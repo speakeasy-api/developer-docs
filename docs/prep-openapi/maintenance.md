@@ -20,7 +20,7 @@ OpenAPI document and helps you fix issues, manage overlays, regenerate SDKs, and
 Navigate to the [Speakeasy UI](https://app.speakeasy.dev/) and log in. Go to the **Studio** tab and follow the
 instructions there. Alternatively, run `speakeasy run --watch` from the root of your SDK repo to start the Studio UI.
 
-![Speakeasy Studio](../assets/maintenance/studio-ui.png)
+<img src="../assets/maintenance/studio-ui.png" alt="Speakeasy Studio" />
 
 ## Refine SDK method names
 
@@ -33,7 +33,7 @@ and `users.get()` would require both operation IDs to be `get`). Speakeasy Sugge
 Follow the instructions above to open the Speakeasy Studio UI. Once there, click the **Improve Method Names** card to
 see the suggested fixes. After a few seconds of generating the fixes, you'll see something like the following:
 
-![Studio Method Name Suggestions](../assets/maintenance/method-names-subview.png)
+<img src="../assets/maintenance/method-names-subview.png" alt="Studio Method Name Suggestions" />
 
 Review the suggested fixes, uncheck any you aren't ready to apply, and click **Apply** to apply the changes to your SDK. Under the hood, this will create
 an [overlay file](https://www.speakeasy.com/docs/prep-openapi/overlays/create-overlays) and update your Speakeasy workflow to apply it. Future SDK generations will use the overlay to include the applied changes.
@@ -55,7 +55,7 @@ The command does the following:
 - Disables the `overlay` output to apply the suggestions to the entire spec in the output file.
 
 Below is the output of the command:
-![Speakeasy suggest output](../assets/maintenance/suggest-cli.png)
+<img src="../assets/maintenance/suggest-cli.png" alt="Speakeasy suggest output" />
 
 ## Refine SDK error handling
 
@@ -82,10 +82,10 @@ The command does the following:
 - Disables the `overlay` output to apply the suggestions to the entire spec in the output file.
 
 The document has been updated to include a few new error schemas, two of which are shown below:
-![Speakeasy suggest output](../assets/maintenance/error-types-schemas.png)
+<img src="../assets/maintenance/error-types-schemas.png" alt="Speakeasy suggest output" />
 
 Meanwhile, each operation has been updated to list the appropriate response codes and their corresponding error types:
-![Speakeasy suggest output](../assets/maintenance/error-types-codes.png)
+<img src="../assets/maintenance/error-types-codes.png" alt="Speakeasy suggest output" />
 
 Note that any codes already defined elsewhere in the document will be re-used. For example, if the `403` response code
 is already defined with a `CustomUnauthorizedResponse` for one operation, it will be re-used for all operations, giving your users a consistent
