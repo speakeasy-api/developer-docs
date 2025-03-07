@@ -3,8 +3,6 @@ title: "OpenAPI overview and best practices"
 description: "OpenAPI / Swagger basics and best practices for constructing an OpenAPI document."
 ---
 
-import { ScrollyCoding } from "~/components/codehike/Scrollycoding";
-
 # OpenAPI overview and best practices
 
 OpenAPI is a standard for describing RESTful APIs. Developers use OpenAPI to define an API's core elements, like endpoints, request and response data formats, authentication methods, and so on.
@@ -19,100 +17,21 @@ OpenAPI has a lot of baked-in flexibility and can describe any HTTP API, includi
 
 With so much flexibility, it isn't always obvious how to construct an OpenAPI document that's suitable for code generation. Speakeasy recommends a set of best practices to follow when writing OpenAPI documents. The following sections outline key points to consider as you create your OpenAPI description.
 
-<ScrollyCoding>
-## !!steps servers
+<h2>Servers</h2>
 
 Add multiple `servers` to define different environments or versions. This is especially useful for separating production and testing environments.
 
-```yaml ! openapi.yaml
-# !focus(5:9)
-openapi: 3.1.0
-info:
-  title: The Speakeasy Bar
-  version: 1.0.0
-servers:
-  - url: https://speakeasy.bar
-    description: The production server
-  - url: https://speakeasy.bar/testing
-    description: The testing server
-security:
-  - apiKey: []
-paths:
-  /drinks:
-    get:
-      tags:
-        - drinks
-      operationId: listDrinks
-      summary: Get a list of drinks
-      responses:
-        "200":
-          description: A list of drinks
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Drink"
-              examples:
-                exampleResponse:
-                  summary: Example response for a list of drinks
-                  value:
-                    drinks:
-                      - name: "Coffee"
-                        price: 2.5
-                      - name: "Tea"
-                        price: 1.8
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BadRequest"
-components:
-  schemas:
-    Drink:
-      type: object
-      title: Drink
-      properties:
-        name:
-          type: string
-        price:
-          type: number
-      description: A response containing a list of drinks.
-    BadRequest:
-      type: object
-      title: BadRequest
-      properties:
-        error:
-          type: string
-        message:
-          type: string
-  securitySchemes:
-    apiKey:
-      type: apiKey
-      name: Authorization
-      in: header
-```
+<h2>Tags</h2>
 
----
-
-## !!steps tags
-
-The `tags` property contains an optional list of values used to group or categorize a set of operations. We **_strongly recommend_** that you always define `tags` for operations but it&apos;s not required.
+The `tags` property contains an optional list of values used to group or categorize a set of operations. We **_strongly recommend_** that you always define `tags` for operations but it's not required.
 
 **In code generation**
 
 Tags are used to namespace methods in the SDK. For example, if you have a tag called `drinks`, then all the methods for that tag will be namespaced under `drinks.listDrinks()`. You can create multi-level namespaces by using a `.` in the tag name, for example, `menu.drinks` will become `menu.drinks.listDrinks()`.
 
-```yaml ! openapi.yaml
-# !focus(15:16)
-```
+<h2>OperationId</h2>
 
----
-
-## !!steps operationId
-
-The `operationId` value is a unique identifier for the operation. It **_must_** be unique in the document and is **_case sensitive_**. We **_strongly recommend_** that you always define an `operationId`, but it&apos;s not required.
+The `operationId` value is a unique identifier for the operation. It **_must_** be unique in the document and is **_case sensitive_**. We **_strongly recommend_** that you always define an `operationId`, but it's not required.
 
 **In code generation**
 
@@ -120,23 +39,11 @@ The `operationId` value is used to create the name of the method that will be ge
 
 If you are generating your spec from an API framework, ensure that `operationId` values are human-readable. Some frameworks, like FastAPI, create long `operationId` identifiers that result in method names that are not idiomatic.
 
-```yaml ! openapi.yaml
-# !focus(17)
-```
-
----
-
-## !!steps Examples
+<h2>Examples</h2>
 
 Adding `Examples` improves the usability of your OpenAPI document by providing examples that illustrate the expected request and response structures.
 
-```yaml ! openapi.yaml
-# !focus(28:36)
-```
-
----
-
-## !!steps $ref
+<h2>$ref</h2>
 
 In OpenAPI, the `$ref` keyword references components defined in the Components Object. These components are commonly used for reusable elements like schemas, parameters, responses, and examples.
 
@@ -144,44 +51,18 @@ In OpenAPI, the `$ref` keyword references components defined in the Components O
 
 Component schemas describe the request and response bodies of operations, serving as the basis for generating SDK types. Using components prevents issues where multiple types are defined for the same data structure.
 
-```yaml ! openapi.yaml
-# !focus(27,51:64)
-```
-
----
-
 **Dedicated Error Classes**
 
 Create dedicated error classes by defining response objects with specific HTTP status codes, such as `400 Bad Request` or `404 Not Found`, accompanied by clear descriptions and structured schemas to convey detailed error information.
-If the name of the error class does not clearly incidate the error type, consider using the `x-speakeasy-name-override` extension to rename it.
+If the name of the error class does not clearly indicate the error type, consider using the `x-speakeasy-name-override` extension to rename it.
 
-```yaml ! openapi.yaml
-# !focus(37:42)
-```
-
----
-
-## !!steps title
+<h2>Title</h2>
 
 The `title` property provides a human-readable title for each schema, improving the readability of your OpenAPI document.
 
-```yaml ! openapi.yaml
-# !focus(47)
-```
-
----
-
-## !!steps Description
+<h2>Description</h2>
 
 Use the `description` field to provide clear and concise information about the purpose, behavior, and expected usage of API elements.
-
-```yaml ! openapi.yaml
-# !focus(53)
-```
-
----
-
-</ScrollyCoding>
 
 ## Extending OpenAPI
 
@@ -191,9 +72,7 @@ Extensions typically follow a naming format of `x-<vendor>-<function>`, where `<
 
 A [range of Speakeasy extensions](/docs/customize-sdks/) are available to help you prepare an OpenAPI document for code generation. Some of the most commonly used extensions are described below.
 
-<ScrollyCoding>
-
-## !!steps x-speakeasy-name-override
+<h2>x-speakeasy-name-override</h2>
 
 Use this extension to override the name of a class, operation, or parameter. The most common use case is to override `operationId` values in your OpenAPI document to simplify the generated SDK method names.
 
@@ -201,58 +80,7 @@ If your `operationId` identifiers follow a consistent pattern, you can define th
 
 In this instance, the SDK will contain a method `menu.drinks.list()` rather than the longer `menu.drinks.list_drinks_v2_get()`.
 
-```yaml ! openapi.yaml
-# !focus(10:12,19)
-openapi: 3.1.0
-info:
-  title: The Speakeasy Bar
-  version: 1.0.0
-servers:
-  - url: https://speakeasy.bar
-    description: The production server
-security:
-  - apiKey: []
-x-speakeasy-name-override:
-  - operationId: ^list_.*
-    methodNameOverride: list
-paths:
-  /drinks:
-    get:
-      tags:
-        - menu
-      x-speakeasy-group: menu.drinks
-      operationId: list_drinks_v2_get
-      x-speakeasy-usage-example: true
-      summary: Get a list of drinks
-      responses:
-        "200":
-          description: A list of drinks
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Drink"
-components:
-  schemas:
-    Drink:
-      type: object
-      properties:
-        name:
-          type: string
-        price:
-          type: number
-  securitySchemes:
-    apiKey:
-      type: apiKey
-      name: Authorization
-      in: header
-      x-speakeasy-example: "<YOUR_API_KEY>"
-```
-
----
-
-## !!steps x-speakeasy-group
+<h2>x-speakeasy-group</h2>
 
 Sometimes, the `tags` in an OpenAPI document may already be used for an unrelated purpose, such as autogenerating labels in documentation. In this scenario, you may want to use something other than `tags` to organize and group your methods.
 
@@ -260,30 +88,12 @@ You can add the `x-speakeasy-group` field to any operation in your OpenAPI docum
 
 In this case, the `listDrinks` operation is added to a `menu.drinks` namespace rather than a `menu` namespace.
 
-```yaml ! openapi.yaml
-# !focus(18)
-```
-
----
-
-## !!steps x-speakeasy-usage-example
+<h2>x-speakeasy-usage-example</h2>
 
 Documentation is an important part of any SDK. This extension allows you to choose which operation is featured at the top of your `README.md`.
 
 We recommend that you pick the API operation that your users frequently use. At a Speakeasy, that would likely be getting the list of drinks on offer.
 
-```yaml ! openapi.yaml
-# !focus(20)
-```
-
----
-
-## !!steps x-speakeasy-example
+<h2>x-speakeasy-example</h2>
 
 Another useful documentation extension is `x-speakeasy-example`, which allows you to provide an example value to be used in the `Authentication` section of your SDK `README.md`. This example signals to users that they should instantiate the SDK with their security token.
-
-```yaml ! openapi.yaml
-# !focus(45)
-```
-
-</ScrollyCoding>
