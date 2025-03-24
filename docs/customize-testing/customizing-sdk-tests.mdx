@@ -3,9 +3,17 @@ title: "Customizing SDK Tests"
 description: "Learn how to customize SDK tests after they are boostrapped."
 ---
 
-import { ScrollyCoding } from "~/components/codehike/Scrollycoding";
-
 # Customizing SDK Tests
+
+## Regenerate tests from scratch
+
+By default tests will only be populated from modifications to the `tests.arazzo.yaml` file once they have been boostrapped.
+If you would like to regenerate all of your SDK tests from scratch, you can run the following command:
+
+```bash
+speakeasy configure tests --rebuild
+```
+
 
 ## Disable auto generation of tests for specific operations
 
@@ -29,7 +37,7 @@ alternatively if a workflow/test already exists that references the operation in
 
 ## Grouping tests
 
-By default, all tests will be generated into a single file related to the main SDK class for example `sdk.test.ts` or `test_sdk.py`. This can be configured by adding a `x-speakeasy-test-group` extension to the workflow which will determine which tests will be grouped together in seperate test files.
+By default, all tests will be generated into a single file related to the main SDK class for example `sdk.test.ts` , `test_sdk.py`, or `SDKTest.java`. This can be configured by adding a `x-speakeasy-test-group` extension to the workflow which will determine which tests will be grouped together in seperate test files.
 
 ```yaml
 arazzo: 1.0.0
@@ -43,7 +51,7 @@ workflows:
 
 ## Generate tests only for specific targets
 
-By default, all tests will be generated for all supported targets. But using the `x-speakeasy-test-targets` extension, it is possible to generate tests only for specific targets. This may be useful if tests are either not needed for certain languages or they may be failing in a certain language.
+By default, all tests will be generated for all supported targets. Using the `x-speakeasy-test-targets` or `x-speakeasy-test-targets-exclude` extensions, it is possible to generate tests only for specific targets. This may be useful if tests are either not needed for certain languages or they may be failing in a certain language.
 
 ```yaml
 arazzo: 1.0.0
@@ -54,279 +62,21 @@ workflows:
       - typescript
     # ...
 ```
-
-## Data Handling
-
-The definition of each operation will determine what data is used in generated testing. In addition to the [data type system](/openapi/schemas/dataTypes) shaping data, OpenAPI Specification supports [examples](/openapi/examples). Test generation will automatically use defined examples when available. In the absense of defined examples, the test generation will attempt to use a realistic example based on the `type`, `format` (if set), and property name (if applicable).
-
-#### Example Property
-
-By default, a single test will be created based on any `example` properties found throughout any defined operation `parameters`, `requestBody`, and `responses`.
-
-In this example, a single test is created for the `updatePet` operation with `id`, `name`, and `photoUrls` data:
-
-<ScrollyCoding>
-
-### !!steps `paths[/pet].put.operationId`
-
-This test is created for the `updatePet` operation.
-
-```yaml ! openapi.yaml
-# !focus(8)
-paths:
-  "/pet":
-    put:
-      tags:
-      - pet
-      summary: Update an existing pet
-      description: Update an existing pet by Id
-      operationId: updatePet
-      requestBody:
-        description: Update an existent pet in the store
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/Pet"
-        required: true
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/Pet"
-components:
-  schemas:
-    Pet:
-      required:
-      - name
-      - photoUrls
-      type: object
-      properties:
-        id:
-          type: integer
-          format: int64
-          example: 10
-        name:
-          type: string
-          example: doggie
-        category:
-          "$ref": "#/components/schemas/Category"
-        photoUrls:
-          type: array
-          items:
-            type: string
-        tags:
-          type: array
-          items:
-            "$ref": "#/components/schemas/Tag"
-        status:
-          type: string
-          description: pet status in the store
-          enum:
-          - available
-          - pending
-          - sold
-```
-
----
-
-### !!steps `paths[/pet].put.requestBody`
-
-The operation uses the `Pet` shared component for both the request body and response.
-
-```yaml ! openapi.yaml
-# !focus(9,14,16,22)
-```
-
----
-
-### !!steps `components.schemas.Pet.required`
-
-The `Pet` shared component is an object type with required `name` and `photoUrls` properties.
-
-```yaml ! openapi.yaml
-# !focus(25:29)
-```
-
----
-
-### !!steps `components.schemas.Pet.id`
-
-While not required, the `Pet` object `id` property has an `example` property, which will be automatically included in the test.
-
-```yaml ! openapi.yaml
-# !focus(31,34)
-```
-
----
-
-### !!steps `components.schemas.Pet.name`
-
-The required `Pet` object `name` property has an `example` property, which will be included in the test.
-
-```yaml ! openapi.yaml
-# !focus(35,37)
-```
-
----
-
-### !!steps `components.schemas.Pet.photoUrls`
-
-The required `Pet` object `photoUrls` property does not include an `example` property, however it will have an example value automatically created since it is required.
-
-```yaml ! openapi.yaml
-# !focus(40:43)
-```
-
----
-
-</ScrollyCoding>
-
-This definition creates a test with `Pet` object request body and response data:
-
+or
 ```yaml
-id: 10
-name: doggie
-photoUrls:
-  - <value>
+arazzo: 1.0.0
+# ...
+workflows:
+  - workflowId: some-test
+    x-speakeasy-test-targets-exclude: # generate tests for all languages except typescript
+      - typescript
+    # ...
 ```
 
-#### Examples Property
+## Customizing SDK Test Manifests
 
-Define multiple tests for an operation using the `examples` property, which in this context is a mapping of example name string keys to example values. Prevent missing or mismatched test generation by ensuring the same example name key is used across all necessary `parameters`, `requestBody`, and `responses` parts of the operation. If desired, [define reusable examples under components](/openapi/examples) similar to schemas.
-
-In this example, multiple tests (`fido` and `rover`) are created for the `addPet` operation:
-
-<ScrollyCoding>
-
-### !!steps `paths[/pet].post.operationId`
-
-These tests are created for the `addPet` operation.
-
-```yaml ! openapi.yaml
-# !focus(8)
-paths:
-  "/pet":
-    post:
-      tags:
-      - pet
-      summary: Add a new pet to the store
-      description: Add a new pet to the store
-      operationId: addPet
-      requestBody:
-        description: Create a new pet in the store
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/Pet"
-            examples:
-              fido:
-                summary: fido request
-                description: fido example requestBody for test generation
-                value:
-                  name: Fido
-                  photoUrls:
-                    - https://www.example.com/fido.jpg
-                  status: available
-              rover:
-                summary: rover request
-                description: rover example requestBody for test generation
-                value:
-                  name: Rover
-                  photoUrls:
-                    - https://www.example.com/rover1.jpg
-                    - https://www.example.com/rover2.jpg
-                  status: pending
-        required: true
-      responses:
-        '200':
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/Pet"
-              examples:
-                fido:
-                  summary: fido response
-                  description: fido example response for test generation
-                  value:
-                    id: 1
-                    name: Fido
-                    photoUrls:
-                      - https://www.example.com/fido.jpg
-                    status: available
-                rover:
-                  summary: rover response
-                  description: rover example response for test generation
-                  value:
-                    id: 2
-                    name: Rover
-                    photoUrls:
-                      - https://www.example.com/rover1.jpg
-                      - https://www.example.com/rover2.jpg
-                    status: pending
-```
-
----
-
-### !!steps `paths[/pet].post.requestBody`
-
-This operation includes both request body and response examples.
-
-```yaml ! openapi.yaml
-# !focus(9,15,34,41)
-```
-
----
-
-### !!steps `examples.fido`
-
-An `addPet` operation `fido` test is created with example request body and response data.
-
-```yaml ! openapi.yaml
-# !focus(16:23,42:50)
-```
-
----
-
-### !!steps `examples.rover`
-
-An `addPet` operation `rover` test is created with example request body and response data.
-
-```yaml ! openapi.yaml
-# !focus(24:32,51:60)
-```
-
----
-
-</ScrollyCoding>
-
-#### Ignoring Data
-
-Data properties can be explicitly ignored in testing via the `x-speakeasy-test-ignore` annotation.
-
-In this example, the `other` property will be omitted from test generation:
-
-```yaml
-paths:
-  /example:
-    get:
-      # ... other operation configuration ...
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: string
-                  other:
-                    type: string
-                    x-speakeasy-test-ignore: true
-```
+Directly modifying SDK tests is not common, but you can customize the actual content of an existing SDK test by modifying the `.speakeasy/tests.arazzo.yaml` file.
+To learn more about these kinds of modifications see [here](/docs/api-contract-tests#writing-custom-end-to-end-tests).
 
 ## Next Steps
 

@@ -1,7 +1,3 @@
----
-sidebar_position: 2
----
-
 # speakeasy  
 `speakeasy`  
 
@@ -21,7 +17,7 @@ Use this CLI to:
 - Suggest improvements to OpenAPI specs
 
 Generate from OpenAPI Specs:
-- Client and Server SDKs in GO, Python, TypeScript, Java, PHP, C#, Swift, Ruby
+- Client and Server SDKs in GO, Python, TypeScript, Java, PHP, C#, Ruby
 - Postman collections
 - Terraform providers
 

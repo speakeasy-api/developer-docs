@@ -81,7 +81,7 @@ The flat response format is the simplest and most ergonomic option, as it avoids
 
 When `responseFormat: flat` is enabled, the generated SDK code will return the `Payment` type directly with no indirection:
 
-<Tabs items={['TypeScript','Python','Go', 'C#']}>
+<Tabs items={['TypeScript','Python','Go', 'C#', 'PHP']}>
   <Tabs.Tab>
 
     ```typescript
@@ -116,6 +116,14 @@ When `responseFormat: flat` is enabled, the generated SDK code will return the `
     ```
 
   </Tabs.Tab>
+
+  <Tabs.Tab>
+
+    ```php
+    public function getPayment(string $id, ?Options $options = null): Payment
+    ```
+
+  </Tabs.Tab>
 </Tabs>
 
 To debug HTTP metadata, users can pass a [custom client][custom-http] to the SDK instance.
@@ -128,7 +136,7 @@ The `envelope-http` format builds response types with a wrapper that holds the r
 
 When `envelope-http` is enabled, the generated SDK code will produce the response types below:
 
-<Tabs items={['TypeScript','Python','Go', 'C#']}>
+<Tabs items={['TypeScript','Python','Go', 'C#', 'PHP']}>
   <Tabs.Tab>
 
     ```typescript
@@ -251,11 +259,90 @@ When `envelope-http` is enabled, the generated SDK code will produce the respons
     ```
 
   </Tabs.Tab>
+
+  <Tabs.Tab>
+
+    ```php
+    class SDK
+    {
+        public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
+    }
+    ```
+
+    ```php
+    class GetPaymentResponse
+    {
+        /**
+        *
+        * @var Shared\HTTPMetadata $httpMeta
+        */
+        #[\Speakeasy\Serializer\Annotation\Exclude]
+
+        public ?Shared\HTTPMetadata $httpMeta;
+
+        /**
+        * Details about a payment
+        *
+        * @var ?Payment $payment
+        */
+        public Payment? Payment { get; set; } = default!;
+
+    }
+    ```
+
+    ```php
+    class HTTPMetadata
+    {
+        /**
+        * Raw HTTP response; suitable for custom response parsing
+        *
+        * @var \Psr\Http\Message\ResponseInterface $response
+        */
+        #[\Speakeasy\Serializer\Annotation\Exclude]
+
+        public \Psr\Http\Message\ResponseInterface $response;
+
+        /**
+        * Raw HTTP request; suitable for debugging
+        *
+        * @var \Psr\Http\Message\RequestInterface $request
+        */
+        #[\Speakeasy\Serializer\Annotation\Exclude]
+
+        public \Psr\Http\Message\RequestInterface $request;
+
+    }
+    ```
+
+  </Tabs.Tab>
 </Tabs>
 
 Built-in HTTP metadata is included in both custom and built-in error types that are thrown or returned from the SDK.
 
 Of the three response formats, `envelope-http` provides the most details about the underlying HTTP requests but adds a layer of indirection with a wrapper value.
+
+#### Accessing HTTP headers with envelope-http
+
+When using `envelope-http`, you can access HTTP headers through the `httpMeta.response.headers` property, providing a cleaner structure than using `rawResponse`:
+
+```typescript
+const { data } = useEmployeesGetSuspense({
+  companyId,
+  page: currentPage,
+  per: itemsPerPage,
+});
+
+console.log(data.httpMeta.response.headers.get('x-total-count'));
+```
+
+#### Headers in SDKs
+
+Headers in SDKs are treated as metadata rather than structured response objects for several reasons:
+- Headers are metadata, separate from the main response payload
+- The dynamic nature of headers makes strict typing impractical
+- This approach follows standard SDK behavior across the industry
+
+While headers can be defined with types in OpenAPI, SDKs generally don't expose them as typed properties. The `envelope-http` format provides a clear separation between HTTP metadata (including headers) and the main response payload.
 
 ### `responseFormat: envelope`
 
@@ -266,7 +353,7 @@ The `responseFormat: envelope` format builds response types with a wrapper that 
 
 When `responseFormat: envelope` is enabled, the generated SDK code will produce the response types below:
 
-<Tabs items={['TypeScript','Python','Go', 'C#']}>
+<Tabs items={['TypeScript','Python','Go', 'C#', 'PHP']}>
   <Tabs.Tab>
 
     ```typescript
@@ -383,4 +470,49 @@ When `responseFormat: envelope` is enabled, the generated SDK code will produce 
     ```
 
   </Tabs.Tab>
-</Tabs>
+
+  <Tabs.Tab>
+
+    ```php
+    class SDK
+    {
+        public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
+    }   
+     ```
+
+    ```php
+    class GetPaymentResponse
+    {
+        /**
+        * HTTP response content type for this operation
+        *
+        * @var string $contentType
+        */
+        public string $contentType;
+
+        /**
+        * HTTP response status code for this operation
+        *
+        * @var int $statusCode
+        */
+        public int $statusCode;
+
+        /**
+        * Raw HTTP response; suitable for custom response parsing
+        *
+        * @var \Psr\Http\Message\ResponseInterface $rawResponse
+        */
+        public \Psr\Http\Message\ResponseInterface $rawResponse;
+
+        /**
+        * Details about a payment
+        *
+        * @var ?Payment $payment
+        */
+        public ?Payment $payment = null;
+
+    }
+    ```
+
+    </Tabs.Tab>
+  </Tabs>

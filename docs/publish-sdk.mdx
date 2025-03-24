@@ -22,7 +22,7 @@ import { Callout, Screenshot } from '~/components'
 | Python     | PyPI            | [API tokens](https://pypi.org/help/#apitoken)                                                                                                                     |                                                                                                                |
 | Go         | GitHub          | [Repo visibility](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility) | For private repos, add the [Speakeasy app](https://github.com/marketplace/speakeasy-api).                      |
 | Java       | Maven           | [Get started with Maven Central](https://central.sonatype.org/publish-ea/publish-ea-guide/) and [verify domain ownership](https://central.sonatype.org/faq/verify-ownership/) |                                                                                                                |
-| PHP        | Packagist       | [See publishing packages](https://packagist.org/)                                                                                                                 | Monorepo setups not permitted.                                                                                 |
+| PHP        | Packagist       | [See publishing packages](https://packagist.org/)                                                                                                                 | Monorepo setups not permitted. Package must be initially created manually in Packagist.                                                                                 |
 | C#         | NuGet           | [API key](https://learn.microsoft.com/en-us/nuget/nuget-org/publish-a-package#create-an-api-key)                                                                  |                                                                                                                |
 | Terraform  | Terraform       | [GPG Key](https://developer.hashicorp.com/terraform/registry/providers/publishing#preparing-and-adding-a-signing-key)                                             |                                                                                                                |
 
@@ -103,8 +103,8 @@ For legacy OSSRH publishing support, see the next section.
 5. Store the following secrets Github actions secrets: 
     - `OSSRH_USERNAME` (the Sonatype username generated in Step 2)
     - `OSSRH_PASSWORD` (the corresponding password/token generated in Step 2)
-    - `GPG_SECRET_KEY` (the exported GPG key)
-    - `GPG_PASSPHRASE` (the passphrase for your GPG key)
+    - `JAVA_GPG_SECRET_KEY` (the exported GPG key)
+    - `JAVA_GPG_PASSPHRASE` (the passphrase for your GPG key)
 6. In the java section of `gen.yaml`,  provide the additional configuration required for publishing to Maven:
 ```yaml
     java:
@@ -130,8 +130,8 @@ For legacy OSSRH publishing support, see the next section.
 3. Store the following secrets Github actions secrets: 
     - `OSSRH_USERNAME` 
     - `OSSRH_PASSWORD`
-    - `GPG_SECRET_KEY`
-    - `GPG_PASSPHRASE`
+    - `JAVA_GPG_SECRET_KEY`
+    - `JAVA_GPG_PASSPHRASE`
 4. In the [Speakeasy workflow file](/docs/workflow-file-reference), add `useSonatypeLegacy: true`:
 ```yaml
 workflowVersion: 1.0.0
@@ -202,19 +202,54 @@ targets:
    - Review the `NUGET.md` file, which is similar to the main `README.md` but excludes the `SDK Installation` and `Available Operations` sections. For more details, see [Editing Your SDK Docs](./docs/sdk-docs).
 
 #### PHP
-1. Create a [Packagist](https://packagist.org) account (if needed).
-2. Generate a Safe API Token:
+1. Create a [Packagist](https://packagist.org) account and manually create your Packagist package.
+2. Generate a Main API Token:
    - Navigate to [Packagist Profile](https://packagist.org/profile/) and log in.
-   - Record the "Safe API Token" under account settings.
+   - Record the "Main API Token" under account settings.
 3. Update GitHub Action Secrets with Packagist credentials:
    - Navigate to the repository's Github Secret Settings.
    - Update the following secrets:
-     - `PACKAGIST_TOKEN`: Set this to the Safe API Token from step 2.
+     - `PACKAGIST_TOKEN`: Set this to the Main API Token from step 2.
      - `PACKAGIST_USERNAME`: Set this to Packagist username.
 4. Store the following secrets in the GitHub Actions secrets:
     - `PACKAGIST_TOKEN`
     - `PACKAGIST_USERNAME`
-5. Confirm that the publishing job is properly set up with the updated credentials.
+5. Confirm that the publishing job is properly set up with the updated credentials. **Note: Package name is read from composer.json `name` field.**
+
+## Migrating from a monorepo to a dedicated repository
+
+When moving a Speakeasy-generated SDK from within a monorepo to its own dedicated repository, follow these steps to ensure a smooth transition.
+
+### Setting up the new repository
+
+1. Create a new repository (can be public or private)
+2. Copy the SDK configuration files to the root of the new repository:
+   - `.speakeasy/gen.yaml`
+   - `.speakeasy/workflow.yaml`
+   - `overlay.yaml` (if using)
+3. Update package configuration files to reflect the new repository location:
+   - For TypeScript: Update `package.json`
+   - For Python: Update `setup.py` or `pyproject.toml`
+   - For Go: Update `go.mod`
+   - For other languages: Update the respective package metadata files
+
+### GitHub Actions configuration
+
+Copy the GitHub Actions workflows to the new repository under `.github/workflows/`. Important considerations:
+
+- Remove any `working_directory` settings that referenced the old monorepo structure
+- Ensure the following secrets are configured in the new repository:
+  - `GITHUB_TOKEN`
+  - Package manager tokens (e.g., `NPM_TOKEN`, `PYPI_TOKEN`)
+  - `SPEAKEASY_API_KEY`
+
+### Benefits of a dedicated repository
+
+- Cleaner build process without workspace dependencies
+- Easier configuration of linting and other tools
+- Simplified version control and release management
+- Direct GitHub issues integration for better user support
+- Independent versioning and release cycles
 
 ## Publishing in the Speakeasy dashboard
 

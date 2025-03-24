@@ -2,27 +2,28 @@
 title: "Generate Terraform provider from OpenAPI / Swagger"
 slug: /create-terraform/
 sidebar_label: Overview
-description: "Generate a Terraform provider from your OpenAPI / Swagger spec."
+description: "Generate a Terraform provider from your OpenAPI document."
 ---
 
 import { Callout } from "~/components";
 
-# Generate a Terraform provider from OpenAPI / Swagger
+
+# Generate a Terraform provider from an OpenAPI document
 
 Terraform is an infrastructure-as-code tool that uses providers to manage cloud infrastructure through API calls. Creating and maintaining Terraform providers, which are typically written in Go, requires specialized skills and frequent updates to keep up with API changes.
 
 Speakeasy simplifies creating and maintaining Terraform providers by generating providers from OpenAPI documents. This eliminates the need for Go expertise, keeps providers up-to-date, and reduces the complexity of developing and maintaining providers for cloud environments.
 
-For a detailed overview of supported features, refer to the [Terraform support matrix](/docs/terraform-support-matrix).
+For a detailed overview of supported features, refer to the [Terraform support matrix](/docs/supported/terraform).
 
 ## Prerequisites
 
 To create a Terraform provider with Speakeasy, you need:
 
-- The [Speakeasy CLI](speakeasy-cli/getting-started)
+- The [Speakeasy CLI](/docs/speakeasy-reference/cli/getting-started)
 - An API spec in a supported format:
 
-| Spec Format        | Supported |
+| Spec format        | Supported |
 | ------------------ | :-------: |
 | OpenAPI 3.0        |    ✅     |
 | OpenAPI 3.1        |    ✅     |
@@ -39,7 +40,7 @@ If you are using an unsupported spec format, use these tools to help you convert
 ## Add annotations
 
 Use the `x-speakeasy-entity` annotation to specify objects to be included as Terraform entities in the provider.
-
+  
 ```yaml
 paths:
  /pet:
@@ -50,10 +51,9 @@ paths:
 Pet:
  x-speakeasy-entity: Pet
  ...
-
 ```
 
-Terraform Usage:
+Terraform usage:
 
 ```HCL
 resource "petstore_pet" "myPet" {
@@ -63,7 +63,7 @@ resource "petstore_pet" "myPet" {
 
 Speakeasy infers Terraform types from your JSON Schema, focusing on the semantics of the `CREATE` and `UPDATE` requests and responses. You **don't need to** define any specific Terraform types in your OpenAPI document.
 
-1. **Required vs. optional:** If a property is required in the `CREATE` request body, it's marked as `Required: true`; otherwise, it's `Optional: true`.
+1. **Required vs optional:** If a property is required in the `CREATE` request body, it's marked as `Required: true`; otherwise, it's `Optional: true`.
 2. **Computed properties:** Properties that appear in a response body but are absent from the `CREATE` request are marked as `Computed: true`. This indicates that Terraform will compute the properties' values.
 3. **The `ForceNew` property:** If a property exists in the `CREATE` request but is not present in the `UPDATE` request, it's labeled `ForceNew`.
 4. **Enum validation:** When an attribute is defined as an enum, Speakeasy configures a `Validator` for runtime type checks. This ensures that all request properties precisely match one of the enumerated values.
@@ -76,12 +76,13 @@ Speakeasy infers Terraform types from your JSON Schema, focusing on the semantic
 
 ## Enhance generated documentation
 
-Speakeasy helps you autogenerate documentation using the HashiCorp `terraform-plugin-docs` tools and packages. For best results, we recommend:
+Speakeasy helps you autogenerate documentation using the HashiCorp `terraform-plugin-docs` tools and packages. For best results, we recommend that you:
 
 1. **Include descriptions:** Ensure your OpenAPI document contains detailed descriptions of resources, attributes, and operations. Clear and concise descriptions help users understand the purpose and use of each component.
 2. **Provide examples:** Use examples in your OpenAPI document to illustrate how resources and attributes should be configured. Speakeasy leverages these examples to generate usage snippets that users can refer to when starting with your provider.
 
-The Swagger Pet Store generates the following usage snippet for the pet resource:
+
+The Swagger Petstore generates a usage snippet for the pet resource similar to the following:
 
 ```go "petstore_pet" "my_pet" {
     id   = 10
@@ -102,10 +103,34 @@ speakeasy quickstart
 
 Follow the interactive guide, providing the necessary information when prompted, including the path to the spec. Select `terraform` as the language. 
 
+When you've completed the quickstart, you can regenerate the Terraform provider at any point by running `speakeasy run`.
+
+## Guidance on modeling entities
+
+### Repository naming
+
+We recommend you name your provider and GitHub repository `terraform-provider-XXX`, where `XXX` becomes the short name of the provider, also known as the **provider type name**.
+
+The provider type name should preferably be `[a-z][a-z0-9]`, although hyphens and underscores are also valid and can be included in the name if necessary.
+
+### Entity naming
+
+When naming entities that you want Speakeasy to convert to Terraform resources, use PascalCase to ensure the names are translated to Terraform's underscore naming. For list endpoints, pluralize the PascalCase name.
+
 When you've completed the quickstart, you can regenerate the Terraform provider at any time by running `speakeasy run`.
 
-## Frequently Asked Questions
+### Modeling entities
 
+First, find the list operation for an API entity or resource. Usually, it is a `GET` on `/something`. Annotate the list operation with `x-speakeasy-entity-operation: XXX#read`.
+
+Now, find the CREATE, READ, UPDATE, and DELETE (CRUD) operations for an API resource. Usually, these take the form of a `POST` on `/something` and operations on `/something/{id}`. Annotate the CRUD operations with `x-speakeasy-entity-operation: XXX#create`.
+
+
+Ensure the CREATE response returns data. Some API frameworks don't output it, even though they generally have to return data such as an identifier for the resource.
+
+Finally, check whether the `GET` (not list) read response includes an extra data property or similar element between the root of the response schema and the actual data. If the `GET` read response does have an additional data property, add the `x-speakeasy-entity: XXX` annotation to the object beneath that data property (not on the data itself). Most APIs use a shared `component`, which is often the best place for entity annotation.
+
+## Frequently asked questions
 
 **Do the generated Terraform providers support importing resources?**
 
@@ -114,7 +139,6 @@ Yes, generated Terraform providers support importing resources. However, certain
 **Prerequisites**
 
 1. **API specification:** Ensure the OpenAPI document defines an annotated and type-complete API operation for reading each resource. Tag the operation with `x-speakeasy-entity-operation: MyEntity#read`.
-
 2. **Complete `READ` operation:** Attributes of a resource not defined in the `READ` API are set to `null` by Terraform during the import process.
 
 **Simple keys**
@@ -142,7 +166,6 @@ import {
 ```bash
 terraform plan -generate-config-out=generated.tf
 ```
-
 **Import composite keys using the CLI**
 
 To import a resource with composite keys using the Terraform CLI, use the `terraform import` command:

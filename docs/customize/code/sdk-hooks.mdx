@@ -32,6 +32,7 @@ Hooks are supported in SDKs generated with the latest Speakeasy CLI. Each suppor
 | TypeScript  | `src/hooks`                          |
 | Java        | `src/main/java/{package_path}/hooks` |
 | C#          | `{root_path}/Hooks`                  |
+| Ruby        | `lib/{sdk_name}/sdk_hooks`           |
 
 ### Steps to Add a Hook
 
@@ -50,6 +51,7 @@ Find the appropriate registration file for the language:
 | TypeScript  | `src/hooks/registration.ts`                        |
 | Java        | `src/main/java/{package_path}/hooks/SDKHooks.java` |
 | C#          | `{root_path}/Hooks/HookRegistration.cs`            |
+| Ruby        | `lib/{sdk_name}/sdk_hooks/registration.rb`         |
 
 3. **Instantiate and register your hook.**
 
@@ -57,7 +59,7 @@ In the registration file, find the method `initHooks/init_hooks/initialize/InitH
 
 Instantiate the hook here and register it for the appropriate event.
 
-<Tabs items={['Go', 'Python', 'TypeScript', 'Java', 'C#']}>
+<Tabs items={['Go', 'Python', 'TypeScript', 'Java', 'C#', 'PHP', 'Ruby']}>
   <Tabs.Tab>
 
 ```go
@@ -127,6 +129,38 @@ namespace <namespace>
 ```
 
   </Tabs.Tab>
+  <Tabs.Tab>
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace <namespace>;
+
+class HookRegistration
+{
+    /**
+     * @param  Hooks  $hooks
+     */
+    public static function initHooks(Hooks $hooks): void
+    {
+        $exampleHook = new ExampleHook();
+
+        $hooks->registerBeforeRequestHook($exampleHook);
+    }
+}
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+```ruby
+def self.init_hooks(hooks)
+  example_hook = ExampleHook.new
+  hooks.register_before_request_hook example_hook
+end
+```
+
+  </Tabs.Tab>
 </Tabs>
 
 <Callout title="Note" variant="info">
@@ -135,7 +169,7 @@ The registration file is generated once and will not be overwritten. After the i
 
 Here are example hook implementations for each of the lifecycle events across different languages:
 
-<Tabs items={['Go', 'Python', 'TypeScript', 'Java', 'C#']}>
+<Tabs items={['Go', 'Python', 'TypeScript', 'Java', 'C#', 'PHP', 'Ruby']}>
   <Tabs.Tab>
 
 ```go
@@ -389,13 +423,132 @@ namespace Speakeasy.Hooks
 
   </Tabs.Tab>
 
+  <Tabs.Tab>
+```php
+namespace Speakeasy\Hooks;
+
+class ExampleHook implements AfterErrorHook, AfterSuccessHook, BeforeRequestHook, SDKInitHook
+{
+    public function sdkInit(string $baseUrl, \GuzzleHttp\ClientInterface $client): SDKRequestContext
+    {
+        // modify the baseURL or wrap the client used by the SDK here and return the updated values
+        return new SDKRequestContext($baseUrl, new TestClient($client));
+    }
+
+    public function beforeRequest(BeforeRequestContext $context, RequestInterface $request): RequestInterface
+    {
+        // modify the request object before it is sent, such as adding headers or query parameters, or throw an exception to stop the request from being sent
+        return $request;
+    }
+
+    public function afterSuccess(AfterSuccessContext $context, ResponseInterface $response): ResponseInterface
+    {
+        // modify the response object before deserialization or throw an exception to stop the response from being returned
+        return $response;
+    }
+
+    public function afterError(AfterErrorContext $context, ?ResponseInterface $response, ?\Throwable $exception): ErrorResponseContext
+    {
+        // modify the response before it is deserialized as a custom error
+        // return new ErrorResponseContext($response, null);
+
+        // OR modify the exception object before it is thrown
+        // return new ErrorResponseContext(null, $exception);
+
+        // OR abort the processing of subsequent AfterError hooks
+        // throw new FailEarlyException("return early", $exception);
+
+        // response and error cannot both be null
+        return new ErrorResponseContext($response, $exception);
+    }    
+}
+
+```
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+```ruby
+# typed: true
+# frozen_string_literal: true
+
+require_relative './types'
+require 'sorbet-runtime'
+
+module ExampleSDK
+  module SDKHooks
+    class ExampleHook
+      extend T::Sig
+      include AbstractSDKInitHook
+      include AbstractBeforeRequestHook
+      include AbstractAfterSuccessHook
+      include AbstractAfterErrorHook
+
+      sig do
+        override.params(
+          base_url: String,
+          client: Faraday::Connection
+        ).returns([String, Faraday::Connection])
+      end
+      def sdk_init(base_url:, client:)
+        # modify the base_url or wrap the client used by the SDK here and return
+        # the updated values
+
+        return base_url, client
+      end
+
+      sig do
+        override.params(
+          hook_ctx: BeforeRequestHookContext,
+          request: Faraday::Request
+        ).returns(Faraday::Request)
+      end
+      def before_request(hook_ctx:, request:)
+        # modify the request object before it is sent, such as adding headers or
+        # query parameters, or raise an exception to stop the request
+
+        request
+      end
+
+      sig do
+        override.params(
+          hook_ctx: AfterSuccessHookContext,
+          response: Faraday::Response
+        ).returns(Faraday::Response)
+      end
+      def after_success(hook_ctx:, response:)
+        # modify the response object before deserialization or raise an
+        # exception to stop the response from being returned
+
+        response
+      end
+
+      sig do
+        override.params(
+          error: T.nilable(StandardError),
+          hook_ctx: AfterErrorHookContext,
+          response: T.nilable(Faraday::Response)
+        ).returns(T.nilable(Faraday::Response))
+      end
+      def after_error(error:, hook_ctx:, response:)
+        # modify the response before it is deserialized or raise an exception to
+        # stop processing of other error hooks and return early
+
+        response
+      end
+    end
+  end
+end
+```
+
+  </Tabs.Tab>
+
 </Tabs>
 
 ## Adding Dependencies
 
 To add dependencies needed for SDK hooks, configure the `additionalDependencies` section in the `gen.yaml` file. <br/><br/>
 
-<Tabs items={['Go', 'Python', 'TypeScript', 'Java', 'C#']}>
+<Tabs items={['Go', 'Python', 'TypeScript', 'Java', 'C#', 'PHP', 'Ruby']}>
   <Tabs.Tab>
 
 ```yaml
@@ -457,6 +610,31 @@ csharp:
       includeAssets: all
       privateAssets: contentFiles; build; native; analyzers; buildTransitive
       excludeAssets: none
+```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+
+```yaml
+php:
+  additionalDependencies:
+    require:
+      "firebase/php-jwt": "^6.10"
+    require-dev:
+      "roave/security-advisories": "dev-latest"
+```
+
+  </Tabs.Tab>
+  <Tabs.Tab>
+ 
+```yaml
+configVersion: 2.0.0
+ruby:
+  additionalDependencies:
+    runtime:
+      "faraday-net_http_persistent": "~>2.3"
+    development:
+      "rubocop-faker": "1.3.0"
 ```
 
   </Tabs.Tab>

@@ -5,14 +5,13 @@ description: "Customize your security and authentication SDK settings for OAuth.
 ---
 
 import { Tabs } from "@speakeasy/nextra-theme";
-import { Callout } from "~/components";
 
 # OAuth 2.0 authentication
 
 Speakeasy fully supports the OAuth 2.0 security implementation. This includes type generation for OAuth schemas and in many cases
 the complete management of the token refresh flow. End users of Speakeasy SDKs don’t need to retrieve and manage access tokens manually.
 
-API builders also have the option to leverage Speakeasy's [custom security schemes](./custom-security-schemes.mdx`) to implement custom OAuth flows that aren't part of
+API builders also have the option to leverage Speakeasy's [custom security schemes](/docs/customize/authentication/custom-security-schemes) to implement custom OAuth flows that aren't part of
 the standard OpenAPI specification.
 
 This document covers the following types of OAuth 2.0 flows:
@@ -24,20 +23,113 @@ This document covers the following types of OAuth 2.0 flows:
 | `resource owner password credentials flow`      | [Docs](#resource-owner-password-credentials-flow)                   |
 | `custom token refresh flow`  | [Docs](#custom-refresh-token-flow)       |
 
-Other custom flows can be implemented using a combination of [hooks](/docs/customize/code/sdk-hooks) and [custom security schemes](/docs/customize/authentication/custom-security-schemes).      
+Other custom flows can be implemented using a combination of [hooks](/docs/customize/code/sdk-hooks) and [custom security schemes](/docs/customize/authentication/custom-security-schemes).
 
 ## Client credentials flow
 
-OAuth 2.0 defines several methods for building a request to the `tokenUrl` endpoint.
+OAuth 2.0 defines several methods for building a request to the `tokenUrl` endpoint. Speakeasy supports the following authentication methods:
 
-| Client authentication method | Description                                                                                  | Speakeasy support |
-| ---------------------------- | -------------------------------------------------------------------------------------------- | ----------------- |
-| `client_secret_post`         | The secret is provided in the request body as `application/x-www-form-urlencoded` form data  | ✅                |
-| `client_secret_basic`        | The secret is provided in the `Authorization` header using the `Basic` authentication scheme | ✅ with hooks     |
-| `authorization-code`         | The secret is passed during the code token (see [Authorization](## Authorization code flow)) | ✅ with hooks     |
-| Other                        |                                                                                              | ✅ with hooks and [custom security schemes](./custom-security-schemes.mdx)    |
+- [`client_secret_post`](#client_secret_post) (default method)
+- [`client_secret_basic`](#client_secret_basic)
+- [`authorization-code`](#authorization-code-flow) (with hooks)
+- [Custom flows](#custom-refresh-token-flow) (with hooks and [custom security schemes](/docs/customize/authentication/custom-security-schemes))
 
 Define `type: oauth2` and `flows: clientCredentials` to prompt users for a client ID and client secret when instantiating the SDK. The client credentials flow is used to obtain an access token for API requests.
+
+### client_secret_post
+
+The `client_secret_post` method sends the client credentials in the request body as `application/x-www-form-urlencoded` form data. This is the default authentication method used by Speakeasy when no specific method is specified.
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://speakeasy.bar/oauth2/token/
+          # client_secret_post is the default method, so no additional configuration is needed
+          scopes: {}
+```
+
+When using this method, the client ID and client secret are sent in the request body as form parameters:
+
+```
+client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&grant_type=client_credentials
+```
+
+### client_secret_basic
+
+The `client_secret_basic` method sends the client credentials in the `Authorization` header using the `Basic` authentication scheme. The client ID and client secret are combined with a colon separator, Base64-encoded, and sent in the header.
+
+To use this method, add the `x-speakeasy-token-endpoint-authentication: client_secret_basic` extension to your OAuth security scheme:
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://speakeasy.bar/oauth2/token/
+          x-speakeasy-token-endpoint-authentication: client_secret_basic
+          scopes: {}
+```
+
+When using this method, the client ID and client secret are sent in the Authorization header:
+
+```
+Authorization: Basic base64(client_id:client_secret)
+```
+
+This method is preferred by some OAuth providers for security reasons, as it keeps credentials out of request bodies and server logs.
+
+### tokenUrl
+
+The `tokenUrl` property in OAuth 2.0 flows can be specified in two formats:
+
+1. An absolute URL (e.g., `https://api.example.com/auth/token`)
+2. A pathname (e.g., `/auth/token`)
+
+When a pathname is provided instead of an absolute URL, Speakeasy resolves it relative to the user's configured server URL. This is particularly useful in environments where you have multiple server configurations and need the token endpoint to adapt accordingly.
+
+For example, if your OpenAPI specification includes a pathname:
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /clientcredentials/token
+          scopes:
+            read: Read access
+            write: Write access
+```
+
+And the user has configured their server URL as `https://api.example.com`, the effective token URL will be `https://api.example.com/clientcredentials/token`.
+
+Alternatively, you can specify an absolute URL:
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.mycompany.com/clientcredentials/token
+          scopes:
+            read: Read access
+            write: Write access
+```
+
+This feature allows for more flexible authentication configurations across different environments without requiring changes to the OpenAPI specification.
+
+### Example OpenAPI configuration
+
+Here's a complete example showing how to configure OAuth client credentials flow in your OpenAPI specification:
 
 ```yaml
 paths:
@@ -58,6 +150,8 @@ components:
       flows:
         clientCredentials:
           tokenUrl: https://speakeasy.bar/oauth2/token/
+          # Uncomment the following line to use client_secret_basic instead of the default client_secret_post
+          # x-speakeasy-token-endpoint-authentication: client_secret_basic
           scopes: {}
 security:
   - clientCredentials:
@@ -75,7 +169,7 @@ generation:
     OAuth2ClientCredentialsEnabled: true
 ```
 
-<Tabs items={['TypeScript', 'Python', 'Go', 'Java', 'C#']}>
+<Tabs items={['TypeScript', 'Python', 'Go', 'Java', 'C#', 'PHP']}>
 
 <Tabs.Tab>
 
@@ -232,7 +326,31 @@ catch (Exception ex)
 ```
 
 </Tabs.Tab>
+<Tabs.Tab>
+```php
+use Speakeasy\Client\Credentials;
+use Speakeasy\Client\Credentials\Models\Components;
+use Speakeasy\Client\Credentials\Models\Operations;
 
+$sdk = Credentials\SDK::builder()
+    ->setSecurity(
+        new Components\Security(
+            clientID: '<YOUR_CLIENT_ID_HERE>',
+            clientSecret: '<YOUR_CLIENT_SECRET_HERE>',
+        )
+    )->build();
+
+try {
+    $res = $sdk->drinks->listDrinks();
+
+    if ($res->Drinks != null) {
+        // handle response
+    }
+} catch (Errors\ErrorThrowable $e) {
+    // handle exception
+}
+```
+</Tabs.Tab>
 </Tabs>
 
 ## Resource Owner Password Credentials flow
@@ -869,21 +987,8 @@ security:
       - write # Apply the write scope globally
 ```
 
-The SDK automatically generates tokens with both `read` and `write`` scopes. When making a request, the SDK checks whether the token contains the required scopes for the operation. If the token lacks the necessary scopes or has expired, a new token is requested with the correct scopes.
+The SDK automatically generates tokens with both `read` and `write` scopes. When making a request, the SDK checks whether the token contains the required scopes for the operation. If the token lacks the necessary scopes or has expired, a new token is requested with the correct scopes.
 
-In the SDK, global OAuth 2.0 scopes can be defined when the SDK is instantiated:
-
-```ts
-import { SDK } from "speakeasy";
-
-const sdk = new SDK({
-  security: {
-    clientID: "<YOUR_CLIENT_ID_HERE>",
-    clientSecret: "<YOUR_CLIENT_SECRET_HERE>",
-    oAuth2Scopes: ["read"], // Global scope applied to all operations by default
-  },
-});
-```
 
 ### Per-operation security with OAuth 2.0 scopes
 
@@ -910,16 +1015,12 @@ Here’s how the SDK can be used with per-operation security:
 ```ts
 import { SDK } from "speakeasy";
 
-const sdk = new SDK({
-  security: {
-    clientID: "<YOUR_CLIENT_ID_HERE>",
-    clientSecret: "<YOUR_CLIENT_SECRET_HERE>",
-  },
-});
+const sdk = new SDK();
 
 const result = await sdk.drinks.listDrinks({
   security: {
-    oAuth2Scopes: ["read"], // Specify the scope for this operation
+    clientID: "<YOUR_CLIENT_ID_HERE>",
+    clientSecret: "<YOUR_CLIENT_SECRET_HERE>",
   },
 });
 ```

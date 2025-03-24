@@ -18,6 +18,7 @@ speakeasy configure tests [flags]
 
 ```
   -h, --help                        help for tests
+      --rebuild                     clears out all existing tests and regenerates them from scratch
   -d, --workflow-directory string   directory of speakeasy workflow file
 ```
 

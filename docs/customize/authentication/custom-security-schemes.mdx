@@ -20,7 +20,7 @@ Custom Security Schemes define a JSON Schema for SDK security options. Combined 
 
 | TypeScript | Python | Go  | C#  | Java | PHP | Swift | Ruby |
 | ---------- | ------ | --- | --- | ---- | --- | ----- | ---- |
-| ✅         | ✅     | ✅  | 🏗️  | 🏗️   | 🏗️  | 🏗️    | 🏗️   |
+| ✅         | ✅     | ✅  | 🏗️  | ✅   | 🏗️  | 🏗️    | 🏗️   |
 
 ### Define a custom security scheme
 
@@ -58,7 +58,7 @@ components:
 
 Once the SDK is regenerated, the custom security scheme can be configured globally or per operation, depending on the `security` definitions.
 
-<Tabs items={['TypeScript', 'Python', 'Go']}>
+<Tabs items={['TypeScript', 'Python', 'Go', 'Java']}>
 
 <Tabs.Tab>
 ```typescript
@@ -107,6 +107,19 @@ Secret: "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI",
 
 ```
 </Tabs.Tab>
+<Tabs.Tab>
+```java
+import org.openapis.openapi.SDK;
+import org.openapis.openapi.models.shared.Security;
+
+SDK sdk = SDK.builder()
+        .security(Security.builder()
+            .appId("app-speakeasy-123")
+            .secret("MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI")
+            .build())
+        .build();
+```
+</Tabs.Tab>
 </Tabs>
 
 ### Use the custom security scheme
@@ -115,7 +128,7 @@ Use [SDK Hooks](/docs/customize/code/sdk-hooks) to access user-provided security
 
 The following example illustrates accessing a custom security scheme in a hook and adding headers to a request:
 
-<Tabs items={['TypeScript', 'Python', 'Go']}>
+<Tabs items={['TypeScript', 'Python', 'Go', 'Java']}>
 
 <Tabs.Tab>
 ```typescript
@@ -202,5 +215,33 @@ func (h *CustomSecurityHook) BeforeRequest(hookCtx BeforeRequestContext, req *ht
 
 ```
 
+</Tabs.Tab>
+<Tabs.Tab>
+```java
+import java.net.http.HttpRequest;
+
+import org.openapis.openapi.models.shared.Security;
+import org.openapis.openapi.utils.Helpers;
+import org.openapis.openapi.utils.Hook.BeforeRequest;
+import org.openapis.openapi.utils.Hook.BeforeRequestContext;
+
+// an instance of this class is registered in SDKHooks
+public class CustomSecurityHook implements BeforeRequest {
+
+    @Override
+    public HttpRequest beforeRequest(BeforeRequestContext context, HttpRequest request) throws Exception {
+        if (!context.securitySource().isPresent()) {
+            throw new IllegalArgumentException("security source is not present");
+        }
+        // this example is for global security, cast to the appropriate HasSecurity
+        // implementation for method-level security
+        Security sec = (Security) context.securitySource().get().getSecurity();
+        return Helpers.copy(request) //
+                .header("X-Security-App-Id", sec.appId()) //
+                .header("X-Security-Secret", sec.secret()) //
+                .build();
+    }
+}
+```
 </Tabs.Tab>
 </Tabs>

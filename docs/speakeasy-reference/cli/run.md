@@ -43,6 +43,7 @@ speakeasy run [flags]
       --set-version string        the manual version to apply to the generated SDK
       --skip-compile              skip compilation when generating the SDK
       --skip-testing              skip testing after generating the SDK, if testing is configured in the workflow
+      --skip-upload-spec          skip uploading the spec to the registry
       --skip-versioning           skip automatic SDK version increments
   -s, --source string             source to run. specify 'all' to run all sources
   -t, --target string             target to run. specify 'all' to run all targets

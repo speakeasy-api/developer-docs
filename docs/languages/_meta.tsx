@@ -21,7 +21,7 @@ export default {
         title: "C#",
     },
     php: {
-        title: "PHP [Beta]",
+        title: "PHP",
     },
     swift: {
         title: "Swift [Alpha]",

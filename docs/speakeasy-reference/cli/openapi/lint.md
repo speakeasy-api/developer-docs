@@ -24,6 +24,7 @@ speakeasy openapi lint [flags]
   -h, --help                          help for lint
       --max-validation-errors int     limit the number of errors to output (default 1000, 0 = no limit) (default 1000)
       --max-validation-warnings int   limit the number of warnings to output (default 1000, 0 = no limit) (default 1000)
+      --non-interactive               force non-interactive mode even when running in a terminal
   -r, --ruleset string                ruleset to use for linting (default "speakeasy-recommended")
   -s, --schema string                 local filepath or URL for the OpenAPI schema
       --token string                  token value to use if authentication is required for downloading schema from remote URL
