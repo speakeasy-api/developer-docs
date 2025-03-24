@@ -18,8 +18,8 @@ export default {
       toc: false,
     },
   },
-  /* 
-    Quickstart 
+  /*
+    Quickstart
   */
   "quickstart-section": {
     type: "separator",
@@ -28,24 +28,21 @@ export default {
   introduction: {
     title: "Introduction",
   },
-  "api-devex": {
-    title: "Why API DevEx?",
-  },
   "core-concepts": {
     title: "Core Concepts",
   },
-  /* 
-    SDK 
+  /*
+    SDK
   */
   "sdk-section": {
     type: "separator",
     title: <SidebarSeparator>SDK</SidebarSeparator>,
   },
+  "create-client-sdks": {
+    title: "Generate SDKs",
+  },
   "prep-openapi": {
     title: "Prep OpenAPI Spec",
-  },
-  "create-client-sdks": {
-    title: "Generate SDK",
   },
   customize: {
     title: "Customize",
@@ -59,8 +56,18 @@ export default {
   languages: {
     title: "Language Design",
   },
-  /* 
-    Terraform 
+  /*
+    Agent tools
+  */
+  "agent-tools-section": {
+    type: "separator",
+    title: <SidebarSeparator>Agent tools</SidebarSeparator>,
+  },
+  "model-context-protocol": {
+      title: " Generate MCP servers",
+  },
+  /*
+    Terraform
   */
   "terraform-section": {
     type: "separator",
@@ -78,24 +85,24 @@ export default {
     title: "Customize Terraform",
     href: "/docs/terraform",
   },
-  /* 
-    Testing 
+  /*
+    Testing
   */
   "testing-section": {
     type: "separator",
-    title: <SidebarSeparator>Testing [Early Access]</SidebarSeparator>,
+    title: <SidebarSeparator>Testing [Alpha]</SidebarSeparator>,
   },
   testing: {
     title: "Start Testing",
   },
   "customize-testing": {
-    title: "Configure SDK Testing",
+    title: "SDK Testing",
   },
   "api-contract-tests": {
     title: "Configure Custom API Contract Tests",
   },
-  /* 
-    Docs 
+  /*
+    Docs
   */
   "docs-section": {
     type: "separator",
@@ -110,8 +117,8 @@ export default {
   integrations: {
     title: "Integrations",
   },
-  /* 
-    Reference 
+  /*
+    Reference
   */
   "ref-section": {
     type: "separator",
@@ -127,7 +134,7 @@ export default {
     title: "Code Examples",
     href: "/examples",
   },
-  /* 
+  /*
     Support
   */
   "support-section": {
@@ -142,7 +149,7 @@ export default {
   "enterprise-support": {
     title: "Enterprise Support",
   },
-  /* 
+  /*
     Privacy & Security
   */
   "privacy-security-section": {
