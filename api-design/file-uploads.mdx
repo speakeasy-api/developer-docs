@@ -127,9 +127,9 @@ The response here will have a simple body:
 That `user` was inferred from the token, and the `url` is the resulting URL to
 the avatar that has been uploaded. Normally this would be some sort of Content
 Delivery Network (CDN) URL, but it could be a direct-to-S3 URL, or a URL to a Go
-service that handles file uploads. It's up to you, but its good to split off
-file uploads to a separate service to keep your API servers free to do more
-impactful work than serving files.
+service that handles file uploads. splitting file uploads to a separate service
+and hosting them elsewhere keeps the API server free to do more productive work
+than reading and writing files.
 
 ### Method B: Upload from URL
 
@@ -174,19 +174,19 @@ in the future, and can be used to link the file to the user that uploaded it.
 ```
 
 Supporting both might not be necessary, but if they are, just support both the
-image types you need and the JSON alternative of that. HTTP makes that
+image types needed and the JSON alternative of that. HTTP makes that
 incredibly easy to do thanks to being able to switch `Content-Type`.
 
 ### Method 3: Separate metadata resource
 
-The above examples are great for simple file uploads, but what if you need to
+The above examples are great for simple file uploads, but what if there is a need to
 upload metadata with the file? This is where things get a bit more complex. 
 
 One approach would be multipart forms, but they're pretty complex to work with
-and not ideal for large files. If sending a massive video file, you don't want
+and not ideal for large files. If sending a massive video file, it's not ideal
 to have to send the title, description, and tags in the same request as the
-video file. If the video file upload fails, you'll have to re-upload the video
-file and all of the metadata again.
+video file. If the video file upload fails, it would have to be re-uploaded with
+the video file and all of the metadata again.
 
 The way YouTube handles uploads via API are an interesting examples of splitting
 out metadata and a video file. They use a two-step process which focuses on
@@ -222,7 +222,8 @@ Content-Type: application/json; charset=UTF-8
 }
 ```
 
-The response then contains a `Location` header with a URL to the video upload endpoint:
+The response then contains a `Location` header with a URL to the video upload
+endpoint:
 
 ```http
 HTTP/1.1 200 OK
@@ -243,45 +244,43 @@ Content-Type: video/mp4
 <BINARY_FILE_DATA>
 ```
 
-What's cool about this approach, is that URL _could_ be part of your main API,
+What's cool about this approach, is that URL _could_ be part of the main API,
 or it _could_ be a totally different service. It could be a direct-to-S3 URL,
 Cloudinary, or some other service that handles file uploads. 
 
 Larger companies will be more prone to building a service to handle such files
-coming in, whilst smaller teams might want to keep things simple and let their
-API do the heavy lifting. The larger the file, the more likely you'll want to
-split that off, as having your API handle these huge files - even if the uploads
-are chunked - will keep the HTTP workers busy. Maintaining those connections
-might slow down a Rails-based API for a long time, for example, so having
-another service would help there.
+coming in, whilst smaller teams might want to keep things simple and let the API
+do the heavy lifting. The larger the file, the more likely it will be desirable
+to split that off, as having the API handle these huge files - even if the
+uploads are chunked - will keep the HTTP workers busy. Maintaining those
+connections might slow down a Rails-based API for a long time, for example, so
+having another service would help there.
 
 ## Best practices
 
 ### Check Content-Type and Content-Length
 
 It is worth noting that the `Content-Type` header is not always reliable, and
-you should not trust it. If you're expecting an image, you should check the
-first few bytes of the file to see if it is a valid image format. If you're
-expecting a CSV, you should check the first few lines to see if it is a valid
-CSV. **Never trust input.**
+should not be trusted. If expecting an image, check the first few bytes of the
+file to see if it is a valid image format. If expecting a CSV, check the first
+few lines to see if it is a valid CSV. **Never trust input.**
 
 The only thing worth mentioning on that request is the addition of
 `Content-Length`, which is basically the size of the image being uploaded. A
 quick check of `headers['Content-Length'].to_i > 3.megabytes` will let us
 quickly reply saying "This image is too large", which is better than waiting
-forever to say that. Sure, malicious folks could lie here, so your backend code
+forever to say that. Sure, malicious folks could lie here, so backend code
 will need to check the image size too. **Never trust input.**
 
 Protecting against large files is important, as it can be a denial of service
-attack. If you allow users to upload files, they could upload a 10GB file and
-fill up your disk space. This is why it's important to check the size of the
+attack. If users are allowed to upload files, they could upload a 10GB file and
+fill up disk space. This is why it's important to check the size of the
 file before writing it to disk. 
 
-To make sure it seems to be the right type, and to make sure it's not too large,
-you can read the file in chunks. This can be done with a simple `File.open` and
+To make sure it seems to be the right type, and to make sure it's not too large, read the file in chunks. This can be done with a simple `File.open` and
 `File.read` in Ruby, or similar in other languages. The file is read in chunks,
 and then written to a file on disk. This is a good way to handle large files, as
-you're not trying to load the whole file into memory at once.
+it's not trying to load the whole file into memory at once.
 
 ```ruby
 def update
@@ -307,7 +306,7 @@ end
 
 Allowing file uploads can introduce all sorts of new attack vectors, so it's worth being very careful about the whole thing. 
 
-One of the main issues with file uploads is directory traversal attacks. If you allow users to upload files, they could upload a file with a name like `../../etc/passwd`, which could allow them to read sensitive files on your server.
+One of the main issues with file uploads is directory traversal attacks. If users are allowed to upload files, they could upload a file with a name like `../../etc/passwd`, which could allow them to read sensitive files on the server.
 
 Uploading from a URL could allow for [Server-Side Request Forgery (SSRF)](https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/) attacks, where an attacker could upload a file from a URL that points to a sensitive internal resource, like an AWS metadata URL, or something like `localhost:8080` which allows them to scan for ports on the server.
 

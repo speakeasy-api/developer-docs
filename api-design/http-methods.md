@@ -1,6 +1,6 @@
 # Using HTTP methods
 
-We learned about URLs in _[What is a URL?](./what-is-a-url.md)_ which is how an
+We learned about URLs in _[What is a URL?](/api-design/urls)_ which is how an
 API defines its "resources". If an API request were a sentence, the URL would be the noun. In this section, we'll cover the verbs of API requests: HTTP methods.
 
 ```curl focus:1[1:3]

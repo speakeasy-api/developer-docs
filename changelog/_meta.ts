@@ -1,13 +1,13 @@
 export default {
   index: {
     theme: {
-      sidebar: true,
+      sidebar: false,
     },
   },
   "*": {
     theme: {
-      layout: "full",
-      sidebar: true,
+      layout: "overview",
+      sidebar: false,
       toc: false,
     },
   },

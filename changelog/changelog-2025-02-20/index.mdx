@@ -1,0 +1,158 @@
+---
+title: "UI Enhancements & deepObject Query Support for Terraform"
+description: "We've made UI improvements across the platform and added support for deepObject query parameters in Terraform."
+keywords:
+  [api, openapi, sdk generation, Terraform]
+image: "/media/changelogs/changelog-2025-02-20.png"
+date: 2025-02-20
+authors:
+  - name: Emre Tezisci
+  - image_url: "/media/author-headshots/emre.jpeg"
+featured_image: "/media/changelogs/changelog-2025-02-20.png"
+---
+
+import { Callout } from "~/components";
+
+
+## 📝 Speakeasy Studio: Navigate OpenAPI Specs with Ease
+Speakeasy Studio now provides a structured, interactive outline for OpenAPI specs and SDK README files, significantly improving the navigation and editing experience.
+
+## 📌 API Registry: Smarter Tracking, Seamless Organization  
+We've redesigned the API Registry to make it even more powerful: from tracking changes at-a-glance, to sharing any API revision with a click.
+
+🏗️ **DeepObject Query Parameter Support for Terraform Providers**  
+Terraform provider generation now supports `style: deepObject`. This improves usability and reduces complexity for consumers by allowing them to define structured attributes in Terraform configurations, instead of needing to manually construct key-value query strings.
+
+---
+
+## 📝 Speakeasy Studio: Navigate OpenAPI Specs with Ease  
+import studio from "./assets/changelog-2025-02-20-studio.mp4";
+
+<div className="mt-10">
+  <video controls={false} loop={true} autoPlay={true} width="100%">
+    <source src={studio} type="video/mp4" />
+  </video>
+</div>
+
+OpenAPI specs are powerful but often overwhelming—long, complex, and difficult to navigate. Finding key details like authentication methods, endpoints, or dependencies can be time-consuming and frustrating.  
+
+### What’s New?  
+Speakeasy Studio now provides a structured, interactive outline for OpenAPI specs and SDK README files, making it effortless to:  \
+✅ **Jump to key sections** like servers, security settings, and endpoints.  
+✅ **Quickly locate dependencies** without endless scrolling.  
+✅ **Improve accuracy** by reducing the risk of missing critical spec details.  
+
+This update eliminates the pain of manually searching through massive API definitions. Everything you need is now neatly organized and just a click away.  
+
+---
+
+## 📌 API Registry: Smarter Tracking, Seamless Organization  
+import api_registry from "./assets/changelog-2025-02-20-api-registry.mp4";
+
+<div className="mt-10">
+  <video controls={false} loop={true} autoPlay={true} width="100%">
+    <source src={api_registry} type="video/mp4" />
+  </video>
+</div>
+
+The API Registry page is the central hub for tracking OpenAPI document revisions, SDK dependencies, and API history—all in one place.
+
+### **What’s New?**  
+We've redesigned the API Registry to make it even more powerful:  \
+✅ **Improved artifact grouping** for better organization and clarity.  
+✅ **More structured spec representation**, making it easier to track changes at a glance.  
+✅ **One-click API sharing**, allowing any revision to be turned into a public URL instantly.  
+✅ **Namespace archiving**, helping teams manage deprecated or inactive APIs effortlessly.  
+
+Whether you're maintaining API history, sharing specs, or tracking dependencies, the new API Registry page makes API management more intuitive and efficient.  
+
+---
+
+## 🏗️ DeepObject Query Parameter Support for Terraform Providers
+
+Some APIs accept structured objects as query parameters. For example, an API might support filtering on multiple fields (`status` and `type`):
+```
+GET /users?filter[status]=active&filter[type]=premium
+```
+
+### Before DeepObject Support
+Without `deepObject` support, consumers of a Terraform provider for this API would need to construct query strings manually. This means defining query parameters as flat key-value pairs or concatenating them into a string:
+
+```hcl
+data "example_resource" "query" {
+  query = "filter[status]=active&filter[type]=premium"
+}
+```
+
+This approach is unintuitive, error prone, and hard to maintain.
+
+### With DeepObject Support
+
+Now, Speakeasy supports `style: deepObject` in OpenAPI specifications. For example:
+
+```yaml
+paths:
+  /users:
+    get:
+      parameters:
+        - name: filter
+          in: query
+          style: deepObject
+          explode: true
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+              type:
+                type: string
+```
+
+With `deepObject` support, Terraform provider consumers can now define query parameters as structured attributes — eliminating the need to construct manual query strings:
+
+```hcl
+data "example_resource" "query" {
+  parameters = {
+    status = "active"
+    type   = "premium"
+  }
+}
+```
+
+### Key Benefits
+This has a significant impact on consumer ergonomics:
+✅ Eliminates manual query string construction\
+✅ Supports complex filtering and nested input\
+✅ Ensures Terraform provider behavior matches API expectations
+
+---
+
+## 🛠️ New Features and Bug Fixes 🐛
+
+<Callout title="NOTE" variant="info">
+  Based on the most recent CLI version: [**Speakeasy v2.493.8**](https://github.com/speakeasy-api/openapi-generation/releases/tag/v2.493.8)
+</Callout>
+
+### Platform
+- 🐛 Fix: Prevented compilation errors caused by special characters in `operationId`.
+- 🐛 Fix: Fixed handling of `null` values in maps and arrays for better representation.
+
+### PHP
+- 🐝 Feat: Added support for deepObject query parameters.
+- 🐛 Fix: Improved query and path parameter handling.
+
+### Go
+- 🐛 Fix: Resolved issues with circular references in Go usage snippets.
+- 🐛 Fix: Prevented Go panics related to `const` query parameters.
+
+### TypeScript
+- 🐛 Fix: Reordered standalone function code for better readability.
+- 🐝 Feat: Introduced `APIPromise`, a custom thenable type that exposes `$inspect()` for SDK functions.
+
+### Terraform
+- 🐝 Feat: Improved float/int32 number format handling.
+- 🐝 Feat: Enabled custom HTTP headers via provider configuration.
+- 🐛 Fix: Added support for nullable array types in Terraform SDKs.
+
+### Java
+- 🐝 Feat: Removed Apache `httpclient` as a dependency, reducing SDK size and improving maintainability.

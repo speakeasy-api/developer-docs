@@ -12,7 +12,7 @@ client and server.
 
 Filtering allows API users to request only the data they need, "filtering out"
 irrelevant things on the server-side instead of making them do it themselves on
-the client-side. Reducing the amount of data you're returning and transferring
+the client-side. Reducing the amount of data being returned and transferred
 reduces server resources and improves performance, which reduces carbon
 emissions and saves money.
 
@@ -35,7 +35,7 @@ the implementation, but there are a few common practices and standards to consid
 
 ### Simple Filtering
 
-Starting with the most basic, you can filter by a single parameter using a query
+Starting with the most basic, filter by a single parameter using a query
 parameter with a sensible name.
 
 ```bash
@@ -89,7 +89,7 @@ very helpful.
 GET /products?filter[price]=20
 ```
 
-To solve this you can use operators to specify the type of comparison, like
+To solve this, use operators to specify the type of comparison, like
 "less than", "greater than", or "not equal". These are usually implemented with
 suffixes or specific words added to the parameter name. For example, `GET
 /products?price_gt=50` would retrieve products where the price is greater than
@@ -100,11 +100,11 @@ suffixes or specific words added to the parameter name. For example, `GET
 - `_gte` and `_lte` for greater than or equal to, and less than or equal to, respectively.
 
 Some people are tempted to try and use operators as a prefix for the value, like
-`GET /products?price=<20` but that gets fairly awkward if you try less than or
-equal: `GET /products?price=<=20`, everything needs to be escaped, and its
+`GET /products?price=<20` but that gets fairly awkward if trying 'less than or
+equal': `GET /products?price=<=20`, everything needs to be escaped, and its
 impossible to read.
 
-Sticking with the filter array approach, you can make this a little more
+Sticking with the filter array approach, this can be made a little more
 readable:
 
 ```bash
@@ -117,7 +117,7 @@ This is a little more verbose, but it's much easier to read and understand.
 
 ### Advanced Filtering
 
-Instead of trying to invent your own approach, there are standards that can be
+Instead of trying to invent a new approach, there are standards that can be
 used to make this easier for everyone, like
 [FIQL](https://datatracker.ietf.org/doc/html/draft-nottingham-atompub-fiql-00),
 [RSQL](https://github.com/jirutka/rsql-parser), or
@@ -157,22 +157,21 @@ RSQL uses a comma to separate filters, which is a little more readable than the
 semicolon and doesn't need to be URL encoded. It can make some amazing queries
 like `last_name==foo*,(age=lt=55;age=gt=5)`.
 
-Whichever of these formats you pick will have pros and cons, but the most
-important thing is to pick a standard instead of reinventing the wheel so you
-can leverage existing libraries and tools on both the client-side and the
+Whichever of these formats is picked it will have pros and cons, but the most
+important thing is to pick a standard instead of reinventing the wheel, to leverage existing libraries and tools on both the client-side and the
 server-side. It's important to reuse existing tools for things like this instead
-of wasting infinite time building and maintaining your own custom solutions
-instead of solving genuine problems for your users.
+of wasting infinite time building and maintaining custom solutions
+instead of solving genuine problems for users.
 
 ## What is Sorting?
 
-What order should you return resources in a collection? 
+What order to return resources in a collection? 
 
 - Oldest first or newest first? 
 - Alphabetical based on the name?
 - Highest price to lowest price?
 
-Whatever you pick at first may be a sensible default, but it's likely that users
+Whichever is picked at first may be a sensible default, but it's likely that users
 will want to change this.
 
 For APIs, sorting is the process of arranging resources in a specific order
@@ -200,70 +199,73 @@ products, we can add `order=desc` to return the most expensive first.
 
 This convention is very closely related to the SQL `ORDER BY` clause, which
 takes a database property and an order in exactly the same way. Unlike a
-database query your API does not have to allow clients to sort by every single
-property, you could restrict to a few common use-cases and make sure they are
+database query the API does not have to allow clients to sort by every single
+property, it could be restricted to a few common use-cases and make sure they are
 well optimized.
 
 ## Best Practices
 
 ### Consistency and Documentation
 
-When designing filters for your REST API, it's important to make sure they are
-intuitive and consistent. Use clear, descriptive names for your parameters. For
+When designing filters for the REST API, it's important to make sure they are
+intuitive and consistent. Use clear, descriptive names for the parameters. For
 example, `price_lt` is much easier to understand than something vague like
-`lower_price`. Providing solid documentation is equally important—developers
+`lower_price`. Providing solid documentation is equally important. Developers
 should be able to quickly find information on the available filters and how to
 use them.
 
 ### Validation and Error Handling
 
 Validation is also critical. If a user tries to apply a filter with invalid data
-(like `price=abc`), your API should return a helpful error message rather than
+(like `price=abc`), the API should return a helpful error message rather than
 just failing silently or returning incorrect results. Be sure to handle edge
 cases as well, such as empty values or invalid characters in the query string.
 
-_Learn more about [error handling in REST APIs](/api-design/responses/errors)._
+_Learn more about [error handling in REST APIs](/api-design/errors)._
 
 ### Performance Considerations
 
-The more you allow clients to customize their requests, the harder it becomes to
-set up caching rules and optimize database queries that might be produced. 
+The more that clients are allowed to customize their requests, the harder it
+becomes to set up caching rules and optimize database queries that might be
+produced. 
 
 Anyone using an SQL database will know that the more complex the query, the
-harder it is to optimize. If you're allowing clients to send in completely
-arbitrary queries, it's going to be very hard to optimize your database because
-you wont know what indexes to create. You are left retroactively optimizing
-popular usages, which might be ok for an internal API used by a limited number
-of colleagues who can warn you, but is a nightmare for teams maintaining public
-APIs where an API could be brought down by a single user launching a new
-product.
+harder it is to optimize. If clients are allowed to send in completely arbitrary
+queries, it's going to be very hard to optimize the database because it won't be
+clear what indexes to create. Being left retroactively optimizing for popular
+usages, which might be ok for an internal API used by a limited number of
+colleagues who can warn of popular usages, but is a nightmare for teams
+maintaining public APIs where an API could be brought down by a single user
+launching a new product.
 
 Rate limiting can help, but it's worth questioning: what is the purpose of this
 API? 
 
-Generally an API is not meant to be a database-over-HTTP, so if you feel
-like you're starting to recreate SQL or some other query language, you might be
-going down the wrong path. There are databases which can be used over HTTP that
-do not require you to create a database, like FaunaDB, Firebase, or DynamoDB,
-which might be a better fit.
+Generally an API is not meant to be a database-over-HTTP, so if it feel like it
+is starting to recreate SQL or some other query language, it might be going down
+the wrong path. There are databases which can be used over HTTP that do not
+require creation of a database, like FaunaDB, Firebase, or DynamoDB, which might
+be a better fit.
 
 ### URL Design
 
-Sometimes a filter could or should have been a different endpoint, a
-different parameter, or a different way of structuring the data. 
+Sometimes a filter could or should have been a different endpoint, a different
+parameter, or a different way of structuring the data. 
 
 If the clients have asked for the ability to show off some "Hot Bargains",
 instead of telling clients to pick numbers based on price with `GET
-/products?price_lt=20&sort=price`, you could use `GET /products/bargains`.
+/products?price_lt=20&sort=price`, why not make it quicker and easier for
+everyone by creating `GET /products/bargains`.
 
-Cachability is improved, because you can set a 24 hour network cache on that
+Cachability is improved, because you can set a 24 hour [network
+cache](/api-design/caching) on that
 which will be shared by all clients. 
 
 Consistency is improved, because the web and iOS versions of the same
 application aren't going to pick slightly different numbers for what is
 considered a bargain.
 
-## Conclusion
+## Summary
 
 Filtering is a powerful tool for API designers, allowing users to request only
 the data they need. By using query parameters, operators, and standard query
