@@ -1,4 +1,4 @@
-import { SidebarSeparator } from "~/components/SidebarSeparator";
+import { SidebarSeparator } from "@/components/ui/SidebarSeparator";
 
 export default {
   index: {
@@ -70,7 +70,7 @@ export default {
   "developer-experience": {
     title: "API developer experience",
   },
-  "consistency": {
+  consistency: {
     title: "Enforcing API consistency",
   },
 };

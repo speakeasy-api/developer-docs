@@ -1,5 +1,4 @@
-import { SidebarSeparator } from "~/components/SidebarSeparator";
-import { HomeIcon } from "~/icons/src/HomeIcon";
+import { SidebarSeparator } from "@/components/ui/SidebarSeparator";
 
 const Title = ({ children }: { children: React.ReactNode }) => (
   <div className="flex items-center">{children}</div>
@@ -7,12 +6,7 @@ const Title = ({ children }: { children: React.ReactNode }) => (
 
 export default {
   index: {
-    title: (
-      <Title>
-        <HomeIcon width={16} height={15} className="mr-2" />
-        Home
-      </Title>
-    ),
+    title: <Title>Home</Title>,
     theme: {
       layout: "overview",
       toc: false,
@@ -64,7 +58,7 @@ export default {
     title: <SidebarSeparator>Agent tools</SidebarSeparator>,
   },
   "model-context-protocol": {
-      title: " Generate MCP servers",
+    title: " Generate MCP servers",
   },
   /*
     Terraform

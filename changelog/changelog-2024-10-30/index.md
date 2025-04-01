@@ -11,7 +11,7 @@ authors:
 featured_image: "/media/announcement-series-a.png"
 ---
 
-import { Callout } from "~/components";
+
 
 No Changelog this week. Just a big thank you to our customers, partners, and team for helping us reach this milestone. We're excited to continue building the future of developer experience with you all.
 
