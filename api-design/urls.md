@@ -163,7 +163,7 @@ Instead of using sub-collections, we can use a "top-level collection" with query
 ?sort=date&size=10&color=red
 ```
 
-In REST APIs, **query parameters** are used to refine the data you're requesting, allowing for [filtering & sorting](/api-design/filtering-responses.mdx), and [pagination](/api-design/pagination).
+In REST APIs, **query parameters** are used to refine the data you're requesting, allowing for [filtering & sorting](/api-design/filtering-responses), and [pagination](/api-design/pagination).
 
 - `size=10` asks the server to return 10 products.
 - `color=red` asks the server to return only red products.

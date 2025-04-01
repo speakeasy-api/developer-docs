@@ -27,7 +27,7 @@ export default {
       toc: false,
     },
   },
-  "release-python-v2-alpha": {
+  "release-python": {
     theme: {
       layout: "full",
       toc: false,

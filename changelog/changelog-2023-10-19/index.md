@@ -2,12 +2,12 @@
 title: "Changelog: Unity and C# now available as generation targets!"
 description: "New features to the Speakeasy Platform - October 19th, 2023."
 keywords: [api, openapi, swagger, sdk generation, devex, dx, developer experience]
-image: "/media/changelog-2023-10-19.png"
+image: "/media/changelogs/changelog-2023-10-19.png"
 date: 2023-10-19
 authors:
   - name: Anuraag Nalluri
   - image_url: "/media/author-headshots/anuraag.jpeg"
-featured_image: "/media/changelog-2023-10-19.png"
+featured_image: "/media/changelogs/changelog-2023-10-19.png"
 ---
 
 While we haven’t had a Changelog post for a minute, the Eng team here at Speakeasy has been heads down building out a laundry list of new features and capabilities. In this Changelog we share a few of these new features including the addition of Unity and C# as generation targets.
@@ -39,7 +39,7 @@ Our SDKs now support multi-level namespacing to enable interfaces that more clos
 
 ### Monkey Patching SDKs via .genignore
 
-We now support the use of `.genignore` to monkey patch your SDKs with any custom business logic, usage snippets, or documentation that regeneration won’t override! You can read more about it [here](/docs/customize-sdks/monkey-patching)
+We now support the use of `.genignore` to monkey patch your SDKs with any custom business logic, usage snippets, or documentation that regeneration won’t override! You can read more about it in the [monkey patching documentation](/docs/customize/code/monkey-patching).
 
 ## 🐜 Improvements and Bug Fixes 🐛
 

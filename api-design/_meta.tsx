@@ -8,6 +8,9 @@ export default {
       toc: false,
     },
   },
+  "picking-architectures": {
+    title: "Choosing an API Architecture",
+  },
   "request-section": {
     type: "separator",
     title: <SidebarSeparator>Designing API Requests</SidebarSeparator>,
@@ -18,7 +21,7 @@ export default {
   "http-methods": {
     title: "Using HTTP methods",
   },
-  "collections": {
+  collections: {
     title: "Resources & Collections",
   },
   parameters: {
@@ -63,5 +66,11 @@ export default {
   },
   "rate-limiting": {
     title: "Protecting APIs with rate limits",
+  },
+  "developer-experience": {
+    title: "API developer experience",
+  },
+  "consistency": {
+    title: "Enforcing API consistency",
   },
 };
