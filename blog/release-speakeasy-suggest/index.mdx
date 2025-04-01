@@ -12,13 +12,13 @@ tags:
 featured_image: "/media/release-speakeasy-suggest.png"
 ---
 
-[`Speakeasy Suggest`](/post/release-speakeasy-suggest), our AI-powered tool for automatically improving OpenAPI specs, is available now through the [Speakeasy CLI](/docs/speakeasy-cli/suggest/README) or as a [Github workflow](/docs/workflow-reference). Provide your own OpenAI API key, or simply use ours by default. We’d love to hear your feedback in our [Slack community](https://join.slack.com/t/speakeasy-dev/shared_invite/zt-1df0lalk5-HCAlpcQiqPw8vGukQWhexw)!
+[`Speakeasy Suggest`](/post/release-speakeasy-suggest), our AI-powered tool for automatically improving OpenAPI specs, is available now through the [Speakeasy CLI](/docs/speakeasy-cli/suggest/README) or as a [Github workflow](/docs/workflow-reference). Provide your own OpenAI API key, or simply use ours by default. We'd love to hear your feedback in our [Slack community](https://join.slack.com/t/speakeasy-dev/shared_invite/zt-1df0lalk5-HCAlpcQiqPw8vGukQWhexw)!
 
 Stay tuned for more posts on `Suggest` output as Github PRs when configuring it as a workflow, interesting results on a variety of specs, and its downstream effects on Speakeasy-generated SDKs!
 
-✨ We plan on open sourcing the core of our LLM-based agent for general-purpose use. Its primary function will be to serve as a JSON document transformer that receives a custom validation function, list of errors, and original document as inputs.
+✨ We plan on open sourcing the core of our LLM-based agent for general-purpose use. Its primary function will be to serve as a JSON document transformer that receives a custom validation function, list of errors, and original document as inputs.
 
-import video_url from "./assets/speakeasy-suggest-demo.mp4";
+import video_url from "@/content/blog/release-speakeasy-suggest/assets/speakeasy-suggest-demo.mp4";
 
 <video controls={false} loop={true} autoPlay={true} width="100%">
   <source src={video_url} type="video/mp4" />
@@ -26,7 +26,7 @@ import video_url from "./assets/speakeasy-suggest-demo.mp4";
 
 ## Background
 
-At Speakeasy, we’ve been automating the creation of high-quality developer surfaces for API companies around the world. These include SDKs across multiple languages and even Terraform providers. Today, our generation logic is built on top of OpenAPI, requiring users to supply an OpenAPI schema to effectively use our tooling and generate these surfaces.
+At Speakeasy, we've been automating the creation of high-quality developer surfaces for API companies around the world. These include SDKs across multiple languages and even Terraform providers. Today, our generation logic is built on top of OpenAPI, requiring users to supply an OpenAPI schema to effectively use our tooling and generate these surfaces.
 
 Unfortunately, OpenAPI is a complicated specification with lots of potential for misconfiguration and unnecessary repetition. For example, the following schema operations contain duplicate operationIDs (i.e., `listDrinks`), duplicate inline schema objects, and no examples.
 
@@ -119,15 +119,15 @@ Unfortunately, OpenAPI is a complicated specification with lots of potential for
                 - price
 ```
 
-As a result of this complexity, many companies create a spec to benefit from the vast ecosystem of OpenAPI tooling (e.g. docs providers), but they don’t have resources or processes in place to maintain it as a first-class resource.
+As a result of this complexity, many companies create a spec to benefit from the vast ecosystem of OpenAPI tooling (e.g. docs providers), but they don't have resources or processes in place to maintain it as a first-class resource.
 
-At Speakeasy, we’ve worked with many users’ specs to ensure they are compliant, clean, and accurately depict the state of their API. By leveraging our OpenAPI expertise and custom spec extensions, we’ve been able to create specs that produce idiomatic and human-readable SDKs for dozens of companies. **But wouldn’t it be great if we could automate this? Enter Speakeasy Suggest.**
+At Speakeasy, we've worked with many users' specs to ensure they are compliant, clean, and accurately depict the state of their API. By leveraging our OpenAPI expertise and custom spec extensions, we've been able to create specs that produce idiomatic and human-readable SDKs for dozens of companies. **But wouldn't it be great if we could automate this? Enter Speakeasy Suggest.**
 
 ## Building Speakeasy Suggest
 
 ### What is it?
 
-`Speakeasy Suggest` is our LLM-based agent that, given an OpenAPI document, automatically suggests fixes, applies them, and outputs the modified spec. Using AI, we’re able to offload the burden of spec management from API producers. `Suggest` can be invoked through both the Speakeasy CLI (outputs modified spec to the local filesystem) and our GitHub Action (creates PR) today.
+`Speakeasy Suggest` is our LLM-based agent that, given an OpenAPI document, automatically suggests fixes, applies them, and outputs the modified spec. Using AI, we're able to offload the burden of spec management from API producers. `Suggest` can be invoked through both the Speakeasy CLI (outputs modified spec to the local filesystem) and our GitHub Action (creates PR) today.
 
 Applying `Suggest` on the invalid spec above, we produce a valid document with unique operationIDs, re-use of common objects where applicable, and better examples.
 
@@ -214,21 +214,28 @@ components:
 ...
 ```
 
-For the remainder of this post, we’d like to delve deeper into the decision-making and engineering challenges behind `Speakeasy Suggest`. To do that, we’ll start from the beginning.
+For the remainder of this post, we'd like to delve deeper into the decision-making and engineering challenges behind `Speakeasy Suggest`. To do that, we'll start from the beginning.
 
 ### Good Input = Good Output
 
-Just as a polished OpenAPI spec may be used to generate high-quality SDKs, an LLM requires input with sufficient specificity and detail to produce useful suggestions for a document. It became quickly obvious to us that dumping a spec and naively asking an LLM to “make it better” would not be fruitful.
+Just as a polished OpenAPI spec may be used to generate high-quality SDKs, an LLM requires input with sufficient specificity and detail to produce useful suggestions for a document. It became quickly obvious to us that dumping a spec and naively asking an LLM to "make it better" would not be fruitful.
 
-We found that our in-house validator (i.e. `speakeasy validate` from our [CLI](https://github.com/speakeasy-api/speakeasy)) would be effective at adding a more specific, deterministic context to our LLM prompt. Our validator is built using [vacuum](https://github.com/daveshanley/vacuum), enabling us to specify **custom rules**. Since these rules are defined by us, they output fixed error messages and line numbers for an array of spec issues. Below is a table highlighting a few of the errors, the suggestions we’d hope to receive from the LLM when including them in the prompt, and explanations of the resulting effects on Speakeasy-generated SDKs when applying those suggestions to the OpenAPI spec.
+We found that our in-house validator (i.e. `speakeasy validate` from our [CLI](https://github.com/speakeasy-api/speakeasy)) would be effective at adding a more specific, deterministic context to our LLM prompt. Our validator is built using [vacuum](https://github.com/daveshanley/vacuum), enabling us to specify **custom rules**. Since these rules are defined by us, they output fixed error messages and line numbers for an array of spec issues. Below is a table highlighting a few of the errors, the suggestions we'd hope to receive from the LLM when including them in the prompt, and explanations of the resulting effects on Speakeasy-generated SDKs when applying those suggestions to the OpenAPI spec.
 
-| Validation Error                             | Suggestion                                                  | Explanation                                                       |
-| -------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
-| duplicate operationId fields within same tag | Change value of offending operationId's                     | Compiles without method names conflicting to get a functional SDK |
-| duplicate inline object schemas              | Move to shared component                                    | Much shorter and more human-looking class names                   |
-| missing examples                             | Add examples for parameter, request bodies, responses, etc. | Generated usage snippets are more human-looking                   |
+<Table 
+  data={[
+    { validationError: "duplicate operationId fields within same tag", suggestion: "Change value of offending operationId's", explanation: "Compiles without method names conflicting to get a functional SDK" },
+    { validationError: "duplicate inline object schemas", suggestion: "Move to shared component", explanation: "Much shorter and more human-looking class names" },
+    { validationError: "missing examples", suggestion: "Add examples for parameter, request bodies, responses, etc.", explanation: "Generated usage snippets are more human-looking" }
+  ]}
+  columns={[
+    { key: "validationError", header: "Validation Error" },
+    { key: "suggestion", header: "Suggestion" },
+    { key: "explanation", header: "Explanation" }
+  ]}
+/>
 
-Each of the validation errors above is present in our invalid spec. So let’s examine the generated Go SDK code before and after running `Speakeasy Suggest` on the document.
+Each of the validation errors above is present in our invalid spec. So let's examine the generated Go SDK code before and after running `Speakeasy Suggest` on the document.
 
 **Before**
 
@@ -322,9 +329,9 @@ func (s *drinks) ListDrinks(ctx context.Context, request operations.ListDrinksRe
 }
 ```
 
-The code in “Before” would not even compile due to duplicate method names from the conflicting operationIDs. As such, we wouldn’t even generate the SDK without throwing a validation error but have done so here simply to show the differences in output. Also, notice the stark difference in the generated class names the successful responses are being deserialized to (i.e. `ListDrinks200ApplicationJSON` vs. `Drink`).
+The code in "Before" would not even compile due to duplicate method names from the conflicting operationIDs. As such, we wouldn't even generate the SDK without throwing a validation error but have done so here simply to show the differences in output. Also, notice the stark difference in the generated class names the successful responses are being deserialized to (i.e. `ListDrinks200ApplicationJSON` vs. `Drink`).
 
-Let’s also examine the differences in the README’s usage snippets your users will reference in their implementation.
+Let's also examine the differences in the README's usage snippets your users will reference in their implementation.
 
 **Before**
 
@@ -380,9 +387,9 @@ func main() {
 
 In addition to better method names and more human-readable classnames, the example value for the drink name parameter is much more relevant. This makes the generated SDK easier for end-users to consume and integrate into their applications.
 
-The validation errors we’ve applied suggestions for are just a small sample of the improvements we can make to an OpenAPI spec. By including them in the prompt, we’ve enabled a feedback loop where even non-critical errors that don’t block SDK generation are encouraged to be added if addressing them improves the quality of the SDK output.
+The validation errors we've applied suggestions for are just a small sample of the improvements we can make to an OpenAPI spec. By including them in the prompt, we've enabled a feedback loop where even non-critical errors that don't block SDK generation are encouraged to be added if addressing them improves the quality of the SDK output.
 
-Let’s delve into how we receive these suggestions from the LLM in a format that allows us to apply them to the spec.
+Let's delve into how we receive these suggestions from the LLM in a format that allows us to apply them to the spec.
 
 ## Structured Output Parser
 
@@ -452,7 +459,7 @@ class JsonOutputParser<T> extends AgentActionOutputParser {
 }
 ````
 
-This ensured responses were in a form that was easy for us to extract the JSON patch from. However, we soon found that our agent would hallucinate invalid JSON patches that referenced keys that didn’t exist in the OpenAPI document. This required augmenting our agent with another tool to verify the validity of these patches by checking if we could apply them.
+This ensured responses were in a form that was easy for us to extract the JSON patch from. However, we soon found that our agent would hallucinate invalid JSON patches that referenced keys that didn't exist in the OpenAPI document. This required augmenting our agent with another tool to verify the validity of these patches by checking if we could apply them.
 
 ```tsx
 export class JsonPatchValidator extends DynamicTool {
@@ -488,18 +495,18 @@ Example output: "valid", "error: path /baz does not exist"`;
 
 💡For a yaml spec, `Speakeasy Suggest` takes extra caution by converting it to JSON before applying the patch and converting it back to yaml while preserving the original key ordering.
 
-We’ll discuss several of the tools we equipped our agent within the next section, where we detail the decision-making process of moving forward with a custom agent.
+We'll discuss several of the tools we equipped our agent within the next section, where we detail the decision-making process of moving forward with a custom agent.
 
 ## Benchmarking Different Approaches
 
-There were two main approaches we tested — _Custom Agent vs. Retrieval Augmented Generation (RAG)_. In order to not exceed GPT-4’s token limits, we provide a small range of lines surrounding the error from the spec to the LLM prompt. As a result, both approaches need to be capable of enabling the LLM to gather information from the full spec in order to return valid JSON patches. The primary differentiator is how this is achieved:
+There were two main approaches we tested — _Custom Agent vs. Retrieval Augmented Generation (RAG)_. In order to not exceed GPT-4's token limits, we provide a small range of lines surrounding the error from the spec to the LLM prompt. As a result, both approaches need to be capable of enabling the LLM to gather information from the full spec in order to return valid JSON patches. The primary differentiator is how this is achieved:
 
 - An agent utilizes tools to enable the LLM to execute custom logic to traverse the spec
 - In RAG, we use external data to augment our prompts. In our case, this involves the standard method of using a vector store to persist embeddings of the spec, which the LLM can quickly index when trying to answer the prompt.
 
 ### **Agent with Custom Tools**
 
-Directly from the langchain docs: “In agents, a language model is used as a reasoning engine to determine which actions to take and in which order.” Each action an agent can take corresponds to one of the tools defined by us that executes a custom function. Since we’re using GPT-4 as our LLM, this takes advantage of [OpenAI’s function calling](https://openai.com/blog/function-calling-and-other-api-updates). Our tools take the OpenAPI spec as input and are capable of performing a range of operations on it.
+Directly from the langchain docs: "In agents, a language model is used as a reasoning engine to determine which actions to take and in which order." Each action an agent can take corresponds to one of the tools defined by us that executes a custom function. Since we're using GPT-4 as our LLM, this takes advantage of [OpenAI's function calling](https://openai.com/blog/function-calling-and-other-api-updates). Our tools take the OpenAPI spec as input and are capable of performing a range of operations on it.
 
 **Searching for line numbers that contain a particular string**
 
@@ -590,9 +597,9 @@ Asking for a Suggestion!
 [{"op": "add", "path": "/components/schemas/Error", "value": {"type": "object", "required": ["code", "message"], "properties": {"code": {"type": "integer", "format": "int32"}, "message": {"type": "string"}}}}, {"op": "replace", "path": "/paths/~1pets/get/parameters/0/schema", "value": {"$ref": "#/components/schemas/Error"}}, {"op": "replace", "path": "/components/schemas/Error", "value": {"$ref": "#/components/schemas/Error"}}]
 ```
 
-But upon further review, we found it added the shared component and then swapped out its own schema definition with the `$ref`, thinking it was one of the duplicate schemas itself despite having a clear line number to check against. Since RAG can’t gather more context via function calls, it would use a similarity search to suggest fixes for same-name fields on the wrong lines. Due to this behavior, this approach wasn’t sufficient for returning JSON patches with the correct paths.
+But upon further review, we found it added the shared component and then swapped out its own schema definition with the `$ref`, thinking it was one of the duplicate schemas itself despite having a clear line number to check against. Since RAG can't gather more context via function calls, it would use a similarity search to suggest fixes for same-name fields on the wrong lines. Due to this behavior, this approach wasn't sufficient for returning JSON patches with the correct paths.
 
-The agent fared much better on all validation errors ranging across a broad span of complexity. Despite the fact that it took 2-3x as long to execute, the agent’s ability to “reason” through a sequence of actions via the execution of custom functions proved to be critical for good suggestion quality. The ability to equip the agent with any new tool we could think of makes it more flexible and future-proof for our use-case than embedding the OpenAPI schema. This is the most important factor in ensuring `Suggest` is a useful product, as OpenAPI specs vary greatly in shape, purpose, and functionality, much like the tools and people who produce them.
+The agent fared much better on all validation errors ranging across a broad span of complexity. Despite the fact that it took 2-3x as long to execute, the agent's ability to "reason" through a sequence of actions via the execution of custom functions proved to be critical for good suggestion quality. The ability to equip the agent with any new tool we could think of makes it more flexible and future-proof for our use-case than embedding the OpenAPI schema. This is the most important factor in ensuring `Suggest` is a useful product, as OpenAPI specs vary greatly in shape, purpose, and functionality, much like the tools and people who produce them.
 
 ### Conclusion
 
