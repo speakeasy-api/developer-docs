@@ -35,7 +35,7 @@ brew install speakeasy-api/homebrew-tap/speakeasy
 speakeasy generate sdk -s openapi.yaml --output ./sdk -l typescript
 ```
 
-<Callout title="Breaking changes" variant="info">
+<Callout title="Breaking changes" type="info">
 If you are currently using Speakeasy for TypeScript generation, we've listed the breaking changes in the later sections of this post as well as instructions on using the new generator.
 </Callout>
 
@@ -45,7 +45,7 @@ If you are currently using Speakeasy for TypeScript generation, we've listed the
 
 One key decision we took when designing for new TypeScript SDKs was to stick as close to modern and ubiquitous web standards as possible. This included switching from Axios to the Fetch API as our HTTP client. This API includes all the necessary building blocks to make HTTP requests: `fetch`, `Request`, `Response`, `Headers`, `FormData`, `File` and `Blob`. Previously, SDKs leaked some of the Axios API and it meant that users needed to be aware of it which was undesirable. Making this move also ensures that your SDKs will work seamlessly on both the server & browser. We also observed frameworks like `Next.js` which specifically augment the fetch API to enable caching of HTTP responses within React Server Components. That is now unlocked with new SDKs.
 
-In addition to browser compatibility, the standard nature of this SDK means it will work in modern JavaScript runtimes. This includes: Node.js, Deno, Bun, React Native. We’ve already been able to run our extensive suite to confirm that new SDKs work in Node.js, Bun and browsers. We’re working to expand our automated testing to cover Deno and React Native.
+In addition to browser compatibility, the standard nature of this SDK means it will work in modern JavaScript runtimes. This includes: Node.js, Deno, Bun, React Native. We've already been able to run our extensive suite to confirm that new SDKs work in Node.js, Bun and browsers. We're working to expand our automated testing to cover Deno and React Native.
 
 Wherever and however your users are building, they will be able to use your SDK.
 
@@ -105,8 +105,8 @@ We wanted to make sure the experience is ergonomic and found that exposing an [a
 
 One of the challenges, we've had to tackle when working on this feature was figuring out how to model these APIs within OpenAPI and we're proud to share that we've developed a proposed specification that is free from propietary extensions. It's vanilla OpenAPI and you can start describing your SSE endpoints with it today then generate SDKs with Speakeasy. As more and more chat-based products emerge, we want to ensure that the APIs and SDKs powering them are free from unnecessary vendor lock-in and instead move towards a common approach to describing them.
 
-[mdn-for-await-of]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
-[sse]: https://html.spec.whatwg.org/multipage/server-sent-events.html
+[mdn-for-await-of](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of)
+[sse](https://html.spec.whatwg.org/multipage/server-sent-events.html)
 
 ### Runtime validation powered by [Zod](https://zod.dev/)
 
@@ -143,7 +143,7 @@ run();
 // ]
 ```
 
-While validating user input is considered table stakes for SDKs, it’s especially useful to validate server data given the information we have in your OpenAPI spec. This can help detect drift between schema and server and prevent certain runtime issues such as missing response fields or sending incorrect data types.
+While validating user input is considered table stakes for SDKs, it's especially useful to validate server data given the information we have in your OpenAPI spec. This can help detect drift between schema and server and prevent certain runtime issues such as missing response fields or sending incorrect data types.
 
 ### Unions are here
 
@@ -241,55 +241,6 @@ const result = await sdk.payments.create({
 
 ### Support for big integers using the native `BigInt` type
 
-Similar to decimal types, there are numbers too large to be represented using JavaScript’s `Number` type. For this reason, we’ve introduced support for `BigInt` values.
+Similar to decimal types, there are numbers too large to be represented using JavaScript's `Number` type. For this reason, we've introduced support for `BigInt` values.
 
-In an OpenAPI schema, fields that are big integers can be modelled as strings with `format: bigint`.
-
-```typescript
-import { SDK } from "@speakeasy/super-sdk";
-
-const sdk = new SDK();
-const result = await sdk.doTheThing({
-  value: 67_818_454n,
-  value: BigInt("340656901")
-});
-```
-
-## Breaking changes
-
-### ES2020 and Node.js v18+
-
-In order to deliver our leanest TypeScript SDKs yet, we set out to avoid unnecessary third-party libraries, polyfills and transpilation which could inflate JavaScript bundles. Based on browser and backend usage statistics, we decided to create a support policy which targets JavaScript features that have been available for at least 3 years. Additionally, when it comes to Node.js in particular, we'll be supporting the current LTS releases. At the time of writing, this is version 18 ([source](https://nodejs.org/en/about/previous-releases)).
-
-### Moving from Axios to fetch
-
-Our previous TypeScript SDK generator used [Axios](https://axios-http.com/) as the underlying HTTP client. SDKs were also exposing Axios APIs to users establishing an unwanted expectation that they are familiar with this library and understand how to configure custom clients and requests. Fortunately, the [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) is a standard web platform API and has become ubiquitous across all runtimes, from browsers to React Native to Bun/Deno/Node.js. Switching to `fetch` means SDKs no longer pull in an unnecessary third-party dependency and leverage standard platform features.
-
-### Changes in SDK file structure
-
-In previous versions of our SDKs, various functionality such as model classes and types were nest in the package's directory structure under a `dist/` folder. While modern editors with language server support take the burden out of typing out imports, it was still unpleasant to see the build folder present in import paths. Many of our existing users commented as much and we fully agree so we've updated how we package SDKs into NPM modules and eliminated this folder from appearing in import paths. This is a breaking change but one that we think SDK owners and users will appreciate.
-
-We've also reorganised various supporting files in the SDK and moved away from the `internal/` package to `lib/`. We do not believe this is going to affect end-users of SDKs but, since it's a breaking change, we're listing it here for completeness.
-
-## Next steps
-
-If you are using Speakeasy to generate your TypeScript SDK for the first time, then you'll automatically be using our new generator.
-
-For existing Speakeasy customers with TypeScript SDKs, we've introduced a new field that you can add in your `gen.yaml` file, called `templateVersion`, to opt-in to the new generator:
-
-```diff
-configVersion: 1.0.0
-# Rest of gen.yaml omitted for brevity
-typescript:
-+  templateVersion: v2
-```
-
-If you are using our GitHub Action then, after committing that change, the next run will generate a refreshed SDK. `speakeasy` CLI users can rerun the `generate` command which will pick up the flag and regenerate the new SDK.
-
-## Building on good foundations
-
-We're really excited to provide users with an awesome experience using machine-generated SDKs. There's often a trade-off that product engineers and API owners consider when relying on code generators versus hand-building SDKs and the quality of the code and public interface they produce. We believe that our refreshed TypeScript SDK generator has baked in a lot of good ideas that ultimately result in a great developer experience, one that increasingly feels like working with a carefully curated TypeScript SDK. We now have the foundation to build even more exciting features like support for Server-sent Events and we're looking forward to taking more of the pain away from shipping awesome DX for your products.
-
-If you do try out Speakeasy and our TypeScript SDKs then we'd love to get your feedback about your experience, new ideas or feature requests.
-
-Happy hacking!
+In an OpenAPI schema, fields that are big integers can be modelled as strings with `
