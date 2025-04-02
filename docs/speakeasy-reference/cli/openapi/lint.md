@@ -1,12 +1,13 @@
 # lint  
-`speakeasy openapi lint`  
 
+`speakeasy openapi lint`  
 
 Lint an OpenAPI document  
 
 ## Details
 
-# Lint 
+# Lint
+
 ## OpenAPI
 
 Validates an OpenAPI document is valid and conforms to the Speakeasy OpenAPI specification.
@@ -38,4 +39,4 @@ speakeasy openapi lint [flags]
 
 ### Parent Command
 
-* [speakeasy openapi](/docs/speakeasy-reference/cli/openapi)	 - Utilities for working with OpenAPI documents
+* [speakeasy openapi](/docs/speakeasy-reference/cli/openapi)  - Utilities for working with OpenAPI documents
