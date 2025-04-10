@@ -1,0 +1,324 @@
+# Examples in OpenAPI
+
+<<<<<<< HEAD:openapi-hub/examples.mdx
+import { Table } from "@/components/ui/Table";
+=======
+import { Table } from "@/mdx/components";
+>>>>>>> 31ce93d05fbe2d7bdd257ecbdb67c080032812be:openapi/examples.mdx
+
+## Why add examples to your OpenAPI spec?
+
+Adding examples to your OpenAPI spec significantly improves the readability of generated artifacts, like documentation and SDKs, by providing concrete, real-world illustrations of how your API behaves. This reduces the learning curve and potential for user errors.
+
+## Where to add examples to your OpenAPI spec
+
+You can add examples to **objects, parameters, or properties** using either the `example` or `examples` keyword.
+
+In the examples below, we consider an API endpoint (e.g., `/ingredients/{id}`) that returns the following example response. This response will be defined in the OpenAPI spec using an `Ingredient` object:
+
+```json
+{
+  "id": 123,
+  "name": "Sugar Syrup",
+  "type": "long-life",
+  "stock": 10,
+  "photo": "https://speakeasy.bar/ingredients/sugar_syrup.jpg",
+  "status": "available"
+}
+```
+
+## 1. Single Example (`example` Keyword)
+
+### Defining a Single Example within `components.schemas`
+
+Use the `example` keyword to define a single example directly within the `schemas` section.
+
+This provides immediate context without requiring users to reference other parts of the spec. However, since it splits the example across multiple properties, it can make understanding the entire object more difficult and may lead to duplication (and maintenance issues) if the same example is needed in multiple schemas.
+
+```yaml
+components:
+  schemas:
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        name:
+          type: string
+          example: "Sugar Syrup"
+        type:
+          type: string
+          example: "long-life"
+        stock:
+          type: integer
+          example: 10
+        photo:
+          type: string
+          format: uri
+          example: "https://speakeasy.bar/ingredients/sugar_syrup.jpg"
+        status:
+          type: string
+          enum:
+            - available
+            - out-of-stock
+          example: "available"
+```
+
+### Defining a Single Example within `components.examples`
+Alternatively, you can define the example as a reusable Example Object in the `components.examples` section. This approach helps avoid redundancy and improves maintainability, as the example can be referenced across multiple schemas, requests, or responses.
+
+This is the format of the Example Object:
+
+<Table
+  data={[
+    { field: "`summary`", type: "String", required: "", description: "A brief summary of the example." },
+    { field: "`description`", type: "String", required: "", description: "A detailed description of the example. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description." },
+    { field: "`value`", type: "Any (typically object)", required: "", description: "The example value. This field can contain any valid JSON data, including simple values or complex objects with multiple properties, as shown in the example below. Mutually exclusive with the `externalValue` field." },
+    { field: "`externalValue`", type: "String", required: "", description: "A URL that points to the example. This is useful if the example is too large to include inline. Mutually exclusive with the `value` field." },
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the Example Object that can be used by tooling and vendors." }
+  ]}
+  columns={[
+    { key: "field", header: "Field" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+```yaml
+components:
+  examples:
+    SugarSyrup:
+      summary: An example of a sugar syrup ingredient.
+      value:
+        id: 123
+        name: "Sugar Syrup"
+        type: "long-life"
+        stock: 10
+        photo: "https://speakeasy.bar/ingredients/sugar_syrup.jpg"
+        status: "available"
+```
+
+**Referencing the Reusable Example in `components.schemas`**
+Once defined in `components.examples`, you can reference this reusable example in your schema like this:
+
+```yaml
+components:
+  schemas:
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        stock:
+          type: integer
+        photo:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum:
+            - available
+            - out-of-stock
+      examples:
+        $ref: '#/components/examples/SugarSyrup'
+```
+
+## 2. Multiple Examples (`examples` Keyword)
+
+To provide multiple examples for a property, or for the entire object, you can use the `examples` keyword. This is useful for showing different scenarios or variations, such as different statuses or conditions for an ingredient.
+
+#### Defining Multiple Examples within `components.schemas`
+
+As before, the `examples` can be specified within `components.schemas`. 
+
+Here’s how you can use the examples keyword at both the property level and the object level.
+
+**Using examples at the Property Level**
+
+```yaml
+components:
+  schemas:
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: integer
+          examples:
+            - 123
+            - 125
+        name:
+          type: string
+          examples:
+            - "Sugar Syrup"
+            - "Maple Syrup"
+        type:
+          type: string
+          examples:
+            - "long-life"
+            - "organic"
+        stock:
+          type: integer
+          examples:
+            - 10
+            - 0
+        photo:
+          type: string
+          format: uri
+          examples:
+            - "https://speakeasy.bar/ingredients/sugar_syrup.jpg"
+            - "https://speakeasy.bar/ingredients/maple_syrup.jpg"
+        status:
+          type: string
+          enum:
+            - available
+            - discontinued
+          examples:
+            - "available"
+            - "discontinued"
+```
+
+The above uses a concise array underneath each `examples`. The drawback of this approach is that it doesn't allow for additional metadata such as `summary` or `description`. An alternative approach that does allow for such metadata is e.g.:
+
+```yaml
+...
+        photo:
+          type: string
+          format: uri
+          examples:
+            sugarSyrup:
+              summary: A photo of Sugar Syrup.
+              value: "https://speakeasy.bar/ingredients/sugar_syrup.jpg"
+            mapleSyrup:
+              summary: A photo of Maple Syrup.
+              value: "https://speakeasy.bar/ingredients/maple_syrup.jpg"
+        status:
+          type: string
+          enum:
+            - available
+            - discontinued
+          examples:
+            available:
+              summary: Status for available ingredient.
+              value: "available"
+            discontinued:
+              summary: Status for discontinued ingredient.
+              value: "discontinued"
+```
+
+**Using examples at the Object Level**
+
+An alternative approach to defining examples at the property level is to define them at the object level.
+
+This shows entire scenarios for the object (`Ingredient` in this case). Each example (`available` and `discontinued`) is a complete instance of the object with all its properties.
+
+```yaml
+components:
+  schemas:
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        stock:
+          type: integer
+        photo:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum:
+            - available
+            - discontinued
+      examples:
+        available:
+          value:
+            id: 123
+            name: "Sugar Syrup"
+            type: "long-life"
+            stock: 10
+            photo: "https://speakeasy.bar/ingredients/sugar_syrup.jpg"
+            status: "available"
+        discontinued:
+          value:
+            id: 125
+            name: "Maple Syrup"
+            type: "organic"
+            stock: 0
+            photo: "https://speakeasy.bar/ingredients/maple_syrup.jpg"
+            status: "discontinued"
+```
+
+Note that the specific names used here (`available` and `discontinued`) are not referenced elsewhere. In other words, you could use names like `example1` or `example2` without affecting the validity of the OpenAPI spec. However, descriptive names like `available` and `discontinued` are important for readability.
+
+
+### Defining Multiple Examples as Reusable Objects in `components.examples`
+Multiple examples can also be defined as a reusable object in the `components.examples` section. This approach keeps examples grouped together, making them easier to maintain and reuse across different parts of the API specification:
+
+```yaml
+components:
+  examples:
+    AvailableIngredient:
+      summary: An example of an ingredient that is available.
+      value:
+        id: 123
+        name: "Sugar Syrup"
+        type: "long-life"
+        stock: 10
+        photo: "https://speakeasy.bar/ingredients/sugar_syrup.jpg"
+        status: "available"
+
+    DiscontinuedIngredient:
+      summary: An example of an ingredient that has been discontinued.
+      value:
+        id: 125
+        name: "Maple Syrup"
+        type: "organic"
+        stock: 0
+        photo: "https://speakeasy.bar/ingredients/maple_syrup.jpg"
+        status: "discontinued"
+```
+
+
+**Referencing Multiple Reusable Examples in `components.schemas`**
+Once defined, you can reference the examples in your schemas like this:
+
+```yaml
+components:
+  schemas:
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        stock:
+          type: integer
+        photo:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum:
+            - available
+            - discontinued
+      examples:
+        available:
+          $ref: '#/components/examples/AvailableIngredient'
+        discontinued:
+          $ref: '#/components/examples/DiscontinuedIngredient'
+```
+
+Here of course, the names `AvailableIngredient` and `DiscontinuedIngredient` are important since they are referenced elsewhere.

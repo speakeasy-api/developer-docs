@@ -1,0 +1,96 @@
+import { Table } from "@/mdx/components";
+
+# Schema Object in OpenAPI
+
+import { Table } from "@/components/ui/Table";
+
+The Schema Object represents any data type used as input or output in OpenAPI. Data types can be objects, arrays, or primitives such as `string`, `number`, `integer`, and `boolean`.
+
+Schema objects are sometimes referred to as _models_, _data types_, or simply, _schemas_. This is because schema types are used to model complex data types used by an API.
+
+The Schema Object is based on and extends the [JSON Schema Specification Draft 2020-12](https://datatracker.ietf.org/doc/html/draft-bhutton-json-schema-00).
+
+OpenAPI 3.1 uses all vocabularies from JSON Schema 2020-12, except for Format Assertion.
+
+For an overview of all JSON Schema properties, see [JSON Schema Docs > JSON Schema 2020-12](https://www.learnjsonschema.com/2020-12/).
+
+OpenAPI 3.1 changes the definition of two JSON Schema properties:
+
+- `description` - In OpenAPI this property may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description.
+- `format` - OpenAPI extends JSON Schema data types by adding additional formats. See [Data Type Formats](/openapi/schemas/dataTypes).
+
+OpenAPI adds another vocabulary to JSON Schema with the following properties:
+
+<Table
+  data={[
+    { fieldName: "`discriminator`", type: "[Discriminator Object](/openapi/schemas/objects/polymorphism#discriminator-object)", description: "A discriminator object describes how to differentiate between related schemas based on the value of a field in a request or response. See [Composition and Inheritance](/openapi/schemas/objects/polymorphism)." },
+    { fieldName: "`xml`", type: "[XML Object](/openapi/schemas/objects/xml)", description: "Adds details about how the schema should be represented as XML." },
+    { fieldName: "`externalDocs`", type: "[External Documentation Object](/openapi/external-documentation)", description: "Points to external documentation for this schema." },
+    { fieldName: "`example`", type: "Any", description: "An example that satisfies this schema. **Deprecated:** Although valid, the use of `example` is discouraged. Use [Examples](/openapi/examples) instead." },
+    { fieldName: "`x-`", type: "[Extensions](/openapi/extensions)", description: "Any number of extension fields can be added to the schema that can be used by tooling and vendors." },
+    { fieldName: "Arbitrary properties", type: "Any", description: "The schema object supports arbitrary properties without the `x-` prefix. This is discouraged in favor of [Extensions](/openapi/extensions)." }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+The example below illustrates three schema objects: `IngredientProductCode`, `Ingredient`, and `IngredientType`.
+
+```yaml
+components:
+  schemas:
+    IngredientProductCode:
+      description: The product code of an ingredient, only available when authenticated.
+      type: string
+      examples:
+        - "AC-A2DF3"
+        - "NAC-3F2D1"
+        - "APM-1F2D3"
+    Ingredient:
+      type: object
+      properties:
+        name:
+          description: The name of the ingredient.
+          type: string
+          examples:
+            - Sugar Syrup
+            - Angostura Bitters
+            - Orange Peel
+        type:
+          $ref: "#/components/schemas/IngredientType"
+        stock:
+          description: The number of units of the ingredient in stock, only available when authenticated.
+          type: integer
+          examples:
+            - 10
+            - 5
+            - 0
+          readOnly: true
+        productCode:
+          $ref: "#/components/schemas/IngredientProductCode"
+        photo:
+          description: A photo of the ingredient.
+          type: string
+          format: uri
+          examples:
+            - https://speakeasy.bar/ingredients/sugar_syrup.jpg
+            - https://speakeasy.bar/ingredients/angostura_bitters.jpg
+            - https://speakeasy.bar/ingredients/orange_peel.jpg
+      required:
+        - name
+        - type
+    IngredientType:
+      description: The type of ingredient.
+      type: string
+      enum:
+        - fresh
+        - long-life
+        - packaged
+```
+
+## JSON Schema and OpenAPI
+
+OpenAPI 3.0 was not totally compatible with JSON schema. That caused, and continues to cause, issues in tooling support. Fortunately, OpenAPI 3.1 is now a superset of JSON Schema, meaning compatibility with any valid JSon Schema document.
