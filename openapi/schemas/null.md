@@ -1,8 +1,12 @@
-# null
+---
+title: Null
+description: Describing null values in OpenAPI schemas in OpenAPI 3.0.X and 3.1.X.
+---
+# null in OpenAPI
 
 ## OpenAPI 3.0.X
 
-OpenAPI 3.0.X doesn't support a `null` type but instead allows you to mark a schema as being `nullable`. This allows that type to either contain a valid value or null.  
+OpenAPI 3.0.X doesn't support a `null` type but instead allows you to mark a schema as being `nullable`. This allows that type to either contain a valid value or null.
 
 ```yaml
 # A nullable string
@@ -52,14 +56,14 @@ schema:
 schema:
     type: object
     properties:
-        foo:    
+        foo:
             type: ['null', 'string']
 
 # A nullable field using oneOf
 schema:
     type: object
     properties:
-        foo:    
+        foo:
             oneOf:
                 - type: null
                 - type: string

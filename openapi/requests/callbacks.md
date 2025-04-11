@@ -1,3 +1,6 @@
+---
+title: Callbacks
+---
 # Callbacks in OpenAPI
 
 A map of [Callback Objects](/openapi/paths/operations/callbacks#callback-object) or [References](/openapi/references) that define incoming requests that may be triggered by the parent operation and the expected responses to be returned. The key is a unique identifier for the collection of callbacks contained within.

@@ -1,4 +1,9 @@
-# object
+---
+title: Objects
+asIndexPage: true
+description: Best practices for describing objects in OpenAPI schemas in OpenAPI 3.0.X and 3.1.X.
+---
+# objects in OpenAPI
 
 The **object** type allows simple and complex objects, dictionaries and free form objects, along with a number of attributes to control validation.
 
@@ -145,14 +150,14 @@ schema:
 You can also describe dictionaries that will contain certain keys
 
 ```yaml
-# A dictionary that must contain at least the specified keys 
+# A dictionary that must contain at least the specified keys
 schema:
     type: object
     properties:
         name:
             type: string # Must match type of additionalProperties
     required:
-        - name        
+        - name
     additionalProperties:
         type: string
 ```
