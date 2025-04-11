@@ -1,3 +1,7 @@
+---
+title: Enums
+description: Best practices for describing enums in OpenAPI
+---
 # Enums in OpenAPI
 
 The OpenAPI Specification (OAS) version 3.x supports the `enum` (enumerated list) keyword for all `schemaObject` object properties, including parameters, request bodies, and responses. The OAS defines an `enum` according to the JSON Schema Specification. The `enum` keyword restricts the value of a JSON property to a fixed set of values. The value must be an array with at least one element and each element must be unique.

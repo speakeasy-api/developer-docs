@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+title: Standard Security Schemes
+---
 # Security Scheme Objects in OpenAPI
 
 Security scheme objects are defined in the [Components Object](../components.md) under the `securitySchemes` field. Each security scheme object has a unique key. [Security Requirement Objects](../security.md#security-requirement-object) elsewhere in the document reference security scheme objects by their keys.

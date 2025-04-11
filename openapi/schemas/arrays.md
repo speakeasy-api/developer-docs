@@ -1,3 +1,8 @@
+---
+title: Arrays
+description: Best practices for describing array types in OpenAPI
+---
+
 # array
 
 The **array** type provides a way of defining a list of other types through providing an **items** attribute that represents the schema of the type contained in the array.
