@@ -4,13 +4,13 @@ description: Learn how to use resources and collections for a REST API, getting 
 
 # Returning resources & collections of data
 
-In the context of REST/HTTP APIs, a resource represents a specific piece of data or object that can be accessed via a unique URI (Uniform Resource Identifier). This could be anything: a user, a blog post, a product, or an order. Whereas a collection is a group of resources. It’s a list or set of all the items of a particular type.
+In the context of REST/HTTP APIs, a resource represents a specific piece of data or object that can be accessed via a unique URI (Uniform Resource Identifier). This could be anything: a user, a blog post, a product, or an order. Whereas a collection is a group of resources. It's a list or set of all the items of a particular type.
 
 ## Structuring URLs for resources & collections
 
-Retrieval of resources and collections both use the `GET` operation. Established convention is to have a unique base URL for each type of resource in an API: `/invoices`, `/transactions`, etc. 
+Retrieval of resources and collections both use the `GET` operation. Established convention is to have a unique base URL for each type of resource in an API: `/invoices`, `/transactions`, etc.
 
-To retrieve the entire collection of resources, a `GET` request is made to that URL: `GET /invoices`. 
+To retrieve the entire collection of resources, a `GET` request is made to that URL: `GET /invoices`.
 
 ```http
 GET /invoices
@@ -234,7 +234,7 @@ In this response:
   a handy convention for knowing where something came from, whether that's a
   JSON blob that has been saved in a database without the headers, or providing
   one location to call back to if this was a temporary action which cannot be
-  repeated. 
+  repeated.
 
 - The `author` link points to the resource representing the author of the post
   because it's quite likely clients will want to load that. Nobody will need to
@@ -249,7 +249,7 @@ In this response:
 Splitting up API data into multiple endpoints that can be grabbed if needed is
 really handy, upgrading a REST API from basically a set of functions which grab
 some data, into an Object-Relational Mapping (ORM) where relationships can be
-navigated easily, but going one step further and focusing on actions turns the API into 
+navigated easily, but going one step further and focusing on actions turns the API into
 essentially a state machine over HTTP.
 
 ## Don't confuse resource design & database design

@@ -38,6 +38,7 @@ www.example.org
 The domain name points your browser to the server where the website is hosted so that users can access the content without having to find and remember long complicated IP addresses.
 
 The **domain name** identifies the website you want to visit. It consists of:
+
 - **Subdomain** (optional): The `www` here is a common subdomain used for websites.
 - **Second-level domain (SLD)**: `example`, which is the core part of the domain name.
 - **Top-level domain (TLD)**: `.com`, which represents the organization type (`.gov`, `.edu`, `.mil`) the country (`.uk`, `.fr`), or the purpose (`.info`, `.blog`, `.earth`).
@@ -98,7 +99,7 @@ api.example.org
 
 The **domain** points to the API server that you're communicating with. Many APIs use a subdomain like `api` to distinguish the API service from the main website.
 
-You might have one API subdomain `api.example.org` for a single API, or multiple subdomains for different services `stats.api.example.org` or `servicename.example.org`. Alternatively you might decide to host the API on the main domain and use a path for the API `example.org/api/`. 
+You might have one API subdomain `api.example.org` for a single API, or multiple subdomains for different services `stats.api.example.org` or `servicename.example.org`. Alternatively you might decide to host the API on the main domain and use a path for the API `example.org/api/`.
 
 It doesn't matter much these days. Splitting web traffic between two different domains - e.g.: `www.example.org` and `api.example.org` had some pretty sizable performance concerns back in the HTTP/1.x days, as browsers would have to do DNS resolution and connection establishment repeatedly adding latency to the web request, but in a HTTP/2 (and HTTP/3) world this is no longer relevant, but some people have strong preferences based on historical reasons or infrastructure requirements.
 
@@ -135,7 +136,7 @@ Having sub-collections and sub-resources is known as "nesting", and you want to 
 
 This URL indicates a very rigid hierarchy where reviews are always tied to a product that is tied to an order for a user. If your use case changes, or if you want to access reviews independently (e.g., by searching for reviews across all products or orders), this rigid hierarchy becomes unwieldy.
 
-**Loss of Flexibility:** As your application evolves, you might need to interact with resources in ways that don’t fit the original hierarchy. Overly strict nesting forces clients to always traverse through the parent resources, even when it's unnecessary or illogical for certain operations. For example, fetching an order might not always need to be tied to a user, especially if your system grows to allow for admin views where orders are retrieved without needing the user context.
+**Loss of Flexibility:** As your application evolves, you might need to interact with resources in ways that don't fit the original hierarchy. Overly strict nesting forces clients to always traverse through the parent resources, even when it's unnecessary or illogical for certain operations. For example, fetching an order might not always need to be tied to a user, especially if your system grows to allow for admin views where orders are retrieved without needing the user context.
 
 **Duplication of Resources:** If a resource belongs to multiple parents, nesting creates redundant endpoints. For example a sub-resource like this:
 
@@ -144,7 +145,7 @@ This URL indicates a very rigid hierarchy where reviews are always tied to a pro
 /shops/789/orders/456
 ```
 
-The order belongs to both a user and a shop, forcing you to maintain multiple endpoints for the same resource. This increases code complexity, and makes network caching confusing and inconsistent. There's no reason to litter the URL with irrelevant parent data, that sub-resource example could just be: 
+The order belongs to both a user and a shop, forcing you to maintain multiple endpoints for the same resource. This increases code complexity, and makes network caching confusing and inconsistent. There's no reason to litter the URL with irrelevant parent data, that sub-resource example could just be:
 
 ```
 /orders/456
@@ -171,16 +172,16 @@ In REST APIs, **query parameters** are used to refine the data you're requesting
 
 The first query parameter is demarcated with a `?`, and subsequent query parameters are separated by `&`.
 
-Filtering can be done for related content too, with id's or other criteria being passed in: 
+Filtering can be done for related content too, with id's or other criteria being passed in:
 
 ```
 /orders?user-id=123&status=pending
 ```
 
-Query string parameters are handy, but the more an API uses, the harder it is to [cache](/api-design/caching). There is no right or wrong number of query parameters to use, just try to weigh up the value of the functionality they will offer, against the performance cost they may incur. 
+Query string parameters are handy, but the more an API uses, the harder it is to [cache](/api-design/caching). There is no right or wrong number of query parameters to use, just try to weigh up the value of the functionality they will offer, against the performance cost they may incur.
 
 ### Summary
 
 A URL is like an address that tells your browser or application where to find a resource on the internet or an API. In a web context, URLs help us navigate to specific pages, while in REST APIs, they act as powerful tools for accessing and manipulating data.
 
-By understanding the different parts of a URL—protocol, domain, path, and query parameters—you can better navigate the web and use APIs to retrieve or update information in a precise, structured way. 
+By understanding the different parts of a URL—protocol, domain, path, and query parameters—you can better navigate the web and use APIs to retrieve or update information in a precise, structured way.
