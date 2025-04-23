@@ -24,77 +24,9 @@ With this flexibility, constructing an OpenAPI document suitable for code genera
 
 Add multiple `servers` to define different environments or versions. This is especially useful for separating production and testing environments.
 
-```yaml ! openapi.yaml
-# !focus(5:9)
-openapi: 3.1.0
-info:
-  title: The Speakeasy Bar
-  version: 1.0.0
-servers:
-  - url: https://speakeasy.bar
-    description: The production server
-  - url: https://speakeasy.bar/testing
-    description: The testing server
-security:
-  - apiKey: []
-paths:
-  /drinks:
-    get:
-      tags:
-        - drinks
-      operationId: listDrinks
-      summary: Get a list of drinks
-      responses:
-        "200":
-          description: A list of drinks
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Drink"
-              examples:
-                exampleResponse:
-                  summary: Example response for a list of drinks
-                  value:
-                    drinks:
-                      - name: "Coffee"
-                        price: 2.5
-                      - name: "Tea"
-                        price: 1.8
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BadRequest"
-components:
-  schemas:
-    Drink:
-      type: object
-      title: Drink
-      properties:
-        name:
-          type: string
-        price:
-          type: number
-      description: A response containing a list of drinks.
-    BadRequest:
-      type: object
-      title: BadRequest
-      properties:
-        error:
-          type: string
-        message:
-          type: string
-  securitySchemes:
-    apiKey:
-      type: apiKey
-      name: Authorization
-      in: header
+```yaml ! openapi.yaml focus=5:9
+!from ./assets/openapi.yaml
 ```
-
----
 
 ## !!steps tags
 
@@ -104,11 +36,9 @@ The `tags` property contains an optional list of values used to group or categor
 
 Tags namespace methods in the SDK. For example, with a tag called `drinks`, all methods for that tag will be namespaced under `drinks.listDrinks()`. Create multi-level namespaces by using a `.` in the tag name, for example, `menu.drinks` becomes `menu.drinks.listDrinks()`.
 
-```yaml ! openapi.yaml
-# !focus(15:16)
+```yaml ! openapi.yaml focus=15:16
+!from ./assets/openapi.yaml
 ```
-
----
 
 ## !!steps operationId
 
@@ -120,21 +50,17 @@ The `operationId` value creates the name of the method generated for the operati
 
 When generating a spec from an API framework, ensure `operationId` values are human-readable. Some frameworks, like FastAPI, create long `operationId` identifiers that result in non-idiomatic method names.
 
-```yaml ! openapi.yaml
-# !focus(17)
+```yaml ! openapi.yaml focus=17
+!from ./assets/openapi.yaml
 ```
-
----
 
 ## !!steps Examples
 
 Adding `Examples` improves OpenAPI document usability by providing examples that illustrate the expected request and response structures.
 
-```yaml ! openapi.yaml
-# !focus(28:36)
+```yaml ! openapi.yaml focus=28:36
+!from ./assets/openapi.yaml
 ```
-
----
 
 ## !!steps $ref
 
@@ -144,42 +70,34 @@ In OpenAPI, the `$ref` keyword references components defined in the Components O
 
 Component schemas describe the request and response bodies of operations, serving as the basis for generating SDK types. Using components prevents issues where multiple types are defined for the same data structure.
 
-```yaml ! openapi.yaml
-# !focus(27,51:64)
+```yaml ! openapi.yaml focus=27,51:64
+!from ./assets/openapi.yaml
 ```
-
----
 
 **Dedicated Error Classes**
 
 Define dedicated error classes by creating response objects with specific HTTP status codes, such as `400 Bad Request` or `404 Not Found`, accompanied by clear descriptions and structured schemas to convey detailed error information.
 If the error class name doesn't clearly indicate the error type, use the `x-speakeasy-name-override` extension to rename it.
 
-```yaml ! openapi.yaml
-# !focus(37:42)
+```yaml ! openapi.yaml focus=37:42
+!from ./assets/openapi.yaml
 ```
-
----
 
 ## !!steps title
 
 The `title` property provides a human-readable title for each schema, improving the readability of the OpenAPI document.
 
-```yaml ! openapi.yaml
-# !focus(47)
+```yaml ! openapi.yaml focus=47
+!from ./assets/openapi.yaml
 ```
-
----
 
 ## !!steps Description
 
 Use the `description` field to provide clear and concise information about the purpose, behavior, and expected usage of API elements.
 
-```yaml ! openapi.yaml
-# !focus(53)
+```yaml ! openapi.yaml focus=53
+!from ./assets/openapi.yaml
 ```
-
----
 
 </Spotlight>
 
@@ -201,56 +119,9 @@ When `operationId` identifiers follow a consistent pattern, define the name over
 
 In this instance, the SDK will contain a method `menu.drinks.list()` rather than the longer `menu.drinks.list_drinks_v2_get()`.
 
-```yaml ! openapi.yaml
-# !focus(10:12,19)
-openapi: 3.1.0
-info:
-  title: The Speakeasy Bar
-  version: 1.0.0
-servers:
-  - url: https://speakeasy.bar
-    description: The production server
-security:
-  - apiKey: []
-x-speakeasy-name-override:
-  - operationId: ^list_.*
-    methodNameOverride: list
-paths:
-  /drinks:
-    get:
-      tags:
-        - menu
-      x-speakeasy-group: menu.drinks
-      operationId: list_drinks_v2_get
-      x-speakeasy-usage-example: true
-      summary: Get a list of drinks
-      responses:
-        "200":
-          description: A list of drinks
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Drink"
-components:
-  schemas:
-    Drink:
-      type: object
-      properties:
-        name:
-          type: string
-        price:
-          type: number
-  securitySchemes:
-    apiKey:
-      type: apiKey
-      name: Authorization
-      in: header
-      x-speakeasy-example: "<YOUR_API_KEY>"
+```yaml ! openapi.yaml focus=10:12,19
+!from ./assets/extending-openapi.yaml
 ```
-
----
 
 ## !!steps x-speakeasy-group
 
@@ -260,11 +131,9 @@ Add the `x-speakeasy-group` field to any operation in the OpenAPI document to de
 
 In this case, the `listDrinks` operation is added to a `menu.drinks` namespace rather than a `menu` namespace.
 
-```yaml ! openapi.yaml
-# !focus(18)
+```yaml ! openapi.yaml focus=18
+!from ./assets/extending-openapi.yaml
 ```
-
----
 
 ## !!steps x-speakeasy-usage-example
 
@@ -272,18 +141,16 @@ Documentation forms an important part of any SDK. This extension allows selectin
 
 Select the API operation that users frequently use. At a Speakeasy, that would likely be getting the list of drinks on offer.
 
-```yaml ! openapi.yaml
-# !focus(20)
+```yaml ! openapi.yaml focus=20
+!from ./assets/extending-openapi.yaml
 ```
-
----
 
 ## !!steps x-speakeasy-example
 
 Another useful documentation extension is `x-speakeasy-example`, which provides an example value to be used in the `Authentication` section of the SDK `README.md`. This example signals to users that the SDK should be instantiated with their security token.
 
-```yaml ! openapi.yaml
-# !focus(45)
+```yaml ! openapi.yaml focus=45
+!from ./assets/extending-openapi.yaml
 ```
 
 </Spotlight>
