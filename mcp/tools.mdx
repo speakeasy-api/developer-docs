@@ -1,0 +1,239 @@
+---
+title: What are MCP Tools?
+description: Learn how to build MCP tools.
+---
+import { Callout } from "@/mdx/components";
+
+# What are MCP Tools?
+
+MCP Tools are callable functions that MCP servers expose to the client. They allow interactions with real-world external environments, like querying databases, calling APIs, writing files, triggering workflows, and more.
+
+Tools are how clients can perform actions and trigger side effects using MCP.
+
+## Lifecycle and request and response formats
+
+Each tool lifecycle follows this pattern:
+
+1. The server registers a tool with a name, input parameters, output schema, and description.
+2. The client calls `tools/list` to discover available tools.
+3. The client calls `tools/call` with the tool `name` and `arguments`.
+4. The server calls the tool function with the provided arguments.
+5. The server runs the tool and returns a result or an error message.
+
+Clients call tools using the `tools/call` method with structured arguments. Here is an example of a tool call request payload:
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "write_note",
+    "arguments": {
+      "slug": "morning",
+      "content": "Start your day with clarity and confidence."
+    }
+  },
+  "id": 2
+}
+```
+
+The `name` field is the name of the tool to call. The `arguments` field is an object containing the arguments to pass to the tool. The `id` field is a unique identifier for the request.
+
+The response to a tool call has the following structure:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "status": "saved",
+    "slug": "morning"
+  }
+}
+```
+
+If an error occurs, the response must conform to the standard JSON-RPC error format.
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "error": {
+    "code": 2050,
+    "message": "Invalid parameters",
+    "data": {
+      "name": "write_note",
+      "arguments": {
+        "slug": "morning",
+        "content": "Start your day with clarity and confidence."
+      }
+    }
+  }
+}
+```
+
+## Declaring a tool request in Python
+
+To declare a tool, you annotate a function with the `@tool` decorator. A tool must accept and return only JSON-serializable data types such as `str`, `int`, `float`, `bool`, `list`, `dict`, and `None`.
+
+The example below shows how to declare a tool using the [official Python SDK for MCP servers](https://github.com/modelcontextprotocol/python-sdk) to place a stock trade using the Alpaca API.
+
+```python
+from mcp.server import Server
+from mcp import types
+from mcp.server import stdio
+
+import requests
+import asyncio
+
+app = Server("alpaca-order-server")
+
+ALPACA_API_KEY = "your_api_key"
+ALPACA_API_SECRET = "your_api_secret"
+ALPACA_BASE_URL = "https://paper-api.alpaca.markets/v2"
+
+HEADERS = {
+    "APCA-API-KEY-ID": ALPACA_API_KEY,
+    "APCA-API-SECRET-KEY": ALPACA_API_SECRET,
+    "Content-Type": "application/json"
+}
+
+@app.list_tools()
+async def list_tools() -> list[types.Tool]:
+    return [
+        types.Tool(
+            name="place_stock_order",
+            description="Place a stock trade via the Alpaca paper trading API",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string"},
+                    "qty": {"type": "integer"},
+                    "side": {"type": "string", "enum": ["buy", "sell"]},
+                    "order_type": {"type": "string", "enum": ["market", "limit"]},
+                    "time_in_force": {"type": "string", "enum": ["day", "gtc"]},
+                    "limit_price": {"type": "number"}
+                },
+                "required": ["symbol", "qty", "side", "order_type", "time_in_force"]
+            }
+        )
+    ]
+
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+    if name != "place_stock_order":
+        raise ValueError(f"Tool not found: {name}")
+
+    symbol = arguments["symbol"].upper()
+    qty = arguments["qty"]
+    side = arguments["side"].lower()
+    order_type = arguments["order_type"].lower()
+    time_in_force = arguments["time_in_force"].lower()
+    limit_price = arguments.get("limit_price")
+
+    order_payload = {
+        "symbol": symbol,
+        "qty": qty,
+        "side": side,
+        "type": order_type,
+        "time_in_force": time_in_force
+    }
+
+    if order_type == "limit" and limit_price:
+        order_payload["limit_price"] = limit_price
+
+    try:
+        response = requests.post(
+            f"{ALPACA_BASE_URL}/orders",
+            headers=HEADERS,
+            json=order_payload
+        )
+        data = response.json()
+        message = f"Order placed: {side.upper()} {qty} {symbol} @ {order_type.upper()}"
+        return [types.TextContent(type="text", text=message)]
+
+    except Exception as e:
+        error_msg = f"Failed to place order for {symbol}: {str(e)}"
+        return [types.TextContent(type="text", text=error_msg)]
+```
+
+In this example, we:
+
+- **Register a tool called `place_stock_order`** with a clear description and a JSON Schema specifying required inputs like `symbol`, `qty`, `side`, `order_type`, and `time_in_force`.
+- **Use `@list_tools` to expose the tool metadata** to the client. This is how agents and UI tools like Claude desktop discover available tools dynamically at runtime.
+- **Implement `@call_tool` to handle the execution logic.** When the tool is invoked by the client, the server builds an HTTP request to the Alpaca API using the provided arguments.
+- **Format a confirmation message summarizing the placed order.** The result is returned as a `TextContent` object, which is compatible with standard MCP tool responses.
+
+We also make sure errors and missing data are handled gracefully, returning fallback messages if the API request fails.
+
+<Callout title="Note" variant="success-gradient" fullWidth>
+  The Python SDK also provides a higher-level interface called `FastMCP`, which simplifies tool declarations. The example above uses the low-level API, which is recommended only when you need fine-grained control over the tool lifecycle.
+</Callout>
+
+
+## Error handling
+
+MCP distinguishes between two types of errors, which must be handled in different ways.
+
+### 1. Protocol-level errors
+
+Use protocol-level errors (such as thrown exceptions or JSON-RPC error responses) only in the following cases:
+
+- Tool not found
+- Permission denied
+- Invalid parameter format
+- Server-side exceptions unrelated to tool functionality
+
+```python
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+    # Protocol-level error - tool not found
+    if name not in AVAILABLE_TOOLS:
+        raise ValueError(f"Tool not found: {name}")
+```
+
+### 2. Tool execution errors
+
+Use structured error responses within successful JSON-RPC responses for:
+
+- Logic errors during tool execution
+- Invalid values
+- Failed operations
+- Any error the LLM should see and handle
+
+```python
+@app.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+    if name == "place_order":
+        try:
+            # Attempt the operation
+            result = place_order(arguments)
+            return [types.TextContent(type="text", text=result)]
+        except OrderError as e:
+            # Tool execution error - returned as content with isError=True
+            return [types.TextContent(
+                type="text",
+                text=f"Error placing order: {str(e)}"
+            )]
+```
+
+This distinction matters because, while protocol-level errors aren't seen by the LLM, tool execution errors are returned as content, allowing the model to reason about errors and retry or change its strategy.
+
+## Best practices and pitfalls to avoid
+
+Here are some best practices to follow when writing MCP tools:
+
+- **Keep names clear and purposeful:** Agents or LLMs can use tool names in decision-making.
+- **Validate all inputs:** Never assume the client sends valid or safe data.
+- **Write good docstrings:** These become the tool descriptions in discovery and are often seen by agents or LLMs.
+- **Return structured results:** Use JSON objects with consistent shape and semantics.
+- **Keep tools deterministic:** Clients expect the same inputs to produce the same outputs unless side effects are explicit and intentional.
+
+Avoid these common pitfalls:
+
+- Irreversible side effects without confirmation. Use [sampling](/mcp/sampling) for validation if needed.
+- Unsafe commands (for example, `os.system`) or raw DB access.
+- Complex or deeply nested input schemas that are hard to validate.
+- Global state unless scoped per session.
+- Returning raw strings unless free-form output is the intent.
+
+MCP Tools are often confused with [MCP Resources](/mcp/resources), which are named, read-only data references addressable via URIs. Learn more about the difference in the Resources vs Tools section of the [MCP Resources documentation](/mcp/resources#resources-vs-tools).
