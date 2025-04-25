@@ -1,18 +1,16 @@
 ---
 title: "Hoisting"
 description: "Hoisting enables flattening of an API request or API response body to make it more tightly align with the resource semantics."
-image: "/assets/examples/generic.png"
+image: "/media/examples/generic.png"
 date: 2023-01-26
 authors:
   - name: Ash Godfrey
-  - image_url: "/assets/author-headshots/ash.jpg"
+  - image_url: "/media/author-headshots/ash.jpg"
 tags:
   - Terraform
 is_featured: true
-featured_image: "/assets/examples/generic.png"
+featured_image: "/media/examples/generic.png"
 ---
-
-import { Spotlight } from "@/mdx/components";
 
 # What is hoisting?
 
@@ -28,16 +26,14 @@ Hoisting is usually applied in specific scenarios to improve the design and usab
 - **Frequent Data Access**: Use hoisting for elements that are often accessed or critical to operations, making them more directly accessible.
 - **Data Model Alignment**: Apply hoisting to better align the API's data structure with the conceptual model of the resources.
 
-<Spotlight>
-
-## !!steps Initial Structure: Without Hoisting
+## Initial Structure: Without Hoisting
 
 Initially, our data structure represents a hierarchical model with nested entities, depicted as a tree.
 
 `x-speakeasy-entity: 1` at the top, with entities 2 and 3 as direct descendants. Entity 2 further nests entities 4, which branches into 5 and 6.
 
 {/* prettier-ignore */}
-```bash !
+```bash
  (1)
  / \
 2   3
@@ -47,14 +43,12 @@ Initially, our data structure represents a hierarchical model with nested entiti
 5   6
 ```
 
----
-
-## !!steps Step 1: Selecting an entity for hoisting
+## Step 1: Selecting an entity for hoisting
 
 Entity (2) is marked with `x-speakeasy-entity` for hoisting.
 
 {/* prettier-ignore */}
-```bash !
+```bash
     1
    / \
  (2)  3
@@ -64,16 +58,14 @@ Entity (2) is marked with `x-speakeasy-entity` for hoisting.
   5   6
 ```
 
----
-
-## !!steps Step 2
+## Step 2
 
 After applying hoisting, the structure is reorganized to prioritize `x-speakeasy-entity: 2`, making its leaf nodes directly accessible and flattening the remaining structure.
 
 `x-speakeasy-entity: 2`
 
 {/* prettier-ignore */}
-```bash !
+```bash
 x-speakeasy-entity: 2
 
  (2)
@@ -83,21 +75,18 @@ x-speakeasy-entity: 2
   5   6
 ```
 
-</Spotlight>
-
 ## Real-World Application: Flattening a "data" property
 
 The JSON Schemas for `Drink`, `Drink`, and `{ drinkType: $DrinkType }` will be each considered the root of a Terraform Type Schema, and will be merged together to form the final Terraform Type Schema using Attribute Inference.
 
 However, this is not always desired. Consider this alternative response:
 
-<Spotlight>
 
-## !!steps Original
+## Original
 
 In the original API design, the request and response body are structured equivalently, without nested elements. This approach is straightforward but might not always suit complex data relationships or requirements.
 
-```yaml ! openapi.yaml
+```yaml openapi.yaml
 # !focus(18:23)
 /drinks:
   post:
@@ -128,13 +117,11 @@ In the original API design, the request and response body are structured equival
         $ref: "#/components/responses/UnknownError"
 ```
 
----
-
-## !!steps Alternate
+## Alternate
 
 The alternate approach introduces a nested `data` property in the API response, which can encapsulate the drink information more distinctly, albeit adding a layer of complexity in data access.
 
-```yaml ! openapi.yaml
+```yaml openapi.yaml
 # !focus(18:26)
 /drinks:
   post:
@@ -168,13 +155,11 @@ The alternate approach introduces a nested `data` property in the API response, 
         $ref: "#/components/responses/UnknownError"
 ```
 
----
-
-## !!steps Original Code
+## Original Code
 
 Using the same request/response bodies, speakeasy would generate the following type schema
 
-```go ! drink_resource.go
+```go drink_resource.go
 func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
   resp.Schema = schema.Schema{
     MarkdownDescription: "Drink Resource",
@@ -206,13 +191,11 @@ func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 }
 ```
 
----
-
-## !!steps Alternative Code
+## Alternative Code
 
 When generated, the provider schema would look like this: not understanding that `data` was a nested object, and instead treating it as a root of the schema.
 
-```go ! drink_resource.go
+```go drink_resource.go
 // !focus(25:40)
 func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
   resp.Schema = schema.Schema{
@@ -261,13 +244,11 @@ func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 }
 ```
 
----
-
-## !!steps The Fix: Implementing Hoisting
+## The Fix: Implementing Hoisting
 
 By applying the [`x-speakeasy-entity` annotation](/docs/terraform/extensions#the-x-speakeasy-entity-annotation), we direct the schema generation process to consider the `Drink` schema as the root of the type schema, effectively flattening the response structure for easier access.
 
-```yaml ! openapi.yaml
+```yaml openapi.yaml
 # !focus(34)
   /drinks:
     post:
@@ -299,40 +280,38 @@ By applying the [`x-speakeasy-entity` annotation](/docs/terraform/extensions#the
           $ref: "#/components/responses/APIError"
         default:
           $ref: "#/components/responses/UnknownError"
-components:
-  schemas:
-    Drink:
-      x-speakeasy-entity: Drink
-      type: object
-      properties:
-        name:
-          description: The name of the drink.
-          type: string
-          examples:
-            - Old Fashioned
-            - Manhattan
-            - Negroni
-        type:
-          $ref: "#/components/schemas/DrinkType"
-        price:
-          description: The price of one unit of the drink in US cents.
-          type: number
-          examples:
-            - 1000 # $10.00
-            - 1200 # $12.00
-            - 1500 # $15.00
-      required:
-        - name
-        - price
+  components:
+    schemas:
+      Drink:
+        x-speakeasy-entity: Drink
+        type: object
+        properties:
+          name:
+            description: The name of the drink.
+            type: string
+            examples:
+              - Old Fashioned
+              - Manhattan
+              - Negroni
+          type:
+            $ref: "#/components/schemas/DrinkType"
+          price:
+            description: The price of one unit of the drink in US cents.
+            type: number
+            examples:
+              - 1000 # $10.00
+              - 1200 # $12.00
+              - 1500 # $15.00
+        required:
+          - name
+          - price
 ```
 
----
-
-## !!steps Finalized Schema: Simplified Access
+## Finalized Schema: Simplified Access
 
 The final provider schema reflects a flattened structure, similar to the original API design but with the flexibility to include nested data when necessary.
 
-```go ! drink_resource.go
+```go drink_resource.go
 func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
   resp.Schema = schema.Schema{
     MarkdownDescription: "Drink Resource",
@@ -363,5 +342,3 @@ func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, 
   }
 }
 ```
-
-</Spotlight>

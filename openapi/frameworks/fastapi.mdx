@@ -62,7 +62,7 @@ These straightforward examples are trivial but will help you better understand t
 
 <Spotlight>
 
-## !!steps Add a list of servers to your FastAPI app
+#### !!steps ServerConfig
 
 This may seem obvious, but while first working with FastAPI in development, the generated docs, development server, and API operations all work out of the box without the need to manually specify your server address.
 
@@ -70,73 +70,43 @@ However, when generating SDKs, your OpenAPI document needs to list servers.
 
 In our `app/main.py`, we added our local server as shown.
 
-```python ! main.py
-from fastapi import FastAPI
-
-app = FastAPI(
-    servers=[
-        {"url": "http://127.0.0.1:8000", "description": "Local server"},
-    ],
-)
+```python ! servers.py
+!from ./assets/fastapi/servers.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps GeneratedYaml
 
 This leads to the following generated output in `openapi.yaml`.
 
-```yaml !! openapi.yaml
-servers:
-  - description: Local server
-    url: http://127.0.0.1:8000/
+```yaml ! servers_openapi.yaml
+!from ./assets/fastapi/servers_openapi.yaml
 ```
 
----
-
-## !!steps Add a title, summary, description, and version to your FastAPI app
+#### !!steps AppInfo
 
 In our `app/main.py`, if we have the following.
 
-```python ! main.py
-from fastapi import FastAPI
-
-app = FastAPI(
-    summary="A simple API to manage burgers and orders",
-    description="This API is used to manage burgers and orders in a restaurant",
-    version="0.1.0",
-    title="APItizing Burger API",
-)
+```python ! info.py
+!from ./assets/fastapi/info.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps InfoYaml
 
 FastAPI generates the following YAML in our `openapi.yaml` file.
 
-```yaml !! openapi.yaml
-info:
-  description: This API is used to manage burgers and orders in a restaurant
-  summary: A simple API to manage burgers and orders
-  title: APItizing Burger API
-  version: 0.1.0
+```yaml ! info.yaml
+!from ./assets/fastapi/openapi_info.yaml
 ```
 
----
-
-## !!steps Route-level customizations: Enhancing usability
+#### !!steps RouteCustomizations
 
 With the basics out of the way, let's look at a few more substantial recommendations.
 
-```yaml !
-
-
+```yaml ! route-customizations.yaml
+# Route-level customizations can significantly enhance the usability of your API
 ```
 
----
-
-## !!steps Add typed additional responses to FastAPI routes
+#### !!steps TypedResponses
 
 When developers use your generated SDK, they may wish to see what all the possible responses for an API call could be.
 
@@ -144,76 +114,19 @@ With FastAPI, you can add additional responses to each route by specifying a res
 
 In our `app/main.py`, we added this abbreviated code.
 
-```python !! main.py
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
-class ResponseMessage(BaseModel):
-    """A response message"""
-
-    message: str = Field(description="The response message")
-
-OPENAPI_RESPONSE_BURGER_NOT_FOUND = {
-    "model": ResponseMessage,
-    "description": "Burger not found",
-}
-
-def response_burger_not_found(burger_id: int):
-    """Response for burger not found"""
-
-    return JSONResponse(
-        status_code=404,
-        content=f"Burger with id {burger_id} does not exist",
-    )
-
-class Burger(BaseModel):
-    id: int
-    name: str
-    description: str = None
-
-app = FastAPI()
-
-@app.get(
-    "/burger/{burger_id}",
-    response_model=BurgerOutput,
-    responses={404: OPENAPI_RESPONSE_BURGER_NOT_FOUND},
-    tags=["burger"],
-)
-def read_burger(burger_id: Annotated[int, Path(title="Burger ID")]):
-    """Read a burger"""
-
-    for burger in burgers_db:
-        if burger.id == burger_id:
-            return burger
-    return response_burger_not_found(burger_id)
+```python ! responses.py
+!from ./assets/fastapi/responses.py.txt
 ```
 
----
-
-## !!steps 
+#### !!steps ResponseSchema
 
 FastAPI adds a schema for our specific error message to `openapi.yaml`.
 
-```yaml ! openapi.yaml
-components:
-  schemas:
-    ResponseMessage:
-      description: A response message
-      properties:
-        message:
-          description: The response message
-          title: Message
-          type: string
-      required:
-        - message
-      title: ResponseMessage
-      type: object
+```yaml ! response_schema.yaml
+!from ./assets/fastapi/response_schema.yaml
 ```
 
----
-
-## !!steps Group FastAPI operations with OpenAPI tags and tag metadata
+#### !!steps OperationTags
 
 As your API develops and grows bigger, you're likely to split it into separate files. FastAPI [provides conveniences](https://fastapi.tiangolo.com/tutorial/bigger-applications/) to help reduce boilerplate and repetition when splitting an API into multiple modules.
 
@@ -221,35 +134,22 @@ While this separation may reduce cognitive overhead while you're working in part
 
 We recommend you add tags to all operations in FastAPI, whether you're building a big application or only have a handful of operations, so that operations can be grouped by tag in generated SDK code and documentation.
 
-```python !
-
-
+```yaml ! operation-tags.yaml
+# Tags help organize operations into logical groups
+tags:
+  - name: burger
+  - name: order
 ```
 
----
-
-## !!steps Add tags to operations
+#### !!steps TagsToOperations
 
 The most straightforward way to add tags is to edit each operation and add a list of tags. This example highlights the tags list.
 
-```python !! main.py mark=7
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.get(
-    "/burger/{burger_id}",
-    tags=["burger"],
-)
-def read_burger(burger_id: int):
-    return {
-        "burger_id": burger_id,
-    }
+```python ! tags_operation.py
+!from ./assets/fastapi/tags_operation.py.txt
 ```
 
----
-
-## !!steps Add metadata to tags
+#### !!steps TagMetadata
 
 You can add metadata to your tags to further improve the developer experience.
 
@@ -257,363 +157,140 @@ FastAPI accepts a parameter called `openapi_tags`, which we can use to add metad
 
 Here's how to add metadata to tags.
 
-```python !! main.py
-from fastapi import FastAPI
-
-tags_metadata = [
-    {
-        "name": "burger",
-        "description": "Operations related to burgers",
-        "externalDocs": {
-            "description": "Burger external docs",
-            "url": "https://en.wikipedia.org/wiki/Hamburger",
-        },
-    },
-    {
-        "name": "order",
-        "description": "Operations related to orders",
-    },
-]
-
-app = FastAPI(
-    openapi_tags=tags_metadata,
-)
-
-@app.get(
-    "/burger/{burger_id}",
-    tags=["burger"],
-)
-def read_burger(burger_id: int):
-    return {
-        "burger_id": burger_id,
-    }
+```python ! tag_metadata.py
+!from ./assets/fastapi/tag_metadata.py.txt
 ```
 
----
-
-## !!steps How tags are added to the OpenAPI document
+#### !!steps TagsInOpenAPI
 
 When we add metadata to tags, FastAPI adds a top-level `tags` section to our OpenAPI document.
 
-```yaml ! openapi.yaml
-tags:
-  - description: Operations related to burgers
-    externalDocs:
-      description: Burger external docs
-      url: https://en.wikipedia.org/wiki/Hamburger
-    name: burger
-  - description: Operations related to orders
-    name: order
+```yaml ! tags.yaml
+!from ./assets/fastapi/tags_openapi.yaml
 ```
 
----
-
-## !!steps
+#### !!steps PathTags
 
 Each tagged path in our OpenAPI document also gets a list of tags.
 
-```yaml !! openapi.yaml
-paths:
-  /burger/{burger_id}:
-    get:
-      description: Read a burger
-      operationId: readBurger
-      summary: Read Burger
-      tags:
-        - burger
-      # ...
+```yaml ! paths.yaml
+!from ./assets/fastapi/paths_tags.yaml
 ```
 
----
 
-## !!steps Customize the OpenAPI `operationId` generated by FastAPI
+#### !!steps OperationIDCustomization
 
 When FastAPI outputs an OpenAPI document, it generates a unique OpenAPI `operationId` for each path. By default, this unique ID is generated by the FastAPI `generate_unique_id` function.
 
-```python ! main.py
-def generate_unique_id(route: "APIRoute") -> str:
-    operation_id = route.name + route.path_format
-    operation_id = re.sub(r"\W", "_", operation_id)
-    assert route.methods
-    operation_id = operation_id + "_" + list(route.methods)[0].lower()
-    return operation_id
+```python ! operation_id.py
+!from ./assets/fastapi/operation_id_default.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps CustomizationOptions
 
 This can often lead to cumbersome and unintuitive names. To improve usability, we have two methods of customizing these generated strings.
 
-```python !
-
-
+```yaml ! customization-options.yaml
+# There are multiple ways to customize operation IDs
+# 1. Using a custom generate_unique_id_function
+# 2. Specifying operation_id per operation
 ```
 
----
 
-## !!steps Option 1: Customize the FastAPI `generate_unique_id_function` function
+#### !!steps CustomUniqueIDFunction
 
 The preferred method is to use a custom function when you generate unique IDs for paths.
 
 The example below is an illustrative function that doesn't generate guaranteed-unique IDs and doesn't handle method names without an underscore. However, it demonstrates how you can add a function that generates IDs based on an operation's method name.
 
-```python !! main.py
-from fastapi import FastAPI
-
-def convert_snake_case_to_camel_case(string: str) -> str:
-    """Convert snake case to camel case"""
-
-    words = string.split("_")
-    return words[0] + "".join(word.title() for word in words[1:])
-
-
-def custom_generate_unique_id_function(route: APIRoute) -> str:
-    """Custom function to generate unique id for each endpoint"""
-
-    return convert_snake_case_to_camel_case(route.name)
-
-
-app = FastAPI(
-    generate_unique_id_function=custom_generate_unique_id_function,
-)
+```python ! custom_id.py
+!from ./assets/fastapi/custom_id_function.py.txt
 ```
 
----
-
-## !!steps Option 2: Add an operation ID per operation
+#### !!steps OperationIDPerRoute
 
 With FastAPI, you can specify the `operationId` per operation. For our example, we'll add a new parameter called `operation_id` to the operation decorator.
 
-```python !! main.py mark=7
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.get(
-    "/burger/{burger_id}",
-    operation_id="readBurger",
-)
-def read_burger(burger_id: int):
-    pass
+```python ! operation_id_route.py
+!from ./assets/fastapi/operation_id_per_route.py.txt
 ```
 
----
-
-## !!steps Add webhooks for real-time notifications
+#### !!steps WebhooksRealtime
 
 Starting with OpenAPI version 3.1.0, it is possible to specify webhooks for your application in OpenAPI.
 
 Here's how to add a webhook to FastAPI:
 
-```python !! main.py
-from fastapi import FastAPI
-
-app = FastAPI()
-
-
-class Order(BaseModel):
-    id: int
-    note: str
-
-
-@app.webhooks.post(
-    "order-status-changed",
-    operation_id="webhookOrderStatusChanged",
-)
-def webhook_order_status_changed(body: Order):
-    """
-    When an order status is changed, this webhook will be triggered.
-
-    The server will send a `POST` request with the order details to the webhook URL.
-    """
-    pass
+```python ! webhook.py
+!from ./assets/fastapi/webhook.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps WebhooksGenerated
 
 FastAPI generates the following top-level `webhooks` section in `openapi.yaml`.
 
-```yaml ! openapi.yaml
-webhooks:
-  order-status-changed:
-    post:
-      description:
-        "When an order status is changed, this webhook will be triggered.
-
-
-        The server will send a `POST` request with the order details to the webhook
-        URL."
-      operationId: webhookOrderStatusChanged
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Order"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        "422":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HTTPValidationError"
-          description: Validation Error
-      summary: Webhook Order Status Changed
+```yaml ! webhook.yaml
+!from ./assets/fastapi/webhook_openapi.yaml
 ```
 
----
-
-## !!steps Integrating Speakeasy
+#### !!steps SpeakeasyIntegration
 
 Now that we have a customized OpenAPI document, we can use Speakeasy to generate SDKs based on it. Let's take a look at how the information we detailed in the OpenAPI document affects how Speakeasy generates SDKs.
 
-```yaml !
-
-
+```yaml ! speakeasy-integration.yaml
+# Speakeasy uses the OpenAPI document to generate SDKs
+# The customizations we've made influence how the SDK code is generated
 ```
 
----
-
-## !!steps Server information
+#### !!steps ServerInfoOutput
 
 After we added our local server information, this is how it generates in the `openapi.yaml` file.
 
-```yaml !! openapi.yaml
-servers:
-  - description: Local server
-    url: http://127.0.0.1:8000/
+```yaml ! servers_output.yaml
+!from ./assets/fastapi/servers_output.yaml
 ```
 
----
-
-## !!steps
+#### !!steps SDKConfiguration
 
 After Speakeasy generates the SDK, this leads to the following abbreviated code in `sdk/src/openapi/sdkconfiguration.py`.
 
-```python ! sdkconfiguration.py
-from dataclasses import dataclass
-
-SERVERS = [
-    'http://127.0.0.1:8000/',
-    # Local server
-]
-"""Contains the list of servers available to the SDK"""
-
-@dataclass
-class SDKConfiguration:
-    ...
-    server_url: Optional[str] = ""
-    server_idx: Optional[int] = 0
-    ...
-
-    def __post_init__(self):
-        self._hooks = SDKHooks()
-
-    def get_server_details(self) -> Tuple[str, Dict[str, str]]:
-        if self.server_url is not None and self.server_url:
-            return remove_suffix(self.server_url, "/"), {}
-        if self.server_idx is None:
-            self.server_idx = 0
-
-        return SERVERS[self.server_idx], {}
+```python ! sdk_config.py
+!from ./assets/fastapi/sdk_configuration.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps ServerDetails
 
 You'll find calls to `SDKConfiguration.get_server_details()` when the SDK builds API URLs.
 
-```python !! sdkconfiguration.py
-# !focus(18:24)
-from dataclasses import dataclass
-
-SERVERS = [
-    'http://127.0.0.1:8000/',
-    # Local server
-]
-"""Contains the list of servers available to the SDK"""
-
-@dataclass
-class SDKConfiguration:
-    ...
-    server_url: Optional[str] = ""
-    server_idx: Optional[int] = 0
-    ...
-
-    def __post_init__(self):
-        self._hooks = SDKHooks()
-
-    def get_server_details(self) -> Tuple[str, Dict[str, str]]:
-        if self.server_url is not None and self.server_url:
-            return remove_suffix(self.server_url, "/"), {}
-        if self.server_idx is None:
-            self.server_idx = 0
-
-        return SERVERS[self.server_idx], {}
+```python ! server_details.py
+!from ./assets/fastapi/server_details.py.txt
 ```
 
----
-
-## !!steps Title, summary, and description
+#### !!steps TitleAndDescription
 
 Speakeasy uses the title, summary, and descriptions we provided earlier to add helpful text to the generated SDK documentation, including comments in the SDK code. For example, in `sdk/src/sdk/sdk.py`.
 
-```python ! sdk.py
-class SDK(BaseSDK):
-    r"""APItizing Burgers API: A simple API to manage burgers and orders
-
-    This API is used to manage burgers and orders in a restaurant
-    """
+```python ! sdk_class.py
+!from ./assets/fastapi/sdk_class.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps VersionInfo
 
 Speakeasy adds the version to the `SDKConfiguration` in `sdk/src/openapi/sdkconfiguration.py`. It also uses this version to construct the user agent (`user_agent`), which contains the version of the SDK, the version of the Speakeasy generator build, and the version of the OpenAPI documentation.
 
-```python !! sdkconfiguration.py
-from dataclasses import dataclass
-
-@dataclass
-class SDKConfiguration:
-    ...
-    openapi_doc_version: str = '0.1.0'
-    user_agent: str = "speakeasy-sdk/python 0.1.0 2.484.0 0.1.0 openapi"
-    ...
+```python ! sdk_version.py
+!from ./assets/fastapi/sdk_config_version.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps UserAgentHeader
 
 When users call your API using the generated SDK, the `user_agent` from `SDKConfiguration` is automatically added to the `user-agent` header. The `_build_request_with_client` method in `BaseSDK` constructs the HTTP request and sets the header using `headers[user_agent_header] = self.sdk_configuration.user_agent`.
 
-```python ! burger.py
-# !focus(9)
-def _build_request_with_client(
-    self,
-    ...
-    user_agent_header,
-    ...
-) -> httpx.Request:
-    ...
-    headers["Accept"] = accept_header_value
-    headers[user_agent_header] = self.sdk_configuration.user_agent
-    ...
+```python ! headers.py
+!from ./assets/fastapi/headers.py.txt
 ```
 
----
-
-## !!steps Customizing the FastAPI `operation_id`
+#### !!steps OperationIDIssues
 
 The unique `operation_id` generated by FastAPI does not translate well into an SDK. We need to customize the unique `operation_id` that FastAPI generates for better readability.
 
@@ -621,214 +298,88 @@ For instance, in the operation that returns a burger by `burger_id`, the default
 
 Here's a usage example after generating an SDK without customizing the `operationId`.
 
-```python !! main.py
-import sdk
-from sdk.models import operations
-
-s = sdk.SDK()
-
-req = operations.ReadBurgerBurgerBurgerIDGetRequest(
-    burger_id=847252,
-)
-
-res = s.burger.read_burger_burger_burger_id_get(req)
+```python ! without_custom.py
+!from ./assets/fastapi/without_custom_id.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps WithCustomID
 
 However, after using the custom function `generate_unique_id` we defined previously, the `read_burger` operation gets a much friendlier operation ID: `readBurger`. And the usage example becomes much easier to read.
 
-```python !! main.py
-import sdk
-from sdk.models import operations
-
-s = sdk.SDK()
-
-req = operations.ReadBurgerRequest(
-    burger_id=847252,
-)
-
-res = s.burger.read_burger(req)
+```python ! with_custom.py
+!from ./assets/fastapi/with_custom_id.py.txt
 ```
 
----
-
-## !!steps
+#### !!steps SpeakeasyNameOverride
 
 In addition to the two methods described earlier for customizing the `operation_id`, there is a third way. We can add the top-level `x-speakeasy-name-override` extension to our OpenAPI document, allowing Speakeasy to override these generated names when it generates SDK code.
 
 To add this extension, follow the Speakeasy guide on [changing method names](/docs/customize-sdks/methods).
 
-```yaml !
-
-
+```yaml ! name-override.yaml
+# Example of x-speakeasy-name-override extension
+x-speakeasy-name-override:
+  operations:
+    readBurger: getBurger
+    createBurger: addBurger
 ```
 
----
-
-## !!steps Add retries to your SDK with `x-speakeasy-retries`
+#### !!steps SpeakeasyRetries
 
 Speakeasy can generate SDKs that follow custom rules for retrying failed requests. For instance, if your server fails to return a response within a specified time, you may want your users to retry their request without clobbering your server.
 
 To add retries to SDKs generated by Speakeasy, add a top-level `x-speakeasy-retries` schema to your OpenAPI document. You can also override the retry strategy per operation by adding `x-speakeasy-retries` to each operation.
 
-```yaml !
-
-
+```yaml ! speakeasy-retries.yaml
+# Speakeasy retries can be configured with a top-level extension
+x-speakeasy-retries:
+  strategy: backoff
+  statusCodes: [5XX]
+  retryConnectionErrors: true
 ```
 
----
-
-## !!steps Add global retries
+#### !!steps GlobalRetries
 
 To add global retries, we need to customize the schema generated by the FastAPI `get_openapi` function.
 
-```python !! main.py
-from fastapi import FastAPI
-from fastapi.openapi.utils import get_openapi
-
-app = FastAPI(
-    summary="A simple API to manage burgers and orders",
-    description="This API is used to manage burgers and orders in a restaurant",
-    version="0.1.0",
-    title="APItizing Burger API",
-)
-
-@app.get("/")
-def root():
-    return {"message": "Root"}
-
-def custom_openapi():
-    if app.openapi_schema:
-        return app.openapi_schema
-
-    openapi_schema = get_openapi(
-        title=app.title,
-        version=app.version,
-        summary=app.summary,
-        description=app.description,
-        routes=app.routes,
-    )
-
-    # Add retries
-    openapi_schema["x-speakeasy-retries"] = {
-        "strategy": "backoff",
-        "backoff": {
-            "initialInterval": 500,
-            "maxInterval": 60000,
-            "maxElapsedTime": 3600000,
-            "exponent": 1.5,
-        },
-        "statusCodes": [
-            "5XX",
-        ],
-        "retryConnectionErrors": True,
-    }
-
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
-
-
-app.openapi = custom_openapi
+```python ! custom_openapi.py
+!from ./assets/fastapi/custom_openapi.py.txt
 ```
 
 Keep in mind, you'll need to add this customization _after_ declaring your operation routes.
 
----
-
-## !!steps 
+#### !!steps RetriesYaml
 
 This change adds the following top-level section to `openapi.yaml`.
 
-```yaml ! openapi.yaml
-x-speakeasy-retries:
-  backoff:
-    exponent: 1.5
-    initialInterval: 500
-    maxElapsedTime: 3600000
-    maxInterval: 60000
-  retryConnectionErrors: true
-  statusCodes:
-    - 5XX
-  strategy: backoff
+```yaml ! retries.yaml
+!from ./assets/fastapi/retries_openapi.yaml
 ```
 
----
-
-## !!steps Adding retries per request
+#### !!steps PerRequestRetries
 
 To add `x-speakeasy-retries` to a single operation, update the operation and add the `openapi_extra` parameter as follows.
 
-```python !! main.py
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.get(
-    "/burger/",
-    openapi_extra={
-        "x-speakeasy-retries": {
-            "strategy": "backoff",
-            "backoff": {
-                "initialInterval": 500,
-                "maxInterval": 60000,
-                "maxElapsedTime": 3600000,
-                "exponent": 1.5,
-            },
-            "statusCodes": [
-                "5XX",
-            ],
-            "retryConnectionErrors": True,
-        }
-    },
-)
-def list_burgers():
-    return []
+```python ! per_request_retries.py
+!from ./assets/fastapi/per_request_retries.py.txt
 ```
 
----
+#### !!steps AuthSecurity
 
-## !!steps Configuring authentication and security
-
-FastAPI supports several authentication mechanisms that can be easily integrated into your API. 
+FastAPI supports several authentication mechanisms that can be easily integrated into your API.
 
 The example below demonstrates adding an API key authentication scheme to the `/burger/` endpoint of our API. We use the `APIKeyHeader` dependency to validate the API key passed in the `Authorization` header.
 
-```python !! main.py
-from fastapi.security import APIKeyHeader
-
-API_KEY = "your-apitizing-api-key"
-
-header_scheme = APIKeyHeader(
-    name=API_KEY,
-    auto_error=True,
-    description="API Key for the Burger listing API. API Key should be sent as a header, with the value 'your-apitizing-api-key'",
-    scheme_name="api_key",
-)
+```python ! api_key_security.py
+!from ./assets/fastapi/api_key_security.py.txt
 ```
 
----
-
-## !!steps Using API key authentication
+#### !!steps APIKeyUsage
 
 We can pass a `key` parameter to the `list_burgers` function, retrieve the API key from the header, and perform validation.
 
-```python !! main.py
-@app.get(
-    "/burger/",
-    response_model=List[BurgerOutput],
-    tags=["burger"],
-    ...
-)
-def list_burgers(key: str = Depends(header_scheme)):
-    """List all burgers"""
-
-    if key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-
-    return [BurgerOutput(**burger_data.dict()) for burger_data in burgers_db]
+```python ! api_key_usage.py
+!from ./assets/fastapi/api_key_usage.py.txt
 ```
 
 Now when generating the OpenAPI document, the API key authentication scheme will be included and only required for the listing on the `/burger/` endpoint.

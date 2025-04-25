@@ -3,27 +3,18 @@ title: "OpenAPI Data in Tests"
 description: "Learn how changes to OpenAPI examples influence tests."
 ---
 
-import { Spotlight } from "@/mdx/components";
-
-
 # OpenAPI Data in Tests
 
-The definition of each operation will determine what data is used in generated testing. In addition to the [data type system](/openapi/schemas/dataTypes) shaping data, OpenAPI Specification supports [examples](/openapi/examples). Test generation will automatically use defined examples when available. In the absense of defined examples, the test generation will attempt to use a realistic example based on the `type`, `format` (if set), and property name (if applicable).
+The definition of each operation determines what data is used in generated testing. In addition to the [data type system](/openapi/schemas/dataTypes) shaping data, OpenAPI Specification supports [examples](/openapi/examples). Test generation automatically uses defined examples when available. In the absence of defined examples, test generation attempts to use a realistic example based on the `type`, `format` (if set), and property name (if applicable).
 
 #### Example Property
 
-By default, a single test will be created based on any `example` properties found throughout any defined operation `parameters`, `requestBody`, and `responses`.
+By default, a single test is created based on any `example` properties found throughout any defined operation `parameters`, `requestBody`, and `responses`.
 
-In this example, a single test is created for the `updatePet` operation with `id`, `name`, and `photoUrls` data:
+Consider the below example. The generator traverses the OpenAPI document to create a single test for the `updatePet` operation with `id`, `name`, and `photoUrls` data:
 
-<Spotlight>
-
-### !!steps `paths[/pet].put.operationId`
-
-This test is created for the `updatePet` operation.
-
-```yaml ! openapi.yaml
-# !focus(8)
+```yaml openapi.yaml
+# !focus(8,9,14,16,22,25:29,31,34,35,37,40:43)
 paths:
   "/pet":
     put:
@@ -79,60 +70,14 @@ components:
           - pending
           - sold
 ```
+Here's how the generator parses this example document:
 
----
-
-### !!steps `paths[/pet].put.requestBody`
-
-The operation uses the `Pet` shared component for both the request body and response.
-
-```yaml ! openapi.yaml
-# !focus(9,14,16,22)
-```
-
----
-
-### !!steps `components.schemas.Pet.required`
-
-The `Pet` shared component is an object type with required `name` and `photoUrls` properties.
-
-```yaml ! openapi.yaml
-# !focus(25:29)
-```
-
----
-
-### !!steps `components.schemas.Pet.id`
-
-While not required, the `Pet` object `id` property has an `example` property, which will be automatically included in the test.
-
-```yaml ! openapi.yaml
-# !focus(31,34)
-```
-
----
-
-### !!steps `components.schemas.Pet.name`
-
-The required `Pet` object `name` property has an `example` property, which will be included in the test.
-
-```yaml ! openapi.yaml
-# !focus(35,37)
-```
-
----
-
-### !!steps `components.schemas.Pet.photoUrls`
-
-The required `Pet` object `photoUrls` property does not include an `example` property, however it will have an example value automatically created since it is required.
-
-```yaml ! openapi.yaml
-# !focus(40:43)
-```
-
----
-
-</Spotlight>
+- `paths[/pet].put.updatePet` - The test uses the `updatePet` operationId in the test name.
+- `paths[/pet].put.requestBody` - The test uses the `Pet` shared component for both the constructed request body and response object.
+- `components.schemas.Pet.required` - The `Pet` shared component is an object type with required `name` and `photoUrls` properties.
+- `components.schemas.Pet.id` - While not required, the `Pet` object `id` property has an `example` property, which is automatically included in the test.
+- `components.schemas.Pet.name` - The required `Pet` object `name` property has an `example` property, which is included in the test.
+- `components.schemas.Pet.photoUrls` - The required `Pet` object `photoUrls` property does not include an `example` property, however it has an example value automatically created since it is required.
 
 This definition creates a test with `Pet` object request body and response data:
 
@@ -145,18 +90,12 @@ photoUrls:
 
 #### Examples Property
 
-Define multiple tests for an operation using the `examples` property, which in this context is a mapping of example name string keys to example values. Prevent missing or mismatched test generation by ensuring the same example name key is used across all necessary `parameters`, `requestBody`, and `responses` parts of the operation. If desired, [define reusable examples under components](/openapi/examples) similar to schemas.
+Multiple tests for an operation can be defined using the `examples` property, which in this context is a mapping of example name string keys to example values. Prevent missing or mismatched test generation by ensuring the same example name key is used across all necessary `parameters`, `requestBody`, and `responses` parts of the operation. If desired, [define reusable examples under components](/openapi/examples) similar to schemas.
 
 In this example, multiple tests (`fido` and `rover`) are created for the `addPet` operation:
 
-<Spotlight>
-
-### !!steps `paths[/pet].post.operationId`
-
-These tests are created for the `addPet` operation.
-
-```yaml ! openapi.yaml
-# !focus(8)
+```yaml openapi.yaml
+# !focus(15:32,41:60)
 paths:
   "/pet":
     post:
@@ -219,45 +158,11 @@ paths:
                     status: pending
 ```
 
----
-
-### !!steps `paths[/pet].post.requestBody`
-
-This operation includes both request body and response examples.
-
-```yaml ! openapi.yaml
-# !focus(9,15,34,41)
-```
-
----
-
-### !!steps `examples.fido`
-
-An `addPet` operation `fido` test is created with example request body and response data.
-
-```yaml ! openapi.yaml
-# !focus(16:23,42:50)
-```
-
----
-
-### !!steps `examples.rover`
-
-An `addPet` operation `rover` test is created with example request body and response data.
-
-```yaml ! openapi.yaml
-# !focus(24:32,51:60)
-```
-
----
-
-</Spotlight>
-
 #### Ignoring Data
 
 Data properties can be explicitly ignored in testing via the `x-speakeasy-test-ignore` annotation.
 
-In this example, the `other` property will be omitted from test generation:
+In this example, the `other` property is omitted from test generation:
 
 ```yaml
 paths:
