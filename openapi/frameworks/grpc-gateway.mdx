@@ -3,7 +3,7 @@ title: How To Generate an OpenAPI Spec With gRPC Gateway
 description: "How to create OpenAPI schemas and great SDKs for your gRPC server"
 ---
 
-import { Callout, Spotlight } from "@/mdx/components";
+import { Callout } from "@/mdx/components";
 
 
 # How to generate an OpenAPI/Swagger spec with gRPC Gateway
@@ -157,143 +157,172 @@ By modifying the protobuf service definition, we can customize the generated Ope
 
 We'll start with a basic example and add options to enhance the schema.
 
-<Spotlight>
+## Understanding the Speakeasy Bar Protobuf Service
 
-## !!steps Meet the Speakeasy Bar Protobuf Service
+Let's explore the Speakeasy Bar protobuf service definition in `proto/speakeasy/v1/speakeasy.proto`. This is the starting point for our gRPC service:
 
-We'll start by taking a look at the Speakeasy Bar protobuf service definition in `proto/speakeasy/v1/speakeasy.proto`.
+```cpp proto/speakeasy/v1/speakeasy.proto
+syntax = "proto3";
 
-```cpp ! proto/speakeasy/v1/speakeasy.proto
-!from ./assets/grpc/speakeasy-raw.proto
+package speakeasy.v1;
+
+message Drink {
+  string product_code = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+}
+
+message GetDrinkRequest {
+  string product_code = 1;
+}
+
+message GetDrinkResponse {
+  Drink drink = 1;
+}
+
+message ListDrinksRequest {
+  // Empty request
+}
+
+message ListDrinksResponse {
+  repeated Drink drinks = 1;
+}
+
+service SpeakeasyService {
+  rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+    option (google.api.http) = {
+      get: "/v1/drinks/{product_code}"
+    };
+  }
+
+  rpc ListDrinks(ListDrinksRequest) returns (ListDrinksResponse) {
+    option (google.api.http) = {
+      get: "/v1/drinks"
+    };
+  }
+}
 ```
 
----
+The service defines one object type called `Drink` with properties like `product_code`, `name`, `description`, and `price`. It also defines a service called `SpeakeasyService` that has two methods:
 
-## !!steps
+1. `GetDrink`: Retrieves a single drink by its product code
+2. `ListDrinks`: Lists all available drinks
 
-The service defines one object type, called `Drink`.
+### Adding API Information to the Service
 
-```cpp ! proto/speakeasy/v1/speakeasy.proto
-// !focus(9:32)
+We can enhance our protobuf definition by adding information about the API to improve the generated OpenAPI schema. We'll use the `options.openapiv2_swagger` option from `grpc.gateway.protoc_gen_openapiv2`:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Speakeasy Bar API"
+    description: "An API for the Speakeasy Bar, featuring a variety of cocktails and drinks."
+    version: "0.1.0"
+  }
+  host: "api.speakeasybar.com"
+  schemes: HTTP
+  schemes: HTTPS
+  consumes: "application/json"
+  produces: "application/json"
+  tags: [
+    {
+      name: "drinks"
+      description: "Operations related to drinks and cocktails offered by the Speakeasy Bar."
+    }
+  ]
+};
 ```
 
----
+This adds several important pieces of information to our API:
 
-## !!steps
+1. **Title, Description, and Version**: Basic information about our API that appears in the `info` object of the generated OpenAPI schema:
 
-A service called `SpeakeasyService` has two methods, `GetDrink` and `ListDrinks`.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto
-// !focus(42:59)
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Speakeasy Bar API",
+    "description": "An API for the Speakeasy Bar, featuring a variety of cocktails and drinks.",
+    "version": "0.1.0"
+  },
+  ...
+}
 ```
 
----
+2. **Server Information**: We add a server to the API using the `host` key. Our conversion script will add the `servers` object to the generated OpenAPI schema:
 
-## !!steps Add API Information to the Service
-
-We'll add information about the API to the service definition using `options.openapiv2_swagger` from `grpc.gateway.protoc_gen_openapiv2`.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto
-// !focus(10:26)
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "servers": [
+    {
+      "url": "https://api.speakeasybar.com"
+    }
+  ]
+}
 ```
 
----
+### Adding Descriptions and Examples to Components
 
-## !!steps
+To create an SDK that offers a great developer experience, we recommend adding descriptions and examples to all fields in OpenAPI components. We'll enhance the `Drink` object type:
 
-We'll add a title, description, and version to the API.
-
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto
-// !focus(11:15)
+```cpp proto/speakeasy/v1/speakeasy.proto
+message Drink {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "Drink"
+      description: "A drink available at the Speakeasy Bar."
+      example: "{\"product_code\":\"602a7da9-b8bb-46e6-b288-457b561029b8\",\"name\":\"Old Fashioned\",\"description\":\"A classic cocktail made with whiskey, sugar, bitters, and a twist of citrus.\",\"price\":12.99}"
+    }
+  };
+  
+  string product_code = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The unique identifier for the drink."
+    pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    format: "uuid"
+    example: "\"602a7da9-b8bb-46e6-b288-457b561029b8\""
+  }];
+  
+  string name = 2 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The name of the drink."
+    example: "\"Old Fashioned\""
+    min_length: 1
+  }];
+  
+  string description = 3 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "A description of the drink."
+    example: "\"A classic cocktail made with whiskey, sugar, bitters, and a twist of citrus.\""
+  }];
+  
+  double price = 4 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The price of the drink in USD."
+    example: "12.99"
+    minimum: 0
+  }];
+}
 ```
 
----
+In this enhanced definition:
 
-## !!steps
+1. We add a `title`, `description`, and `example` to the `Drink` object type. The `example` is a stringified JSON object.
 
-This appears in the `info` object in the generated OpenAPI schema.
+2. We use `openapiv2_field` to add options to the fields in the `Drink` object type. For example, we add a `description`, `pattern`, `format`, and `example` to the `productCode` field:
 
-```json !! openapi/speakeasy/v1/speakeasy.openapi.json(generated)
-!from ./assets/grpc/speakeasy.openapi.json
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "productCode": {
+    "type": "string",
+    "description": "The unique identifier for the drink.",
+    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    "format": "uuid",
+    "example": "602a7da9-b8bb-46e6-b288-457b561029b8"
+  }
+}
 ```
 
----
+If you use Speakeasy to create an SDK, this description and example will appear in the generated documentation and usage examples. For instance, in the TypeScript SDK's documentation:
 
-## !!steps
-
-We'll add a server to the API using the `host` key.
-
-Our conversion script will add the `servers` object to the generated OpenAPI schema.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto focus=16
-!from ./assets/grpc/speakeasy.proto
-```
-
----
-
-## !!steps
-
-Our conversion script will add the `servers` object to the generated OpenAPI schema.
-
-```json !! openapi/speakeasy/v1/speakeasy.openapi.json(generated) focus=222:226
-!from ./assets/grpc/speakeasy.openapi.json
-```
-
----
-
-## !!steps Add Descriptions and Examples to Components
-
-To create an SDK that offers a great developer experience, we recommend adding descriptions and examples to all fields in OpenAPI components.
-
-We'll start with the `Drink` object type.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto focus=29:35
-!from ./assets/grpc/speakeasy.proto
-```
-
----
-
-## !!steps
-
-We added a `title`, `description`, and `example` to the `Drink` object type.
-
-Note that the `example` is a stringified JSON object.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto focus=29:35 mark=34
-!from ./assets/grpc/speakeasy.proto
-```
-
----
-
-## !!steps
-
-We use `openapiv2_field` to add options to the fields in the `Drink` object type.
-
-For example, we added a `description`, `pattern`, format, and `example` to the `productCode` field.
-
-```cpp !! proto/speakeasy/v1/speakeasy.proto focus=74:79
-!from ./assets/grpc/speakeasy.proto
-```
-
----
-
-```json !! openapi/speakeasy/v1/speakeasy.openapi.json(generated) focus=66:72
-!from ./assets/grpc/speakeasy.openapi.json
-```
-
----
-
-## !!steps
-
-If you use Speakeasy to create an SDK, this description and example will appear in the generated documentation and usage examples.
-
-This usage example is from the TypeScript SDK's documentation.
-
-Note how the `productCode` field is represented by our UUID example instead of a random string.
-
-```typescript ! sdk/docs/sdks/drinks/README.md(generated)
-// !mark(7)
+```typescript sdk/docs/sdks/drinks/README.md
 import { SDK } from "openapi";
 
 (async() => {
@@ -309,79 +338,132 @@ import { SDK } from "openapi";
 })();
 ```
 
----
+Note how the `productCode` field is represented by our UUID example instead of a random string.
 
-## !!steps Customize the OperationId
+### Customizing the OperationId
 
-By default, the `operationId` is the method name in the protobuf service definition.
+By default, the `operationId` is the method name in the protobuf service definition. We can customize the `operationId` for each method using `options.openapiv2_operation`:
 
-We can customize the `operationId` for each method using `options.openapiv2_operation`.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto focus=105
-!from ./assets/grpc/speakeasy.proto
+```cpp proto/speakeasy/v1/speakeasy.proto
+rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+  option (google.api.http) = {
+    get: "/v1/drinks/{product_code}"
+  };
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+    operation_id: "getDrink"
+    // More options...
+  };
+}
 ```
 
----
+This appears in the generated OpenAPI schema:
 
-```json ! openapi/speakeasy/v1/speakeasy.openapi.json(generated) focus=122
-!from ./assets/grpc/speakeasy.openapi.json
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "operationId": "getDrink"
+}
 ```
 
----
+### Adding Descriptions and Tags to Methods
 
-## !!steps Add Descriptions and Tags to Methods
+We can also add descriptions and tags to methods using `options.openapiv2_operation`:
 
-We can add descriptions and tags to methods using `options.openapiv2_operation`.
-
-```cpp !! proto/speakeasy/v1/speakeasy.proto focus=106
-!from ./assets/grpc/speakeasy.proto
+```cpp proto/speakeasy/v1/speakeasy.proto
+rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+  option (google.api.http) = {
+    get: "/v1/drinks/{product_code}"
+  };
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+    operation_id: "getDrink"
+    summary: "Get a drink"
+    description: "Get a drink by its product code."
+    tags: "drinks"
+    // More options...
+  };
+}
 ```
 
----
+This adds tags and descriptions to the operation in the OpenAPI schema:
 
-```json !! openapi/speakeasy/v1/speakeasy.openapi.json(generated) focus=219:226
-!from ./assets/grpc/speakeasy.openapi.json
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "tags": [
+    "drinks"
+  ],
+  "summary": "Get a drink",
+  "description": "Get a drink by its product code."
+}
 ```
 
----
+### Adding Tag Descriptions
 
-## !!steps Add Tag Descriptions
+We can add descriptions to tags in the protobuf definition by using `options.openapiv2_swagger`:
 
-We can add descriptions to tags in the protobuf definition by using `options.openapiv2_swagger`.
-
-In the code example, we added a description to the `drinks` tag.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto focus=22:25
-!from ./assets/grpc/speakeasy.proto
+```cpp proto/speakeasy/v1/speakeasy.proto
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  // Other options...
+  tags: [
+    {
+      name: "drinks"
+      description: "Operations related to drinks and cocktails offered by the Speakeasy Bar."
+    }
+  ]
+};
 ```
 
----
+This adds descriptions to tags in the OpenAPI schema:
 
-```json ! openapi/speakeasy/v1/speakeasy.openapi.json(generated) focus=221
-!from ./assets/grpc/speakeasy.openapi.json
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "tags": [
+    {
+      "name": "drinks",
+      "description": "Operations related to drinks and cocktails offered by the Speakeasy Bar."
+    }
+  ]
+}
 ```
 
----
+### Adding OpenAPI Extensions
 
-## !!steps Add OpenAPI Extensions
+gRPC Gateway allows us to add OpenAPI extensions to the schema using the `extensions` field in our protobuf service definition. For example, we can add the [Speakeasy retries extension](/docs/customize-sdks/retries) called `x-speakeasy-retries`, which causes the SDK to retry failed requests:
 
-gRPC Gateway allows us to add OpenAPI extensions to the OpenAPI schema using the `extensions` key in our protobuf service definition.
-
-For example, we can add the [Speakeasy retries extension](/docs/customize-sdks/retries) `x-speakeasy-retries`, which will cause the SDK to retry failed requests.
-
-In the code example, we added the `x-speakeasy-retries` extension to the `GetDrink` method.
-
-```cpp ! proto/speakeasy/v1/speakeasy.proto focus=120:179
-!from ./assets/grpc/speakeasy.proto
+```cpp proto/speakeasy/v1/speakeasy.proto
+rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+  option (google.api.http) = {
+    get: "/v1/drinks/{product_code}"
+  };
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+    // Other options...
+    extensions: {
+      key: "x-speakeasy-retries"
+      value: {
+        string_value: "{\"strategy\":\"backoff\",\"backoff\":{\"initialInterval\":500,\"maxInterval\":60000,\"maxElapsedTime\":3600000,\"exponent\":1.5},\"statusCodes\":[\"5XX\"],\"retryConnectionErrors\":true}"
+      }
+    }
+  };
+}
 ```
 
----
+This adds the extension to the OpenAPI schema:
 
-```json ! openapi/speakeasy/v1/speakeasy.openapi.json(generated) focus=200:209
-!from ./assets/grpc/speakeasy.openapi.json
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "x-speakeasy-retries": {
+    "strategy": "backoff",
+    "backoff": {
+      "initialInterval": 500,
+      "maxInterval": 60000,
+      "maxElapsedTime": 3600000,
+      "exponent": 1.5
+    },
+    "statusCodes": [
+      "5XX"
+    ],
+    "retryConnectionErrors": true
+  }
+}
 ```
-
-</Spotlight>
 
 ## Create an SDK With Speakeasy
 

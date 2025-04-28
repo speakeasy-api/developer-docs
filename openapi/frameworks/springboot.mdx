@@ -3,7 +3,7 @@ title: How to generate an OpenAPI/Swagger document with Spring Boot
 description: "Generating an OpenAPI specification with Spring Boot and using it to create SDKs with Speakeasy."
 ---
 
-import { Callout, Spotlight } from "@/mdx/components";
+import { Callout } from "@/mdx/components";
 
 
 # Generating an OpenAPI document and SDK from Spring Boot
@@ -67,166 +67,252 @@ All the code in this step can be found in our example application.
 
 Open the `src/main/java/com/bookstore/BookstoreApplication.java` file in your text editor to see where to begin when adding OpenAPI annotations to your project.
 
-<Spotlight>
+## Defining API Documentation with Spring Boot Annotations
 
-## !!steps
+### Main Application Configuration
 
-The `BookstoreApplication` class is the entry point for the API. Similarly, we define the entry point to the OpenAPI document.
+The `BookstoreApplication` class is the entry point for the API, and it's also where we define the main OpenAPI documentation properties:
 
-```java ! BookstoreApplication.java focus=1:34
-!from ./assets/springboot/BookstoreApplication.java.txt
+```java BookstoreApplication.java
+package com.bookstore;
+
+import io.swagger.v3.oas.annotations.OpenAPIDefinition;
+import io.swagger.v3.oas.annotations.info.Contact;
+import io.swagger.v3.oas.annotations.info.Info;
+import io.swagger.v3.oas.annotations.info.License;
+import io.swagger.v3.oas.annotations.servers.Server;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@OpenAPIDefinition(
+        info = @Info(
+                title = "Bookstore API",
+                version = "1.0.0",
+                description = "This API provides endpoints to manage a bookstore's inventory of books and magazines, " +
+                        "as well as customer orders. You can use it to browse publications, create orders, and track " +
+                        "order status.",
+                contact = @Contact(
+                        name = "Bookstore API Support",
+                        email = "api@bookstore.example.com",
+                        url = "https://bookstore.example.com/support"
+                ),
+                license = @License(
+                        name = "Apache 2.0",
+                        url = "https://www.apache.org/licenses/LICENSE-2.0.html"
+                )
+        ),
+        servers = {
+                @Server(url = "https://api.bookstore.example.com", description = "Production server (uses live data)"),
+                @Server(url = "http://localhost:8080", description = "Development server (uses test data)")
+        }
+)
+public class BookstoreApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(BookstoreApplication.class, args);
+    }
+}
 ```
 
+The `@OpenAPIDefinition` annotation populates the OpenAPI document with essential context for anyone who wants to use the API. The `title`, `version`, and `description` fields describe what the API does, its current state, and how it can be used.
 
----
+The `@Server` annotation defines available endpoints for the API. In the example, there are two options: a production server at `https://api.bookstore.example.com` that uses live data, and a localhost server at `http://localhost:8080` for testing with sample data.
 
-## !!steps
+### Defining Data Models
 
-The `@OpenAPIDefinition` annotation populates the OpenAPI document with essential context for anyone who wants to use the API. This tells developers what the API does and how they can use it.
+Next, let's look at how you can use OpenAPI annotations to describe API data structures in the `Models.java` file:
 
-Use the `title`, `version`, and `description` fields to describe what the API does, its current state, and how it can be used.
+```java Models.java
+package com.bookstore;
 
-```java !! BookstoreApplication.java focus=14:34 mark=16:18
-!from ./assets/springboot/BookstoreApplication.java.txt
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+
+@Schema(description = "Base class for all publications")
+@JsonTypeInfo(
+        use = JsonTypeInfo.Id.NAME,
+        property = "type",
+        visible = true
+)
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = Book.class, name = "BOOK"),
+        @JsonSubTypes.Type(value = Magazine.class, name = "MAGAZINE")
+})
+public abstract class Publication {
+    @Schema(description = "Unique identifier of the publication", example = "123e4567-e89b-12d3-a456-426614174000")
+    protected String id;
+
+    @Schema(description = "Title of the publication", example = "Spring Boot in Action")
+    protected String title;
+
+    @Schema(description = "Publication date in ISO format", example = "2023-05-15")
+    protected String publicationDate;
+
+    @Schema(description = "Price in USD", example = "29.99")
+    protected float price;
+
+    @JsonProperty("type")
+    @Schema(description = "Type of publication", example = "BOOK", allowableValues = {"BOOK", "MAGAZINE"})
+    protected abstract String getType();
+
+    // Getters and setters omitted for brevity
+}
+
+@Schema(description = "Book publication with author and ISBN")
+class Book extends Publication {
+    @Schema(description = "Author of the book", example = "Craig Walls")
+    private String author;
+
+    @Schema(description = "ISBN of the book", example = "978-1617292545")
+    private String isbn;
+
+    @Override
+    @JsonIgnore
+    protected String getType() {
+        return "BOOK";
+    }
+
+    // Constructor, getters, and setters omitted for brevity
+}
+
+@Schema(description = "Magazine publication with issue number and publisher")
+class Magazine extends Publication {
+    @Schema(description = "Issue number of the magazine", example = "42")
+    private int issueNumber;
+
+    @Schema(description = "Publisher of the magazine", example = "O'Reilly Media")
+    private String publisher;
+
+    @Override
+    @JsonIgnore
+    protected String getType() {
+        return "MAGAZINE";
+    }
+
+    // Constructor, getters, and setters omitted for brevity
+}
 ```
 
+The `@Schema` annotation can be used at both the class and field levels:
 
----
+- At the class level, `@Schema` describes what a `Publication`, `Book`, or `Magazine` represents in the API.
+- At the field level, fields like `id` and `author` are documented with a description and example values.
 
-## !!steps
+The `Publication` class acts as the base schema in the OpenAPI specification. By using `@JsonTypeInfo` and `@JsonSubTypes`, we tell OpenAPI that a `Publication` can be either a `Book` or `Magazine`. This polymorphism is reflected in the OpenAPI document as a `oneOf` schema, allowing endpoints to accept or return either type. API clients will include a `type` field set to either `BOOK` or `MAGAZINE` to identify the publication type.
 
-The `@Server` annotation defines any available endpoints for the API. In the example, there are two options: A production server at `https://api.bookstore.example.com` that uses live data, and a localhost server at `http://localhost:8080` for testing with sample data.
+Here's how we define an `Order` class that references the `Publication` schema:
 
-```java !! BookstoreApplication.java focus=30:33
-!from ./assets/springboot/BookstoreApplication.java.txt
+```java Models.java
+@Schema(description = "Customer order for publications")
+class Order {
+    @Schema(description = "Unique identifier of the order", example = "order-123456")
+    private String id;
+
+    @Schema(description = "Name of the customer who placed the order", example = "John Doe")
+    private String customerName;
+
+    @Schema(description = "Email of the customer", example = "john.doe@example.com")
+    private String customerEmail;
+
+    @Schema(description = "List of publications in the order")
+    private List<Publication> items;
+
+    @Schema(description = "Current status of the order", example = "PENDING")
+    private OrderStatus status;
+
+    // Constructor, getters, and setters omitted for brevity
+}
 ```
 
+The `Order` class uses the `@Schema` annotation to document the `items` field, which references the `Publication` schema. This tells OpenAPI that `Orders` can contain an array of either books or magazines, using the polymorphic structure defined earlier.
 
----
+For the order status, we use an enumeration:
 
-## !!steps
-
-Open the `Models.java` file to see how you can use OpenAPI annotations to describe API data structures.
-
-```java ! Models.java focus=1:206
-!from ./assets/springboot/Models.java.txt
+```java Models.java
+@Schema(description = "Status of an order")
+enum OrderStatus {
+    PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+}
 ```
 
+This appears in the OpenAPI specification as a string field with a set of allowed values.
 
----
+Finally, we define an error response model:
 
-## !!steps
+```java Models.java
+@Schema(description = "Error response with code and message")
+class ErrorResponse {
+    @Schema(description = "Error code", example = "NOT_FOUND")
+    private String code;
 
-The `@Schema` annotation can be used at both the class and field levels to describe data structures in the OpenAPI documentation.
+    @Schema(description = "Error message", example = "Publication with ID 123 not found")
+    private String message;
 
-At the class level, `@Schema` describes what a `Publication`, `Book`, or `Magazine` represents in the API.
-
-At the field level, fields like `id` and `author` are documented with a description of the field's purpose and an example of the value that API users should provide or expect to receive.
-
-```java !! Models.java focus=13:71 mark=15,25,28,31,34
-!from ./assets/springboot/Models.java.txt
+    // Constructor, getters, and setters omitted for brevity
+}
 ```
 
+### Defining API Endpoints
 
----
+Now, let's define the API endpoints in the `PublicationsController.java` file:
 
-## !!steps
+```java PublicationsController.java
+package com.bookstore;
 
-The `Publication` class acts as the base schema in the OpenAPI specification.
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-By using `@JsonTypeInfo` and `@JsonSubTypes`, we tell OpenAPI that a `Publication` can be either a `Book` or `Magazine`. This polymorphism is reflected in the OpenAPI document as a `oneOf` schema, where each endpoint that works with publications can accept or return either type.
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
-API clients will see that when working with publications, they need to include a `type` field set to either `BOOK` or `MAGAZINE` to properly identify the publication type.
-
-```java !! Models.java focus=13:71 mark=19:22
-!from ./assets/springboot/Models.java.txt
+@RestController
+@RequestMapping("/publications")
+@Tag(name = "Publications", description = "Operations for managing publications (books and magazines)")
+public class PublicationsController {
+    // Controller methods follow
+}
 ```
 
+The `@Tag` annotation groups operations under "Publications" in the OpenAPI document. Combined with `@RequestMapping("/publications")`, it tells API consumers that these endpoints handle publication-related operations.
 
----
+For each endpoint method, we use annotations to document their purpose and responses:
 
-## !!steps
-
-The `Order` class uses the `@Schema` annotation to document the `items` field, which references the `Publication` schema.
-
-This tells OpenAPI that `Orders` can contain an array of either books or magazines, using the polymorphic structure we defined earlier.
-
-```java !! Models.java focus=135:174 mark=135,143
-!from ./assets/springboot/Models.java.txt
+```java PublicationsController.java
+@Operation(summary = "Get a publication by ID", description = "Returns a single publication (book or magazine)")
+@ApiResponses(value = {
+    @ApiResponse(responseCode = "200", description = "Successful operation",
+                 content = @Content(schema = @Schema(oneOf = {Book.class, Magazine.class}))),
+    @ApiResponse(responseCode = "404", description = "Publication not found",
+                 content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+})
+@GetMapping("/{id}")
+public ResponseEntity<?> getPublication(
+    @Parameter(description = "ID of the publication to return", required = true)
+    @PathVariable String id) {
+    // Implementation omitted for brevity
+}
 ```
 
+The `@Operation` and `@ApiResponses` annotations document what the endpoint does and what responses to expect. For example, `getPublication` is annotated to show that it returns a publication successfully (`200` status) or an error (`404` status) if the publication isn't found.
 
----
-
-## !!steps
-
-To document the available statuses of an `Order`, we annotate an enum with `@Schema`.
-
-In the OpenAPI specification, this appears as a string field specifying a set of allowed values.
-
-```java !! Models.java focus=176:182 mark=176
-!from ./assets/springboot/Models.java.txt
-```
-
-
----
-
-## !!steps
-
-We annotate the `ErrorResponse` class with `@Schema` to describe any errors users might run into when using the API endpoints.
-
-```java !! Models.java focus=184:206 mark=184,186,189
-!from ./assets/springboot/Models.java.txt
-```
-
-
----
-
-## !!steps
-
-The next step is to define the API endpoints. We will go through the `PublicationsController.java` file to see how to map a Spring Boot controller to OpenAPI.
-
-```java ! PublicationsController.java focus=1:94
-!from ./assets/springboot/PublicationsController.java.txt
-```
-
-
----
-
-## !!steps
-
-The `@Tag` annotation groups the operations in the controller under "Publications" in the OpenAPI document. Combined with `@RequestMapping("/publications")`, it tells API consumers that these endpoints handle publication-related operations.
-
-```java !! PublicationsController.java focus=22:23 mark=23
-!from ./assets/springboot/PublicationsController.java.txt
-```
-
-
----
-
-## !!steps
-
-On each method, you can use the `@Operation` and `@ApiResponses` annotations to document what the endpoint does and what responses to expect.
-
-For example, `getPublication` has been annotated to show that it returns a publication successfully (`200` status) or an error (`404` status) if the publication isn't found.
-
-```java !! PublicationsController.java focus=48:54 mark=48,49
-!from ./assets/springboot/PublicationsController.java.txt
-```
-
-
----
-
-## !!steps
-
-Use the `@Parameter` annotation to describe the requirements for input parameters.
-
-```java !! PublicationsController.java focus=74:90 mark=76
-!from ./assets/springboot/PublicationsController.java.txt
-```
-
-
-</Spotlight>
+The `@Parameter` annotation describes the requirements for input parameters, such as the ID path parameter in this example.
 
 
 ## Step 5: View the generated OpenAPI document
@@ -249,122 +335,146 @@ curl http://localhost:8080/api-docs.yaml -o openapi.yaml
 This command saves the OpenAPI document as `openapi.yaml` in your current directory.
 
 
-<Spotlight>
+## Examining the Generated OpenAPI Document
 
+Let's explore the generated OpenAPI document to see how the Spring Boot annotations translate into an OpenAPI specification.
 
-## !!steps
+### OpenAPI Version Information
 
-Let's scroll through the generated OpenAPI document to see how our Spring Boot annotations were translated into an OpenAPI specification.
+The OpenAPI document begins with version information:
 
-```java ! BookstoreApplication.java
-!from ./assets/springboot/BookstoreApplication.java.txt
+```yaml openapi.yaml
+openapi: 3.1.0
 ```
 
-```yaml ! openapi.yaml
-!from ./assets/springboot/openapi.yaml.txt
+This version is determined by the configuration in our application.properties file. It tells API consumers which OpenAPI spec version to expect.
+
+### API Information
+
+Next comes the `info` object, which is generated from the `@OpenAPIDefinition` annotation:
+
+```yaml openapi.yaml
+info:
+  title: Bookstore API
+  description: >-
+    This API provides endpoints to manage a bookstore's inventory of books and
+    magazines, as well as customer orders. You can use it to browse
+    publications, create orders, and track order status.
+  contact:
+    name: Bookstore API Support
+    url: https://bookstore.example.com/support
+    email: api@bookstore.example.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
 ```
 
+Notice how each field in the Java annotation maps directly to its counterpart in the OpenAPI document output. This one-to-one mapping makes it easy to understand how your code affects the final API documentation.
 
----
+### Server Information
 
-## !!steps
+Server configurations defined with `@Server` annotations appear in the servers array:
 
-The OpenAPI document begins with version information.
-
-This version is determined by the `springdoc-openapi` library we're using. Simple, but important - it tells API consumers which OpenAPI spec version to expect.
-
-```java !! BookstoreApplication.java focus=13 mark=13
-!from ./assets/springboot/BookstoreApplication.java.txt
+```yaml openapi.yaml
+servers:
+  - url: https://api.bookstore.example.com
+    description: Production server (uses live data)
+  - url: http://localhost:8080
+    description: Development server (uses test data)
 ```
 
-```yaml !! openapi.yaml focus=1
-!from ./assets/springboot/openapi.yaml.txt
+### Polymorphic Models
+
+One of the more complex aspects of the API is how polymorphic models are represented. The `Publication` class has been translated into a schema that supports polymorphism through a discriminator:
+
+```yaml openapi.yaml
+Publication:
+  type: object
+  description: Base class for all publications
+  properties:
+    id:
+      type: string
+      description: Unique identifier of the publication
+      example: 123e4567-e89b-12d3-a456-426614174000
+    title:
+      type: string
+      description: Title of the publication
+      example: Spring Boot in Action
+    publicationDate:
+      type: string
+      description: Publication date in ISO format
+      example: '2023-05-15'
+    price:
+      type: number
+      format: float
+      description: Price in USD
+      example: 29.99
+    type:
+      type: string
+      description: Type of publication
+      example: BOOK
+      enum:
+        - BOOK
+        - MAGAZINE
+  required:
+    - id
+    - title
+    - publicationDate
+    - price
+    - type
+  discriminator:
+    propertyName: type
+    mapping:
+      BOOK: '#/components/schemas/Book'
+      MAGAZINE: '#/components/schemas/Magazine'
 ```
 
-
----
-
-## !!steps
-
-Next comes the `info` object, which is generated from the `@OpenAPIDefinition` annotation.
-
-This Java annotation transforms directly into the corresponding OpenAPI structure.
-
-Notice how each field in the annotation maps directly to its counterpart in the OpenAPI document output. This one-to-one mapping makes it easy to understand how your code affects the final API documentation.
-
-```java !! BookstoreApplication.java focus=15:29
-!from ./assets/springboot/BookstoreApplication.java.txt
-```
-
-```yaml !! openapi.yaml focus=2:13
-!from ./assets/springboot/openapi.yaml.txt
-```
-
-
----
-
-## !!steps
-
-Server configurations defined with `@Server` annotations appear in the servers array.
-
-These annotations generate the following OpenAPI structure.
-
-```java !! BookstoreApplication.java focus=30:33
-!from ./assets/springboot/BookstoreApplication.java.txt
-```
-
-```yaml !! openapi.yaml focus=14:18
-!from ./assets/springboot/openapi.yaml.txt
-```
-
-
----
-
-## !!steps
-
-One of the more complex aspects of the API is how polymorphic models are represented.
-
-The `Publication` class has been translated into a schema that supports polymorphism through a discriminator.
-
-A few key things to notice:
-
+Key aspects to notice:
 - The `@Schema` annotations provide descriptions and examples
 - The `@JsonTypeInfo` annotation determines the discriminator property
 - The `@JsonSubTypes` annotation defines the possible concrete implementations
 
+### API Endpoints
 
-```java !! Models.java focus=15:24
-!from ./assets/springboot/Models.java.txt
+Finally, let's examine how controller methods translate into API endpoints. Here's how the `getPublication` endpoint appears in the OpenAPI document:
+
+```yaml openapi.yaml
+/publications/{id}:
+  get:
+    tags:
+      - Publications
+    summary: Get a publication by ID
+    description: Returns a single publication (book or magazine)
+    operationId: getPublication
+    parameters:
+      - name: id
+        in: path
+        description: ID of the publication to return
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Successful operation
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Book'
+                - $ref: '#/components/schemas/Magazine'
+      '404':
+        description: Publication not found
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 ```
 
-```yaml !! openapi.yaml focus=336:379 mark=337:338,347,377:379
-!from ./assets/springboot/openapi.yaml.txt
-```
-
-
----
-
-## !!steps
-
-Finally, let's examine how controller methods translate into API endpoints.
-
-The `@Operation` annotation provides the summary and description.
-
-Each `@ApiResponse` maps to an entry in the responses object.
-
-The `@Parameter` annotation documents the path parameter.
-
-
-```java !! PublicationsController.java focus=48:55
-!from ./assets/springboot/PublicationsController.java.txt
-```
-
-```yaml !! openapi.yaml focus=199:227
-!from ./assets/springboot/openapi.yaml.txt
-```
-
-
-</Spotlight>
+The mapping is clear:
+- The `@Operation` annotation provides the summary and description
+- Each `@ApiResponse` maps to an entry in the responses object
+- The `@Parameter` annotation documents the path parameter
 
 # Create an SDK from the OpenAPI document
 

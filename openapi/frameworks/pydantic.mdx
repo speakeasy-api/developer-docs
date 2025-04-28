@@ -3,8 +3,6 @@ title: How To Generate an OpenAPI Spec with Pydantic V2
 description: "How to generate OpenAPI schemas and great SDK clients for your Pydantic V2 Models"
 ---
 
-import { Spotlight } from "@/mdx/components";
-
 # How to generate an OpenAPI/Swagger spec with Pydantic V2
 
 [Pydantic](https://docs.pydantic.dev/latest/) is considered by many API developers to be the best data validation library for Python, and with good reason. By defining an application's models in Pydantic, developers benefit from a vastly improved development experience, runtime data validation and serialization, and automatic OpenAPI schema generation.
@@ -57,15 +55,13 @@ pip install pyyaml
 
 Let's follow a step-by-step process to generate an OpenAPI schema from a Pydantic model without any additional libraries.
 
-<Spotlight>
-
-### !!steps Define a Simple Pydantic Model
+### Define a Simple Pydantic Model
 
 Create a new Python file called `models.py` and define a simple Pydantic model.
 
 In this example, we define a Pydantic model called `Pet` with three fields: `id`, `name`, and `breed`. The `id` field is an integer, and the `name` and `breed` fields are strings.
 
-```python ! models.py
+```python
 from pydantic import BaseModel
 
 
@@ -75,16 +71,13 @@ class Pet(BaseModel):
     breed: str
 ```
 
----
-
-### !!steps Generate JSON Schema for the Pydantic Model
+### Generate JSON Schema for the Pydantic Model
 
 Add a new function called `print_json_schema` to the `models.py` file that prints the JSON schema for the `Pet` model.
 
 This function uses the `model_json_schema` method provided by Pydantic to generate the JSON schema, which Python then prints to the console as YAML. We use YAML for readability, but the output is still a valid JSON schema.
 
-```python ! models.py
-# !focus(1,11:16)
+```python
 import yaml
 from pydantic import BaseModel
 
@@ -103,13 +96,9 @@ if __name__ == "__main__":
     print_json_schema()
 ```
 
----
-
-## !!steps
-
 Run `python models.py` to generate the JSON schema for the `Pet` model and print it as YAML:
 
-```yaml ! Output
+```yaml
 properties:
   breed:
     title: Breed
@@ -128,16 +117,13 @@ title: Pet
 type: object
 ```
 
----
-
-## !!steps Multiple Pydantic Models
+### Multiple Pydantic Models
 
 Let's add another Pydantic model called `Owner` to the `models.py` file.
 
 The `Owner` model has two fields: `id` and `name`. Both fields are integers. Additionally, the `Owner` model has a list of `Pet` objects.
 
-```python ! models.py
-# !focus(11,14:18)
+```python
 import yaml
 from pydantic import BaseModel
 
@@ -162,18 +148,13 @@ if __name__ == "__main__":
     print_json_schema()
 ```
 
----
-
-## !!steps Generate JSON Schema for Multiple Pydantic Models
+### Generate JSON Schema for Multiple Pydantic Models
 
 Update the `print_json_schema` function to print the JSON schema for both the `Pet` and `Owner` models.
 
 Note that we're now calling the [`models_json_schema`](https://docs.pydantic.dev/2.7/api/json_schema/#pydantic.json_schema.models_json_schema) function from `pydantic.json_schema` instead of the `model_json_schema` method.
 
-```python ! models.py
-# !focus(3)
-# !focus(18:22)
-# !focus(26[23:34])
+```python
 import yaml
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
@@ -202,13 +183,9 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 Run `python models.py` to generate the JSON schema for both the `Pet` and `Owner` models and print it as YAML:
 
-```yaml ! Output
+```yaml
 $defs:
   Owner:
     properties:
@@ -247,66 +224,18 @@ $defs:
     title: Pet
     type: object
 ```
-
----
-
-## !!steps
 
 The generated schema includes definitions for both the `Pet` and `Owner` models. The `Owner` model has a reference to the `Pet` model, indicating that the `Owner` model contains a list of `Pet` objects.
 
 Note that the root of the schema includes a `$defs` key that contains the definitions for both models, and the `Owner` model references the `Pet` model using the `$ref` keyword.
 
-```yaml ! Output
-# !focus(1,12)
-$defs:
-  Owner:
-    properties:
-      id:
-        title: Id
-        type: integer
-      name:
-        title: Name
-        type: string
-      pets:
-        items:
-          $ref: "#/$defs/Pet"
-        title: Pets
-        type: array
-    required:
-      - id
-      - name
-      - pets
-    title: Owner
-    type: object
-  Pet:
-    properties:
-      breed:
-        title: Breed
-        type: string
-      id:
-        title: Id
-        type: integer
-      name:
-        title: Name
-        type: string
-    required:
-      - id
-      - name
-      - breed
-    title: Pet
-    type: object
-```
-
----
-
-## !!steps Customize Pydantic JSON Schema Generation
+### Customize Pydantic JSON Schema Generation
 
 Let's customize the generated JSON schema to reference the `Pet` model using the `#/components/schemas` path instead of `$defs`.
 
 We'll use the `ref_template` parameter of the `models_json_schema` function to specify the reference template.
 
-```python ! models.py
-# !focus(21)
+```python
 import yaml
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
@@ -336,14 +265,9 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 Next, we'll update the `print_json_schema` function to print a JSON schema that resembles an OpenAPI schema's `components` section.
 
-```python ! models.py
-# !focus(23,27,28[21:34])
+```python
 import yaml
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
@@ -378,16 +302,11 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 Run `python models.py` to generate the OpenAPI schema for both the `Pet` and `Owner` models.
 
 The generated OpenAPI schema includes the `components` section, with definitions for both the `Pet` and `Owner` models.
 
-```yaml ! Output
-# !focus(1:2,13)
+```yaml
 components:
   schemas:
     Owner:
@@ -428,16 +347,11 @@ components:
       type: object
 ```
 
----
-
-## !!steps
-
 The JSON Schema we generated resembles an OpenAPI schema's `components` section, but to generate a valid OpenAPI schema, we need to add the `openapi` and `info` sections.
 
 Edit the `print_json_schema` function in `models.py` to include the `openapi` and `info` sections in the generated OpenAPI schema.
 
-```python ! models.py
-# !focus(24:28)
+```python
 import yaml
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
@@ -477,16 +391,11 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 Run `python models.py` to generate the complete OpenAPI schema for both the `Pet` and `Owner` models.
 
 The generated OpenAPI schema includes the `openapi`, `info`, and `components` sections with definitions for both the `Pet` and `Owner` models.
 
-```yaml ! Output
-# !focus(1:4)
+```yaml
 openapi: 3.1.0
 info:
   title: Pet Sitter API
@@ -531,18 +440,13 @@ components:
       type: object
 ```
 
----
-
 Now we have a complete OpenAPI document that we can use to generate SDK clients for our API. However, the generated OpenAPI schema does not contain descriptions or example values for the models. We can add these details to the Pydantic models to improve the generated OpenAPI schema.
 
----
-
-## !!steps Add Descriptions to Pydantic Models
+### Adding Descriptions to Pydantic Models
 
 Let's add docstrings to the `Pet` and `Owner` models to include additional information in the generated OpenAPI schema.
 
-```python ! models.py
-# !focus(7:13,20:26)
+```python
 import yaml
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
@@ -596,14 +500,9 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 If we run `python models.py`, we see that our `Owner` schema now includes a description field, derived from the docstring we added to the `Owner` Pydantic model.
 
-```yaml ! Output
-# !focus(8:13)
+```yaml
 openapi: 3.1.0
 info:
   title: Pet Sitter API
@@ -660,81 +559,15 @@ components:
       type: object
 ```
 
----
-
-## !!steps
-
 The `Pet` schema now also includes a description field, derived from the docstring we added to the `Pet` Pydantic model.
 
-```yaml ! Output
-# !focus(33:38)
-openapi: 3.1.0
-info:
-  title: Pet Sitter API
-  version: 0.0.1
-components:
-  schemas:
-    Owner:
-      description: 'An Owner of Pets in the system.
-
-
-        ID is unique.
-
-        Can have multiple pets.'
-      properties:
-        id:
-          title: Id
-          type: integer
-        name:
-          title: Name
-          type: string
-        pets:
-          items:
-            $ref: '#/components/schemas/Pet'
-          title: Pets
-          type: array
-      required:
-      - id
-      - name
-      - pets
-      title: Owner
-      type: object
-    Pet:
-      description: 'A Pet in the system.
-
-
-        ID is unique.
-
-        Can have multiple owners.'
-      properties:
-        id:
-          title: Id
-          type: integer
-        name:
-          title: Name
-          type: string
-        breed:
-          title: Breed
-          type: string
-      required:
-      - id
-      - name
-      - breed
-      title: Pet
-      type: object
-```
-
----
-
-## !!steps Add OpenAPI Titles and Descriptions to Pydantic Fields
+### Adding OpenAPI Titles and Descriptions to Pydantic Fields
 
 Let's add titles and descriptions to the fields of the `Pet` and `Owner` models to include additional information in the generated OpenAPI schema.
 
 We'll use the `Field` class from Pydantic to add descriptions to the fields.
 
-```python ! models.py
-# !mark(2,14:16)
-# !focus(2[33:37],14[15:83],15[17:75],16[18:78])
+```python
 import yaml
 from pydantic import BaseModel, Field
 from pydantic.json_schema import models_json_schema
@@ -790,14 +623,9 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 If we run `python models.py`, we see that our `Pet` schema now includes descriptions for each field.
 
-```yaml ! Output
-# !focus(44:45,48:49,52:53)
+```yaml
 openapi: 3.1.0
 info:
   title: Pet Sitter API
@@ -860,9 +688,7 @@ components:
       type: object
 ```
 
----
-
-## !!steps Add OpenAPI Example Values to Pydantic Models
+### Adding OpenAPI Example Values to Pydantic Models
 
 Examples help API users understand your API's data structures, and some SDK and documentation generators use OpenAPI example values to generate useful code snippets and documentation.
 
@@ -870,8 +696,7 @@ Let's add example values to the `Pet` and `Owner` Pydantic models. Once again, w
 
 Note that the examples are added as a list per field, using the `examples` parameter.
 
-```python ! models.py
-# !focus(18[9:20],24[9:25],30[9:60])
+```python
 import yaml
 from pydantic import BaseModel, Field
 from pydantic.json_schema import models_json_schema
@@ -955,14 +780,9 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 If we run `python models.py`, we see that our `Pet` schema now includes example values for each field.
 
-```yaml ! Output
-# !focus(51:52,57:58,63:66)
+```yaml
 openapi: 3.1.0
 info:
   title: Pet Sitter API
@@ -1039,16 +859,13 @@ components:
       type: object
 ```
 
----
-
-## !!steps Marking Fields as Optional in Pydantic Models
+### Marking Fields as Optional in Pydantic Models
 
 By default, Pydantic marks all fields as required. You can mark a field as optional by setting the `default` parameter to `None`.
 
 Let's mark the `breed` field in the `Pet` model as optional by setting the `default` parameter to `None`.
 
-```python ! models.py
-# !focus(26[16:21],27[9:12])
+```python
 import yaml
 from pydantic import BaseModel, Field
 from pydantic.json_schema import models_json_schema
@@ -1132,14 +949,9 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 If we run `python models.py`, we see that the `breed` field in the `Pet` schema now has two types: `string` and `null`, and it has been removed from the `required` list. Only `id` and `name` are required fields after marking `breed` as optional.
 
-```yaml ! Output
-# !focus(61:74)
+```yaml
 openapi: 3.1.0
 info:
   title: Pet Sitter API
@@ -1218,16 +1030,13 @@ components:
       type: object
 ```
 
----
-
-## !!steps Adding Enums to OpenAPI using Pydantic Models
+### Adding Enums to OpenAPI using Pydantic Models
 
 Enums in OpenAPI are useful for defining a set of possible values for a field.
 
 Let's add an enum called `PetType` to the `Pet` model to represent different types of pets.
 
-```python ! models.py
-# !focus(1[1:24],25:30,7:14)
+```python
 from enum import StrEnum
 import yaml
 from pydantic import BaseModel, Field
@@ -1328,14 +1137,9 @@ if __name__ == "__main__":
     print_json_schema([Pet, Owner])
 ```
 
----
-
-## !!steps
-
 In our generated OpenAPI schema, we have a new `pet_type` field in the `Pet` schema.
 
-```yaml ! Output
-# !focus(49:57)
+```yaml
 openapi: 3.1.0
 info:
   title: Pet Sitter API
@@ -1432,11 +1236,7 @@ components:
       type: string
 ```
 
----
-
 This enum is represented as a separate schema in the OpenAPI document.
-
-</Spotlight>
 
 ## Adding Paths and Operations to the OpenAPI Schema
 
@@ -1462,52 +1262,34 @@ Install the `openapi-pydantic` library:
 pip install openapi-pydantic
 ```
 
-<Spotlight>
+### Define API Endpoints
 
-## !!steps
+Create a new file called `api.py` to define the API endpoints using the `openapi-pydantic` library:
 
-Create a new Python file called `api.py` and define the API endpoints and operations using the `openapi-pydantic` library.
-
-The `api.py` file saves the complete OpenAPI schema to a file named `openapi.yaml`.
-
-```python ! api.py
+```python api.py
 from typing import List
 import yaml
-
 from pydantic import BaseModel, Field
-
 from openapi_pydantic.v3 import OpenAPI, Info, PathItem, Operation
 from openapi_pydantic.util import PydanticSchema, construct_open_api_with_schema_class
-
 from models import Pet, Owner
 
-
+# Define response wrapper models
 class PetsResponse(BaseModel):
     """A response containing a list of pets"""
-
     pets: List[Pet] = Field(..., description="List of pets")
-
 
 class OwnersResponse(BaseModel):
     """A response containing a list of owners"""
-
     owners: List[Owner] = Field(..., description="List of owners")
-
 
 def construct_base_open_api() -> OpenAPI:
     return OpenAPI(
         openapi="3.1.0",
-        info=Info(
-            title="Pet Sitter API",
-            version="0.0.1",
-        ),
-        servers=[
-            {
-                "url": "http://127.0.0.1:4010",
-                "description": "Local prism server",
-            },
-        ],
+        info=Info(title="Pet Sitter API", version="0.0.1"),
+        servers=[{"url": "http://127.0.0.1:4010", "description": "Local prism server"}],
         paths={
+            # GET and POST endpoints for pets collection
             "/pets": PathItem(
                 get=Operation(
                     operationId="listPets",
@@ -1528,23 +1310,20 @@ def construct_base_open_api() -> OpenAPI:
                     description="Create a pet",
                     requestBody={
                         "content": {
-                            "application/json": {
-                                "schema": PydanticSchema(schema_class=Pet)
-                            }
+                            "application/json": {"schema": PydanticSchema(schema_class=Pet)}
                         }
                     },
                     responses={
                         "201": {
                             "description": "Pet created",
                             "content": {
-                                "application/json": {
-                                    "schema": PydanticSchema(schema_class=Pet)
-                                }
+                                "application/json": {"schema": PydanticSchema(schema_class=Pet)}
                             },
                         }
                     },
                 ),
             ),
+            # GET endpoint for a specific pet by ID
             "/pets/{pet_id}": PathItem(
                 get=Operation(
                     operationId="getPetById",
@@ -1555,10 +1334,7 @@ def construct_base_open_api() -> OpenAPI:
                             "in": "path",
                             "description": "ID of pet to return",
                             "required": True,
-                            "schema": {
-                                "type": "integer",
-                                "format": "int64",
-                            },
+                            "schema": {"type": "integer", "format": "int64"},
                             "examples": {"1": {"value": 1}},
                         },
                     ],
@@ -1566,14 +1342,13 @@ def construct_base_open_api() -> OpenAPI:
                         "200": {
                             "description": "A pet",
                             "content": {
-                                "application/json": {
-                                    "schema": PydanticSchema(schema_class=Pet)
-                                }
+                                "application/json": {"schema": PydanticSchema(schema_class=Pet)}
                             },
                         }
                     },
                 ),
             ),
+            # GET endpoint for owners collection
             "/owners": PathItem(
                 get=Operation(
                     operationId="listOwners",
@@ -1583,9 +1358,7 @@ def construct_base_open_api() -> OpenAPI:
                             "description": "A list of owners",
                             "content": {
                                 "application/json": {
-                                    "schema": PydanticSchema(
-                                        schema_class=OwnersResponse
-                                    )
+                                    "schema": PydanticSchema(schema_class=OwnersResponse)
                                 }
                             },
                         }
@@ -1595,7 +1368,7 @@ def construct_base_open_api() -> OpenAPI:
         },
     )
 
-
+# Generate the complete OpenAPI document
 open_api = construct_base_open_api()
 open_api = construct_open_api_with_schema_class(open_api)
 
@@ -1604,23 +1377,30 @@ if __name__ == "__main__":
         file.write(
             yaml.dump(
                 open_api.model_dump(
-                    by_alias=True,
-                    mode="json",
-                    exclude_none=True,
-                    exclude_unset=True,
+                    by_alias=True, mode="json", exclude_none=True, exclude_unset=True,
                 ),
                 sort_keys=False,
             )
         )
 ```
 
----
+This code defines:
 
-## !!steps
+1. Response models that wrap our Pydantic models (like `PetsResponse`) for consistent API responses
+2. A function that builds the OpenAPI document with four endpoints:
+   - `GET /pets`: Lists all pets
+   - `POST /pets`: Creates a new pet
+   - `GET /pets/{pet_id}`: Gets a pet by ID
+   - `GET /owners`: Lists all owners
+3. Each endpoint includes:
+   - An `operationId` for SDK generation
+   - A description of what the endpoint does
+   - Request parameters/body (where applicable)
+   - Response schemas that reference our Pydantic models
 
-Run `python api.py` to generate the complete OpenAPI schema with paths and operations and save it to a file named `openapi.yaml`.
+When run, this generates an `openapi.yaml` file with the full API specification:
 
-```yaml ! openapi.yaml
+```yaml openapi.yaml
 openapi: 3.1.0
 info:
   title: Pet Sitter API
@@ -1640,7 +1420,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PetsResponse"
-      deprecated: false
     post:
       description: Create a pet
       operationId: createPet
@@ -1649,7 +1428,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/Pet"
-        required: false
       responses:
         "201":
           description: Pet created
@@ -1657,26 +1435,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Pet"
-      deprecated: false
   /pets/{pet_id}:
     get:
       description: Get a pet by ID
       operationId: getPetById
       parameters:
-        - description: ID of pet to return
+        - name: pet_id
+          in: path
+          description: ID of pet to return
           required: true
-          deprecated: false
-          explode: false
           schema:
             type: integer
             format: int64
           examples:
             "1":
               value: 1
-          name: pet_id
-          in: path
-          allowEmptyValue: false
-          allowReserved: false
       responses:
         "200":
           description: A pet
@@ -1684,7 +1457,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Pet"
-      deprecated: false
   /owners:
     get:
       description: List all owners
@@ -1696,369 +1468,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OwnersResponse"
-      deprecated: false
 components:
   schemas:
-    Owner:
-      properties:
-        id:
-          type: integer
-          title: Owner ID
-          description: Owner's unique identifier
-          examples:
-            - 1
-        name:
-          type: string
-          title: Owner Name
-          description: The owner's full name
-          examples:
-            - John Doe
-        pets:
-          items:
-            $ref: "#/components/schemas/Pet"
-          type: array
-          title: Owner's Pets
-          description: The pets that belong to this owner
-          examples:
-            - id: 1
-      type: object
-      required:
-        - id
-        - name
-        - pets
-      title: Owner
-      description: "An Owner of Pets in the system.
-
-
-        ID is unique.
-
-        Can have multiple pets."
-    OwnersResponse:
-      properties:
-        owners:
-          items:
-            $ref: "#/components/schemas/Owner"
-          type: array
-          title: Owners
-          description: List of owners
-      type: object
-      required:
-        - owners
-      title: OwnersResponse
-      description: A response containing a list of owners
-    Pet:
-      properties:
-        pet_type:
-          allOf:
-            - $ref: "#/components/schemas/PetType"
-          title: Pet Type
-          description: Type of pet
-          examples:
-            - dog
-            - cat
-            - bird
-        id:
-          type: integer
-          title: Pet ID
-          description: The pet's unique identifier
-          examples:
-            - 1
-        name:
-          type: string
-          title: Pet Name
-          description: Name of the pet
-          examples:
-            - Fido
-        breed:
-          anyOf:
-            - type: string
-            - type: "null"
-          title: Pet Breed
-          description: Breed of the pet
-          examples:
-            - Golden Retriever
-            - Siamese
-            - Parakeet
-      type: object
-      required:
-        - pet_type
-        - id
-        - name
-      title: Pet
-      description: "A Pet in the system.
-
-
-        ID is unique.
-
-        Can have multiple owners."
-    PetType:
-      type: string
-      enum:
-        - dog
-        - cat
-        - bird
-      title: PetType
-      description: An enumeration of pet types.
-    PetsResponse:
-      properties:
-        pets:
-          items:
-            $ref: "#/components/schemas/Pet"
-          type: array
-          title: Pets
-          description: List of pets
-      type: object
-      required:
-        - pets
-      title: PetsResponse
-      description: A response containing a list of pets
+    # Schemas for our models are included here
+    # (Pet, Owner, PetType, PetsResponse, OwnersResponse)
 ```
 
----
-
-## !!steps
-
-Our `api.py` file imports `Pet` and `Owner` models from `models.py`.
-
-```python ! api.py
-# !focus(1:9)
-# !mark(9)
-```
-
----
-
-## !!steps
-
-We'll use the `models.py` file from the previous steps to define the Pydantic models for `Pet` and `Owner`.
-
-```python ! models.py
-# !focus(17:48)
-from enum import StrEnum
-import yaml
-from pydantic import BaseModel, Field
-from pydantic.json_schema import models_json_schema
-
-
-class PetType(StrEnum):
-    """
-    An enumeration of pet types.
-    """
-
-    DOG = "dog"
-    CAT = "cat"
-    BIRD = "bird"
-
-
-class Pet(BaseModel):
-    """
-    A Pet in the system.
-
-    ID is unique.
-    Can have multiple owners.
-    """
-
-    pet_type: PetType = Field(
-        ...,
-        title="Pet Type",
-        description="Type of pet",
-        examples=["dog", "cat", "bird"],
-    )
-    id: int = Field(
-        ...,
-        title="Pet ID",
-        description="The pet's unique identifier",
-        examples=[1],
-    )
-    name: str = Field(
-        ...,
-        title="Pet Name",
-        description="Name of the pet",
-        examples=["Fido"],
-    )
-    breed: str | None = Field(
-        None,
-        title="Pet Breed",
-        description="Breed of the pet",
-        examples=["Golden Retriever", "Siamese", "Parakeet"],
-    )
-
-
-class Owner(BaseModel):
-    """
-    An Owner of Pets in the system.
-
-    ID is unique.
-    Can have multiple pets.
-    """
-
-    id: int = Field(
-        ...,
-        title="Owner ID",
-        description="Owner's unique identifier",
-        examples=[1],
-    )
-    name: str = Field(
-        ...,
-        title="Owner Name",
-        description="The owner's full name",
-        examples=["John Doe"],
-    )
-    pets: list[Pet] = Field(
-        ...,
-        title="Owner's Pets",
-        description="The pets that belong to this owner",
-        examples=[{"id": 1}],
-    )
-
-
-def print_json_schema(models):
-    _, schemas = models_json_schema(
-        [(model, "validation") for model in models],
-        ref_template="#/components/schemas/{model}",
-    )
-    openapi_schema = {
-        "openapi": "3.1.0",
-        "info": {
-            "title": "Pet Sitter API",
-            "version": "0.0.1",
-        },
-        "components": {
-            "schemas": schemas.get("$defs"),
-        },
-    }
-    print(yaml.dump(openapi_schema, sort_keys=False))
-
-
-if __name__ == "__main__":
-    print_json_schema([Pet, Owner])
-```
-
----
-
-## !!steps
-
-In `api.py`, we then define two response schemas as Pydantic models: `PetsResponse` and `OwnersResponse`.
-
-Defining response schemas as Pydantic models allows us to reuse them in multiple operations, and to use them for validation and serialization in our API request handlers.
-
-```python ! api.py
-# !focus(12:21)
-
-```
-
----
-
-## !!steps
-
-We'll start by defining a function called `construct_base_open_api` that returns an `OpenAPI` object with the base configuration for our API.
-
-The function defines the API title, version, and servers, and includes the paths for the `/pets`, `/pets/{pet_id}`, and `/owners` endpoints.
-
-```python ! api.py
-# !focus(24:36)
-```
-
----
-
-## !!steps
-
-The `/pets` path includes two operations: `GET` to list all pets and `POST` to create a pet.
-
-The `GET` operation returns a list of pets using the `PetsResponse` schema.
-
-```python ! api.py
-# !focus(38:52)
-```
-
----
-
-## !!steps
-
-Note that we added `operationId` and `description` fields to the operations to provide additional information about the operation.
-
-Clear operation IDs and descriptions help API users understand the purpose of each operation and allow SDK generators to create more informative client code.
-
-```python ! api.py
-# !focus(38:52)
-# !mark(40:41)
-
-```
-
----
-
-## !!steps
-
-The `POST` operation creates a pet using the `Pet` schema as the request body and returns the created pet using the `Pet` schema.
-
-We use the `PydanticSchema` class from `openapi-pydantic` to reference the Pydantic model in the OpenAPI schema.
-
-In a real-world application, you would likely not include the pet's ID in the request body as the server would generate the ID, but for simplicity, we include it here.
-
-```python ! api.py
-# !focus(53:73)
-# !mark(59,68)
-
-```
-
----
-
-## !!steps
-
-This translates to the following OpenAPI operation:
-
-```yaml ! openapi.yaml
-# !focus(21:37)
-```
-
----
-
-## !!steps
-
-The `/pets/{pet_id}` path includes a `GET` operation to get a pet by ID.
-
-The operation includes a path parameter `pet_id` to specify the ID of the pet to retrieve.
-
-```python ! api.py
-# !focus(75:102)
-```
-
----
-
-## !!steps
-
-The `GET` operation's `parameters` field includes the path parameter `pet_id` with a description, required flag, and schema definition.
-
-The `responses` field includes a `200` response with the `Pet` schema as the response body.
-
-```python ! api.py
-# !focus(75:102)
-# !mark(79:91)
-
-```
-
----
-
-## !!steps
-
-This translates to the following OpenAPI operation.
-
-Note how the generated schema closely resembles the Pydantic model.
-
-```yaml ! openapi.yaml
-# !focus(38:64)
-```
-
----
-
-## !!steps
-
-We'll leave the rest of the `openapi.yaml` file, as it is similar to the components generated in the previous section.
-
-```python ! openapi.yaml
-
-```
-
-</Spotlight>
+The generated OpenAPI document includes all the components from our Pydantic models, along with the API endpoints we defined. The schemas include all the titles, descriptions, examples, and other details we added to our Pydantic models.
 
 ## Generating an SDK from the OpenAPI Schema
 
@@ -2100,70 +1516,43 @@ Alternatively, you can add extensions directly to the OpenAPI schema using the `
 
 For example, you can add the [`x-speakeasy-retries` extension](../../docs/customize-sdks/retries.mdx) to have Speakeasy generate retry logic in the SDK.
 
-<Spotlight>
-
-## !!steps
-
 Import the `Dict` and `Any` types from the `typing` module in `api.py`, and `ConfigDict` from `pydantic`.
 
 We'll use these types to define the `x-speakeasy-retries` extension in the OpenAPI schema.
 
-```python ! api.py
-# !focus(1[24:34],4[40:49])
+```python api.py
 from typing import List, Dict, Any
 import yaml
-
 from pydantic import BaseModel, Field, ConfigDict
-
 from openapi_pydantic.v3 import OpenAPI, Info, PathItem, Operation
 from openapi_pydantic.util import PydanticSchema, construct_open_api_with_schema_class
-
 from models import Pet, Owner
 
-
+# Define response models
 class PetsResponse(BaseModel):
     """A response containing a list of pets"""
-
     pets: List[Pet] = Field(..., description="List of pets")
-
 
 class OwnersResponse(BaseModel):
     """A response containing a list of owners"""
-
     owners: List[Owner] = Field(..., description="List of owners")
 
-
+# Define OpenAPI class with retry extension
 class OpenAPIwithRetries(OpenAPI):
-    """
-    OpenAPI with xSpeakeasyRetries extension
-
-    This class extends the OpenAPI model to include the x-speakeasy-retries extension.
-    """
-
+    """OpenAPI with x-speakeasy-retries extension"""
     xSpeakeasyRetries: Dict[str, Any] = Field(
         ...,
         description="Retry configuration for the API",
         alias="x-speakeasy-retries",
     )
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-    )
-
+    model_config = ConfigDict(populate_by_name=True)
 
 def construct_base_open_api() -> OpenAPIwithRetries:
     return OpenAPIwithRetries(
         openapi="3.1.0",
-        info=Info(
-            title="Pet Sitter API",
-            version="0.0.1",
-        ),
-        servers=[
-            {
-                "url": "http://127.0.0.1:4010",
-                "description": "Local prism server",
-            },
-        ],
+        info=Info(title="Pet Sitter API", version="0.0.1"),
+        servers=[{"url": "http://127.0.0.1:4010", "description": "Local prism server"}],
+        # Add retry configuration
         xSpeakeasyRetries={
             "strategy": "backoff",
             "backoff": {
@@ -2175,154 +1564,16 @@ def construct_base_open_api() -> OpenAPIwithRetries:
             "statusCodes": ["5XX"],
             "retryConnectionErrors": True,
         },
+        # Define API paths (endpoints)
         paths={
-            "/pets": PathItem(
-                get=Operation(
-                    operationId="listPets",
-                    description="List all pets",
-                    responses={
-                        "200": {
-                            "description": "A list of pets",
-                            "content": {
-                                "application/json": {
-                                    "schema": PydanticSchema(schema_class=PetsResponse)
-                                }
-                            },
-                        }
-                    },
-                ),
-                post=Operation(
-                    operationId="createPet",
-                    description="Create a pet",
-                    requestBody={
-                        "content": {
-                            "application/json": {
-                                "schema": PydanticSchema(schema_class=Pet)
-                            }
-                        }
-                    },
-                    responses={
-                        "201": {
-                            "description": "Pet created",
-                            "content": {
-                                "application/json": {
-                                    "schema": PydanticSchema(schema_class=Pet)
-                                }
-                            },
-                        }
-                    },
-                ),
-            ),
-            "/pets/{pet_id}": PathItem(
-                get=Operation(
-                    operationId="getPetById",
-                    description="Get a pet by ID",
-                    parameters=[
-                        {
-                            "name": "pet_id",
-                            "in": "path",
-                            "description": "ID of pet to return",
-                            "required": True,
-                            "schema": {
-                                "type": "integer",
-                                "format": "int64",
-                            },
-                            "examples": {"1": {"value": 1}},
-                        },
-                    ],
-                    responses={
-                        "200": {
-                            "description": "A pet",
-                            "content": {
-                                "application/json": {
-                                    "schema": PydanticSchema(schema_class=Pet)
-                                }
-                            },
-                        }
-                    },
-                ),
-            ),
-            "/owners": PathItem(
-                get=Operation(
-                    operationId="listOwners",
-                    description="List all owners",
-                    responses={
-                        "200": {
-                            "description": "A list of owners",
-                            "content": {
-                                "application/json": {
-                                    "schema": PydanticSchema(
-                                        schema_class=OwnersResponse
-                                    )
-                                }
-                            },
-                        }
-                    },
-                ),
-            ),
-        },
+            # ... API endpoints defined the same as before ...
+        }
     )
-
-
-open_api = construct_base_open_api()
-open_api = construct_open_api_with_schema_class(open_api)
-
-if __name__ == "__main__":
-    with open("openapi.yaml", "w") as file:
-        file.write(
-            yaml.dump(
-                open_api.model_dump(
-                    by_alias=True,
-                    mode="json",
-                    exclude_none=True,
-                    exclude_unset=True,
-                ),
-                sort_keys=False,
-            )
-        )
 ```
 
----
+This produces an OpenAPI schema with retry functionality:
 
-## !!steps
-
-In the `OpenAPIwithRetries` class, we define the `x-speakeasy-retries` extension.
-
-Note that we need to use the `alias` parameter to define the extension with the `x-` prefix, then allow ourselves to use the `xSpeakeasyRetries` attribute in the class by setting `populate_by_name=True` in the `model_config`.
-
-```python ! api.py
-# !focus(24:39)
-# !mark(34[9:36],37:39)
-
-```
-
----
-
-## !!steps
-
-We then update the `construct_base_open_api` function to return an `OpenAPIwithRetries` object.
-
-```python ! api.py
-# !focus(42[34:51],43[12:29])
-```
-
----
-
-## !!steps
-
-Add `xSpeakeasyRetries` to the `OpenAPIwithRetries` object in the `construct_base_open_api` function.
-
-```python ! api.py
-# !focus(55:65)
-```
-
----
-
-## !!steps
-
-This translates to the following OpenAPI schema:
-
-```yaml ! openapi.yaml
+```yaml openapi.yaml
 x-speakeasy-retries:
   strategy: backoff
   backoff:
@@ -2335,39 +1586,36 @@ x-speakeasy-retries:
   retryConnectionErrors: true
 ```
 
-</Spotlight>
-
 ### Add Tags to the OpenAPI Schema
 
 To group operations in the OpenAPI schema, you can use tags. This also allows Speakeasy to structure the generated SDK code and documentation logically.
 
 Add a `tags` field to the `OpenAPIwithRetries` object, then add a `tags` field to each operation in the `construct_base_open_api` function:
 
-```python api.py mark=4:13,18
+```python api.py
 def construct_base_open_api() -> OpenAPIwithRetries:
     return OpenAPIwithRetries(
-        # ...
+        # Basic API info
+        openapi="3.1.0",
+        info=Info(title="Pet Sitter API", version="0.0.1"),
+        
+        # Define tags for grouping operations
         tags=[
-            {
-                "name": "pets",
-                "description": "Operations about pets",
-            },
-            {
-                "name": "owners",
-                "description": "Operations about owners",
-            },
+            {"name": "pets", "description": "Operations about pets"},
+            {"name": "owners", "description": "Operations about owners"},
         ],
+        
+        # API endpoints with tags applied
         paths={
             "/pets": PathItem(
                 get=Operation(
-                    # ...
+                    operationId="listPets",
                     tags=["pets"],
+                    # other properties...
                 ),
-                # ...
             ),
-            # ...
+            # other endpoints...
         },
-        # ...
     )
 ```
 

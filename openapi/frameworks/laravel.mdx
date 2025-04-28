@@ -416,17 +416,38 @@ final readonly class IndexController
 }
 ```
 
----
-
 ### !!steps Authenicate Scribe
 
 Let's next focus on the `invoke` method that is what will be used to generate the path information. We use `#[Authenticated]` to let Scribe know that this endpoint needs to be authenticated
 
 ```php !
 // !focus(10)
-```
+#[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
+final readonly class IndexController
+{
+    public function __construct(
+        private AuthManager $auth,
+        private StandUpRepository $repository,
+    ) {
+    }
 
----
+    #[Authenticated]
+    #[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
+    #[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
+    public function __invoke(Request $request): CollectionResponse
+    {
+        $standups = $this->repository->forTeam(
+            team: $this->auth->user()->current_team_id,
+        );
+
+        return new CollectionResponse(
+            data: StandUpResource::collection(
+                resource: $standups->paginate(),
+            ),
+        );
+    }
+}
+```
 
 ### !!steps Add Descriptions
 
@@ -434,9 +455,32 @@ Use `#[Endpoint]` to add additional information about this endpoint; describing 
 
 ```php !
 // !focus(11)
-```
+#[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
+final readonly class IndexController
+{
+    public function __construct(
+        private AuthManager $auth,
+        private StandUpRepository $repository,
+    ) {
+    }
 
----
+    #[Authenticated]
+    #[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
+    #[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
+    public function __invoke(Request $request): CollectionResponse
+    {
+        $standups = $this->repository->forTeam(
+            team: $this->auth->user()->current_team_id,
+        );
+
+        return new CollectionResponse(
+            data: StandUpResource::collection(
+                resource: $standups->paginate(),
+            ),
+        );
+    }
+}
+```
 
 ### !!steps Adding Responses
 
@@ -444,6 +488,31 @@ Finally, we want to add `#[ResponseFromApiResource]` to let Scribe know how this
 
 ```php !
 // !focus(12)
+#[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
+final readonly class IndexController
+{
+    public function __construct(
+        private AuthManager $auth,
+        private StandUpRepository $repository,
+    ) {
+    }
+
+    #[Authenticated]
+    #[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
+    #[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
+    public function __invoke(Request $request): CollectionResponse
+    {
+        $standups = $this->repository->forTeam(
+            team: $this->auth->user()->current_team_id,
+        );
+
+        return new CollectionResponse(
+            data: StandUpResource::collection(
+                resource: $standups->paginate(),
+            ),
+        );
+    }
+}
 ```
 
 </Spotlight>
