@@ -1,0 +1,61 @@
+from mcp.server.fastmcp import FastMCP
+from mcp.server.stdio import stdio_server
+from mcp.server import InitializationOptions, NotificationOptions
+from pathlib import Path
+import asyncio
+
+NOTES_DIR = Path("notes")
+NOTES_DIR.mkdir(exist_ok=True)
+
+app = FastMCP("MCP Notes Server")
+
+#### TOOLS ####
+@app.tool()
+def write_note(slug: str, content: str) -> str:
+  note_path = NOTES_DIR / f"{slug}.txt"
+  note_path.write_text(content.strip(), encoding="utf-8")
+  return f"Note '{slug}' saved."
+
+#### RESOURCES ####
+@app.resource("note://{slug}")
+def read_note(slug: str) -> str:
+  note_path = NOTES_DIR / f"{slug}.txt"
+  if not note_path.exists():
+      return "Note not found."
+  return note_path.read_text(encoding="utf-8")
+
+#### PROMPTS ####
+@app.prompt()
+def suggest_note_prompt(topic: str) -> str:
+  return f"""
+      Write a short, thoughtful note for someone who needs advice about: {topic}
+  """
+
+#### ROOTS ####
+@app.tool()
+def list_notes(root: str = None) -> list[str]:
+  all_slugs = [f"note://{f.stem}" for f in NOTES_DIR.glob("*.txt")]
+  if root:
+      return [slug for slug in all_slugs if slug.startswith(root)]
+  return all_slugs
+
+# -----------------------------
+# ENTRYPOINT (Explicit Transport)
+# -----------------------------
+async def main():
+  async with stdio_server() as (read_stream, write_stream):
+      await app.run(
+          read_stream,
+          write_stream,
+          InitializationOptions(
+              server_name="mcp-notes-server",
+              server_version="0.1.0",
+              capabilities=app.get_capabilities(
+                  notification_options=NotificationOptions(),
+                  experimental_capabilities={},
+              ),
+          ),
+      )
+
+if __name__ == "__main__":
+  asyncio.run(main())
