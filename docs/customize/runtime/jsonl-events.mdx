@@ -1,0 +1,320 @@
+---
+description: "Learn how to model streaming APIs using JSON Lines (JSONL) format."
+sidebar_label: "Enable JSON Lines"
+slug: "/customize/runtime/jsonl-events"
+---
+
+import { CodeWithTabs, Callout } from "@/mdx/components";
+
+# Enabling JSON lines responses
+
+**JSON Lines** (JSONL) or **Newline Delimited JSON** (NDJSON) is a simple and efficient format for streaming structured data. Each line in the stream is a valid JSON object, making it ideal for streaming large datasets, log files, or real-time data feeds. This format is particularly useful for processing data line by line without loading the entire response into memory.
+
+<Callout title="INFO" variant="info">
+  The format is known by two names and content types, which are completely interchangeable:
+  - JSON Lines (JSONL): `application/jsonl`
+  - Newline Delimited JSON (NDJSON): `application/x-ndjson`
+
+
+  You can use either content type in your OpenAPI specification, they are functionally identical (each line must be a valid JSON object that matches the specified schema).
+</Callout>
+
+Here's an example of using an SDK to stream log data in JSONL/NDJSON format:
+
+
+<CodeWithTabs>
+```typescript !!tabs TypeScript
+import { SDK } from '@speakeasy/sdk';
+
+const sdk = new SDK();
+
+async function streamLogs() {
+  const result = await sdk.logs.fetch_logs();
+
+  for await (const event of result) {
+    // Each event is a parsed JSON object from the stream
+    console.log(`[${event.timestamp}] ${event.message}`);
+  }
+}
+
+streamLogs().catch(error => {
+  console.error('Error streaming logs:', error);
+});
+```
+
+```python !!tabs Python
+from speakeasy_sdk import SDK
+
+with SDK() as sdk:
+    res = sdk.logs.fetch_logs()
+
+    assert res.object is not None
+
+    with res.object as jsonl_stream:
+        for event in jsonl_stream:
+            # Handle the event
+            print(event, flush=True)
+```
+
+```go !!tabs Go
+import(
+    "context"
+    "speakeasy_sdk"
+    "log"
+)
+
+func main() {
+    ctx := context.Background()
+
+    s := speakeasy_sdk.New()
+
+    res, err := s.logs.FetchLogs(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    if res.Object != nil {
+        for res.Object.Next() {
+            event, _ := res.Object.Value()
+            log.Print(event)
+            // Handle the event
+        }
+    }
+}
+```
+
+```java !!tabs Java
+import java.lang.Exception;
+import speakeasy.sdk.SDK;
+import speakeasy.sdk.models.operations.ReadJsonlResponse;
+import speakeasy.sdk.models.operations.ReadJsonlResponseBody;
+import speakeasy.sdk.utils.JsonLStream;
+
+public class Application {
+    public static void main(String[] args) throws Exception {
+        SDK sdk = SDK.builder()
+            .build();
+
+        ReadJsonlResponse res = sdk.logs().fetch_logs()
+                .call();
+
+        // Stream, must be closed after use!
+        try (JsonLStream<ReadJsonlResponseBody> events = res.events()) {
+            events.stream().forEach(System.out::println);
+        }
+    }
+}
+```
+</CodeWithTabs>
+
+<Callout title="INFO" variant="info">
+  The JSONL/NDJSON streaming feature is currently supported in TypeScript, Python, Go, and Java.
+  Let us know if you'd like to see support for other languages.
+</Callout>
+
+## Modeling JSONL/NDJSON in OpenAPI
+
+To implement line-delimited JSON streaming in generated SDKs, model an API endpoint that serves a stream in your OpenAPI document. Each line in the response will be a JSON object matching the specified schema. You can use either `application/jsonl` or `application/x-ndjson` as the content type.
+
+### Basic implementation
+
+The example below shows an operation that streams log events:
+
+```yaml
+paths:
+  /logs:
+    get:
+      summary: Stream log events
+      operationId: stream
+      tags:
+        - logs
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Log events stream
+          content:
+            # You can use either content type:
+            application/jsonl:
+              schema:
+                $ref: "#/components/schemas/LogEvent"
+            # OR
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/LogEvent"
+components:
+  schemas:
+    LogEvent:
+      description: A log event in line-delimited JSON format
+      type: object
+      properties:
+        timestamp:
+          type: string
+        message:
+          type: string
+```
+
+
+### Endpoints with multiple response types
+
+For APIs that support both batch and streaming responses, use URL fragments to define separate paths for each response type:
+
+```yaml
+paths:
+  /analytics:
+    get:
+      summary: >
+        Get analytics events as a batch response
+      operationId: getBatch
+      tags: [analytics]
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Analytics events batch
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalyticsEvent"
+  /analytics#stream:
+    get:
+      summary: >
+        Stream analytics events in real-time
+      operationId: stream
+      tags: [analytics]
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Analytics events stream
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/AnalyticsEvent"
+```
+
+Use the appropriate method based on your requirements:
+
+<CodeWithTabs>
+```typescript !!tabs TypeScript
+import { SDK } from '@speakeasy/sdk';
+
+const sdk = new SDK()
+
+// Batch method
+const batchResponse = await sdk.analytics.getBatch({
+  start_date: "2024-01-01"
+});
+
+// Streaming method
+const stream = await sdk.analytics.stream({
+  start_date: "2024-01-01"
+});
+
+for await (const event of stream) {
+  // handle stream
+}
+```
+
+```python !!tabs Python
+from speakeasy_sdk import SDK
+
+with SDK() as sdk:
+    # Batch method
+    batch_response = sdk.analytics.get_batch(
+        start_date="2024-01-01"
+    )
+
+    # Streaming method
+    stream = sdk.analytics.stream(
+        start_date="2024-01-01"
+    )
+
+    with stream.object as jsonl_stream:
+        for event in jsonl_stream:
+            # Handle the event
+            print(event, flush=True)
+```
+
+```go !!tabs Go
+import (
+    "context"
+    "log"
+    "speakeasy_sdk"
+)
+
+func main() {
+    ctx := context.Background()
+    s := speakeasy_sdk.New()
+
+    // Batch method
+    batchRes, err := s.Analytics.GetBatch(ctx, speakeasy_sdk.GetBatchRequest{
+        StartDate: "2024-01-01",
+    })
+
+    // Streaming method
+    streamRes, err := s.Analytics.Stream(ctx, speakeasy_sdk.StreamRequest{
+        StartDate: "2024-01-01",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    if streamRes.Object != nil {
+        for streamRes.Object.Next() {
+            event, _ := streamRes.Object.Value()
+            // Handle the event
+            log.Print(event)
+        }
+    }
+}
+```
+
+```java !!tabs Java
+import java.lang.Exception;
+import speakeasy.sdk.SDK;
+import speakeasy.sdk.models.operations.GetBatchResponse;
+import speakeasy.sdk.models.operations.StreamResponse;
+import speakeasy.sdk.utils.JsonLStream;
+
+public class Application {
+    public static void main(String[] args) throws Exception {
+        SDK sdk = SDK.builder()
+            .build();
+
+        // Batch method
+        GetBatchResponse batchResponse = sdk.analytics().getBatch()
+            .startDate("2024-01-01")
+            .call();
+
+        // Streaming method
+        StreamResponse streamResponse = sdk.analytics().stream()
+            .startDate("2024-01-01")
+            .call();
+
+        // Stream must be closed after use!
+        try (JsonLStream<StreamResponse> events = streamResponse.events()) {
+            events.stream().forEach(event -> {
+                // Handle the event
+                System.out.println(event);
+            });
+        }
+    }
+}
+```
+</CodeWithTabs>
