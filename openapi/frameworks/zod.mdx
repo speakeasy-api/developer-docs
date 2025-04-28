@@ -62,7 +62,6 @@ npm install zod-openapi yaml
 Save this TypeScript code in a new file called `index.ts`.
 
 ```typescript index.ts
-// !focus(1:7)
 import { z } from "zod";
 
 const burgerSchema = z.object({
@@ -77,7 +76,6 @@ const burgerSchema = z.object({
 We'll add the `openapi` method to Zod by calling `extendZodWithOpenApi` once. Update `index.ts` to import `extendZodWithOpenApi` from `zod-openapi`, then call `extendZodWithOpenApi`.
 
 ```typescript index.ts
-// !focus(1:9) !mark(3,4)
 import { z } from "zod";
 
 import { extendZodWithOpenApi } from "zod-openapi";
@@ -97,7 +95,6 @@ Next, we'll use the new `openapi` method provided by `extendZodWithOpenApi` to r
 We'll also add an OpenAPI generator, `OpenApiGeneratorV31`, and log the generated component to the console as YAML.
 
 ```typescript index.ts
-// !focus(1:12) !mark(12)
 import { z } from "zod";
 
 import { extendZodWithOpenApi } from "zod-openapi";
@@ -125,7 +122,6 @@ We'll also add a description to the `Burger` component itself.
 Edit `index.ts` and edit `burgerSchema` to add OpenAPI metadata.
 
 ```typescript index.ts
-// !focus(1:23) !mark(7:19,22:23)
 import { z } from "zod";
 
 import { extendZodWithOpenApi } from "zod-openapi";
@@ -159,7 +155,6 @@ Now that we know how to register components with metadata for our OpenAPI schema
 Import `yaml` and `createDocument`.
 
 ```typescript index.ts
-// !mark(1,7)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -196,7 +191,6 @@ burgerSchema.openapi({
 We'll use the `createDocument` method to generate an OpenAPI document. We'll pass in the `burgerSchema` and a title for the document.
 
 ```typescript index.ts
-// !mark(31:49,51)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -301,7 +295,6 @@ To make the burger ID available to other schemas, we'll define a burger ID schem
 Let's create the burger ID schema now.
 
 ```typescript index.ts
-// !mark(11:22)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -372,7 +365,6 @@ console.log(yaml.stringify(document));
 We'll replace the burger ID field with a reference to the burger ID schema.
 
 ```typescript index.ts
-// !mark(25,11:20)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -443,7 +435,6 @@ console.log(yaml.stringify(document));
 We'll add a schema for creating burgers that doesn't include an ID. We'll use this schema to define the request body for the create burger path.
 
 ```typescript index.ts
-// !mark(41:44)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -518,183 +509,10 @@ Paths define the endpoints of your API. For our burger restaurant, we might defi
 
 To register paths and webhooks, we'll define paths as objects of type `ZodOpenApiOperationObject`, then add our paths and webhooks to the document definition.
 
-Start by importing `ZodOpenApiOperationObject` from `zod-openapi`.
+We'll use `ZodOpenApiOperationObject` from `zod-openapi` to add `create burger`, and `read burger` paths:
+
 
 ```typescript index.ts
-// !mark(7)
-import * as yaml from "yaml";
-
-import { z } from "zod";
-
-import {
-  extendZodWithOpenApi,
-  ZodOpenApiOperationObject,
-  createDocument
-} from "zod-openapi";
-extendZodWithOpenApi(z);
-
-const BurgerIdSchema = z
-  .number()
-  .min(1)
-  .openapi({
-    ref: "BurgerId",
-    description: "The unique identifier of the burger.",
-    example: 1,
-    param: {
-      in: "path",
-      name: "id",
-    },
-  });
-
-const burgerSchema = z.object({
-  id: BurgerIdSchema,
-  name: z.string().min(1).max(50).openapi({
-    description: "The name of the burger.",
-    example: "Veggie Burger",
-  }),
-  description: z.string().max(255).optional().openapi({
-    description: "The description of the burger.",
-    example: "A delicious bean burger with avocado.",
-  }),
-});
-
-burgerSchema.openapi({
-  ref: "Burger",
-  description: "A burger served at the restaurant.",
-});
-
-const burgerCreateSchema = burgerSchema.omit({ id: true }).openapi({
-  ref: "BurgerCreate",
-  description: "A burger to create.",
-});
-
-const document = createDocument({
-  openapi: "3.1.0",
-  info: {
-    title: "Burger Restaurant API",
-    description: "An API for managing burgers at a restaurant.",
-    version: "1.0.0",
-  },
-  servers: [
-    {
-      url: "https://example.com",
-      description: "The production server.",
-    },
-  ],
-  components: {
-    schemas: {
-      burgerSchema,
-    },
-  },
-});
-
-console.log(yaml.stringify(document));
-```
-
-### 14. Add a Create Burger Path
-
-We'll add a path for creating a new burger. We'll use the `ZodOpenApiOperationObject` type to define the path.
-
-```typescript index.ts
-// !mark(47:69)
-import * as yaml from "yaml";
-
-import { z } from "zod";
-
-import {
-  extendZodWithOpenApi,
-  ZodOpenApiOperationObject,
-  createDocument
-} from "zod-openapi";
-extendZodWithOpenApi(z);
-
-const BurgerIdSchema = z
-  .number()
-  .min(1)
-  .openapi({
-    ref: "BurgerId",
-    description: "The unique identifier of the burger.",
-    example: 1,
-    param: {
-      in: "path",
-      name: "id",
-    },
-  });
-
-const burgerSchema = z.object({
-  id: BurgerIdSchema,
-  name: z.string().min(1).max(50).openapi({
-    description: "The name of the burger.",
-    example: "Veggie Burger",
-  }),
-  description: z.string().max(255).optional().openapi({
-    description: "The description of the burger.",
-    example: "A delicious bean burger with avocado.",
-  }),
-});
-
-burgerSchema.openapi({
-  ref: "Burger",
-  description: "A burger served at the restaurant.",
-});
-
-const burgerCreateSchema = burgerSchema.omit({ id: true }).openapi({
-  ref: "BurgerCreate",
-  description: "A burger to create.",
-});
-
-const createBurger: ZodOpenApiOperationObject = {
-  operationId: "createBurger",
-  summary: "Create a new burger",
-  description: "Creates a new burger in the database.",
-  requestBody: {
-    description: "The burger to create.",
-    content: {
-      "application/json": {
-        schema: burgerCreateSchema,
-      },
-    },
-  },
-  responses: {
-    "201": {
-      description: "The burger was created successfully.",
-      content: {
-        "application/json": {
-          schema: burgerSchema,
-        },
-      },
-    },
-  },
-};
-
-const document = createDocument({
-  openapi: "3.1.0",
-  info: {
-    title: "Burger Restaurant API",
-    description: "An API for managing burgers at a restaurant.",
-    version: "1.0.0",
-  },
-  servers: [
-    {
-      url: "https://example.com",
-      description: "The production server.",
-    },
-  ],
-  components: {
-    schemas: {
-      burgerSchema,
-    },
-  },
-});
-
-console.log(yaml.stringify(document));
-
-### 15. Add a Read Burger Path
-
-We'll add a path for fetching a burger by ID. We'll use the `ZodOpenApiOperationObject` type to define the path.
-
-```typescript index.ts
-// !mark(71:88)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -807,12 +625,11 @@ const document = createDocument({
 console.log(yaml.stringify(document));
 ```
 
-### 16. Add a Webhook That Runs When a Burger Is Created
+### 14. Add a Webhook That Runs When a Burger Is Created
 
 We'll add a webhook that runs when a burger is created. We'll use the `ZodOpenApiOperationObject` type to define the webhook.
 
 ```typescript index.ts
-// !mark(90:107)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -859,48 +676,7 @@ const burgerCreateSchema = burgerSchema.omit({ id: true }).openapi({
   description: "A burger to create.",
 });
 
-const createBurger: ZodOpenApiOperationObject = {
-  operationId: "createBurger",
-  summary: "Create a new burger",
-  description: "Creates a new burger in the database.",
-  requestBody: {
-    description: "The burger to create.",
-    content: {
-      "application/json": {
-        schema: burgerCreateSchema,
-      },
-    },
-  },
-  responses: {
-    "201": {
-      description: "The burger was created successfully.",
-      content: {
-        "application/json": {
-          schema: burgerSchema,
-        },
-      },
-    },
-  },
-};
-
-const getBurger: ZodOpenApiOperationObject = {
-  operationId: "getBurger",
-  summary: "Get a burger",
-  description: "Gets a burger from the database.",
-  requestParams: {
-    path: z.object({ id: BurgerIdSchema }),
-  },
-  responses: {
-    "200": {
-      description: "The burger was retrieved successfully.",
-      content: {
-        "application/json": {
-          schema: burgerSchema,
-        },
-      },
-    },
-  },
-};
+// Create and Get burger operations defined here...
 
 const createBurgerWebhook: ZodOpenApiOperationObject = {
   operationId: "createBurgerWebhook",
@@ -944,12 +720,11 @@ const document = createDocument({
 console.log(yaml.stringify(document));
 ```
 
-### 17. Register Paths and Webhooks
+### 15. Register Paths and Webhooks
 
 We'll register our paths and webhooks by adding them to the document definition.
 
 ```typescript index.ts
-// !mark(116:128)
 import * as yaml from "yaml";
 
 import { z } from "zod";
@@ -961,102 +736,8 @@ import {
 } from "zod-openapi";
 extendZodWithOpenApi(z);
 
-const BurgerIdSchema = z
-  .number()
-  .min(1)
-  .openapi({
-    ref: "BurgerId",
-    description: "The unique identifier of the burger.",
-    example: 1,
-    param: {
-      in: "path",
-      name: "id",
-    },
-  });
-
-const burgerSchema = z.object({
-  id: BurgerIdSchema,
-  name: z.string().min(1).max(50).openapi({
-    description: "The name of the burger.",
-    example: "Veggie Burger",
-  }),
-  description: z.string().max(255).optional().openapi({
-    description: "The description of the burger.",
-    example: "A delicious bean burger with avocado.",
-  }),
-});
-
-burgerSchema.openapi({
-  ref: "Burger",
-  description: "A burger served at the restaurant.",
-});
-
-const burgerCreateSchema = burgerSchema.omit({ id: true }).openapi({
-  ref: "BurgerCreate",
-  description: "A burger to create.",
-});
-
-const createBurger: ZodOpenApiOperationObject = {
-  operationId: "createBurger",
-  summary: "Create a new burger",
-  description: "Creates a new burger in the database.",
-  requestBody: {
-    description: "The burger to create.",
-    content: {
-      "application/json": {
-        schema: burgerCreateSchema,
-      },
-    },
-  },
-  responses: {
-    "201": {
-      description: "The burger was created successfully.",
-      content: {
-        "application/json": {
-          schema: burgerSchema,
-        },
-      },
-    },
-  },
-};
-
-const getBurger: ZodOpenApiOperationObject = {
-  operationId: "getBurger",
-  summary: "Get a burger",
-  description: "Gets a burger from the database.",
-  requestParams: {
-    path: z.object({ id: BurgerIdSchema }),
-  },
-  responses: {
-    "200": {
-      description: "The burger was retrieved successfully.",
-      content: {
-        "application/json": {
-          schema: burgerSchema,
-        },
-      },
-    },
-  },
-};
-
-const createBurgerWebhook: ZodOpenApiOperationObject = {
-  operationId: "createBurgerWebhook",
-  summary: "New burger webhook",
-  description: "A webhook that is called when a new burger is created.",
-  requestBody: {
-    description: "The burger that was created.",
-    content: {
-      "application/json": {
-        schema: burgerSchema,
-      },
-    },
-  },
-  responses: {
-    "200": {
-      description: "The webhook was processed successfully.",
-    },
-  },
-};
+// Previous code from examples above...
+// BurgerIdSchema, burgerSchema, burgerCreateSchema, createBurger, getBurger, createBurgerWebhook
 
 const document = createDocument({
   openapi: "3.1.0",
@@ -1094,7 +775,7 @@ const document = createDocument({
 console.log(yaml.stringify(document));
 ```
 
-### 18. Run the Code
+### 16. Run the Code
 
 Run the code in the terminal:
 
@@ -1208,7 +889,7 @@ components:
 npx ts-node index.ts
 ```
 
-### 19. Generate an SDK
+### 17. Generate an SDK
 
 With our OpenAPI schema complete, we can now generate an SDK using the Speakeasy SDK generator. We'll follow the instructions in the Speakeasy documentation to [generate SDKs for various platforms](/docs/create-client-sdks).
 
