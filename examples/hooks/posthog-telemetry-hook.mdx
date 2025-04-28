@@ -1,0 +1,224 @@
+---
+title: "Add telemetry to your SDK with SDK hooks and Posthog"
+description: "Use SDK hooks with Posthog to track events."
+image: "/assets/examples/posthog-hook-example.png"
+date: 2024-06-13
+authors:
+  - name: Luke Hagar
+  - image_url: "/assets/author-headshots/luke.jpeg"
+tags:
+  - Hooks
+is_featured: true
+featured_image: "/assets/examples/posthog-hook-example.png"
+---
+
+# Add telemetry to your SDK with SDK hooks and Posthog
+
+## Prerequisites
+- You will need a Posthog account (If you don't have one, you can sign up [here](https://posthog.com/signup))
+
+## Overview
+
+This guide will walk you through adding telemetry to a TypeScript SDK using SDK hooks and the Posthog Node SDK.
+
+SDK hooks are a way to inject custom actions at various points in the SDK's execution.
+
+You can inject custom actions at the following points in the SDK's execution:
+
+- `On SDK Initialization`
+- `Before a request is executed`
+- `After a successful response`
+- `After an error response`
+
+## Adding the Posthog SDK to your project
+
+To add the Posthog SDK to your project, you will need to add the dependancy to your Speakeasy SDK's `gen.yaml` file under the dependancies section:
+
+```yaml
+configVersion: 2.0.0
+generation:
+  sdkClassName: Petstore
+  ...
+typescript:
+  version: 0.7.11
+  additionalDependencies:
+    dependencies:
+      posthog-node: ^4.0.1 <- This is the line you need to add, ensure the version you add adheres to NPM package standards.
+```
+
+After adding the dependency, the Posthog SDK will be included in your projects package.json file everytime you generate your SDK.
+
+## Adding your first SDK hook
+
+Now that you have the Posthog SDK included in your project, you can start adding SDK hooks to your SDK.
+
+First, create a new file in the `src/hooks` directory, and name it `telemetry_hooks.ts`.
+
+In this file you will need to import the hook types for each hook you want to use, as well as the PostHog SDK and initialize the PostHog SDK with your API Key. 
+I will be using all four of the hooks in this guide, but you can choose which hooks you want to use. 
+
+```typescript
+import {
+  AfterErrorContext,
+  AfterErrorHook,
+  AfterSuccessContext,
+  AfterSuccessHook,
+  BeforeRequestContext,
+  BeforeRequestHook,
+  SDKInitHook,
+  SDKInitOptions,
+} from "./types";
+
+import { PostHog } from "posthog-node";
+
+const PostHogClient = new PostHog("phc_xxxxxxxxxxxxxxxxxx", {
+  host: "https://us.i.posthog.com",
+});
+```
+
+Next you can create a class that will hold your hooks. 
+Our class will be `TelemetryHooks` and our first hook will be an `On SDK Initialization` hook.
+
+Below is the start of our `TelemetryHooks` class. This class will hold all of our telemetry hooks. 
+
+```typescript
+export class TelemetryHooks
+  implements SDKInitHook {
+  sdkInit(opts: SDKInitOptions): SDKInitOptions {
+    const { baseURL, client } = opts;
+    return { baseURL, client };
+  }
+}
+```
+
+This hook allows us to inject custom actions and capture an `SDK Init` event to Posthog at the time the SDK is initialized.
+
+Here are the key points to the capture method outlined below:
+- **distinctId**: A `distinctId` can be provided, serving as a unique identifier for either a user or a session. This is particularly useful for tracking recurring events across different sessions, which can aid in identifying and troubleshooting issues.
+- **event**: The name of the event is specified to facilitate easier sorting and analysis within Posthog.
+- **properties**: An arbitrary set of properties; extra information relevant to the event. Here the contents of the `opts` parameter are added to the event as properties. This allows for detailed tracking of the initialization parameters.
+
+Lastly Posthog's SDKs are asynchronous, so we need to shutdown the SDK after we are done, ensuring events are flushed out before the process ends.
+
+```typescript
+export class TelemetryHooks
+  implements SDKInitHook {
+  sdkInit(opts: SDKInitOptions): SDKInitOptions {
+    const { baseURL, client } = opts;
+
+    PostHogClient.capture({
+      distinctId: "distinct_id_of_the_user",
+      event: "SDK Init",
+      properties: {
+        baseURL,
+        client,
+      },
+    });
+
+    PostHogClient.shutdown();
+    return { baseURL, client };
+  }
+}
+```
+
+Now that we have our `TelemetryHooks` class, we can add the remainder of the hooks.
+
+```typescript
+export class TelemetryHooks
+  implements SDKInitHook, BeforeRequestHook, AfterSuccessHook, AfterErrorHook {// <- add in the remainder of the hooks you will be implementing
+  ...
+  }
+```
+
+The structure of the remaining hooks is the same, We just supply a `distinctId`, an `event`, and `properties` for each hook.
+
+```typescript
+async beforeRequest(
+    hookCtx: BeforeRequestContext,
+    request: Request
+  ): Promise<Request> {
+    PostHogClient.capture({
+      distinctId: "distinct_id_of_the_user",
+      event: "Before Request",
+      properties: {
+        hookCtx: hookCtx,
+      },
+    });
+
+    await PostHogClient.shutdown();
+    return request;
+  }
+
+  async afterSuccess(
+    hookCtx: AfterSuccessContext,
+    response: Response
+  ): Promise<Response> {
+    PostHogClient.capture({
+      distinctId: "distinct_id_of_the_user",
+      event: "After Success",
+      properties: {
+        hookCtx: hookCtx,
+        response: response,
+      },
+    });
+
+    await PostHogClient.shutdown();
+    return response;
+  }
+
+  async afterError(
+    hookCtx: AfterErrorContext,
+    response: Response | null,
+    error: unknown
+  ): Promise<{ response: Response | null; error: unknown }> {
+    PostHogClient.capture({
+      distinctId: "distinct_id_of_the_user",
+      event: "After Error",
+      properties: {
+        hookCtx: hookCtx,
+        response: response,
+        error: error,
+      },
+    });
+
+    await PostHogClient.shutdown();
+    return { response, error };
+  }
+```
+
+Once all the hooks are implemented, you can now use the `TelemetryHooks` class in your SDK.
+
+in the `src/hooks/registration.ts`, you simply need to import the class from the file you created the hooks in, and register them following the directions in the comment.
+
+```typescript
+import { Hooks } from "./types";
+
+import { TelemetryHooks } from "./telemetry_hooks";
+
+/*
+ * This file is only ever generated once on the first generation and then is free to be modified.
+ * Any hooks you wish to add should be registered in the initHooks function. Feel free to define them
+ * in this file or in separate files in the hooks folder.
+ */
+
+export function initHooks(hooks: Hooks) {
+    // Add hooks by calling hooks.register{ClientInit/BeforeCreateRequest/BeforeRequest/AfterSuccess/AfterError}Hook
+    // with an instance of a hook that implements that specific Hook interface
+    // Hooks are registered per SDK instance, and are valid for the lifetime of the SDK instance
+    hooks.registerBeforeRequestHook(new TelemetryHooks());
+    hooks.registerAfterSuccessHook(new TelemetryHooks());
+    hooks.registerAfterErrorHook(new TelemetryHooks());
+    hooks.registerSDKInitHook(new TelemetryHooks());
+}
+
+```
+
+You can now regenerate your SDK and use the new hooks. 
+
+Running API calls using this SDK will surface events up to Posthog.
+
+And you can review all the details in Posthog.
+
+![Screenshot of event data in Posthog.](./assets/posthog-event-data.png)
+
+You can review all the code outlined in this guide in the [SDK Hooks](https://github.com/speakeasy-api/examples/blob/main/posthog-hook-ts/src/hooks/posthog.ts) repository.

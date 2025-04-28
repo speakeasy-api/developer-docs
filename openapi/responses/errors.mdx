@@ -1,0 +1,177 @@
+import { Table, Callout } from "@/mdx/components";
+
+# Errors in OpenAPI
+
+In OpenAPI, errors are typically represented as [responses](/openapi/paths/operations/responses#response-object-in-openapi), with a clear body response structure and a status code in the range of **400-599** describing the error.
+
+A well-designed error response should provide a clear and actionable message that helps the developer describe the error to a user.
+
+## Key elements of an error response
+
+The status code and response body are the key elements of an error response. 
+
+### Status code
+
+HTTP response status codes play a vital role in describing the nature of errors. You should use appropriate codes to indicate the error type:
+
+<Table 
+  data={[
+    { statusCode: "400", meaning: "Bad Request", exampleUseCase: "Input validation failed" },
+    { statusCode: "401", meaning: "Unauthorized", exampleUseCase: "Missing or invalid authentication" },
+    { statusCode: "403", meaning: "Forbidden", exampleUseCase: "Insufficient permissions" },
+    { statusCode: "404", meaning: "Not Found", exampleUseCase: "Resource does not exist" },
+    { statusCode: "413", meaning: "Payload Too Large", exampleUseCase: "File or request body exceeds limit" },
+    { statusCode: "415", meaning: "Unsupported Media Type", exampleUseCase: "Invalid content type (for example, text or XML)" },
+    { statusCode: "500", meaning: "Internal Server Error", exampleUseCase: "Unexpected server-side issue" }
+  ]}
+  columns={[
+    { key: "statusCode", header: "Status code" },
+    { key: "meaning", header: "Meaning" },
+    { key: "exampleUseCase", header: "Example use case" }
+  ]}
+/>
+
+<Callout title="HTTP response status codes" type="info">
+  You can find a comprehensive list of HTTP response status codes for client errors (400-499) [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status#client_error_responses) and server errors (500-599) [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status#server_error_responses).
+</Callout>
+
+
+### Response body
+
+The response body provides the client with additional information about the error that can be displayed to the user. It is recommended to use a structured schema that describes the error in a clear and actionable way. Here is an example:
+
+```yaml
+{
+  "error": "ValidationError",
+  "message": "The provided file type is not supported.",
+  "details": {
+    "field": "fileType",
+    "allowedValues": ["image/jpeg", "application/pdf"]
+  }
+}
+```
+
+An error response can have these common properties: 
+
+- `error`: A machine-readable error code, such as `ValidationError` or `AuthenticationFailed`.
+
+- `message`: A human-readable description of the error.
+
+- `details`: Additional contextual information about the error, such as invalid fields or allowed values.
+
+You can provide additional properties in the response body, such as the `timestamp` or `trace ID`, to help with debugging and tracking the error.
+
+## Defining error responses in an OpenAPI document
+
+For standard API endpoints, error responses should be defined in the `responses` section of the OpenAPI document. You can use reusable components to standardize error schemas:
+
+
+```yaml openapi.yaml
+paths:
+  /resource:
+    get:
+      summary: Retrieve a resource
+      responses:
+        '200':
+          description: Successful operation
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  responses:
+    BadRequestError:
+      description: Invalid input provided
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+          description: Unique identifier for error tracing
+```
+
+
+## RFC 9457 Problem Details for Errors
+
+## Standardizing error messages: RFC 9457 Problem Details
+
+[RFC 9457](https://tools.ietf.org/html/rfc9457) is a standard for representing errors in REST APIs. Published in July 2023, it introduces a standardized, machine-readable, and actionable format for describing errors. While RFC 9457 is widely regarded as a best practice, it is important to note that it is not included in the OpenAPI Specification (OAS).
+
+The Problem Details format for describing errors is JSON-based and specifies key properties that are either required, optional, or extensible. When serialized as JSON, the format uses the media type `application/problem+json`. 
+
+The core properties of the Problem Details format are:
+
+- `type`: A URI reference that identifies the problem type, providing documentation or additional context for the error.
+
+- `title`: A short, human-readable summary of the problem type. The title should be consistent across instances of the same problem.
+
+- `status`: The HTTP status code for the error.
+
+- `detail`: A human-readable explanation of the error.
+
+- `instance`: A URI reference that identifies the specific occurrence of the problem, providing a link for debugging or accessing more information.
+
+Here is how you can apply RFC 9457 to your OpenAPI documentation:
+
+
+```yaml openapi.yaml
+paths:
+  /user:
+    post:
+      summary: Create a new user
+      responses:
+        '400':
+          description: Validation Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  schemas:
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: URI reference identifying the problem type.
+        title:
+          type: string
+          description: A short, human-readable summary of the problem type.
+        status:
+          type: integer
+          description: HTTP status code for this error occurrence.
+        detail:
+          type: string
+          description: Explanation specific to this occurrence of the problem.
+        instance:
+          type: string
+          format: uri-reference
+          description: URI reference identifying the specific occurrence of the problem.
+```

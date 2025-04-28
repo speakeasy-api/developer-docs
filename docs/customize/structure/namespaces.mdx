@@ -1,0 +1,242 @@
+---
+title: Customize namespaces
+description: "Group API methods into namespaces for a better object-oriented SDK interface. Learn how to namespace your Speakeasy SDKs today."
+slug: "/customize-sdks/namespaces/"
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+# Customize Namespaces
+
+When you're exposing your API to users, you may want to group API methods into namespaces to give your SDK an object-oriented interface. This type of interface can help users better conceptualize the objects they are manipulating when they use the API.
+
+## Default Behavior
+
+By default, Speakeasy will use the `tags` in your OpenAPI spec as the organizing principles for namespaces. For each `tag` in your spec, Speakeasy will create a namespace.
+
+Each method will then be added to namespaces corresponding with its `tags`. If a method does not have an associated `tag`, it will be added to the root SDK class of the generated client library. If a method has multiple tags associated with it, the operation will appear as a method in multiple classes.
+
+The following example illustrates the method `sdk.Drinks.ListDrinks()` assigned to the `Drinks` namespace and another method `sdk.ListLocations()` kept in the default class:
+
+```yaml Tags
+# !focus(21:22)
+paths:
+  /bar_locations:
+    get:
+    operationId: listLocations
+    summary: List all locations of the Speakeasy bar
+    description: Get a list of all the bars being run by Speakeasy
+    responses:
+      "200":
+        description: A list of bars
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/BarLocation"
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: List all drinks
+      description: Get a list of all drinks served by the bar
+      tags:
+        - drinks
+      responses:
+        "200":
+          description: A list of drinks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Drink"
+tags:
+  - name: drinks
+    description: Everything about our Drinks on offer
+```
+
+The generated SDK will include methods that can be invoked as follows:
+
+```go
+// Method added into the Drinks namespace
+sdk.Drinks.ListDrinks()
+// Default method
+sdk.ListLocations()
+```
+
+## Define Namespaces Without Tags `x-speakeasy-group`
+
+Sometimes the `tags` in an OpenAPI spec may already be used for an unrelated purpose (for example, autogenerating documentation). In this scenario, you may want to use something other than `tags` to organize your methods.
+
+The `x-speakeasy-group` field allows you to define custom namespaces. Add this field to any operation in your OpenAPI spec to override any `tags` associated with that method. For example:
+
+```yaml x-speakeasy-group
+# !focus(16)
+paths:
+  /drinks/{drink_type}/get_vintage:
+    get:
+      operationId: getVintage
+      summary: Check the vintage of the wine
+      description: Get the vintage of a drink served by the bar
+      parameters:
+        - name: drink_type
+          in: path
+          description: The type of drink
+          required: true
+          schema:
+            type: string
+      tags:
+        - drinks
+      x-speakeasy-group: wine
+      responses:
+        "200":
+          description: A list of drinks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Drink"
+tags:
+  - name: drinks
+    description: Everything about Drinks on offer
+```
+
+The generated SDK will include a method, which can be invoked as follows:
+
+```go
+// GetVintage - get the vintage of the wine
+sdk.wine.GetVintage("wine")
+```
+
+## Define Multi-Level Namespaces
+
+You can use `tags` or the `x-speakeasy-group` extension to define nested namespaces for your operations using `.` notion. There is no limit to the number of levels you can define.
+
+<CodeWithTabs>
+
+```yaml !!tabs Tags
+# !focus(6:7)
+paths:
+  /drink/{drink_type}/get_vintage/:
+    get:
+      operationId: getVintage
+      summary: Check the vintage of the wine
+      tags:
+        - drinks.wine
+      parameters:
+        - name: drink_type
+          in: path
+          description: The type of drink
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: the wine vintage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vintage"
+```
+
+```yaml !!tabs x-speakeasy-group
+# !focus(6)
+paths:
+  /drink/{drink_type}/get_vintage/:
+    get:
+      operationId: getVintage
+      summary: Check the vintage of the wine
+      x-speakeasy-group: drinks.wine
+      parameters:
+        - name: drink_type
+          in: path
+          description: The type of drink
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: the wine vintage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vintage"
+```
+
+</CodeWithTabs>
+
+The generated SDK will include a method, invoked as follows:
+
+```go
+// Get the Vintage of a specified wine.
+sdk.Drinks.Wine.GetVintage("wine")
+```
+
+## Multiple Namespaces
+
+If you want to add a method to multiple namespaces, list multiple values in `tags` or the `x-speakeasy-group` extension. Both accept an array of values:
+
+<CodeWithTabs>
+
+```yaml !!tabs Tags
+# !focus(6:8)
+paths:
+  /drink/{drink_type}/get_vintage/:
+    get:
+      operationId: getVintage
+      summary: Check the vintage of the wine
+      tags:
+        - drinks
+        - wine
+      parameters:
+        - name: drink_type
+          in: path
+          description: The type of drink
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: the wine vintage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vintage"
+```
+
+```yaml !!tabs x-speakeasy-group
+# !focus(6:8)
+paths:
+  /drink/{drink_type}/get_vintage/:
+    get:
+      operationId: getVintage
+      summary: Check the vintage of the wine
+      x-speakeasy-group:
+        - drinks
+        - wine
+      parameters:
+        - name: drink_type
+          in: path
+          description: The type of drink
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: the wine vintage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vintage"
+```
+
+</CodeWithTabs>
+The generated SDK will include methods that can be invoked as follows:
+
+```go
+// Get the Vintage
+sdk.Drinks.GetVintage("wine")
+sdk.Wine.GetVintage("wine")
+```

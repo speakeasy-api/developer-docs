@@ -1,0 +1,473 @@
+---
+title: "Create TypeScript SDKs from OpenAPI / Swagger"
+description: "Learn how Speakeasy generates Typescript SDKs from your OpenAPI / Swagger spec."
+---
+
+import { Callout, Spotlight } from "@/mdx/components";
+
+
+# Create TypeScript SDKs from OpenAPI / Swagger
+
+## SDK Overview
+
+The Speakeasy TypeScript SDK creation builds idiomatic TypeScript libraries using standard web platform features.
+
+The SDK is strongly typed, makes minimal use of third-party modules, and is straightforward to debug. Using the SDKs that Speakeasy generates will feel familiar to TypeScript developers. We make opinionated choices in some places but do so thoughtfully and deliberately.
+
+The core features of the TypeScript SDK include:
+
+- Compatibility with vanilla JavaScript projects since the SDK's consumption is through `.d.ts` (TypeScript type definitions) and `.js` files.
+- Usable on the server and in the browser.
+- Use of the `fetch`, `ReadableStream`, and async iterable APIs for compatibility with popular JavaScript runtimes:
+  - Node.js
+  - Deno
+  - Bun
+- Support for streaming requests and responses.
+- Authentication support for OAuth flows and support for standard security mechanisms (HTTP Basic, application tokens, and so on).
+- Optional pagination support for supported APIs.
+- Optional support for retries in every operation.
+- Complex number types including big integers and decimals.
+- Date and date/time types using RFC3339 date formats.
+- Custom type enums using strings and integers.
+- Union types and combined types.
+
+## TypeScript Package Structure
+
+```yaml lib-structure.yaml
+|-- src                # Root for all library source files
+|   └-- lib            # The core internals of the SDK
+|   |   └-- ...
+|   |   └-- http.ts
+|   |   └-- sdks.ts
+|   |   └-- http.ts
+|   |   └-- ...
+|   |-- sdk
+|   |   └-- models
+|   |   |   └-- errors
+|   |   |   └-- operations  # Namespace for additional helper types used during marshaling and unmarshalling
+|   |   |   |   └-- ...
+|   |   |   └-- shared      # Namespace for the SDK's shared models, including those from OpenAPI components
+|   |   |   |   └-- ...
+|   |   └-- types           # Custom types support used in the SDK
+|   |   |   └-- ...
+|   |   └-- index.ts
+|   |   └-- sdk.ts
+|   |   └-- ..
+|   └-- index.ts
+|-- docs               # Markdown files for the SDK's documentation
+|   └- ...
+└-- ...
+```
+
+## Runtime Environment Requirements
+
+The SDK targets ES2018, ensuring compatibility with a wide range of JavaScript runtimes that support this version. Key features required by the SDK include:
+
+- [Web Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
+- [Web Streams API](https://developer.mozilla.org/en-US/docs/Web/API/Streams_API) and in particular `ReadableStream`
+- [Async iterables](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_async_iterator_and_async_iterable_protocols) using `Symbol.asyncIterator`
+
+<Callout title="Note" type="info">
+  We used data from `caniuse` and `mdn` to determine our support policy and when we adopt a javascript feature. Typically we adopt features that have been out for > 3 years with reasonable support.
+</Callout>
+
+
+Runtime environments that are explicitly supported are:
+
+- Evergreen browsers: Chrome, Safari, Edge, Firefox.
+- Node.js active and maintenance LTS releases (currently, v18 and v20).
+- Bun v1 and above.
+- Deno v1.39 - Note Deno doesn't currently have native support for streaming file uploads backed by the filesystem ([issue link][deno-file-streaming]).
+
+[deno-file-streaming](https://github.com/denoland/deno/issues/11018)
+
+<Callout title="Note" type="info">
+  For teams interested in working directly with the SDK&apos;s source files, our SDK
+  leverages TypeScript `v5` features. To directly consume these source files,
+  your environment should support TypeScript version 5 or higher. This
+  requirement applies to scenarios where direct access to the source is
+  necessary.
+</Callout>
+
+## TypeScript HTTP Client
+
+TypeScript SDKs stick as close to modern and ubiquitous web standards as possible. We use the `fetch()` API as our HTTP client. The API includes all the necessary building blocks to make HTTP requests: `fetch`, `Request`, `Response`, `Headers`, `FormData`, `File`, and `Blob`.
+
+The standard nature of this SDK ensures it works in modern JavaScript runtimes, including Node.js, Deno, Bun, and React Native. We've run our extensive suite to confirm that new SDKs work in Node.js, Bun, and browsers.
+
+## Type System
+
+### Primitive Types
+
+Where possible the TypeScript SDK uses primitive types such as `string`, `number`, and `boolean`. In the case of arbitrary-precision decimals, a third-party library is used since there isn't a native decimal type. Using decimal types is crucial in certain applications such as code manipulating monetary amounts and in situations where overflow, underflow, or truncation caused by precision loss can lead to significant incidents.
+
+To describe a decimal type in OpenAPI, use the `format: decimal` keyword. The SDK will take care of serializing and deserializing decimal values under the hood using the [decimal.js](https://github.com/MikeMcl/decimal.js) library.
+
+```typescript
+import { SDK } from "@speakeasy/super-sdk";
+import { Decimal } from "@speakeasy/super-sdk/types";
+
+const sdk = new SDK();
+const result = await sdk.payments.create({
+  amount: new Decimal(0.1).add(new Decimal(0.2))
+});
+```
+
+Similar to decimal types, we've introduced support for native `BigInt` values for numbers too large to be represented using the JavaScript `Number` type.
+
+In an OpenAPI schema, fields for big integers can be modeled as strings with `format: bigint`.
+
+```typescript
+import { SDK } from "@speakeasy/super-sdk";
+
+const sdk = new SDK();
+const result = await sdk.doTheThing({
+  value: 67_818_454n,
+  value: BigInt("340656901")
+});
+```
+
+### Generated Types
+
+The TypeScript SDK generates a type for each request, response, and shared model in your OpenAPI schema. Each model is backed by a [Zod](https://zod.dev/) schema that validates the objects at runtime.
+
+<Callout title="Note" type="info">
+  It&apos;s important to note that data validation is run on user input when calling
+  an SDK method _and on the subsequent response data from the server_. If
+  servers are not returning data that matches the OpenAPI spec, then validation
+  errors are thrown at runtime.
+</Callout>
+
+Below is a complete example of a shared model created by the TypeScript generator:
+
+<Spotlight>
+
+#### !!steps Public Type
+
+The `DrinkOrder` type represents the public type the model file exports and what SDK users will work with inside their code.
+
+```typescript ! drinkorder.ts focus=6:12
+!from ./assets/drinkorder.ts.txt
+```
+
+#### !!steps Internal Types
+
+A special namespace accompanies every model and contains the types and schemas for the model that represent inbound and outbound data.
+
+> The namespace, including types and values in it, isn't intended for use outside the SDK and is marked as `@internal`.
+
+```typescript ! drinkorder.ts focus=14:15
+!from ./assets/drinkorder.ts.txt
+```
+
+#### !!steps Inbound
+
+The inbound representation of a model defines the shape of the data received from a server. It is validated and deserialized into the public type above.
+
+```typescript ! drinkorder.ts focus=16:43
+!from ./assets/drinkorder.ts.txt
+```
+
+#### !!steps Outbound
+
+The outbound representation of a model defines the shape of the data sent to a server. A user provides a value that satisfies the public type above and the outbound schema serializes it into what the server expects.
+
+```typescript ! drinkorder.ts focus=45:71
+!from ./assets/drinkorder.ts.txt
+```
+
+#### !!steps Zod Validation
+
+All generated models have this overall structure. By pinning the types with runtime validation, Speakeasy gives users a stronger guarantee that the SDK types they work with during development are valid at runtime, otherwise, Speakeasy throws exceptions that fail loudly.
+
+```typescript ! drinkorder.ts
+!from ./assets/drinkorder.ts.txt
+```
+
+</Spotlight>
+
+<Callout title="Note" type="info">
+It&apos;s important to note that Zod is a peer dependency.
+
+The reason for listing Zod as a peer dependency is to use the user&apos;s installation of Zod if they have it. Every popular package manager, except for Yarn, says, &quot;If the user doesn&apos;t have a peer dependency installed, I&apos;m gonna go ahead and install it and make it available&quot;.
+
+Why does Speakeasy use peer dependencies? There are situations where the `node_modules` tree ends up with multiple Zod versions if the user has a different version of Zod installed than what the SDK requires. For example:
+
+```text
+node_modules/
+  zod/  v3.21.1
+  sdk/
+    node_modules/
+      zod/ v3.23.5
+```
+
+If the SDK throws a Zod validation error, the user might have code like this:
+
+```typescript
+import { Sdk } from "sdk";
+import { ZodError } from "zod";
+
+const sdk = new Sdk();
+
+try {
+  const result = await sdk.drinks.list({userId: "oops"});
+} catch (err) {
+  if (err instanceof ZodError) { // branch 1
+    console.error("the server returned invalid data");
+  } else {
+     throw err;
+  }
+}
+```
+
+The code at `branch 1` will not evaluate to `true` because the runtime loaded the wrong `ZodError` version. Using peer dependencies helps prevent this Zod validation error.
+
+Speakeasy SDKs wrap `ZodError`s with a custom error type declared in each SDK. In practice, the Zod error is hidden from users and gets them to only work with the error type exported from the SDK. In the future, we start listing Zod as a direct dependency and are unaware of other Zod installations the user might have.
+
+</Callout>
+
+### Union Types
+
+Support for polymorphic types is critical to most production applications. In OpenAPI, these types are defined using the `oneOf` keyword. Speakeasy represents these types using TypeScript's union notation, for example, `Cat | Dog`.
+
+```typescript
+import { SDK } from "@speakeasy/super-sdk";
+
+async function run() {
+  const sdk = new SDK();
+  const pet = await sdk.fetchMyPet();
+
+  switch (pet.type) {
+    case "cat":
+      console.log(pet.litterType);
+      break;
+    case "dog":
+      console.log(pet.favoriteToy);
+      break;
+    default:
+      // Ensures exhaustive switch statements in TypeScript
+      pet satisfies never;
+      throw new Error(`Unidentified pet type: ${pet.type}`)
+  }
+}
+
+run();
+```
+
+### Type Safety
+
+TypeScript provides static type safety to give you greater confidence in the code you are shipping. However, TypeScript has limited support to protect from opaque data at the boundaries of your programs. User input and server data coming across the network can circumvent static typing if not correctly modeled. This usually means marking this data as `unknown` and exhaustively sanitizing it.
+
+Our TypeScript SDKs solve this issue neatly by modeling all the data at the boundaries using [Zod schemas](https://zod.dev/). Using Zod schemas ensures that everything coming from users and servers will work as intended, or fail loudly with clear validation errors. This is even more impactful for the vanilla JavaScript developers using your SDK.
+
+```typescript
+import { SDK } from "@speakeasy/super-sdk";
+
+async function run() {
+  const sdk = new SDK();
+
+  const result = await sdk.products.create({
+    name: "Fancy pants",
+    price: "ummm"
+  });
+}
+
+run();
+
+// 🚨 Throws
+//
+// ZodError: [
+//   {
+//     "code": "invalid_type",
+//     "expected": "number",
+//     "received": "string",
+//     "path": [
+//       "price"
+//     ],
+//     "message": "Expected number, received string"
+//   }
+// ]
+```
+
+While validating user input is considered table stakes for SDKs, it's especially useful to validate server data given the information we have in your OpenAPI spec. This can help detect drift between schema and server and prevent certain runtime issues such as missing response fields or sending incorrect data types.
+
+## Tree Shaking
+
+Speakeasy-created Typescript SDKs contain few internal couplings between modules. Users who bundle them into client-side apps can take advantage of tree-shaking performance when working with "deep" SDKs. These SDKs are subdivided into namespaces like `sdk.comments.create(...)` and `sdk.posts.get(...)`. Importing the top-level SDK pulls the entire SDK into a client-side bundle even if a small subset of functionality was needed.
+
+You can import the exact namespaces or "sub-SDKs", and tree-shake the rest of the SDK away at build time.
+
+```typescript
+import { PaymentsSDK } from "@speakeasy/super-sdk/sdk/payments";
+// 👆 Only code needed by this SDK is pulled in by bundlers
+
+async function run() {
+	const payments = new PaymentsSDK({ authKey: "" });
+
+  const result = await payments.list();
+
+  console.log(result);
+}
+
+run();
+```
+
+Speakeasy benchmarked whether there would be benefits in allowing users to import individual SDK operations but from our testing, there was a marginal reduction in bundled code versus importing sub-SDKs. It's highly dependent on how operations are grouped and the depth and breadth of an SDK as defined in the OpenAPI spec. If you think your SDK users could greatly benefit from exporting individual operations, please reach out to us and we can re-evaluate this feature.
+
+## Streaming Support
+
+Support for streaming is critical for applications that need to send or receive large amounts of data between client and server without first buffering the data into memory, potentially exhausting this system resource. Uploading a huge file is one use case where streaming can be useful.
+
+As an example, in Node.js v20, streaming a large file to a server using an SDK is only a handful of lines:
+
+```typescript
+import { openAsBlob } from "node:fs";
+
+import { SDK } from "@speakeasy/super-sdk";
+
+async function run() {
+  const sdk = new SDK();
+
+  const fileHandle = await openAsBlob("./src/sample.txt");
+
+  const result = await sdk.upload({ file: fileHandle });
+
+  console.log(result);
+}
+run();
+```
+
+In the browser, users would typically select files using `<input type="file">` and the SDK call is identical to the sample code above.
+
+Other JavaScript runtimes may have similar native APIs to obtain a web standards file or blob and pass it to SDKs.
+
+For response streaming, SDKs expose a `ReadableStream`, a part of the Streams API web standard.
+
+```typescript
+import fs from "node:fs";
+import { Writable } from "node:stream";
+import { SDK } from "@speakeasy/super-sdk";
+
+async function run() {
+  const sdk = new SDK();
+
+  const result = await sdk.usageReports.download("UR123");
+
+  const destination = Writable.toWeb(
+    fs.createWriteStream("./report.csv")
+  );
+
+  await result.data.pipeTo(destination);
+}
+
+run();
+```
+
+## Server-Sent Events
+
+TypeScript SDKs support the streaming of server-sent events by exposing async iterables. Unlike the native `EventSource` API, SDKs can create streams using GET or POST requests, and other methods that can pass custom headers and request bodies.
+
+```typescript
+import { SDK } from "@speakeasy/super-sdk";
+
+async function run() {
+  const sdk = new SDK();
+
+  const result = await sdk.completions.chat({
+    messages: [
+      {
+        role: 'user',
+        content: "What is the fastest bird that is common in North America?",
+      },
+    ],
+  });
+
+  if (result.chatStream == null) {
+    throw new Error("failed to create stream: received null value");
+  }
+
+  for await (const event of res.chatStream) {
+    process.stdout.write(event.data.content)
+  }
+}
+
+run();
+```
+
+For more information on how to model this API in your OpenAPI document, see [Enabling Event-Streaming Operations](/docs/customize-sdks/server-sent-events).
+
+## Parameters
+
+If configured, Speakeasy generates methods with parameters for each parameter defined in the OpenAPI document, provided the number of parameters is less than or equal to the configured `maxMethodParams` value in the `gen.yaml` file.
+
+If the number of parameters exceeds the configured `maxMethodParams` value or is set to `0`, then a request object is generated for the method instead allowing all parameters to be passed in a single object.
+
+## Errors
+
+Following TypeScript best practices, all operation methods in the SDK will return a response object and an error. Callers should always check for the presence of the error. The object used for errors is configurable per request. Any error response may return a custom error object. A generic error will be provided when any sort of communication failure is detected during an operation.
+
+Here's an example of custom error handling in a theoretical SDK:
+
+```typescript
+import { Speakeasy } from "@speakeasy/bar";
+import * as errors from "@speakeasy/bar/sdk/models/errors";
+
+async function run() {
+    const sdk = new Speakeasy({
+        apiKey: "<YOUR_API_KEY_HERE>",
+    });
+
+    const res = await sdk.bar.getDrink().catch((err) => {
+        if (err instanceof errors.FailResponse) {
+            console.error(err); // handle exception
+            return null;
+        } else {
+            throw err;
+        }
+    });
+
+    if (res?.statusCode !== 200) {
+        throw new Error("Unexpected status code: " + res?.statusCode || "-");
+    }
+
+    // handle response
+}
+
+run();
+```
+
+The SDK also includes a `SDKValidationError` to make it easier to debug validation errors, particularly when the server sends unexpected data. Instead of throwing a `ZodError` back at SDK users without revealing the underlying raw data that failed validation, `SDKValidationError` provides a way to pretty-print validation errors for a more pleasant debugging experience.
+
+## Debugging Support
+
+Typescript SDKs support a new response format that includes the native Request and Response objects that were used in an SDK method call. Enable this by setting the `responseFormat` config in your `gen.yaml` file to `envelope-http`.
+
+```typescript
+const sdk = new SDK();
+const { users, httpMeta } = await sdk.users.list();
+//                👆
+
+const { request, response } = httpMeta;
+console.group("Request completed")
+console.log("Endpoint:", request.method, request.url)
+console.log("Status", response.status)
+console.log("Content type", response.headers.get("content-type"))
+console.groupEnd()
+```
+
+The `httpMeta` property will also be available on any error class that relates to HTTP requests. This includes the built-in `SDKError` class and any custom error classes that you have defined in your spec.
+
+## User Agent Strings
+
+The Typescript SDK includes a [`User-Agent`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests to track SDK usage amongst broader API usage. The format is as follows:
+
+```stmpl
+speakeasy-sdk/typescript {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{PackageName}}
+```
+
+Where
+
+- `SDKVersion` is the version of the SDK, defined in `gen.yaml` and released.
+- `GenVersion` is the version of the Speakeasy generator.
+- `DocVersion` is the version of the OpenAPI document.
+- `PackageName` is the name of the package defined in `gen.yaml`.

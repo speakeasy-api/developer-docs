@@ -1,0 +1,394 @@
+---
+slug: "/authentication-configuration"
+sidebar_label: Customize Authentication
+description: "Customize your security and authentication SDK settings for OAuth."
+---
+
+import { CodeWithTabs, Callout } from "@/mdx/components";
+
+
+# Customize Security and Authentication
+
+## Scope Authentication
+
+### Global
+
+Global security allows users to configure the SDK once and reuse the security configuration for all subsequent calls.
+
+To use global security, define the security configuration in the `security` block at the root of the SDK.
+
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks.
+      description: Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+      tags:
+        - drinks
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      name: api_key
+      in: header
+security: # Here
+  - api_key: []
+```
+
+In the resulting SDK, the user can define the security configuration in the SDK's instantiation. It will then be automatically applied to all subsequent method calls without needing to be passed in as an argument:
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import { SDK } from "speakeasy";
+
+async function run() {
+  const sdk = new SDK({
+    apiKey: "<YOUR_API_KEY_HERE>",
+  });
+
+  const result = await sdk.drinks.listDrinks();
+
+  // Handle the result
+  console.log(result);
+}
+
+run();
+```
+
+```python !!tabs Python
+import sdk
+
+s = sdk.SDK(
+    api_key="<YOUR_API_KEY_HERE>",
+)
+
+
+res = s.drinks.list_drinks()
+
+if res.drinks is not None:
+    # handle response
+    pass
+```
+
+```go !!tabs Go
+package main
+
+import (
+	"context"
+	"log"
+	"speakeasy"
+	"speakeasy/models/components"
+)
+
+func main() {
+	s := speakeasy.New(
+		speakeasy.WithSecurity("<YOUR_API_KEY_HERE>"),
+	)
+
+	ctx := context.Background()
+	res, err := s.Drinks.ListDrinks(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if res.Drinks != nil {
+		// handle response
+	}
+}
+```
+
+```java !!tabs Java
+package hello.world;
+
+import dev.speakeasyapi.speakeasy.SDK;
+import dev.speakeasyapi.speakeasy.models.components.*;
+import dev.speakeasyapi.speakeasy.models.components.Security;
+import dev.speakeasyapi.speakeasy.models.operations.*;
+import dev.speakeasyapi.speakeasy.models.operations.ListDrinksResponse;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import static java.util.Map.entry;
+
+public class Application {
+
+    public static void main(String[] args) {
+        try {
+            SDK sdk = SDK.builder()
+                .apiKey("<YOUR_API_KEY_HERE>")
+                .build();
+
+            ListDrinksResponse res = sdk.drinks().listDrinks()
+                .call();
+
+            if (res.drinks().isPresent()) {
+                // handle response
+            }
+        } catch (dev.speakeasyapi.speakeasy.models.errors.SDKError e) {
+            // handle exception
+        } catch (Exception e) {
+            // handle exception
+        }
+    }
+}
+```
+
+```csharp !!tabs C#
+using Speakeasy;
+using Speakeasy.Models.Components;
+
+var sdk = new SDK(
+    security: new Security() { ApiKey = "<YOUR_API_KEY_HERE>" }
+);
+
+try
+{
+    var res = await sdk.Drinks.ListDrinksAsync();
+
+    if (res.Drinks != null)
+    {
+        // handle response
+    }
+}
+catch (Exception ex)
+{
+   // handle exception
+}
+```
+
+```php !!tabs PHP
+declare(strict_types=1);
+
+require 'vendor/autoload.php';
+
+use OpenAPI\OpenAPI;
+
+$sdk = OpenAPI\SDK::builder()
+    ->setSecurity(
+        new OpenAPI\Security(
+            apiKey: "<YOUR_API_KEY_HERE>"
+        )
+    )
+    ->build();
+
+try {
+    $response = $sdk->drinks->listDrinks();
+
+    if ($response->drinks !== null) {
+        // handle response
+    }
+} catch (Exception $e) {
+    // handle exception
+}
+```
+
+</CodeWithTabs>
+
+### Per-Operation Security
+
+<Callout title="Note" type="info">
+
+**Security Hoisting:** In cases where global security is **not** defined, Speakeasy automatically hoists the most commonly occurring operation-level security to be considered global. This will simplify SDK usage.
+
+</Callout>
+
+Operation-specific security configuration overrides the default authentication settings for an endpoint. This is commonly used for operations that do not require authentication or are part of an authentication flow, such as obtaining a short-lived access token.
+
+Define `security` within an operation's scope to apply operation-specific security:
+
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks.
+      description: Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+      security: # Here
+        - apiKey: []
+      tags:
+        - drinks
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      name: api_key
+      in: header
+security:
+  - {}
+```
+
+In the SDK, the user can pass in a specific security configuration as an argument to the method call:
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import { SDK } from "speakeasy";
+
+async function run() {
+  const sdk = new SDK();
+
+  const operationSecurity = "<YOUR_API_KEY_HERE>";
+
+  const result = await sdk.drinks.listDrinks(operationSecurity);
+
+  // Handle the result
+  console.log(result);
+}
+
+run();
+```
+
+```python !!tabs Python
+import sdk
+
+s = sdk.SDK()
+
+res = s.drinks.list_drinks("<YOUR_API_KEY_HERE>")
+
+if res.drinks is not None:
+    # handle response
+    pass
+```
+
+```go !!tabs Go
+package main
+
+import (
+	"context"
+	"log"
+	"speakeasy"
+	"speakeasy/models/operations"
+)
+
+func main() {
+	s := speakeasy.New()
+
+	operationSecurity := operations.ListDrinksSecurity{
+		APIKey: "<YOUR_API_KEY_HERE>",
+	}
+
+	ctx := context.Background()
+	res, err := s.Drinks.ListDrinks(ctx, operationSecurity)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if res.Drinks != nil {
+		// handle response
+	}
+}
+```
+
+```java !!tabs Java
+package hello.world;
+
+import dev.speakeasyapi.speakeasy.SDK;
+import dev.speakeasyapi.speakeasy.models.components.*;
+import dev.speakeasyapi.speakeasy.models.components.Security;
+import dev.speakeasyapi.speakeasy.models.operations.*;
+import dev.speakeasyapi.speakeasy.models.operations.ListDrinksResponse;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import static java.util.Map.entry;
+
+public class Application {
+
+    public static void main(String[] args) {
+        try {
+            SDK sdk = SDK.builder()
+                .build();
+
+            ListDrinksResponse res = sdk.drinks().listDrinks()
+                .security(ListDrinksSecurity.builder()
+                    .apiKey("<YOUR_API_KEY_HERE>")
+                    .build())
+                .call();
+
+            if (res.drinks().isPresent()) {
+                // handle response
+            }
+        } catch (dev.speakeasyapi.speakeasy.models.errors.SDKError e) {
+            // handle exception
+        } catch (Exception e) {
+            // handle exception
+        }
+    }
+}
+```
+
+```csharp !!tabs C#
+using Speakeasy;
+using Speakeasy.Models.Components;
+
+var sdk = new SDK(
+    security: new Security() { ApiKey = "<YOUR_API_KEY_HERE>" }
+);
+
+try
+{
+    var res = await sdk.Drinks.ListDrinksAsync();
+
+    if (res.Drinks != null)
+    {
+        // handle response
+    }
+}
+catch (Exception ex)
+{
+   // handle exception
+}
+```
+
+```php !!tabs PHP
+declare(strict_types=1);
+
+require 'vendor/autoload.php';
+
+use OpenAPI\OpenAPI;
+
+$sdk = OpenAPI\SDK::builder()->build();
+
+$requestSecurity = new ListDrinksSecurity(
+    apiKey: '<YOUR_API_KEY_HERE>',
+);
+
+try {
+    $response = $sdk->drinks->listDrinks(
+        security: $requestSecurity,
+    );
+
+    // handle response
+
+} catch (Exception $e) {
+    // handle exception
+}
+```
+
+</CodeWithTabs>
+
+## Environment Variables
+
+A common pattern for setting global parameters and security options in an SDK is by using environment variables. Speakeasy supports this with environment variable prefixes. To enable this feature, set the `envVarPrefix` variable in the language section of the SDK's `gen.yaml` file.
+
+Global parameters can then be provided via environment variables in the format `{PREFIX}_{GLOBALNAME}`. Documentation for this will be automatically included in the README.
+
+Security options can also be set via environment variables if not provided directly to the SDK. For example, a security field like `api_key` can be set with the variable `{PREFIX}_{API_KEY}`.
+
+```ts
+const SDK = new SDK({
+  apiKey: process.env["SDK_API_KEY"] ?? "",
+});
+```
+
+<Callout title="Note" type="info">
+
+Note: In some cases, adding `envVarPrefix` may alter the structure of security options. Required global security will become optional to allow setting it via environment variables.
+
+</Callout>
+
+For details on enabling this feature during generation, see the language-specific `gen.yaml` [configuration reference](/docs/speakeasy-reference/generation/gen-yaml).

@@ -1,0 +1,457 @@
+---
+title: "OpenAPI: OneOf schemas"
+description: "Support for OpenAPI `oneOf` types with idiomatic unions."
+slug: "/customize-sdks/oneof-schemas/"
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+
+# The `oneOf` keyword
+
+In support of the OpenAPI Specification `oneOf` schemas, Speakeasy SDKs provide language-specific implementations based on idiomatic unions (when available) or using generated supporting objects that allow type safety by using an `enum` discriminator.
+
+## Supporting objects
+
+Assuming your OpenAPI document has a `Pet` component, consider this `oneOf` block:
+
+```yaml
+oneOf:
+  - type: string
+  - type: integer
+  - $ref: "/components/schemas/Pet"
+```
+
+How Speakeasy generates supporting objects for your SDK depends on the language of the SDK.
+
+<CodeWithTabs>
+  ```typescript !!tabs TypeScript
+ /* Speakeasy leverages native TypeScript support for unions to represent `oneOf` schemas. A union type is generated to represent the different possible types defined in the `oneOf` schema. */
+```
+
+```go !!tabs Go
+/* Go does not provide a native `union` data type, so Speakeasy will create a supporting `struct` with a corresponding _pseudo enum_ that is used for discrimination. The supporting object will be named differently depending on whether it is used as part of a request or included as a response.
+
+The generated object can optionally accept any of the `oneOf` types but should only store one at a time. The `Type` field should store the corresponding `const` value:
+*/
+
+type FetchPetRequestBodyType string
+
+const (
+	FetchPetRequestBodyTypeStr          FetchPetRequestBodyType = "str"
+	FetchPetRequestBodyTypeInteger      FetchPetRequestBodyType = "integer"
+	FetchPetRequestBodyTypePet          FetchPetRequestBodyType = "pet"
+)
+
+type FetchPetRequestBody struct {
+	Str          *string
+	Integer      *int64
+	Pet *shared.Pet
+
+	Type FetchPetRequestBodyType
+}
+
+/* An SDK user shouldn&apos;t construct a `FetchPetRequestBody` object. Instead, they should call one of the supporting `Create` methods that set the content value and discriminator. */
+
+
+func CreateFetchPetRequestBodyStr(str string) FetchPetRequestBody {
+	typ := FetchPetRequestBodyTypeStr
+
+	return FetchPetRequestBody{
+		Str:  &str,
+		Type: typ,
+	}
+}
+
+func CreateFetchPetRequestBodyInteger(integer int64) FetchPetRequestBody {
+	typ := FetchPetRequestBodyTypeInteger
+
+	return FetchPetRequestBody{
+		Integer: &integer,
+		Type: typ,
+	}
+}
+
+func CreateFetchPetRequestBodyPet(pet shared.Pet) FetchPetRequestBody {
+	typ := FetchPetRequestBodyTypePet
+
+	return FetchPetRequestBody{
+		Pet: &pet,
+		Type: typ,
+	}
+}
+```
+
+```python !!tabs Python
+
+# Speakeasy uses Python's built-in `typing.Union` objects and will not create special objects for any `oneOf` keywords in your OpenAPI document.
+ ```
+
+```csharp !!tabs C#
+public class FetchPetRequestBodyType
+{
+  private FetchPetRequestBodyType(string value) { Value = value; }
+
+  public string Value { get; private set; }
+  public static FetchPetRequestBodyType Str { get { return new FetchPetRequestBodyType("str"); } }
+
+  public static FetchPetRequestBodyType Integer { get { return new FetchPetRequestBodyType("integer"); } }
+
+  public static FetchPetRequestBodyType Pet { get { return new FetchPetRequestBodyType("pet"); } }
+
+  // ..snip
+}
+
+public class FetchPetRequestBody
+{
+  public FetchPetRequestBody(FetchPetRequestBodyType type) {
+      Type = type;
+  }
+  public string? Str { get; set; }
+  public long? Integer { get; set; }
+  public Pet Pet { get; set; }
+
+  public FetchPetRequestBodyType Type { get; set; }
+
+  public static FetchPetRequestBody CreateString(string str) {
+      FetchPetRequestBodyType typ = FetchPetRequestBodyType.Str;
+
+      FetchPetRequestBody res = new FetchPetRequestBody(typ);
+      res.Str = str;
+      return res;
+  }
+
+  public static FetchPetRequestBody CreateInteger(long integer) {
+      FetchPetRequestBodyType typ = FetchPetRequestBodyType.Integer;
+
+      FetchPetRequestBody res = new FetchPetRequestBody(typ);
+      res.Integer = integer;
+      return res;
+  }
+
+  public static FetchPetRequestBody CreatePet(Pet pet) {
+      FetchPetRequestBodyType typ = FetchPetRequestBodyType.Pet;
+
+      FetchPetRequestBody res = new FetchPetRequestBody(typ);
+      res.Pet = pet;
+      return res;
+  }
+}
+```
+
+
+```java !!tabs Java
+/* For a `oneOf` type, Speakeasy generates a Java class that wraps the different value types and provides static factory methods (`of*`) for creation.
+
+For read purposes, the `value()` method should be inspected with the Java `instanceof` operator to determine the type for casting the `value()` method result. The `equals`, `hashCode`, and `toString` methods are all implemented.
+*/
+
+@JsonDeserialize(using = FetchPetRequestBody._Deserializer.class)
+public class FetchPetRequestBody {
+
+    @JsonValue
+    private TypedObject value;
+
+    private FetchPetRequestBody(TypedObject value) {
+        this.value = value;
+    }
+
+    public static FetchPetRequestBody of(String value) {
+        Utils.checkNotNull(value, "value");
+        return new FetchPetRequestBody(TypedObject.of(value, JsonShape.DEFAULT, new TypeReference<String>(){}));
+    }
+
+    public static FetchPetRequestBody of(long value) {
+        Utils.checkNotNull(value, "value");
+        return new FetchPetRequestBody(TypedObject.of(value, JsonShape.DEFAULT, new TypeReference<java.lang.Long>(){}));
+    }
+
+    public static FetchPetRequestBody of(Pet value) {
+        Utils.checkNotNull(value, "value");
+        return new FetchPetRequestBody(TypedObject.of(value, JsonShape.DEFAULT, new TypeReference<Pet>(){}));
+    }
+
+    /**
+     * Returns an instance of one of these types:
+     * <ul>
+     * <li>{@code java.lang.String}</li>
+     * <li>{@code long}</li>
+     * <li>{@code pet.store.simple.models.shared.Pet}</li>
+     * </ul>
+     *
+     * <p>Use {@code instanceof} to determine what type is returned. For example:
+     *
+     * <pre>
+     * if (obj.value() instanceof String) {
+     *     String answer = (String) obj.value();
+     *     System.out.println("answer=" + answer);
+     * }
+     * </pre>
+     *
+     * @return value of oneOf type
+     **/
+    public java.lang.Object value() {
+        return value.value();
+    }
+
+    @Override
+    public boolean equals(java.lang.Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        FetchPetRequestBody other = (FetchPetRequestBody) o;
+        return Objects.deepEquals(this.value.value(), other.value.value());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(value.value());
+    }
+
+    @SuppressWarnings("serial")
+    public static final class _Deserializer extends OneOfDeserializer<FetchPetRequestBody> {
+
+        public _Deserializer() {
+            super(FetchPetRequestBody.class, false,
+                  TypeReferenceWithShape.of(new TypeReference<Long>() {}, JsonShape.DEFAULT),
+                  TypeReferenceWithShape.of(new TypeReference<String>() {}, JsonShape.DEFAULT),
+                  TypeReferenceWithShape.of(new TypeReference<Pet>() {}, JsonShape.DEFAULT));
+        }
+    }
+
+    @Override
+    public String toString() {
+        return Utils.toString(FetchPetRequestBody.class,
+                "value", value);
+    }
+
+}
+```
+</CodeWithTabs>
+
+
+## Requests
+
+Assume you have an operation that allows the user to fetch a pet by submitting the pet's name, ID, or complete pet object:
+
+```yaml
+/pet:
+  get:
+    operationId: fetchPet
+    requestBody:
+      description: identifier of pet to fetch
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: string
+              - type: integer
+              - $ref: "/components/schemas/Pet"
+    responses:
+      "200":
+        description: fetched pet
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Pet"
+```
+
+<CodeWithTabs>
+
+```typescript 
+const sdk = new SDK();
+sdk.pets.fetchPet("Fido"); // string
+sdk.pets.fetchPet(123);    // number
+sdk.pets.fetchPet({ id: "p-123" }); // Pet object
+```
+
+```go !!tabs Go
+
+/* You can use the object returned from the supporting `Create` function as a parameter in the operation&apos;s request: */
+
+
+s := sdk.New()
+
+req := shared.CreateFetchPetRequestBodyInteger(1)
+
+res, err := s.Pets.FetchPet(context.Background(), req)
+
+```
+
+```python !!tabs Python
+
+# Speakeasy uses native Python unions internally, so using `oneOf` types in your Python SDK is intuitive: Directly use the type you want to submit as the request object (in this case, a `str`, `int`, or `Pet` object).
+
+
+s = SDK()
+
+res = s.pets.fetch_pet(request=1)
+```
+
+
+```csharp !!tabs C#
+/* The C# SDKs use a custom object-oriented approach to supporting union types. Speakeasy generates a supporting `class` with a corresponding **pseudo enum**, which is used for discrimination. The supporting object is named differently depending on whether it is used as part of a request or included as a response.
+
+The generated object can optionally accept any of the `oneOf` types but should only store one at a time. The `Type` field should store the corresponding `enum` value:  */
+
+s = new SDK()
+
+req = CreateFetchPetRequestBodyInteger(1)
+
+var res = s.Pets.FetchPet(req)
+
+/* An SDK user should not construct a `FetchPetRequestBody` object. Instead, they should call one of the supporting `Create` methods that set the content value and discriminator. */
+
+```
+
+
+
+```java !!tabs Java
+SDK sdk = SDK.builder().build();
+// fetch pet by integer id
+FetchPetResponse res = sdk.fetchPet(FetchPetRequestBody.of(123));
+```
+</CodeWithTabs>
+
+## Responses
+
+Sometimes you may have a response that specifies a `oneOf` schema. For languages that do not natively support unions, Speakeasy will create supporting objects to deserialize the `oneOf` response into the correct object type. No supported objects are needed for languages with native union types, so Speakeasy will deserialize into the native type.
+
+For example, this schema:
+
+```
+/pet_id:
+  get:
+    operationId: petId
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              title: res
+              oneOf:
+                - type: string
+                - type: integer
+```
+
+Will result in these response types:
+
+
+<CodeWithTabs>
+```typescript !!tabs TypeScript
+type PetIdRes = string | number;
+```
+
+```go !!tabs Go
+type petIdResType string
+const (
+	PetIdResTypeStr          petIdResType = "str"
+	PetIdResTypeInteger      petIdResType = "integer"
+)
+type petIdRes struct {
+	Str          *string
+	Integer      *int64
+
+	Type petIdResType
+}
+type FetchPetResponse struct {
+	// ..snip
+	Res *petIdRes
+}
+
+```
+
+```python !!tabs Python
+
+@dataclasses.dataclass
+class FetchPetResponse:
+    # ..snip
+    res: Optional[Union[str, int]] = dataclasses.field(default=None)
+```
+
+```csharp !!tabs C#
+
+public class PetIdResType
+{
+  public static PetIdResType Str { get { return new PetIdResType("str"); } }
+
+  public static PetIdResType Integer { get { return new PetIdResType("integer"); } }
+
+  // ..snip
+}
+
+
+public class PetIdRes {
+    public string? Str { get; set; }
+    public long? Integer { get; set; }
+
+    public PetIdResType Type { get; set; }
+    // ..snip
+}
+
+public class FetchPetResponse {
+	// ..snip
+	public PetIdRes? res { get; set; }
+}
+```
+
+```java !!tabs Java
+
+/* To access the fetched pet from the response object, call the `res()` method below. Notice that it returns an `Optional`. However, this is a holdover from previous generator versions. Recent generators ensure that a response is always present when calling `res()`, but `Optional` is still used to maintain backward compatibility. */
+
+
+public class FetchPetResponse {
+
+/\*\*
+_ fetched pet
+_/
+public Optional<Pet> res() {
+...
+}
+
+...
+}
+
+```
+</CodeWithTabs>
+
+### Splitting `oneOf` schema types
+
+By defining similar operations with aligned but different schemas, you can apply `x-speakeasy-type-override: any` for untyped operations and use `oneOf` to define stricter types in others. This allows you to use methods like `DoSomething(StrictObject{...})` alongside `DoSomethingUntyped({...})`, providing flexibility across SDK methods based on the required schema type.
+
+This approach is particularly useful when dealing with endpoints that require you to split `oneOf` schema types into separate SDK methods.
+
+Example:
+
+```yaml
+/sources#SellerPartner:
+  post:
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SourceSellerPartnerCreateRequest"
+    tags:
+      - "Sources"
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceResponse"
+        description: "Successful operation"
+      "400":
+        description: "Invalid data"
+      "403":
+        description: "Not allowed"
+    operationId: "createSourceSellerPartner"
+    summary: "Create a source"
+    description: "Creates a source given a name, workspace ID, and a JSON blob containing the configuration for the source."
+    x-use-speakeasy-middleware: true
+    x-speakeasy-entity-operation: Source_SellerPartner#create
+````

@@ -1,0 +1,487 @@
+---
+title: How To Generate an OpenAPI spec with tsoa
+description: "How to generate an OpenAPI spec with tsoa and use Speakeasy to generate client SDKs."
+---
+
+import { Callout } from "@/mdx/components";
+
+# How to generate an OpenAPI/Swagger spec with tsoa
+
+In this tutorial, we'll learn how to create an OpenAPI schema using [tsoa (TypeScript OpenAPI)](https://tsoa-community.github.io/docs/introduction.html).
+
+<Callout title="Tip" >
+  If you want to follow along, you can use the [**tsoa Speakeasy Bar example
+  repository**](https://github.com/speakeasy-api/speakeasy-tsoa-example)
+</Callout>
+
+## How to generate an OpenAPI/Swagger spec with tsoa
+
+To [generate an OpenAPI spec using tsoa](https://tsoa-community.github.io/docs/generating.html), we can use the tsoa CLI or call tsoa's `generateSpec` function. tsoa saves the spec as `swagger.json` by default, but we can customize the base filename using the configuration option `specFileBaseName`.
+
+### Generating an OpenAPI Spec Using the tsoa CLI
+
+[Generate an OpenAPI spec](https://tsoa-community.github.io/docs/generating.html#using-cli) by running the following command in the terminal:
+
+```bash
+# generate OpenAPI spec
+npx tsoa spec
+```
+
+By default, tsoa will use the configuration from the `tsoa.json` file with your generated routes and metadata to generate an OpenAPI spec.
+
+In our example app, the relevant `tsoa.json` config is as follows:
+
+```json tsoa.json
+{
+  "spec": {
+    "outputDirectory": "build",
+    "specVersion": 3
+  }
+}
+```
+
+This configures tsoa to output the generated OpenAPI spec in the `build` directory and to use OpenAPI version 3.
+
+### Programmatically Generate an OpenAPI Spec Using tsoa
+
+To generate an OpenAPI spec using the OpenAPI [internal generator functions](https://tsoa-community.github.io/docs/generating.html#programmatic), import `generateSpec` and call this function by passing a spec config of type `ExtendedSpecConfig` from `tsoa`.
+
+<Callout title="CAUTION" type="warning">
+  The recommended way to generate an OpenAPI Spec is via the CLI as tsoa
+  [warns](https://tsoa-community.github.io/docs/generating.html#programmatic)
+  that `generateSpec` and `ExtendedSpecConfig` can change in minor or patch
+  releases of tsoa. The example below is illustrative and not included in the
+  example app.
+</Callout>
+
+```typescript
+import { generateSpec, ExtendedSpecConfig } from "tsoa";
+
+(async () => {
+  const specOptions: ExtendedSpecConfig = {
+    basePath: "/api",
+    entryFile: "./api/server.ts",
+    specVersion: 3,
+    outputDirectory: "./build",
+    controllerPathGlobs: ["./routeControllers/**/*Controller.ts"],
+  };
+
+  await generateSpec(specOptions);
+})();
+```
+
+Add the code above to a TypeScript file and run it to generate an OpenAPI spec using the custom configuration defined in `specOptions`.
+
+## Supported OpenAPI Versions
+
+As of August 2023, tsoa can generate OpenAPI version 2 and version 3 specifications. Speakeasy supports OpenAPI version 3 and version 3.1. To use Speakeasy, make sure to configure tsoa to generate OpenAPI v3.
+
+To set the OpenAPI version, add `spec.specVersion=3` to your `tsoa.json` configuration file:
+
+```json tsoa.json
+{
+  "spec": {
+    "specVersion": 3
+  }
+}
+```
+
+## How tsoa Generates OpenAPI `info`
+
+When generating an OpenAPI spec, tsoa tries to guess your API's title, description, and contact details based on values in your project `package.json` file.
+
+<Callout title="Tip" >
+  Values in `tsoa.json` take precedence over those in `package.json` when
+  configured.
+</Callout>
+
+### Set OpenAPI `info` in `package.json`
+
+Take this snippet from our example app's `package.json` file:
+
+```json package.json
+{
+  "name": "speakeasy-bar-tsoa",
+  "version": "1.0.0",
+  "description": "Speakeasy Bar API",
+  "author": "Speakeasy Support <support@speakeasy.bar> (https://support.speakeasy.bar)",
+  "license": "Apache-2.0"
+}
+```
+
+By default, tsoa will generate the following spec based on the values above:
+
+```yaml build/swagger.yaml
+info:
+  title: speakeasy-bar-tsoa
+  version: 1.0.0
+  license:
+    name: Apache-2.0
+  contact:
+    name: "Speakeasy Support "
+    email: support@speakeasy.bar
+    url: "https://support.speakeasy.bar"
+```
+
+tsoa uses the package author as the contact person by default, extracting the author's email address and optional URL from the [person format defined by npm](https://docs.npmjs.com/cli/v9/configuring-npm/package-json#people-fields-author-contributors).
+
+### Set OpenAPI Info Using tsoa Configuration
+
+To manually configure your OpenAPI info section, configure tsoa using the `tsoa.json` file:
+
+```json tsoa.json
+{
+  "spec": {
+    "name": "Custom API Name",
+    "description": "Custom API Description",
+    "license": "MIT",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Contact",
+      "email": "help@example.com",
+      "url": "http://example.com"
+    }
+  }
+}
+```
+
+After adding this custom configuration, tsoa will use these values instead of those from `package.json` when generating a spec.
+
+## Update tsoa to Generate OpenAPI Component Schemas
+
+Let's see how we can help tsoa generate separate and reusable component schemas for a request body.
+
+Consider the following drink model:
+
+```typescript src/drinks/drink.ts
+/**
+ * The type of drink.
+ */
+export enum DrinkType {
+  COCKTAIL = "cocktail",
+  NON_ALCOHOLIC = "non-alcoholic",
+  BEER = "beer",
+  WINE = "wine",
+  SPIRIT = "spirit",
+  OTHER = "other",
+}
+
+export interface Drink {
+  /**
+   * The name of the drink.
+   * @example "Old Fashioned"
+   * @example "Manhattan"
+   * @example "Negroni"
+   */
+  name: string;
+  type?: DrinkType;
+
+  /**
+   * The price of one unit of the drink in US cents.
+   * @isInt
+   * @example 1000
+   * @example 1200
+   * @example 1500
+   */
+  price: number;
+
+  /**
+   * The number of units of the drink in stock, only available when authenticated.
+   * @isInt
+   * @example 102
+   * @example 10
+   * @example 0
+   */
+  stock?: number;
+
+  /**
+   * The product code of the drink, only available when authenticated.
+   * @example "SP-001"
+   * @example "CK-001"
+   * @example "CK-002"
+   */
+  productCode?: string;
+}
+```
+
+We'd like to write a controller that updates the `name` and `price` fields. The controller should take both fields as body parameters.
+
+We'll start with the example controller below. Note how the body parameters `drinkName` and `price` are defined by passing the `@BodyProp` decorator to the controller function multiple times.
+
+```typescript src/drinks/drinksController.ts mark=6:7
+@Route("drink")
+export class DrinkController extends Controller {
+  @Put("{productCode}")
+  public async updateDrink(
+    @Path() productCode: string,
+    @BodyProp() drinkName?: string,
+    @BodyProp() price?: number
+  ): Promise<Drink> {
+    const drink = new DrinksService().updateDrink(
+      productCode,
+      drinkName,
+      price
+    );
+
+    return drink;
+  }
+}
+```
+
+This would generate inline parameters without documentation for the `UpdateDrink` operation in OpenAPI, as shown in the snippet below:
+
+```yaml build/swagger.yaml
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        properties:
+          drinkName:
+            type: string
+          price:
+            type: integer
+        type: object
+```
+
+While perfectly valid, this schema is not reusable and excludes the documentation and examples from our model definition.
+
+We recommend picking fields from the model interface directly and exporting a new interface. We could use the TypeScript utility types `Pick` and `Partial` to pick the `name` and `price` fields and make both optional:
+
+```typescript src/drinks/drinksService.ts
+export interface DrinkUpdateParams
+  extends Partial<Pick<Drink, "name" | "price">> {}
+```
+
+In our controller, we can now use `DrinkUpdateParams` as follows:
+
+```typescript src/drinks/drinksController.ts mark=6
+@Route("drink")
+export class DrinkController extends Controller {
+  @Put("{productCode}")
+  public async updateDrink(
+    @Path() productCode: string,
+    @Body() requestBody: DrinkUpdateParams
+  ): Promise<Drink> {
+    const drink = new DrinksService().updateDrink(productCode, requestBody);
+
+    return drink;
+  }
+}
+```
+
+## Customizing OpenAPI `operationId` Using tsoa
+
+When generating an OpenAPI spec, tsoa adds an `operationId` to each operation.
+
+We can customize the `operationId` in three ways:
+
+- Using the `@OperationId` decorator.
+- Using the default tsoa `operationId` generator.
+- Creating a custom `operationId` template.
+
+### Using the `@OperationId` Decorator
+
+The most straightforward way to customize the `operationId` is to add the `@OperationId` decorator to each operation.
+
+In the example below, the custom `operationId` is `updateDrinkNameOrPrice`:
+
+```typescript src/drinks/drinksController.ts mark=7
+@Route("drink")
+export class DrinkController extends Controller {
+  @OperationId("updateDrinkNameOrPrice")
+  @Put("{productCode}")
+  public async updateDrink(
+    @Path() productCode: string,
+    @Body() requestBody: DrinkUpdateParams
+  ): Promise<Drink> {
+    const drink = new DrinksService().updateDrink(productCode, requestBody);
+
+    return drink;
+  }
+}
+```
+
+### Using the Default tsoa `operationId` Generator
+
+If a controller method is not decorated with the `OperationId` decorator, tsoa generates the `operationId` by converting the method name to title case using the following Handlebars template:
+
+```handlebars
+{{titleCase method.name}}
+```
+
+### Creating a Custom `operationId` Template
+
+To create a custom `operationId` for all operations without the `@OperationId` decorator, tsoa allows us to specify a Handlebars template in `tsoa.json`. tsoa adds two helpers to Handlebars: `replace` and `titleCase`. The method object and controller name get passed to the template as `method` and `controllerName`.
+
+The following custom `operationId` template prepends the controller name and removes underscores from the method name:
+
+```json tsoa.json
+{
+  "spec": {
+    "operationIdTemplate": "{{controllerName}}-{{replace method.name '_' ''}}"
+  }
+}
+```
+
+## Add OpenAPI Tags to tsoa Methods
+
+At Speakeasy, whether you're building a big application or only have a handful of operations, we recommend adding tags to all operations so you can group them by tag in generated SDK code and documentation.
+
+### Add Tags to Operations Using Decorators
+
+tsoa provides the `@Tags()` decorator for controllers and controller methods. The decorator accepts one or more strings as input.
+
+```typescript src/drinks/drinksController.ts mark=6
+@Route("drink")
+@Tags("drinks", "bar")
+export class DrinkController extends Controller {
+  @OperationId("updateDrinkNameOrPrice")
+  @Put("{productCode}")
+  @Tags("Drink")
+  public async updateDrink(
+    @Path() productCode: string,
+    @Body() requestBody: DrinkUpdateParams
+  ): Promise<Drink> {
+    const drink = new DrinksService().updateDrink(productCode, requestBody);
+
+    return drink;
+  }
+}
+```
+
+Contrary to the illustrative example above, we recommend adding a single tag per method or controller to ensure that the generated SDK is split into logical units.
+
+### Add Metadata to Tags
+
+To add metadata to tags, add a `tags` object to your `tsoa.json`:
+
+```json tsoa.json
+{
+  "spec": {
+    "tags": [
+      {
+        "name": "drinks",
+        "description": "Operations related to drinks",
+        "externalDocs": {
+          "description": "Find out more about drinks",
+          "url": "http://example.com"
+        }
+      },
+      {
+        "name": "bar",
+        "description": "Operations related to the bar"
+      },
+      {
+        "name": "update",
+        "description": "Update operations"
+      }
+    ]
+  }
+}
+```
+
+### Add Speakeasy Extensions to Methods
+
+Sometimes OpenAPI's vocabulary is insufficient for your generation needs. For these situations, Speakeasy provides a set of OpenAPI extensions. For example, you may want to give an SDK method a name different from the `OperationId`. To cover this use case, we provide an `x-speakeasy-name-override` extension.
+
+To add these custom extensions to your OpenAPI spec, you can make use of tsoa's `@Extension()` decorator:
+
+```typescript src/drinks/drinksController.ts mark=5
+@Route("drink")
+@Tags("drinks", "bar")
+export class DrinkController extends Controller {
+  @OperationId("updateDrinkNameOrPrice")
+	@Extension({"x-speakeasy-name-override":"update"})
+  @Put("{productCode}")
+  @Tags("update")
+  public async updateDrink(
+    @Path() productCode: string,
+    @Body() requestBody: DrinkUpdateParams
+  ): Promise<Drink> {
+    const drink = new DrinksService().updateDrink(productCode, requestBody);
+
+    return drink;
+  }
+}
+```
+
+## Add Retries to Your SDK With `x-speakeasy-retries`
+
+Speakeasy can generate SDKs that follow custom rules for retrying failed requests. For instance, if your server fails to return a response within a specified time, you may want your users to retry their request without clobbering your server.
+
+Add retries to SDKs generated by Speakeasy by adding a top-level `x-speakeasy-retries` schema to your OpenAPI spec. You can also override the retry strategy per operation by adding `x-speakeasy-retries`.
+
+### Adding Global Retries
+
+To add a top-level retries extension to your OpenAPI spec, add a new `spec` schema to the `spec` configuration in `tsoa.json`:
+
+```json tsoa.json
+{
+  "spec": {
+    "spec": {
+      "x-speakeasy-retries": {
+        "strategy": "backoff",
+        "backoff": {
+          "initialInterval": 500,
+          "maxInterval": 60000,
+          "maxElapsedTime": 3600000,
+          "exponent": 1.5
+        },
+        "statusCodes": ["5XX"],
+        "retryConnectionErrors": true
+      }
+    }
+  }
+}
+```
+
+### Adding Retries per Method
+
+To add retries to individual methods, use the tsoa `@Extension` decorator.
+
+In the example below, we add `x-speakeasy-retries` to the `updateDrink` method:
+
+```typescript src/drinks/drinksController.ts mark=4:14
+@Route("drink")
+export class DrinkController extends Controller {
+  @Put("{productCode}")
+  @Extension("x-speakeasy-retries", {
+    strategy: "backoff",
+    backoff: {
+      initialInterval: 500,
+      maxInterval: 60000,
+      maxElapsedTime: 3600000,
+      exponent: 1.5,
+    },
+    statusCodes: ["5XX"],
+    retryConnectionErrors: true,
+  })
+  public async updateDrink(
+    @Path() productCode: string,
+    @Body() requestBody: DrinkUpdateParams,
+  ): Promise<Drink> {
+    const drink = new DrinksService().updateDrink(productCode, requestBody);
+
+    return drink;
+  }
+}
+```
+
+## How To Generate an SDK Based on Your OpenAPI Spec
+
+Once you have an OpenAPI spec, use Speakeasy to generate an SDK by calling the following in the terminal:
+
+```bash
+speakeasy quickstart
+```
+
+Follow the onscreen prompts to provide the necessary configuration details for your new SDK such as the name, schema location and output path. Enter `build/swagger.json` when prompted for the OpenAPI document location and select TypeScript when prompted for which language you would like to generate.
+
+You can generate SDKs using Speakeasy when your API definition in tsoa changes. Many Speakeasy users [add SDK generation to their CI workflows](/docs/workflow-reference) to ensure their SDKs are always up to date.
+
+## Summary
+
+This tutorial explored different configurations and customizations available for the OpenAPI specification generation using tsoa. We've also learned how to assign and customize OpenAPI `operationId` and OpenAPI tags to our tsoa methods. Finally, we demonstrated how to add retries to your SDKs using `x-speakeasy-retries`. With this knowledge, you should now be able to leverage tsoa, OpenAPI, and Speakeasy more effectively for your API.
+
+Take a look at our [Speakeasy Bar (tsoa) example repository](https://github.com/speakeasy-api/speakeasy-tsoa-example) containing all the code from this article.

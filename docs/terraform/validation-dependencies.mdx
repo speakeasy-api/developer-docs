@@ -1,0 +1,184 @@
+---
+title: "Validation and Dependencies"
+description: |
+  Learn how to add custom validation logic and manage attribute dependencies in your Terraform provider.
+---
+
+# TO DO
+Figure out why its failing to render
+
+{/* # Validation and Dependencies
+
+##  Prevent Conflicting Attributes
+
+The `x-speakeasy-conflicts-with` extension indicates that a property conflicts with another, ensuring that certain combinations of properties are not set together. This is ideal for situations where certain attributes are mutually exclusive or setting one attribute invalidates another.
+
+```yaml
+components:
+  schemas:
+    Pet:
+      x-speakeasy-entity: Pet
+      type: object
+      properties:
+        name:
+          type: string
+        name_prefix:
+          type: string
+          x-speakeasy-conflicts-with: name
+        id:
+          type: string
+        generated_name_options:
+          type: object
+          properties:
+            prefix:
+              type: string
+              x-speakeasy-conflicts-with:
+                - ../name_prefix
+                - ../name
+                - ../id
+```
+
+```tf
+resource "example_pet" "happy_pet" {
+  name = "Mrs Poppy"
+  name_prefix = "Mrs"
+}
+```
+
+```txt
+$ terraform plan
+│ Error: Invalid Attribute Combination
+│ 
+│   with example_pet.happy_pet,
+│   on provider.tf line 39, in resource "example_pet" "happy_pet":
+│   3:   name_prefix = "test"
+│ 
+│ Attribute "name" cannot be specified when "name_prefix" is specified
+```
+
+## Enforce Mutually Exclusive Attributes (x-speakeasy-xor-with)
+
+The `x-speakeasy-xor-with` extension ensures that exactly one of the listed attributes must be configured at the same time. If multiple attributes are set simultaneously or if no attribute is set, Terraform plan validation fails. This differs from `x-speakeasy-conflicts-with` in that it requires exactly one attribute to be set, while `conflicts-with` allows zero or one attribute to be set.
+
+```yaml
+components:
+  schemas:
+    Pet:
+      x-speakeasy-entity: Pet
+      type: object
+      properties:
+        this:
+          type: string
+        that:
+          type: string
+        another:
+          type: string
+          # user MUST configure exactly one of: this, that, or another
+          x-speakeasy-xor-with:
+            - ../this
+            - ../that
+```
+
+```tf
+resource "example_pet" "happy_pet" {
+  this = "value1"
+  that = "value2"  # Error: exactly one field must be set
+}
+```
+
+```txt
+$ terraform plan
+│ Error: Invalid Attribute Combination
+│ 
+│   with example_pet.happy_pet,
+│   on provider.tf line 2:
+│   2:   that = "value2"
+│ 
+│ Exactly one of attributes [this, that, another] must be specified
+```
+
+## Enforce Required Attribute Dependencies (x-speakeasy-required-with)
+
+The `x-speakeasy-required-with` extension ensures that when the annotated field is configured, all the specified dependent fields must also be configured. This is useful for enforcing that certain fields are always configured together.
+
+```yaml
+components:
+  schemas:
+    Pet:
+      x-speakeasy-entity: Pet
+      type: object
+      properties:
+        name:
+          type: string
+        age:
+          type: integer
+        breed:
+          type: string
+          # when breed is set, name and age must also be set
+          x-speakeasy-required-with:
+            - ../name
+            - ../age
+```
+
+```tf
+resource "example_pet" "happy_pet" {
+  breed = "Labrador"  # Error: name and age must also be set when breed is set
+}
+```
+
+```txt
+$ terraform plan
+│ Error: Missing Required Attributes
+│ 
+│   with example_pet.happy_pet,
+│   on provider.tf line 2:
+│   2:   breed = "Labrador"
+│ 
+│ The following attributes must be configured when 'breed' is specified: [name, age]
+```
+
+## OpenAPI Plan Validators
+
+Speakeasy automatically generates certain Terraform configuration value validation handlers based on your OpenAPI specification. When configuration validation is defined, Terraform raises invalid value errors before users can apply their configuration for a better user experience.
+
+By default, these OpenAPI specification properties are automatically handled:
+
+- For `string` types: `enum`, `maxLength`, `minLength`, and `pattern`
+- For `integer` types: `enum`, `minimum`, and `maximum`
+- For `array` types: `maxItems`, `minItems`, and `uniqueItems`
+
+For use cases not automatically handled, add custom validation logic or reach out to the team.
+
+### Add Custom Validation Logic
+
+Use the `x-speakeasy-plan-validators` extension to add custom validation logic to Terraform plan operations and ensure configurations meet predefined criteria before execution. This extension is essential for scenarios requiring advanced validation logic that JSON Schema cannot accommodate.
+
+```yaml
+components:
+  schemas:
+    Pet:
+      type: object
+      x-speakeasy-entity: Pet
+      properties:
+        name:
+          type: string
+        age:
+          type: integer
+          x-speakeasy-plan-validators: AgeValidator
+```
+
+In this scenario, when Speakeasy next generates the Terraform provider, it will bootstrap a custom validator file located at `internal/validators/int64validators/age_validator.go`, and import the schema configuration wherever `x-speakeasy-plan-validators: AgeValidator` is referenced. You can modify the validator file to contain your logic.
+
+#### Implementation Notes
+
+1. A plan validator is a type conformant to the `terraform-plugin-framework` expected interface. A unique plan validator will be bootstrapped in the appropriate subfolder for the Terraform type it is applied to: `boolvalidators`, `float64validators`, `int64validators`, `listvalidators`, `mapvalidators`, `numbervalidators`, `objectvalidators`, `setvalidators`, or `stringvalidators`. Speakeasy will always create and use a file as `snake_case.go` for a given `x-speakeasy-plan-validators` value.
+
+2. A plan validator operates on the raw (untyped) Terraform value types. However, you can convert a Terraform type to a value type Speakeasy manages (`type_mytype.go`) by using the included reflection utility. This is useful for applying validators to complex types like `list`, `map`, `object`, and `set`.
+
+3. While working with a plan validator, you have the ability to perform various tasks, including initiating network requests. However, it's important to ensure that plan validations do not result in any unintended side effects. Please refer to [the HashiCorp guidance on plan validator development](https://developer.hashicorp.com/terraform/plugin/framework/validation) or reach out in our Slack if you have questions. 
+
+4. It is possible to have an array of plan validators, for example, `x-speakeasy-plan-validators: [MinAgeValidator, MaxAgeValidator]`.
+
+5. A validator can only be applied to a resource attribute. Validators cannot be applied at the same level as the `x-speakeasy-entity` annotation because that becomes the "root" of the Terraform resource. However, validators can access or refer to any data in the entire resource (for an example, see the `x-speakeasy-conflicts-with` validator). The annotation will be ignored for data sources.
+
+6. Speakeasy regenerations do not delete user-written code. If the validator is no longer in use, it will be ignored (no longer referenced) but the source file will remain. You might want to delete such an orphaned validation file for repository hygiene. */}

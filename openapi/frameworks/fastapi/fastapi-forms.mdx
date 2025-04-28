@@ -1,0 +1,65 @@
+---
+title: "Addressing form data type compatibility in FastAPI"
+description: "Handle form data discrepancy with FastAPI and Speakeasy."
+---
+
+
+# Addressing form data type compatibility in FastAPI
+
+## Understanding the challenges 
+
+When integrating FastAPI with a Speakeasy Python SDK, one of the main challenges arises from differences in how form data is structured. Speakeasy employs a bracket notation (`key[]`) to represent arrays in form data, whereas FastAPI does not natively support this format. By default, FastAPI constructs lists from form data containing duplicate keys, which can lead to mismatches in processing.
+
+FastAPI:
+
+```python 
+FormData([('key', 'value1'), ('key', 'value2')])
+```
+
+Speakeasy SDKs:
+
+```python
+FormData([('key[]', 'value1'), ('key[]', 'value2')])
+```
+
+## Limitations 
+
+**Middleware Execution Order**
+
+In FastAPI, middleware executes after FastAPI has already read and interpreted the request body. By this point, FastAPI has parsed the form data, making it challenging for middleware to modify the format of the form data. This sequential execution order restricts the ability of middleware to alter the form data format effectively.
+
+**Streaming Data Handling**
+
+FastAPI processes incoming request data as a continuous stream, allowing it to handle large payloads efficiently. However, this streaming approach complicates the process of making alterations to the data mid-stream within middleware. Attempting to modify the data stream after it has been parsed introduces a heightened risk of errors. Additionally, such modifications can lead to reduced efficiency in data handling, as they may require rewinding or manipulating the stream, resulting in additional processing overhead.
+
+## Solution
+
+Addressing these challenges involves a direct modification of FastAPI's request processing mechanism. This allows for the conversion of Speakeasy-formatted form data into a structure recognizable by FastAPI. 
+
+```python
+# Reference to FastAPI's original form retrieval method.
+get_form = Request._get_form
+
+async def patched_get_form(self, **kwargs) -> FormData:
+    
+    # Fetch original form data.
+    form_params = await get_form(self)
+
+    # Adjust parameters: remove '[]' from keys indicating arrays.
+    fixed_params = []
+    for key, value in form_params.multi_items():
+        if key.endswith("[]"):  # Normalize array keys.
+            key = key[:-2]
+        fixed_params.append((key, value))  # Collect adjusted pairs.
+
+    # Return modified FormData with compatible keys.
+    return FormData(fixed_params)
+```
+
+
+
+## Conclusion
+
+
+Integrating FastAPI with Speakeasy SDKs can pose challenges due to differences in form data handling. However, by understanding the limitations of middleware and applying a custom patch to FastAPI's request form handling, we can overcome these obstacles. 
+

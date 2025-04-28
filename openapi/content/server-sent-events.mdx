@@ -1,0 +1,219 @@
+import { Table } from "@/mdx/components";
+
+# Server-sent events in OpenAPI
+
+Server-sent events (SSE) allow servers to push real-time updates to clients over a single HTTP connection. This protocol is widely used for scenarios requiring steady updates, such as notifications, live data feeds, or chat applications. While SSE shares some conceptual similarities with the WebSocket protocol, SSE differs significantly as it is a one-way communication from the server to the client, whereas the WebSocket protocol supports full-duplex communication.
+
+The following table summarizes the main differences between SSE and WebSockets.
+
+<Table 
+  data={[
+    { feature: "Connection", sse: "Persistent, maintained by the client", websockets: "Persistent, maintained by both client and server" },
+    { feature: "Direction", sse: "One-way: Server to Client", websockets: "Two-way: Bidirectional communication" },
+    { feature: "Initiator", sse: "Client initiates the connection", websockets: "Client initiates a WebSocket handshake" },
+    { feature: "Use case", sse: "Real-time updates (for example, stock prices)", websockets: "Interactive applications (e.g., chat, gaming)" },
+    { feature: "Data push mechanism", sse: "Server streams events continuously", websockets: "Both server and client can push messages" },
+    { feature: "Protocol", sse: "Single HTTP connection (`text/event-stream`)", websockets: "WebSocket protocol (`ws://` or `wss://`)" },
+    { feature: "Client role", sse: "Opens and maintains the connection", websockets: "Maintains and interacts with the connection" },
+    { feature: "Reconnection", sse: "Handled by the browser or client-side code using the `EventSource` API", websockets: "Managed by custom reconnection logic in the application" }
+  ]}
+  columns={[
+    { key: "feature", header: "Feature" },
+    { key: "sse", header: "Server-sent events (SSE)" },
+    { key: "websockets", header: "WebSockets" }
+  ]}
+/>
+
+SSE is ideal for simple, efficient, one-way server-to-client communication scenarios. The WebSocket protocol is better suited to applications that require interactive, low-latency, two-way communication between the client and server.
+
+## Defining SSE in OpenAPI documents
+
+Server-sent events (SSE) are not natively supported in OpenAPI but can be represented as an endpoint using the `text/event-stream` MIME type to indicate the data format. 
+
+The event stream format is a UTF-8-encoded text stream with messages separated by a newline (`\n`). Each message may include up to four fields:
+
+- `event`: A string specifying the event type.
+- `data`: The payload, often a JSON object or plain text.
+- `id`: An optional unique identifier for resuming streams after disconnection.
+- `retry`: An optional integer defining reconnection delay in milliseconds.
+
+Depending on application needs, messages can include only the `data` field, only the `event` field, or a combination of fields. This flexibility allows for tailored implementations, for example, a data-only stream for updates or an event-only stream for simple notifications.
+
+This example SSE endpoint notifies the client about stock price updates and includes only the `id`, `event`, and `data` fields:
+
+```yaml openapi.yaml
+paths:
+  /stock-updates:
+    get:
+      tags:
+        - ServerSentEvents
+      summary: Subscribe to real-time stock market updates
+      description: >
+       This endpoint streams real-time stock updates to the client using server-sent events (SSE).
+       The client must establish a persistent HTTP connection to receive updates.
+      responses:
+        '200':
+          description: Stream of real-time stock updates
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/StockStream'
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    StockStream:
+      type: object
+      description: A server-sent event containing stock market update content
+      required: [id, event, data]
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the stock update event
+        event:
+          type: string
+          const: stock_update
+          description: Event type
+        data:
+          $ref: '#/components/schemas/StockUpdate'
+
+    StockUpdate:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Stock ticker symbol
+        price:
+          type: string
+          description: Current stock price
+          example: "100.25"
+```
+
+A JavaScript client can subscribe to the endpoint using the `EventSource` API:
+
+```javascript
+const eventSource = new EventSource('https:://api.example.com/stock-updates');
+
+eventSource.onmessage = function(event) {
+  // The event has the following format as example:
+  // {"id":"1","event":"stock_update","data":{"symbol":"AAPL","price":"100.25"}}
+  const stockUpdate = JSON.parse(event).data;
+  console.log(`Stock Update: ${stockUpdate.symbol} is now ${stockUpdate.price}`);
+};
+
+eventSource.onerror = function(error) {
+  console.error('Error occurred:', error);
+};
+```
+
+## Best practices for SSE design and OpenAPI integration
+
+Here are some best practices for handling server-sent events and including them in an OpenAPI document.
+
+### Improve reliability with heartbeats
+
+Sending a heartbeat every few seconds is recommended to improve reliability by keeping the connection alive. Heartbeats can also help detect network issues and prompt the client to reconnect.
+
+If you implement heartbeats, your SSE APIs can send multiple types of events, allowing you to use the `oneOf` keyword to describe the heartbeat message format.
+
+```yaml openapi.yaml
+components:
+  schemas:
+    StockStream:
+      oneOf:
+        - $ref: '#/components/schemas/HeartbeatEvent'
+        - $ref: '#/components/schemas/StockUpdateEvent'
+      discriminator:
+        propertyName: event
+        mapping:
+          ping: '#/components/schemas/HeartbeatEvent'
+          stock_update: '#/components/schemas/StockUpdateEvent'
+
+    HeartbeatEvent:
+      description: A server-sent event indicating that the server is still processing the request
+      type: object
+      required: [event]
+      properties:
+        event:
+          type: string
+          const: "ping"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the heartbeat
+
+    StockUpdateEvent:
+      description: A server-sent event containing stock market update content
+      type: object
+      required: [id, event, data]
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the stock update event
+        event:
+          type: string
+          const: stock_update  
+```
+
+
+### Include event identification in the event payload
+
+Include an `id` or `sequence` property in the event payload to ensure that the client receives events in the correct order and avoid missing or out-of-order updates.
+
+### Implement a retry mechanism 
+
+To prevent data loss when an API fails to send an event, implement a retry mechanism such as introducing a delay before retrying or using exponential backoff.
+
+### Use sentinel events to signal a closed connection
+
+Sending a sentinel event can be helpful to indicate that the connection is closed or the server is no longer available. This is useful for error handling or notifying the client that there is no more data to be received.
+
+The following example schema for a sentinel event demonstrates how a client can terminate a connection when it receives the `CLOSED` sentinel event:
+
+
+```yaml openapi.yaml
+paths:
+  /stock-updates:
+    get:
+      summary: Subscribe to real-time stock market updates
+      operationId: stockUpdates
+      tags:
+        - ServerSentEvents
+      responses:
+        '200':
+          description: Stream of real-time stock updates
+          content:
+            text/event-stream:
+              x-sse-sentinel: 'CLOSED'
+              schema:
+                $ref: '#/components/schemas/StockUpdateEvent'
+```
+
+
+For each event received, the client can check the `X-SSE-Sentinel` header to determine whether the connection has closed or if no more data needs to be received.
+
+### Handle SSE errors effectively
+
+To handle errors in SSE effectively, servers can send specific error events within the stream that include an error field detailing the issue. For non-critical errors, custom headers like `X-SSE-Error` can communicate problems without interrupting the event flow. 
+
+Specific error events in the stream can be defined using a structured schema, as demonstrated below.
+
+```yaml openapi.yaml
+components:
+  schemas:
+    ErrorEvent:
+      description: A server-sent error event
+      type: object
+      required: [event, message]
+      properties:
+        event:
+          type: string
+          const: error
+        message:
+          type: string
+          description: Description of the error
+```
+
+For critical errors, use a sentinel event as described in the previous section.

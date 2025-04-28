@@ -1,0 +1,887 @@
+import { Table } from "@/mdx/components";
+
+# OpenAPI PHP SDK creation: Speakeasy vs open source
+
+Many of our users have switched from [OpenAPI Generator](https://openapi-generator.tech/) to Speakeasy for their PHP SDKs. Learn how to use both SDK creators in this guide, and the differences between them.
+
+Open-source OpenAPI generators are great for experimentation but lack the reliability, performance, and intuitive developer experience required for critical applications. As an alternative, Speakeasy creates [idiomatic SDKs](/post/client-sdks-as-a-service) that meet the bar for enterprise use.
+
+Here's the high-level summary of the differences between Speakeasy and OpenAPI Generator:
+
+<Table
+  columns={[
+    { key: "feature", header: "Feature" },
+    { key: "speakeasy", header: "Speakeasy" },
+    { key: "openapi", header: "OpenAPI Generator" }
+  ]}
+  data={[
+    { feature: "OpenAPI 3.0 support", speakeasy: "✅", openapi: "✅" },
+    { feature: "OpenAPI 3.1 support", speakeasy: "✅", openapi: "❌" },
+    { feature: "Laravel integration", speakeasy: "✅", openapi: "❌" },
+    { feature: "Code readability", speakeasy: "Concise, human-readable code", openapi: "Verbose, messy code" },
+    { feature: "Files generated", speakeasy: "84 granular separation", openapi: "16 less separation" },
+    { feature: "Code generated", speakeasy: "3,915 lines", openapi: "6,316 lines" },
+    { feature: "PHP version support", speakeasy: "PHP 8.1+", openapi: "PHP 7.4+" },
+    { feature: "Type safety", speakeasy: "✅", openapi: "❌" },
+    { feature: "Runtime type checking", speakeasy: "✅ JMS Serializer", openapi: "❌" },
+    { feature: "Serialization", speakeasy: "✅ JMS Serializer", openapi: "✅ PHP extensions" },
+    { feature: "Enum support", speakeasy: "✅", openapi: "⚠️ Uses constant strings and functions" },
+    { feature: "OAuth 2.0 support", speakeasy: "⚠️ Coming soon", openapi: "❌" },
+    { feature: "Content type support", speakeasy: "JSON and form", openapi: "JSON, form, and XML" },
+    { feature: "Async support", speakeasy: "❌", openapi: "✅" },
+    { feature: "Union type handling", speakeasy: "✅", openapi: "⚠️ Creates custom implementation" },
+    { feature: "Documentation", speakeasy: "✅", openapi: "⚠️ Examples may lack required fields" },
+    { feature: "CI/CD integration", speakeasy: "✅", openapi: "❌" }
+  ]}
+/>
+
+In this post, we'll do a technical deep dive on creating PHP SDKs using both Speakeasy and OpenAPI Generator, then we'll compare the generated SDKs.
+
+## What is OpenAPI Generator?
+
+**OpenAPI Generator** (not to be confused with a generic **OpenAPI generator**) is a community-run, open-source tool for generating SDKs from OpenAPI specifications, with a [focus on version 3](https://openapi-generator.tech/docs/fork-qna). OpenAPI Generator originated as a fork of [Swagger Codegen](https://swagger.io/tools/swagger-codegen), a similar tool maintained by Smartbear.
+
+## Preparing the SDK generators
+
+For our comparison, we ran Speakeasy and OpenAPI Generator in separate Docker containers, which work on Windows, macOS, and Linux. Using Docker instead of running code directly on your physical machine is safer, as the code cannot access files outside the folder you specify.
+
+We used the PetStore 3.1 YAML schema file from the [Swagger editor](https://editor-next.swagger.io) examples menu.
+
+To follow along with this guide, locate the PetStore file in **File -> Load Example -> OpenAPI 3.1 Petstore** and save it to a subfolder called `app` in your current path, such as `app/schema.yaml`.
+
+OpenAPI Generator provides a Docker image, but Speakeasy does not. To install the Speakeasy CLI, you can either follow the steps in the [Speakeasy Getting Started guide](/docs/speakeasy-reference/cli/getting-started) to install the Go binary directly on your computer, or run it in Docker, as we did.
+
+To use Docker, first create a `Dockerfile` with the content below, replacing `YourApiKey` with your key from the Speakeasy website.
+
+```bash
+FROM alpine:3.19
+WORKDIR /app
+RUN apk add bash go curl unzip sudo nodejs npm
+RUN curl -fsSL https://go.speakeasy.com/cli-install.sh | sh;
+ENV GOPATH=/root/go
+ENV PATH=$PATH:$GOPATH/bin
+ENV SPEAKEASY_API_KEY=YourApiKey
+```
+
+Then build the Speakeasy image with the command below.
+
+```sh
+docker build -t seimage .
+```
+
+## Validating the schemas
+
+Both OpenAPI Generator and the Speakeasy CLI can validate an OpenAPI schema. We'll run both and compare the output.
+
+### Validation using OpenAPI Generator
+
+To validate `schema.yaml` using OpenAPI Generator, run the following in the terminal:
+
+```bash
+docker run --rm -v "./app:/local" openapitools/openapi-generator-cli validate -i /local/schema.yaml
+```
+
+OpenAPI Generator returns two warnings:
+
+```
+Warnings:
+	- Unused model: Address
+	- Unused model: Customer
+
+[info] Spec has 2 recommendation(s).
+```
+
+### Validation using Speakeasy
+
+Validate the schema with Speakeasy by running the following in the terminal:
+
+```bash
+docker run --rm -v "./app:/app" seimage speakeasy validate openapi -s /app/schema.yaml
+```
+
+The Speakeasy validator returns 72 hints about missing examples, seven warnings about missing responses, and three warnings about unused components. Each warning includes a detailed JSON-formatted error with line numbers.
+
+Since both validators return only warnings and not errors, we can assume both generators will create SDKs without issues.
+
+## Creating the SDKs
+
+First, we'll create an SDK with OpenAPI Generator, and then we'll create one with Speakeasy.
+
+### Creating an SDK with OpenAPI Generator
+
+OpenAPI Generator includes three different PHP SDK creators (and six server creators). We'll use the stable [PHP creator](https://openapi-generator.tech/docs/generators/php), as the others are in beta testing and have fewer features.
+
+To create an SDK from the schema file using OpenAPI Generator, we ran the command below, which we found in the [OpenAPI Generator README](https://github.com/OpenAPITools/openapi-generator#16---docker).
+
+```sh
+docker run --rm -v "./app:/local" openapitools/openapi-generator-cli generate -i /local/schema.yaml -g php -o /local/og
+```
+
+OpenAPI Generator creates three folders:
+
+<Table
+  columns={[
+    { key: "folder", header: "Folder" },
+    { key: "content", header: "Content" }
+  ]}
+  data={[
+    { 
+      folder: "`docs`", 
+      content: "Documentation in `.md` files for each object." 
+    },
+    { 
+      folder: "`lib`", 
+      content: "PHP code to call the API on the server, includes a `Model` folder containing a file for each object in the schema and an `Api` folder containing a file for each tag in the schema. If you pass [parameters](https://openapi-generator.tech/docs/generators/php#config-options) to the build command, you can rename `Api`, for example, to `PetstoreSdk`." 
+    },
+    { 
+      folder: "`test`", 
+      content: "Unit test stubs for all objects and operations. The test stubs are empty, leaving testing logic to the developer." 
+    }
+  ]}
+/>
+
+A warning from OpenAPI Generator in the terminal read:
+
+```
+Generation using 3.1.0 specs is in development and is not officially supported yet.
+```
+
+The [OpenAPI Generator roadmap](https://openapi-generator.tech/docs/roadmap) hasn't been updated in almost two years.
+
+### Creating an SDK with Speakeasy
+
+Next, we'll create an SDK using the Speakeasy CLI with the command below.
+
+```bash
+docker run --rm -v "./app:/app" seimage speakeasy generate sdk --schema /app/schema.yaml --lang php --out /app/se
+```
+
+Speakeasy gives multiple warnings about `xml request bodies are not currently supported` and creates the following folders.
+
+<Table
+  columns={[
+    { key: "folder", header: "Folder" },
+    { key: "content", header: "Content" }
+  ]}
+  data={[
+    { 
+      folder: "`docs`", 
+      content: "Documentation in `.md` files for each component, operation, and SDK (tag)." 
+    },
+    { 
+      folder: "`src`", 
+      content: "PHP code to call the API on the server, containing a `Models` folder for each object and operation in the schema. The `src` folder also contains a `Utils` folder containing code for common functions, like security and date handling." 
+    }
+  ]}
+/>
+
+Speakeasy does not create test stubs, as unit testing is performed on Speakeasy's generator instead of the generated SDK. Shipping unit tests for generated SDKs adds unnecessary complexity and dependencies.
+
+## Calling the server
+
+Swagger provides a complete test server for the PetStore OpenAPI 3.1 schema at https://petstore31.swagger.io.
+
+We called the pet operations given in each SDK's README file against the test server to check that the SDKs contain working code.
+
+We used a [Docker Composer 2.7](https://hub.docker.com/layers/library/composer/2.7/images/sha256-692dd0a0b775cc25ea0cf3ed936b1470647191a6417047e6a77d757a9f29c956?context=explore) container, which is based on Alpine 3 and PHP 8.
+
+### Calling the server with the OpenAPI Generator SDK
+
+We used the `app/og/main.php` script below to call the API with the SDK generated by OpenAPI Generator. The example code was mostly given in the `README.md` file.
+
+```php app/og/main.php
+<?php
+require_once(__DIR__ . '/vendor/autoload.php');
+
+$config = OpenAPI\Client\Configuration::getDefaultConfiguration()->setAccessToken('test');
+$apiInstance = new OpenAPI\Client\Api\PetApi(new GuzzleHttp\Client(), $config);
+$pet = new \OpenAPI\Client\Model\Pet(); // \OpenAPI\Client\Model\Pet | Create a new pet in the store
+$pet->setId(1);
+$pet->setName("1");
+
+try {
+    $result = $apiInstance->addPet($pet);
+    print_r($result);
+} catch (Exception $e) {
+    echo 'Exception when calling PetApi->addPet: ', $e->getMessage(), PHP_EOL;
+}
+```
+
+To get access to the folder to create the script, give yourself permissions to the shared Docker volume with the command below, using your username.
+
+```sh
+sudo chown -R yourUsername ./app
+```
+
+Next, we ran the command below and received a successful response.
+
+```sh
+docker run --rm -v "./app/og:/app" -w "/app" composer:2.7 sh -c  "composer install && php main.php"
+```
+
+The response of `$apiInstance->addPet($pet)` is below.
+
+```text Output
+OpenAPI\Client\Model\Pet Object
+(
+    [openAPINullablesSetToNull:protected] => Array()
+    [container:protected] => Array
+        (
+            [id] => 1
+            [name] => 1
+            [category] =>
+            [photo_urls] => Array()
+            [tags] => Array()
+            [status] =>
+        )
+)
+```
+
+First, the command installs the PHP dependencies in the Docker container as recommended in the SDK `README.md` file, then it runs the sample `main.php` script to call the server using the SDK.
+
+### Calling the server with the Speakeasy SDK
+
+The SDK Speakeasy creates also calls the server successfully.
+
+Below is an example script to call the API with the SDK created by Speakeasy. Save it as `app/se/main.php`.
+
+```php app/se/main.php
+<?php
+
+declare(strict_types=1);
+
+require 'vendor/autoload.php';
+
+use OpenAPI\OpenAPI;
+use OpenAPI\OpenAPI\Models\Components;
+
+// Typed security object
+$security = new Components\Security("<YOUR_PETSTORE_AUTH_HERE>");
+
+$sdk = OpenAPI\SDK::builder()
+    ->setSecurity($security->petstoreAuth)
+    ->build();
+
+try {
+    // Fully typed SDK objects
+    $request = new Components\Pet10(
+        name: 'doggie',
+        photoUrls: [
+            'https://example.com/doggie.jpg',
+            'https://example.com/doggie2.jpg',
+        ],
+        id: 10,
+        tags: [
+            new Components\Tag(
+                id: 123,
+                name: 'pets',
+            ),
+            new Components\Tag(
+                id: 3,
+                name: 'good-dogs',
+            ),
+            new Components\Tag(
+                id: 900,
+                name: 'not-cats',
+            ),
+        ],
+        // Typed subobjects
+        category: new Components\Category(
+            id: 1,
+            name: 'Dogs',
+        ),
+        // Enums help you validate the input data
+        status: Components\Status::Available
+    );
+    $response = $sdk->pet->addPetForm($request);
+    if ($response->pet !== null) {
+        print_r($response->pet);
+    }
+} catch (Throwable $e) {
+    print_r($e);
+}
+```
+
+In the example above, we use the `Components` namespace to create a typed security object and a typed request object. We then call the `addPetForm` operation on the `pet` object in the SDK. You'll notice that the SDK helps you validate the input data with enums and typed subobjects.
+
+Let's run the script to see the response.
+
+The command to run the script is nearly identical to the command the OpenAPI Generator SDK used, except for using the Speakeasy folder.
+
+```sh
+docker run --rm -v "./app/se:/app" -w "/app" composer:2.7 sh -c  "composer install && php main.php"
+```
+
+The response of `$sdk->pet->addPetForm($request)` is below.
+
+```text Output
+OpenAPI\OpenAPI\Models\Components\Pet15 Object
+(
+    [id] => 10
+    [name] => doggie
+    [category] => OpenAPI\OpenAPI\Models\Components\Category Object
+        (
+            [id] => 1
+            [name] => Dogs
+        )
+    [photoUrls] => Array
+        (
+            [0] => https://example.com/doggie2.jpg
+        )
+    [tags] => Array
+        (
+            [0] => OpenAPI\OpenAPI\Models\Components\Tag Object
+                (
+                    [id] => 3
+                    [name] => good-dogs
+                )
+
+            [1] => OpenAPI\OpenAPI\Models\Components\Tag Object
+                (
+                    [id] => 900
+                    [name] => not-cats
+                )
+        )
+    [status] => OpenAPI\OpenAPI\Models\Components\Status Enum:string
+        (
+            [name] => Available
+            [value] => available
+        )
+)
+```
+
+## Package structure
+
+Let's compare the structure of the SDKs in terms of code volume and folder structure.
+
+You can count the lines of code in the SDKs by running `cloc` for each (ignoring documentation and test folders):
+
+```bash
+cloc ./app/og/lib
+cloc ./app/se/src
+```
+
+Below are the results for each SDK.
+
+<Table
+  columns={[
+    { key: "project", header: "Project" },
+    { key: "files", header: "Files" },
+    { key: "blank", header: "Blank lines" },
+    { key: "comment", header: "Comment lines" },
+    { key: "code", header: "Code lines" }
+  ]}
+  data={[
+    { 
+      project: "OpenAPI Generator", 
+      files: "16",
+      blank: "1198",
+      comment: "4267",
+      code: "6316"
+    },
+    { 
+      project: "Speakeasy", 
+      files: "84",
+      blank: "1073",
+      comment: "2214",
+      code: "3915"
+    }
+  ]}
+/>
+
+We see that the Speakeasy SDK has five times as many files as OpenAPI Generator, but 40% less code. The libraries Speakeasy uses, as well as shared utility functions, allow it to create more concise code than OpenAPI Generator.
+
+The following commands output the files of each SDK.
+
+```sh
+tree ./app/og/lib
+tree ./app/se/src
+```
+
+Below is the output for OpenAPI Generator.
+
+```sh
+├── Api
+│   ├── PetApi.php
+│   ├── StoreApi.php
+│   └── UserApi.php
+├── ApiException.php
+├── Configuration.php
+├── HeaderSelector.php
+├── Model
+│   ├── Address.php
+│   ├── ApiResponse.php
+│   ├── Category.php
+│   ├── Customer.php
+│   ├── ModelInterface.php
+│   ├── Order.php
+│   ├── Pet.php
+│   ├── Tag.php
+│   └── User.php
+└── ObjectSerializer.php
+```
+
+The folder structure is simple and clear with nothing unexpected. Files are separated at the API level (pet, store, and user) and by model. There are a few helper files, like `ApiException.php`.
+
+Below is the output for Speakeasy.
+
+```sh
+├── Models
+│   ├── Components
+│   │   ├── ApiResponse.php
+│   │   ├── Category.php
+│   │   ├── Order1.php
+│   │   ├── Order2.php
+│   │   ├── Order3.php
+│   │   ├── Order4.php
+│   │   ├── Order5.php
+│   │   ├── Order6.php
+│   │   ├── OrderStatus.php
+│   │   ├── Pet1.php
+│   │   ├── Pet10.php
+│   │   ├── Pet11.php
+│   │   ├── Pet12.php
+│   │   ├── Pet13.php
+│   │   ├── Pet14.php
+│   │   ├── Pet15.php
+│   │   ├── Pet16.php
+│   │   ├── Pet17.php
+│   │   ├── Pet18.php
+│   │   ├── Pet19.php
+│   │   ├── Pet2.php
+│   │   ├── Pet20.php
+│   │   ├── Pet21.php
+│   │   ├── Pet22.php
+│   │   ├── Pet3.php
+│   │   ├── Pet4.php
+│   │   ├── Pet5.php
+│   │   ├── Pet6.php
+│   │   ├── Pet7.php
+│   │   ├── Pet8.php
+│   │   ├── Security.php
+│   │   ├── Status.php
+│   │   ├── Tag.php
+│   │   ├── User1.php
+│   │   ├── User10.php
+│   │   ├── User11.php
+│   │   ├── User12.php
+│   │   ├── User13.php
+│   │   ├── User15.php
+│   │   ├── User2.php
+│   │   ├── User3.php
+│   │   ├── User4.php
+│   │   ├── User5.php
+│   │   ├── User6.php
+│   │   ├── User7.php
+│   │   ├── User8.php
+│   │   └── User9.php
+│   ├── Errors
+│   │   └── SDKException.php
+│   └── Operations
+│       ├── AddPetFormResponse.php
+│       ├── AddPetJsonResponse.php
+│       ├── AddPetRawResponse.php
+│       ├── CreateUserFormResponse.php
+│       ├── CreateUserJsonResponse.php
+│       ├── CreateUserRawResponse.php
+│       ├── CreateUsersWithListInputResponse.php
+│       ├── DeleteOrderRequest.php
+│       ├── DeleteOrderResponse.php
+│       ├── DeletePetRequest.php
+│       ├── DeletePetResponse.php
+│       ├── DeleteUserRequest.php
+│       ├── DeleteUserResponse.php
+│       ├── FindPetsByStatusRequest.php
+│       ├── FindPetsByStatusResponse.php
+│       ├── FindPetsByTagsRequest.php
+│       ├── FindPetsByTagsResponse.php
+│       ├── GetInventoryResponse.php
+│       ├── GetInventorySecurity.php
+│       ├── GetOrderByIdRequest.php
+│       ├── GetOrderByIdResponse.php
+│       ├── GetPetByIdRequest.php
+│       ├── GetPetByIdResponse.php
+│       ├── GetPetByIdSecurity.php
+│       ├── GetUserByNameRequest.php
+│       ├── GetUserByNameResponse.php
+│       ├── LoginUserRequest.php
+│       ├── LoginUserResponse.php
+│       ├── LogoutUserResponse.php
+│       ├── PlaceOrderFormResponse.php
+│       ├── PlaceOrderJsonResponse.php
+│       ├── PlaceOrderRawResponse.php
+│       ├── Status.php
+│       ├── UpdatePetFormResponse.php
+│       ├── UpdatePetJsonResponse.php
+│       ├── UpdatePetRawResponse.php
+│       ├── UpdatePetWithFormRequest.php
+│       ├── UpdatePetWithFormResponse.php
+│       ├── UpdateUserFormRequest.php
+│       ├── UpdateUserFormResponse.php
+│       ├── UpdateUserJsonRequest.php
+│       ├── UpdateUserJsonResponse.php
+│       ├── UpdateUserRawRequest.php
+│       ├── UpdateUserRawResponse.php
+│       ├── UploadFileRequest.php
+│       └── UploadFileResponse.php
+├── Pet.php
+├── SDK.php
+├── SDKBuilder.php
+├── SDKConfiguration.php
+├── Store.php
+├── User.php
+└── Utils
+    ├── DateHandler.php
+    ├── DateTimeHandler.php
+    ├── DefaultRequest.php
+    ├── DefaultResponse.php
+    ├── DefaultStream.php
+    ├── DefaultUri.php
+    ├── EnumHandler.php
+    ├── FormMetadata.php
+    ├── Headers.php
+    ├── JSON.php
+    ├── MixedJSONHandler.php
+    ├── MultipartMetadata.php
+    ├── ParamsMetadata.php
+    ├── PathParameters.php
+    ├── PhpDocTypeParser.php
+    ├── QueryParameters.php
+    ├── RequestBodies.php
+    ├── RequestMetadata.php
+    ├── Security.php
+    ├── SecurityClient.php
+    ├── SecurityMetadata.php
+    ├── SpeakeasyMetadata.php
+    ├── UnionHandler.php
+    └── Utils.php
+```
+
+The Speakeasy SDK is more complex and has more features. Files are separated at a lower level than OpenAPI Generator — at the operation level – and further split into content types of the operation, like `AddPetJsonResponse.php`. There are more helper files bundled with the SDK in the `Utils` folder.
+
+## Code readability
+
+We'll compare the SDKs in terms of code readability, focusing on the `Pet` model first.
+
+### OpenAPI Generator
+
+The `Pet` model generated by OpenAPI Generator inherits a `ModelInterface` and has a `container` property that holds the model's fields. The model's constructor can either take an associative array of field names and values or no arguments. Then, the model exposes getter and setter methods for each field.
+
+Type mapping is presented as an associative array of field names and types as strings. The `Pet` model has the following fields:
+
+```php app/og/lib/Model/Pet.php
+//...
+    protected static $openAPITypes = [
+        'id' => 'int',
+        'name' => 'string',
+        'category' => '\OpenAPI\Client\Model\Category',
+        'photo_urls' => 'string[]',
+        'tags' => '\OpenAPI\Client\Model\Tag[]',
+        'status' => 'string'
+    ];
+//...
+```
+
+Overall, the `Pet` model is extremely verbose, coming in at 623 lines of code, including comments and whitespace, but excluding dependencies.
+
+Contrast this with the `Pet` model generated by Speakeasy.
+
+### Speakeasy
+
+The `Pet10` model generated by Speakeasy is more concise and readable, presented in its entirety below:
+
+```php app/se/src/Models/Components/Pet10.php
+<?php
+
+/**
+ * Code generated by Speakeasy (https://speakeasy.com). DO NOT EDIT.
+ */
+
+declare(strict_types=1);
+
+namespace OpenAPI\OpenAPI\Models\Components;
+
+use OpenAPI\OpenAPI\Utils\SpeakeasyMetadata;
+class Pet10
+{
+    /**
+     *
+     * @var ?int $id
+     */
+    #[SpeakeasyMetadata('form:name=id')]
+    public ?int $id = null;
+
+    /**
+     *
+     * @var string $name
+     */
+    #[SpeakeasyMetadata('form:name=name')]
+    public string $name;
+
+    /**
+     *
+     * @var ?Category $category
+     */
+    #[SpeakeasyMetadata('form:name=category,json=true')]
+    public ?Category $category = null;
+
+    /**
+     * $photoUrls
+     *
+     * @var array<string> $photoUrls
+     */
+    #[SpeakeasyMetadata('form:name=photoUrls')]
+    public array $photoUrls;
+
+    /**
+     * $tags
+     *
+     * @var ?array<Tag> $tags
+     */
+    #[SpeakeasyMetadata('form:name=tags,json=true')]
+    public ?array $tags = null;
+
+    /**
+     * pet status in the store
+     *
+     * @var ?Status $status
+     */
+    #[SpeakeasyMetadata('form:name=status')]
+    public ?Status $status = null;
+
+    /**
+     * @param  string  $name
+     * @param  array<string>  $photoUrls
+     * @param  ?int  $id
+     * @param  ?Category  $category
+     * @param  ?array<Tag>  $tags
+     * @param  ?Status  $status
+     */
+    public function __construct(string $name, array $photoUrls, ?int $id = null, ?Category $category = null, ?array $tags = null, ?Status $status = null)
+    {
+        $this->name = $name;
+        $this->photoUrls = $photoUrls;
+        $this->id = $id;
+        $this->category = $category;
+        $this->tags = $tags;
+        $this->status = $status;
+    }
+}
+```
+
+The `Pet10` model, at 76 lines of code, including comments and whitespace, is more concise and readable than the `Pet` model generated by OpenAPI Generator. Speakeasy uses modern PHP features like typed properties, attributes, and named arguments to make the model more readable.
+
+Serialization and deserialization are handled by [JMS/Serializer](http://jmsyst.com/libs/serializer), which uses annotations in the model to convert objects to and from JSON. This allows Speakeasy to create more concise and readable code.
+
+Instead of using a getter and setter for each field, Speakeasy uses typed properties and a constructor to set the fields. This makes implementing the model more straightforward and less verbose.
+
+## Dependencies
+
+The OpenAPI Generator SDK Composer file has the dependencies below.
+
+- The ext-curl, ext-json, and ext-mbstring PHP extensions, which handle calling HTTP, serialize objects to JSON, and work with Unicode.
+- [Guzzle](https://docs.guzzlephp.org/en/stable) and [Guzzle PSR-7](https://github.com/guzzle/psr7) send HTTP requests with [PSR-7](https://www.php-fig.org/psr/psr-7/) support.
+- [PHPUnit](https://phpunit.de/documentation.html) runs tests.
+- [Symfony PHP Coding Standards Fixer](https://cs.symfony.com/) formats code.
+
+The Speakeasy SDK Composer file has the dependencies below.
+
+- [Guzzle](https://docs.guzzlephp.org/en/stable) sends HTTP requests.
+- [Serializer](https://jmsyst.com/libs/serializer) converts PHP objects to and from JSON and XML to be sent over HTTP.
+- [Brick\DateTime](https://github.com/brick/date-time) manages dates, times, and time zones.
+- [phpDocumentor TypeResolver](https://github.com/phpDocumentor/TypeResolver) generates types from DocBlocks.
+- [Laravel Pint](https://laravel.com/docs/11.x/pint) formats code.
+- [PHPStan](https://phpstan.org/) finds errors and handles complex types.
+- [PHPUnit](https://phpunit.de/documentation.html) runs tests. However, there are no tests in the created SDK.
+- [Rector](https://github.com/rectorphp/rector) checks code quality.
+- [Roave Security Advisories](https://github.com/Roave/SecurityAdvisories) warns about dangerous Composer dependencies.
+
+Both creators use similar libraries, but OpenAPI Generator relies as much as possible on core PHP extensions, while Speakeasy has more serialization and complex typing libraries: Serializer, Brick, TypeResolver, and PHPStan.
+
+## Supported PHP versions
+
+At the time of compiling this comparison, the Speakeasy SDK required at least PHP version 8.1. PHP 8 introduced language features to support stronger typing.
+
+The OpenAPI Generator SDK still supports PHP version 7.4, though it is compatible with PHP 8.
+
+We recommend you use the latest PHP version with both SDKs.
+
+## Strong typing
+
+Both creators use DocBlocks to provide type annotations to all parameters and variables in the SDKs, which is useful for IDEs and for programmers to understand the code.
+
+But files in the Speakeasy SDK include the line `declare(strict_types=1);`, which causes PHP to throw a `TypeError` if a function accepts or returns an invalid type at runtime. The OpenAPI Generator SDK files do not have this line and so don't check types at runtime.
+
+In Speakeasy, the JMS Serializer checks types when converting from JSON to PHP objects at runtime. OpenAPI Generator doesn't have this in plain Guzzle.
+
+### Enums
+
+OpenAPI Generator provides a workaround for enumerations using constant strings and functions. Below is the pet status enumeration for OpenAPI Generator.
+
+```php
+public const STATUS_AVAILABLE = 'available';
+public const STATUS_PENDING = 'pending';
+public const STATUS_SOLD = 'sold';
+
+/**
+ * Gets allowable values of the enum
+ *
+ * @return string[]
+ */
+public function getStatusAllowableValues()
+{
+    return [
+        self::STATUS_AVAILABLE,
+        self::STATUS_PENDING,
+        self::STATUS_SOLD,
+    ];
+}
+```
+
+Below is the pet status enumeration for Speakeasy using modern PHP.
+
+```php
+enum Status: string
+{
+    case Available = 'available';
+    case Pending = 'pending';
+    case Sold = 'sold';
+}
+```
+
+### Content types
+
+Below are the content types in the schema for updating a pet, in JSON, XML, or as a form.
+
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        $ref: "#/components/schemas/Pet"
+    application/xml:
+      schema:
+        $ref: "#/components/schemas/Pet"
+    application/x-www-form-urlencoded:
+      schema:
+        $ref: "#/components/schemas/Pet"
+```
+
+Speakeasy supports JSON and form content types, but not XML. OpenAPI Generator supports all three. Additionally, OpenAPI Generator provides asynchronous versions of each HTTP call, such as `AddPet` and `AddPetAsync`.
+
+In Speakeasy, each content type for each operation will become its own file in the SDK. In OpenAPI Generator, all operations are combined into one API file.
+
+### Unions
+
+In OpenAPI, you can use `oneOf` in a schema like this:
+
+```yaml
+Pet:
+  type: object
+  properties:
+    age:
+      oneOf:
+        - type: integer
+        - type: string
+```
+
+The `age` property will be typed as a union in PHP in Speakeasy:
+
+```php
+class Pet10
+{
+    /**
+     *
+     * @var int|string|null $age
+     */
+    #[SpeakeasyMetadata('form:name=age')]
+    public int|string|null $age = null;
+
+...
+
+    public function __construct(?string $name = null, ?array $photoUrls = null, int|string|null $age = null,
+```
+
+OpenAPI Generator can handle this schema, but creates a 380-line file called `PetAge.php` with custom code to implement unions.
+
+## Created documentation
+
+Both Speakeasy and OpenAPI Generator create a `docs` directory with Markdown documentation and PHP usage examples for every operation and every model.
+
+We found the usage examples in the Speakeasy SDK worked flawlessly, while the examples in the OpenAPI Generator SDK don't always include required fields when instantiating objects. For instance, the `PetApi.md` example in the OpenAPI Generator SDK doesn't include any fields for the `Pet` object.
+
+```php app/og/docs/PetApi.md
+<?php
+require_once(__DIR__ . '/vendor/autoload.php');
+
+
+// Configure OAuth2 access token for authorization: petstore_auth
+$config = OpenAPI\Client\Configuration::getDefaultConfiguration()->setAccessToken('YOUR_ACCESS_TOKEN');
+
+
+$apiInstance = new OpenAPI\Client\Api\PetApi(
+    // If you want to use a custom http client, pass your client which implements `GuzzleHttp\ClientInterface`.
+    // This is optional, `GuzzleHttp\Client` will be used as default.
+    new GuzzleHttp\Client(),
+    $config
+);
+$pet = new \OpenAPI\Client\Model\Pet(); // \OpenAPI\Client\Model\Pet | Create a new pet in the store
+
+try {
+    $result = $apiInstance->addPet($pet);
+    print_r($result);
+} catch (Exception $e) {
+    echo 'Exception when calling PetApi->addPet: ', $e->getMessage(), PHP_EOL;
+}
+```
+
+Both SDKs include detailed documentation for operations and models, but the Speakeasy SDK includes more detailed usage examples that work out of the box.
+
+Speakeasy also creates appropriate example strings based on a field's `format` in the OpenAPI schema.
+
+For example, if we add `format: uri` to the item for a pet's photo URLs, we can compare each SDK's usage documentation for this field.
+
+The SDK created by Speakeasy includes a helpful example of this field that lists multiple random URLs:
+
+```php
+# Speakeasy SDK Usage Example
+pet = shared.Pet(
+    # ...
+    photo_urls=[
+        'https://salty-stag.name',
+        'https://moral-star.info',
+        'https://present-giggle.info',
+    ]
+)
+```
+
+The OpenAPI Generator SDK's documentation uses a single random string in its example:
+
+```php
+# PHP SDK Usage Example
+pet = Pet(
+    # ...
+    photo_urls=[
+        "photo_urls_example"
+    ]
+)
+```
+
+## Automation
+
+This comparison focuses on installing and using Speakeasy and OpenAPI Generator using the command line, but both tools can also run as part of a CI workflow. For example, you can set up a [GitHub Action](https://github.com/speakeasy-api/sdk-generation-action) to ensure your Speakeasy SDK is always up-to-date when your API schema changes.
+
+## Unsupported features
+
+At the time of writing, OpenAPI Generator does not support:
+
+- [Data types null, UUID](https://openapi-generator.tech/docs/generators/php/#data-type-feature), [all, any, and union](https://openapi-generator.tech/docs/generators/php/#schema-support-feature).
+- [Server URLs with parameters](https://openapi-generator.tech/docs/generators/php/#global-feature).
+- [Callbacks](https://openapi-generator.tech/docs/generators/php/#global-feature) (allowing your server to call a client).
+- [Link objects](https://openapi-generator.tech/docs/generators/php/#global-feature) (relating operations to each other to indicate a workflow).
+
+Neither service supports OAuth 2 flows other than Implicit.
+
+## Summary
+
+Open-source tooling can be a great way to experiment, but if you're working on production code, the Speakeasy PHP SDK creator will help ensure that you create reliable and performant PHP SDKs. The Speakeasy PHP SDK creator uses strong typing to provide safe runtime performance, supports many OpenAPI features, and is rapidly adding more.

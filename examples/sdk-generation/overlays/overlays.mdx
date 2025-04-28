@@ -1,0 +1,187 @@
+---
+title: "Common Overlays for SDKs"
+description: "Overlays are a quick and easy way to implement changes to your OpenAPI / Swagger spec. We explain how they work and show you how to use overlays."
+image: "/assets/examples/generic.png"
+date: 2023-01-26
+authors:
+  - name: Ash Godfrey
+  - image_url: '/assets/author-headshots/ash.jpg'
+tags:
+  - SDK Generation
+is_featured: true
+featured_image: "/assets/examples/generic.png"
+---
+
+# Example Overlays
+
+[Overlays](/docs/prep-openapi/overlays/create-overlays) act as a layer on top of your existing OpenAPI specification, allowing you to apply modifications and extensions seamlessly. They are perfect for adding new features, customizing responses, and adapting specifications to specific needs without disrupting the underlying structure.
+
+To demonstrate the power of overlays, we'll use a sample OpenAPI Specification for "The Speakeasy Bar." This initial spec sets the stage for our overlay examples:
+
+```yaml openapi.yaml
+openapi: 3.1.0
+info:
+  title: The Speakeasy Bar
+  version: 1.0.0
+  summary: A bar that serves drinks.
+servers:
+  - url: https://speakeasy.bar
+    description: The production server.
+security:
+  - apiKey: []
+tags:
+  - name: drinks
+    description: The drinks endpoints.
+  - name: orders
+    description: The orders endpoints.
+paths:
+  /dinner/:
+    post:
+      ...
+    get:
+      ...
+  /drinks/:
+    post:
+      ...
+```
+
+Let's explore how overlays can enhance and adapt this specification to do the following: 
+
+
+* [Adding Speakeasy Extensions](#adding-speakeasy-extensions)
+* [Adding SDK Specific Documentation](#adding-sdk-specific-documentation)
+* [Modifying Auto-Generated Schemas](#modifying-auto-generated-schemas)
+* [Adding Examples to API Documentation](#adding-examples-to-api-documentation)
+* [Hiding Internal APIs from a Public SDK](#hiding-internal-apis-from-a-public-sdk)
+* [Removing specific PUT operation](#removing-specific-put-operation)
+* [Standardize Configurations](#standardize-configurations)
+
+
+### Adding Speakeasy Extensions
+
+**Objective:** Integrate [Terraform](/docs/terraform/extensions) functionality into the API specification for order management.
+
+**Overlay Action**: 
+
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Add Terraform Functionality to Order Schema
+  version: 1.1.0
+actions:
+  - target: "$.components.schemas.Order"
+    update:
+      - x-speakeasy-entity: Order
+        description: "Enables Terraform provider support for the Order schema."
+
+```
+
+### Adding SDK Specific Documentation
+
+**Objective:** Provide tailored instructions for Java and JavaScript SDKs for the `/orders` endpoint.
+
+**Overlay Action**:
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Distinguish Order Endpoint Docs for Java and JavaScript SDKs
+  version: 1.1.1
+actions:
+  - target: "$.paths['/orders'].post.description"
+    update:
+      - value: "For Java SDK: use `OrderService.placeOrder()`. For JavaScript SDK: use `orderService.placeOrder()`."
+```
+
+### Modifying Auto-Generated Schemas
+
+**Objective:**  Enhance the precision of the Drink schema, making it more descriptive and informative for API consumers. 
+
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Refine Drink Schema for Better Clarity
+  version: 1.1.2
+actions:
+  - target: "$.components.schemas.Drink"
+    update:
+      - properties:
+          type:
+            type: string
+            description: "Type of drink, e.g., 'cocktail', 'beer'."
+          alcoholContent:
+            type: number
+            description: "Percentage of alcohol by volume."
+```
+
+
+### Adding Examples to API Documentation
+
+**Objective:**  Illustrate the drink ordering process with a practical example for user clarity.
+
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Add Drink Order Example for User Clarity
+  version: 1.1.3
+actions:
+  - target: "$.paths['/drinks/order'].post"
+    update:
+      - examples:
+          standardOrder:
+            summary: "Standard order example"
+            value: 
+              drink: "Old Fashioned"
+              quantity: 1
+```
+
+### Hiding Internal APIs from a Public SDK
+
+**Objective:** Restrict the visibility of internal staff management endpoints.
+
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Secure Internal Staff Management Endpoint
+  version: 1.1.4
+actions:
+  - target: "$.paths['/internal/staff']"
+    update:
+      - x-internal: true
+        description: "This endpoint is restricted for internal staff management and not visible in public SDKs."
+```
+
+### Removing Specific Put Operation
+
+**Objective:** Exclude PUT operations without the `x-speakeasy-entity-operation.`
+
+**Overlay Action**: 
+
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Remove Non-Essential PUT Operations
+  version: 1.1.0
+actions:
+  - target: $.paths.*.put[?(! @.x-speakeasy-entity-operation)]
+    remove: true
+
+```
+
+### Standardize Configurations
+
+**Objective:** Remove the server and security configurations from each operation within the paths.
+
+**Overlay Action**: 
+
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Standardize Server and Security Configurations
+  version: 1.1.0
+actions:
+  - target: $.paths.*.*.servers
+    remove: true
+  - target: $.paths.*.*.security
+    remove: true
+
+```

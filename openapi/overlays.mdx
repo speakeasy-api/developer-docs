@@ -1,0 +1,483 @@
+import { Callout, Spotlight, Table } from "@/mdx/components";
+
+# OpenAPI Overlays
+
+Overlays allow us to modify an existing OpenAPI document without directly editing the original document. An overlay is a separate document that contains instructions for updating the original OpenAPI document.
+
+<Callout title="Active Development" type="warning">
+  The [OpenAPI Overlay
+  Specification](https://github.com/OAI/Overlay-Specification) has now reached a stable [1.0.0](https://github.com/OAI/Overlay-Specification/releases/tag/1.0.0) release.
+  Speakeasy toolchain utilises a homegrown and OSS implementation. Source code is available [here](https://github.com/speakeasy-api/openapi-overlay). Contributions are welcome!
+</Callout>
+
+Overlays are useful for:
+
+- Separating concerns between the original API definition and modifications required by different consumers or use cases.
+- Avoiding direct modification of the original OpenAPI document, which may be managed by a separate team or process.
+- Applying a set of common modifications to multiple OpenAPI documents.
+
+## Overlay Document Structure in OpenAPI
+
+An Overlay document is a separate document from the OpenAPI document it modifies. It contains an ordered list of [Action Objects](#action-object) that describe the modifications to be made to the original OpenAPI document.
+
+<Spotlight>
+## !!steps `overlay`
+<Table 
+  data={[
+    { fieldName: "`overlay`", type: "String", required: "✅" }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" }
+  ]}
+/>
+
+The version of the Overlay Specification that the document uses. The value must be a supported [version number](#overlay-specification-versions)
+
+```yaml ! overlay.yaml
+# !focus(1)
+overlay: 1.0.0
+info:
+  title: Overlay to fix the Speakeasy bar
+  version: 0.0.1
+actions:
+  - target: "$.tags"
+    description: Add a Snacks tag to the global tags list
+    update:
+      - name: Snacks
+        description: All methods related to serving snacks
+  - target: "$.paths['/dinner']"
+    description: Remove all paths related to serving dinner
+    remove: true
+```
+
+---
+
+## !!steps `info`
+
+| Field Name | Type                                | Required |
+| ---------- | ----------------------------------- | -------- |
+| `info`     | [Info Object](#overlay-info-object) | ✅       |
+
+Provides metadata about the Overlay document.
+
+```yaml ! overlay.yaml
+# !focus(2:4)
+overlay: 1.0.0
+info:
+  title: Overlay to fix the Speakeasy bar
+  version: 0.0.1
+actions:
+  - target: "$.tags"
+    description: Add a Snacks tag to the global tags list
+    update:
+      - name: Snacks
+        description: All methods related to serving snacks
+  - target: "$.paths['/dinner']"
+    description: Remove all paths related to serving dinner
+    remove: true
+```
+
+---
+
+## !!steps `title`
+
+| Field Name | Type   | Required |
+| ---------- | ------ | -------- |
+| `title`    | String | ✅       |
+
+A human-readable title describing the purpose of the Overlay document.
+
+```yaml ! overlay.yaml
+# !focus(3)
+```
+
+---
+
+## !!steps `version`
+
+<Table 
+  data={[
+    { fieldName: "version", type: "String", required: "✅" }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" }
+  ]}
+/>
+
+A version identifier indicating the version of the Overlay document.
+
+```yaml ! overlay.yaml
+# !focus(4)
+```
+
+---
+
+## !!steps `actions`
+
+| Field Name | Type                              | Required |
+| ---------- | --------------------------------- | -------- |
+| `actions`  | [[Action Object](#action-object)] | ✅       |
+
+An ordered list of [Action Objects](#action-object) to be applied to the original OpenAPI document. The list must contain at least one [Action Object](#action-object).
+
+```yaml ! overlay.yaml
+# !focus(5:13)
+```
+
+---
+
+## !!steps `target`
+
+| Field Name | Type   | Required |
+| ---------- | ------ | -------- |
+| `version`  | String | ✅       |
+
+A [JSONPath](https://datatracker.ietf.org/wg/jsonpath/documents/) expression that specifies the location in the original OpenAPI document where the change should be made. See [Action Targets](#action-targets).
+
+```yaml ! overlay.yaml
+# !focus(6)
+```
+
+---
+
+## !!steps `description`
+
+| Field Name | Type   | Required |
+| ---------- | ------ | -------- |
+| `version`  | String |          |
+
+A description of the action. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description.
+
+```yaml ! overlay.yaml
+# !focus(7)
+```
+
+---
+
+## !!steps `update`
+
+| Field Name | Type   | Required |
+| ---------- | ------ | -------- |
+| `version`  | String |          |
+
+An object containing the properties and values to be merged with the objects referenced by the `target`. This field has no effect if the `remove` field is `true`.
+
+```yaml ! overlay.yaml
+# !focus(8:10)
+```
+
+---
+
+## !!steps `remove`
+
+| Field Name | Type   | Required |
+| ---------- | ------ | -------- |
+| `version`  | String |          |
+
+If `true`, the objects referenced by the `target` are removed from the original document. If `false` or not provided, the objects are not removed. This field takes precedence over the `update` field.
+
+```yaml ! overlay.yaml
+# !focus(13)
+```
+
+---
+
+</Spotlight>
+
+<Table 
+  data={[
+    { fieldName: "overlay", type: "String", required: "✅", description: "The version of the Overlay Specification that the document uses. The value must be a supported [version number](#overlay-specification-versions)." },
+    { fieldName: "info", type: "[Info Object](#overlay-info-object)", required: "✅", description: "Provides metadata about the Overlay document." },
+    { fieldName: "extends", type: "String", required: "", description: "A URL to the original OpenAPI document this overlay applies to." },
+    { fieldName: "actions", type: "[[Action Object](#action-object)]", required: "✅", description: "An ordered list of [Action Objects](#action-object) to be applied to the original OpenAPI document. The list must contain at least one [Action Object](#action-object)." },
+    { fieldName: "x-*", type: "[Extensions](#extensions)", required: "", description: "Any number of extension fields can be added to the Overlay document that can be used by tooling and vendors. When provided at this level, they apply to the entire Overlay document." }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+## Overlay Specification Versions
+
+The `overlay` field contains the version number of the Overlay Specification that the document conforms to. Tooling should use this value to interpret the document correctly.
+
+The current version of the Overlay Specification is `1.0.0`, but keep in mind that the specification is still under development.
+
+## Overlay Info Object in OpenAPI
+
+Provides metadata about the Overlay document.
+
+<Table 
+  data={[
+    { fieldName: "title", type: "String", required: "✅", description: "A human-readable title describing the purpose of the Overlay document." },
+    { fieldName: "version", type: "String", required: "✅", description: "A version identifier indicating the version of the Overlay document." },
+    { fieldName: "x-*", type: "Any", required: "", description: "Any number of extension fields can be added that can be used by tooling and vendors." }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+## Action Object in OpenAPI
+
+Each Action Object represents at least one change to be made to the original OpenAPI document at the location specified by the `target` field.
+
+<Table 
+  data={[
+    { fieldName: "`target`", type: "String", required: "✅", description: "A [JSONPath](https://datatracker.ietf.org/wg/jsonpath/documents/) expression that specifies the location in the original OpenAPI document where the change should be made. See [Action Targets](#action-targets)." },
+    { fieldName: "`description`", type: "String", required: "", description: "A description of the action. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description." },
+    { fieldName: "`update`", type: "Any", required: "", description: "An object containing the properties and values to be merged with the objects referenced by the `target`. This field has no effect if the `remove` field is `true`." },
+    { fieldName: "`remove`", type: "Boolean", required: "", description: "If `true`, the objects referenced by the `target` are removed from the original document. If `false` or not provided, the objects are not removed. This field takes precedence over the `update` field." },
+    { fieldName: "`x-*`", type: "Any", required: "", description: "Any number of extension fields can be added to the Action Object that can be used by tooling and vendors." }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+## Action Targets in OpenAPI
+
+The `target` field of an [Action Object](#action-object) is a [JSONPath](https://goessner.net/articles/JsonPath/) expression that specifies the locations in the original OpenAPI document where the change should be made.
+
+JSONPath expressions allow you to select and manipulate specific parts of a JSON or YAML document using an intuitive syntax. The expressions are similar to XPath for XML, allowing you to traverse the document tree and select elements based on various criteria.
+
+JSONPath is [implemented differently](https://cburgmer.github.io/json-path-comparison/) across tooling languages and among individual tools. Speakeasy uses [VMware Labs YAML JSONPath](https://github.com/vmware-labs/yaml-jsonpath) to parse JSONPath.
+
+Here are some examples of JSONPath expressions relevant to OpenAPI documents:
+
+<Table 
+  data={[
+    { jsonpathExpression: "`$.info.title`", description: "Selects the `title` field of the `info` object." },
+    { jsonpathExpression: "`$.servers[0].url`", description: "Selects the `url` field of the first server in the `servers` array." },
+    { jsonpathExpression: "`$.paths['/drinks'].get.parameters`", description: "Selects the `parameters` of the `get` operation on the `/drinks` path." },
+    { jsonpathExpression: "`$.paths..parameters[?(@.in=='query')]`", description: "Selects all query parameters across all paths." },
+    { jsonpathExpression: "`$.paths.*[?(@..parameters.*[?(@.in=='query')])]`", description: "Selects all operations that have one or more query parameters." },
+    { jsonpathExpression: "`$.paths.*[?(@..parameters.*[?(@.in=='query')])]['post','get','put','path','delete'].tags`", description: "Selects tags of specific operations that have one or more query parameters." },
+    { jsonpathExpression: "`$.components.schemas.Drink`", description: "Selects the `Drink` schema from the `components.schemas` object." }
+  ]}
+  columns={[
+    { key: "jsonpathExpression", header: "JSONPath Expression" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+When selecting the object to target for different types of updates, consider the following:
+
+<Table 
+  data={[
+    { updateType: "Updating a primitive value (string, number, boolean)", targetObject: "The containing object" },
+    { updateType: "Updating an object", targetObject: "The object itself" },
+    { updateType: "Updating an array", targetObject: "The array itself" },
+    { updateType: "Adding a new property to an object", targetObject: "The object itself" },
+    { updateType: "Adding a new item to an array", targetObject: "The array itself" },
+    { updateType: "Removing a property from an object", targetObject: "The object itself" },
+    { updateType: "Removing an item from an array", targetObject: "The array itself" }
+  ]}
+  columns={[
+    { key: "updateType", header: "Type of Update" },
+    { key: "targetObject", header: "Target Object" }
+  ]}
+/>
+
+For example, to update the `description` field of the `info` object, you would target the `info` object itself:
+
+```yaml
+overlay: 1.0.0
+info:
+  title: Update Speakeasy API description
+  version: 1.0.0
+actions:
+  - target: $.info
+    update:
+      description: The Speakeasy Bar API is a secret underground bar that serves drinks to those in the know.
+```
+
+To remove a specific path, such as `/oldDrinks`, from the `paths` object, you would target that path directly:
+
+```yaml
+overlay: 1.0.0
+info:
+  title: Remove deprecated drinks path
+  version: 1.0.0
+actions:
+  - target: $.paths['/oldDrinks']
+    remove: true
+```
+
+## Applying an Overlay in OpenAPI
+
+When an overlay is applied, the `update` object is merged with the targeted objects. Any properties present in both the `update` object and the targeted objects will be replaced with the values from the `update` object. New properties from the `update` object will be added to the targeted objects.
+
+The Overlay document is processed in the following order:
+
+1. Tooling locates the original OpenAPI document to modify. This is based on the `extends` field if provided, otherwise determined by the tooling.
+
+2. Each [Action Object](#action-object) is applied to the OpenAPI documents in the order they appear in the `actions` array.
+
+   For each action:
+
+   1. The `target` JSONPath expression is evaluated against the OpenAPI document to locate the objects to modify.
+
+   2. If the `remove` field is `true`, the targeted objects are removed from the OpenAPI document.
+
+   3. If the `remove` field is `false` or not provided and an `update` object is specified, the `update` object is merged with each of the targeted objects.
+
+## OpenAPI Overlay Examples
+
+Here are some examples of overlays that could be applied to the Speakeasy Bar OpenAPI document:
+
+## Updating Info and Servers
+
+This example demonstrates updating the `info` and `servers` objects in the original OpenAPI document.
+
+```yaml
+overlay: 1.0.0
+info:
+  title: Update Speakeasy Bar Info and Servers
+  version: 1.0.0
+actions:
+  - target: $.info
+    update:
+      description: The Speakeasy Bar API is a secret underground bar that serves drinks to those in the know.
+      contact:
+        name: Speakeasy Bar Support
+        email: support@speakeasy.bar
+  - target: $.servers
+    update:
+      - url: https://staging.speakeasy.bar/v1
+        description: Staging server
+      - url: https://api.speakeasy.bar/v1
+        description: Production server
+```
+
+## Adding Tags and Updating Drink Responses
+
+This example demonstrates adding tags to the OpenAPI document and updating response objects for operations related to drinks.
+
+```yaml
+overlay: 1.0.0
+info:
+  title: Add Tags and Update Drink Responses
+  version: 1.0.0
+actions:
+  - target: $.tags
+    update:
+      - name: Drinks
+        description: Operations related to managing drinks
+      - name: Orders
+        description: Operations related to order processing
+  - target: $.paths['/drinks'].get.responses[200].content['application/json'].schema
+    update:
+      $ref: "#/components/schemas/DrinkList"
+  - target: $.paths['/drinks/{drinkId}'].get.responses[200].content['application/json'].schema
+    update:
+      $ref: "#/components/schemas/Drink"
+```
+
+## Adding Query Parameter Tags
+
+This example demonstrates adding a tag to all operations that have query parameters.
+
+```yaml
+overlay: 1.0.0
+info:
+  title: Add Query Parameter Tags
+  version: 1.0.0
+actions:
+  - target: $.paths.*[?(@..parameters.*[?(@.in=='query')])]['post','get','put','path','delete'].tags
+    update:
+      - hasQueryParameters
+```
+
+## Removing Deprecated Drink Operations
+
+This example demonstrates removing operations related to drinks that have been marked as deprecated.
+
+```yaml
+overlay: 1.0.0
+info:
+  title: Remove Deprecated Drink Operations
+  version: 1.0.0
+actions:
+  - target: $.paths['/drinks'].*.deprecated
+    remove: true
+  - target: $.paths['/drinks/{drinkId}'].*.deprecated
+    remove: true
+```
+
+<Callout title="Overlay Creation Tool" type="info">
+  Check out <a href="https://overlay.speakeasy.com/" target="_blank" rel="noopener noreferrer">overlay.speakeasy.com</a> to create and edit your overlays visually.
+</Callout>
+
+<Table 
+  data={[
+    { fieldName: "version", type: "String", required: "" }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" }
+  ]}
+/>
+
+<Table 
+  data={[
+    { fieldName: "actions", type: "[[Action Object](#action-object)]", required: "✅" }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" }
+  ]}
+/>
+
+<Table 
+  data={[
+    { fieldName: "target", type: "String", required: "✅", description: "A [JSONPath](https://datatracker.ietf.org/wg/jsonpath/documents/) expression that specifies the location in the original OpenAPI document where the change should be applied." },
+    { fieldName: "description", type: "String", required: "", description: "A description of the action. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description." },
+    { fieldName: "update", type: "Any", required: "", description: "An object containing the properties and values to be merged with the objects referenced by the `target`. This field has no effect if the `remove` field is `true`." },
+    { fieldName: "remove", type: "Boolean", required: "", description: "If `true`, the objects referenced by the `target` are removed from the original document. If `false` or not provided, the objects are not removed. This field takes precedence over the `update` field." },
+    { fieldName: "x-*", type: "Any", required: "", description: "Any number of extension fields can be added to the Action Object that can be used by tooling and vendors." }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+<Table 
+  data={[
+    { jsonpathExpression: "$.info.title", description: "Selects the `title` field of the `info` object." },
+    { jsonpathExpression: "$.servers[0].url", description: "Selects the `url` field of the first server in the `servers` array." }
+  ]}
+  columns={[
+    { key: "jsonpathExpression", header: "JSONPath Expression" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+<Table 
+  data={[
+    { fieldName: "`overlay`", type: "String", required: "✅" }
+  ]}
+  columns={[
+    { key: "fieldName", header: "Field Name" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" }
+  ]}
+/>

@@ -1,0 +1,1080 @@
+---
+title: "Comparison guide: OpenAPI/Swagger Java client generation"
+description: "Comparing the new Speakeasy Java SDK generator with the open-source OpenAPI Java generators"
+keywords: [api, openapi, swagger, sdk generation, sdk, java, sdk, developer experience, devex, dx]
+date: 2024-05-08
+---
+
+import { Table } from "@/mdx/components";
+
+# Comparison guide: OpenAPI/Swagger Java client generation
+
+At Speakeasy, we specialize in producing idiomatic SDKs in various programming languages, including Java. Our approach to SDK generation prioritizes a rich developer experience that enables you as an API provider to concentrate on refining your API and empowers your developer-users to efficiently leverage your services.
+
+In this article, we'll compare creating a Java SDK using Speakeasy to creating one using the [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator).
+
+Below is a table that summarizes the key differences between the two SDKs:
+
+<Table 
+  data={[
+    { name: "Minimum version", support: "Java 11+ (modern features)", docs: "Java 8+ (legacy support)", notes: "" },
+    { name: "Dependencies", support: "✅ Minimal dependencies", docs: "⚠️ Many third-party dependencies", notes: "" },
+    { name: "HTTP client", support: "Native Java 11 `java.net.http`", docs: "⚠️ Third-party OkHttp dependency", notes: "" },
+    { name: "JSON processing", support: "✅ [Jackson](https://github.com/FasterXML/jackson) (enterprise-ready, faster)", docs: "⚠️ [Gson](https://github.com/google/gson) (simpler, limited config)", notes: "" },
+    { name: "Builder pattern", support: "✅ Modern builder pattern", docs: "❌ Traditional setters only", notes: "" },
+    { name: "Null safety", support: "✅ Proactive with `Optional` support", docs: "❌ Basic retrospective validation", notes: "" },
+    { name: "Retry support", support: "✅ Built-in configurable retries", docs: "❌ Not supported", notes: "" },
+    { name: "Documentation", support: "✅ Comprehensive, with examples", docs: "⚠️ Basic documentation", notes: "" },
+    { name: "Collections", support: "✅ Modern list implementations", docs: "⚠️ Mix of arrays and lists", notes: "" },
+    { name: "Field access", support: "✅ Encapsulated (getter methods)", docs: "❌ Direct field access", notes: "" },
+    { name: "OAuth support", support: "✅ Built-in OAuth 2.0", docs: "⚠️ Requires additional library", notes: "" },
+    { name: "Pagination", support: "✅ Supported", docs: "❌ Not supported", notes: "" }
+  ]}
+  columns={[
+    { key: "name", header: "Feature" },
+    { key: "support", header: "Speakeasy" },
+    { key: "docs", header: "OpenAPI Generator" },
+    { key: "notes", header: "Notes" }
+  ]}
+/>
+
+Read more about these headline features of Speakeasy-created Java SDKs in the [March 2024 release notes](/post/release-java-ga), or consult the [Speakeasy Java SDK documentation](/docs/languages/java/methodology-java).
+
+For a detailed technical comparison, read on!
+
+## Installing the CLIs
+
+For this comparison, we need both the Speakeasy and OpenAPI Generator CLIs installed to generate the Java SDKs from the specification YAML file. We're using macOS, so we use Homebrew to install the CLIs.
+
+### Installing the Speakeasy CLI
+
+Install the Speakeasy CLI by running the following command in the terminal:
+
+```bash
+brew install speakeasy-api/homebrew-tap/speakeasy
+```
+
+You can check the version to ensure installation was successful:
+
+```bash
+speakeasy -v
+```
+
+If you encounter any errors, take a look at the [Speakeasy SDK creation documentation](/docs/create-client-sdks).
+
+### Installing the OpenAPI Generator CLI
+
+Install the OpenAPI Generator CLI by running the following command in the terminal:
+
+```bash
+brew install openapi-generator
+```
+
+You can check the version:
+
+```bash
+openapi-generator version
+```
+
+Browse the [OpenAPI Generator documentation](https://github.com/OpenAPITools/openapi-generator/blob/master/README.md) if any errors occur.
+
+## Downloading the Swagger Petstore specification
+
+We need an OpenAPI specification YAML file to generate SDKs for. We'll use the Swagger Petstore specification, which you can find at [https://petstore3.swagger.io/api/v3/openapi.yaml](https://petstore3.swagger.io/api/v3/openapi.yaml).
+
+Download the file in and save it as `petstore.yaml` with the following command in the terminal:
+
+```bash
+curl https://petstore3.swagger.io/api/v3/openapi.yaml --output petstore.yaml
+```
+
+## Validating the specification file
+
+Let's validate the spec using both the Speakeasy CLI and OpenAPI Generator.
+
+### Validation using Speakeasy
+
+Run the following command in the terminal where the specification file is located:
+
+```bash
+speakeasy validate openapi -s petstore.yaml
+```
+
+The Speakeasy validator returns the following:
+
+```bash
+╭────────────╮╭───────────────╮╭────────────╮
+│ Errors (0) ││ Warnings (10) ││ Hints (72) │
+├────────────┴┘               └┴────────────┴────────────────────────────────────────────────────────────╮
+│                                                                                                        │
+│ │ Line 250: operation-success-response - operation `updatePetWithForm` must define at least a single   │
+│ │ `2xx` or `3xx` response                                                                              │
+│                                                                                                        │
+│   Line 277: operation-success-response - operation `deletePet` must define at least a single `2xx` or  │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   Line 413: operation-success-response - operation `deleteOrder` must define at least a single `2xx` o │
+│   r                                                                                                    │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   Line 437: operation-success-response - operation `createUser` must define at least a single `2xx` or │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   Line 524: operation-success-response - operation `logoutUser` must define at least a single `2xx` or │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   ••                                                                                                   │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ ←/→ switch tabs  ↑/↓ navigate  ↵ inspect  esc quit
+```
+
+The Speakeasy CLI validation result gives us a handy tool for switching between the errors, warnings, and hints tabs with the option to navigate through the results on each tab.
+
+In this instance, Speakeasy generated ten warnings. Let's correct them before continuing.
+
+Notice that some of the warnings contain a `default` response. For completeness, we'd like to explicitly return a `200` HTTP response. We'll make the following modifications in the `petstore.yaml` file.
+
+When the `updatePetWithForm` operation executes successfully, we expect an HTTP `200` response with the updated `Pet` object to be returned.
+
+Insert the following after `responses` on line 250:
+
+```
+"200":
+  description: successful operation
+  content:
+    application/xml:
+      schema:
+        $ref: '#/components/schemas/Pet'
+    application/json:
+      schema:
+        $ref: '#/components/schemas/Pet'
+```
+
+Similarly, following successful `createUser` and `updateUser` operations, we'd like to return an HTTP `200` response with a `User` object.
+
+Add the following text to both operations below `responses`:
+
+```
+"200":
+  description: successful operation
+  content:
+    application/xml:
+      schema:
+        $ref: '#/components/schemas/User'
+    application/json:
+      schema:
+        $ref: '#/components/schemas/User'
+```
+
+Now we'll add the same response to four operations. Copy the following text:
+
+```
+"200":
+  description: successful operation
+```
+
+Paste this response after `responses` for the following operations:
+
+- `deletePet`
+- `deleteOrder`
+- `logoutUser`
+- `deleteUser`
+
+We are left with three warnings indicating potentially unused or orphaned objects and operations.
+
+For unused objects, locate the following lines of code and delete them:
+
+```
+Customer:
+  type: object
+  properties:
+    id:
+      type: integer
+      format: int64
+      example: 100000
+    username:
+      type: string
+      example: fehguy
+    address:
+      type: array
+      xml:
+        name: addresses
+        wrapped: true
+      items:
+        $ref: '#/components/schemas/Address'
+  xml:
+    name: customer
+Address:
+  type: object
+  properties:
+    street:
+      type: string
+      example: 437 Lytton
+    city:
+      type: string
+      example: Palo Alto
+    state:
+      type: string
+      example: CA
+    zip:
+      type: string
+      example: "94301"
+  xml:
+    name: address
+```
+
+To remove the unused request bodies, locate the following lines and delete them:
+
+```
+requestBodies:
+    Pet:
+      description: Pet object that needs to be added to the store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Pet'
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/Pet'
+    UserArray:
+      description: List of user object
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/User'
+```
+
+Now if you validate the file with the Speakeasy CLI, you'll notice there are no warnings:
+
+```
+╭────────────╮╭──────────────╮╭────────────╮
+│ Errors (0) ││ Warnings (0) ││ Hints (75) │
+├────────────┴┴──────────────┴┘            └─────────────────────────────────────────────────────────────╮
+│                                                                                                        │
+│ │ Line 51: missing-examples - Missing example for requestBody. Consider adding an example              │
+│                                                                                                        │
+│   Line 54: missing-examples - Missing example for requestBody. Consider adding an example              │
+│                                                                                                        │
+│   Line 57: missing-examples - Missing example for requestBody. Consider adding an example              │
+│                                                                                                        │
+│   Line 65: missing-examples - Missing example for responses. Consider adding an example                │
+│                                                                                                        │
+│   Line 68: missing-examples - Missing example for responses. Consider adding an example                │
+│                                                                                                        │
+│   •••••••••••••••                                                                                      │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ ←/→ switch tabs  ↑/↓ navigate  ↵ inspect  esc quit
+```
+
+### Validation using OpenAPI Generator
+
+To validate the `petstore.yaml` specification file with OpenAPI Generator, run the following command in the terminal:
+
+```bash
+openapi-generator validate -i petstore.yaml
+```
+
+The OpenAPI Generator returns the following response, indicating no issues detected.
+
+```bash
+Validating spec (petstore.yaml)
+No validation issues detected.
+```
+
+Now that we have made the `petstore.yaml` file more complete by fixing the warnings, let's use it to create SDKs.
+
+## Creating SDKs
+
+We'll create Java SDKs using Speakeasy and OpenAPI Generator and then compare them.
+
+### Creating an SDK with Speakeasy
+
+Create a Java SDK from the `petstore.yaml` specification file using Speakeasy by running the following command in the terminal:
+
+```bash
+# Generate Petstore SDK using Speakeasy java generator
+speakeasy generate sdk \
+    --schema petstore.yaml \
+    --lang java \
+    --out ./sdks/petstore-sdk-java-speakeasy/
+```
+
+The generator will return some logging results while the SDK is being created and a success indicator on completion.
+
+```bash
+SDK for java generated successfully ✓
+```
+
+### Creating an SDK with OpenAPI Generator
+
+Run the following command in the terminal to generate a Java SDK using OpenAPI Generator:
+
+```bash
+# Generate Petstore SDK using python generator
+openapi-generator generate \
+  --input-spec petstore.yaml \
+  --generator-name java \
+  --output ./sdks/petstore-sdk-java \
+  --additional-properties=packageName=petstore_sdk,projectName=petstore-sdk-java
+```
+
+The generator returns various logs and finally a successful generation message.
+
+```bash
+################################################################################
+# Thanks for using OpenAPI Generator.                                          #
+# Please consider donation to help us maintain this project 🙏                 #
+# https://opencollective.com/openapi_generator/donate                          #
+################################################################################
+```
+
+## SDK code compared: Project structure
+
+Let's compare the two project structures by printing a tree structure of each SDK directory's `src` folder.
+
+Run the following command to get the Speakeasy SDK structure:
+
+```bash
+cd petstore-sdk-java-speakeasy/src/main/java
+tree
+```
+
+The results of the project structure are displayed as follows:
+
+```bash
+||____org
+| |____openapis
+| | |____openapi
+| | | |____Pet.java
+| | | |____SecuritySource.java
+| | | |____User.java
+| | | |____utils
+| | | | |____SpeakeasyMetadata.java
+| | | | |____SecurityMetadata.java
+| | | | |____LazySingletonValue.java
+| | | | |____RetryConfig.java
+| | | | |____TypedObject.java
+| | | | |____BigDecimalString.java
+| | | | |____Response.java
+| | | | |____OneOfDeserializer.java
+| | | | |____MultipartFormMetadata.java
+| | | | |____JSON.java
+| | | | |____Hooks.java
+| | | | |____Deserializers.java
+| | | | |____QueryParameters.java
+| | | | |____Utils.java
+| | | | |____QueryParamsMetadata.java
+| | | | |____Retries.java
+| | | | |____RequestBody.java
+| | | | |____RequestMetadata.java
+| | | | |____Security.java
+| | | | |____Metadata.java
+| | | | |____SpeakeasyHTTPClient.java
+| | | | |____BackoffStrategy.java
+| | | | |____SerializedBody.java
+| | | | |____Types.java
+| | | | |____HTTPClient.java
+| | | | |____Options.java
+| | | | |____HeaderMetadata.java
+| | | | |____PathParamsMetadata.java
+| | | | |____FormMetadata.java
+| | | | |____Hook.java
+| | | | |____HTTPRequest.java
+| | | | |____BigIntegerString.java
+| | | |____models
+| | | | |____operations
+| | | | | |____DeletePetRequest.java
+| | | | | |____GetPetByIdSecurity.java
+| | | | | |____UpdateUserFormResponse.java
+| | | | | |____CreateUserFormResponse.java
+| | | | | |____LoginUserRequestBuilder.java
+| | | | | |____UpdateUserRawRequestBuilder.java
+| | | | | |____DeletePetResponse.java
+| | | | | |____GetOrderByIdRequestBuilder.java
+| | | | | |____SDKMethodInterfaces.java
+| | | | | |____UpdateUserJsonRequestBuilder.java
+| | | | | |____Status.java
+| | | | | |____FindPetsByStatusRequest.java
+| | | | | |____DeleteOrderRequestBuilder.java
+| | | | | |____CreateUserJsonResponse.java
+| | | | | |____UpdateUserJsonResponse.java
+| | | | | |____DeleteOrderRequest.java
+| | | | | |____UpdateUserRawResponse.java
+| | | | | |____UpdatePetFormResponse.java
+| | | | | |____PlaceOrderJsonRequestBuilder.java
+| | | | | |____AddPetFormResponse.java
+| | | | | |____PlaceOrderRawRequestBuilder.java
+| | | | | |____UpdatePetJsonRequestBuilder.java
+| | | | | |____FindPetsByStatusRequestBuilder.java
+| | | | | |____CreateUserRawRequestBuilder.java
+| | | | | |____LoginUserRequest.java
+| | | | | |____FindPetsByTagsRequestBuilder.java
+| | | | | |____FindPetsByTagsRequest.java
+| | | | | |____LogoutUserResponse.java
+| | | | | |____FindPetsByStatusResponse.java
+| | | | | |____DeleteUserRequest.java
+| | | | | |____UpdateUserRawRequest.java
+| | | | | |____AddPetFormRequestBuilder.java
+| | | | | |____GetInventorySecurity.java
+| | | | | |____DeleteUserRequestBuilder.java
+| | | | | |____CreateUsersWithListInputResponse.java
+| | | | | |____DeleteOrderResponse.java
+| | | | | |____UpdateUserJsonRequest.java
+| | | | | |____GetPetByIdRequestBuilder.java
+| | | | | |____CreateUserFormRequestBuilder.java
+| | | | | |____CreateUserRawResponse.java
+| | | | | |____AddPetJsonResponse.java
+| | | | | |____UpdatePetJsonResponse.java
+| | | | | |____GetOrderByIdResponse.java
+| | | | | |____UploadFileResponse.java
+| | | | | |____DeletePetRequestBuilder.java
+| | | | | |____UpdatePetWithFormResponse.java
+| | | | | |____PlaceOrderJsonResponse.java
+| | | | | |____UpdateUserFormRequestBuilder.java
+| | | | | |____LoginUserResponse.java
+| | | | | |____UploadFileRequest.java
+| | | | | |____LogoutUserRequestBuilder.java
+| | | | | |____FindPetsByTagsResponse.java
+| | | | | |____GetPetByIdResponse.java
+| | | | | |____UpdatePetWithFormRequest.java
+| | | | | |____GetPetByIdRequest.java
+| | | | | |____UpdatePetRawResponse.java
+| | | | | |____CreateUsersWithListInputRequestBuilder.java
+| | | | | |____AddPetRawResponse.java
+| | | | | |____PlaceOrderFormResponse.java
+| | | | | |____GetUserByNameResponse.java
+| | | | | |____UpdatePetWithFormRequestBuilder.java
+| | | | | |____GetOrderByIdRequest.java
+| | | | | |____GetInventoryResponse.java
+| | | | | |____PlaceOrderFormRequestBuilder.java
+| | | | | |____UploadFileRequestBuilder.java
+| | | | | |____GetInventoryRequestBuilder.java
+| | | | | |____UpdatePetFormRequestBuilder.java
+| | | | | |____UpdatePetRawRequestBuilder.java
+| | | | | |____DeleteUserResponse.java
+| | | | | |____CreateUserJsonRequestBuilder.java
+| | | | | |____GetUserByNameRequest.java
+| | | | | |____AddPetJsonRequestBuilder.java
+| | | | | |____AddPetRawRequestBuilder.java
+| | | | | |____GetUserByNameRequestBuilder.java
+| | | | | |____UpdateUserFormRequest.java
+| | | | | |____PlaceOrderRawResponse.java
+| | | | |____components
+| | | | | |____Order.java
+| | | | | |____Status.java
+| | | | | |____Tag.java
+| | | | | |____ApiResponse.java
+| | | | | |____Pet.java
+| | | | | |____OrderStatus.java
+| | | | | |____Category.java
+| | | | | |____User.java
+| | | | | |____Security.java
+| | | | |____errors
+| | | | | |____SDKError.java
+| | | |____Store.java
+| | | |____SDKConfiguration.java
+| | | |____SDK.java
+```
+
+Now run the following command for the OpenAPI Generator SDK folder:
+
+```bash
+cd petstore-sdk-java/src/main/java
+tree
+```
+
+The OpenAPI Generator SDK structure looks like this:
+
+```bash
+|____org
+| |____openapitools
+| | |____client
+| | | |____ApiClient.java
+| | | |____ApiException.java
+| | | |____ProgressResponseBody.java
+| | | |____Pair.java
+| | | |____GzipRequestInterceptor.java
+| | | |____auth
+| | | | |____RetryingOAuth.java
+| | | | |____HttpBasicAuth.java
+| | | | |____ApiKeyAuth.java
+| | | | |____OAuth.java
+| | | | |____OAuthOkHttpClient.java
+| | | | |____Authentication.java
+| | | | |____OAuthFlow.java
+| | | | |____HttpBearerAuth.java
+| | | |____ApiResponse.java
+| | | |____JSON.java
+| | | |____ServerVariable.java
+| | | |____StringUtil.java
+| | | |____Configuration.java
+| | | |____ServerConfiguration.java
+| | | |____model
+| | | | |____Order.java
+| | | | |____ModelApiResponse.java
+| | | | |____Customer.java
+| | | | |____Tag.java
+| | | | |____Pet.java
+| | | | |____AbstractOpenApiSchema.java
+| | | | |____Category.java
+| | | | |____User.java
+| | | | |____Address.java
+| | | |____api
+| | | | |____PetApi.java
+| | | | |____UserApi.java
+| | | | |____StoreApi.java
+| | | |____ApiCallback.java
+| | | |____ProgressRequestBody.java
+```
+
+The Speakeasy-created SDK contains more generated files than the SDK from OpenAPI Generator, which is partly due to the Speakeasy SDK being less dependent on third-party libraries.
+
+## Model and usage
+
+Let's take a look at how Speakeasy generates model classes for creating and updating a `Pet` object.
+
+```java
+Pet req = Pet.builder()
+    .name("Snoopie")
+    .photoUrls(java.util.List.of(
+            "https://some_url.com/snoopie1.jpg"))
+    .id(1)
+    .category(Category.builder()
+        .id(1)
+        .name("Dogs")
+        .build())
+    .tags(java.util.List.of(
+        Tag.builder()
+            .build()))
+    .status(Status.AVAILABLE)
+    .build();
+
+UpdatePetJsonResponse res = sdk.pet().updatePetJson()
+    .request(req)
+    .call();
+
+if (res.body().isPresent()) {
+    // handle response
+}
+```
+
+The Speakeasy model follows the builder pattern to construct objects with many optional parameters, making the code more readable and easier to use.
+
+Let's see how the OpenAPI Generator SDK performs the same operation:
+
+```java
+    ApiClient defaultClient = Configuration.getDefaultApiClient();
+    defaultClient.setBasePath("/api/v3");
+
+    // Configure OAuth2 access token for authorization: petstore_auth
+    OAuth petstore_auth = (OAuth) defaultClient.getAuthentication("petstore_auth");
+    petstore_auth.setAccessToken("YOUR ACCESS TOKEN");
+
+    PetApi apiInstance = new PetApi(defaultClient);
+    Pet pet = new Pet(); // Pet | Create a new pet in the store
+    pet.setName("Snoopie");
+    try {
+      Pet result = apiInstance.addPet(pet);
+      System.out.println(result);
+    } catch (ApiException e) {
+      System.err.println("Exception when calling PetApi#addPet");
+      System.err.println("Status code: " + e.getCode());
+      System.err.println("Reason: " + e.getResponseBody());
+      System.err.println("Response headers: " + e.getResponseHeaders());
+      e.printStackTrace();
+    }
+```
+
+The OpenAPI Generator SDK focuses on manual serialization and deserialization using Gson, providing setter methods for individual properties of the `Pet` object.
+
+The two SDKs have distinctly different approaches to handling object creation, validation, and JSON serialization, with the Speakeasy-generated SDK emphasizing fluid and declarative object creation using modern patterns and annotations for handling JSON data.
+
+Let's look more closely at how the `Pet` model attributes are declared in each SDK.
+
+Notice how the Speakeasy SDK uses Jackson annotations for the JSON serialization and deserialization of objects.
+
+```java
+public class Pet {
+    @JsonInclude(Include.NON_ABSENT)
+    @JsonProperty("id")
+    @SpeakeasyMetadata("form:name=id")
+    private Optional<? extends Long> id;
+
+    @JsonProperty("name")
+    @SpeakeasyMetadata("form:name=name")
+    private String name;
+
+    @JsonInclude(Include.NON_ABSENT)
+    @JsonProperty("category")
+    @SpeakeasyMetadata("form:name=x")
+    private Optional<? extends Category> category;
+
+    @JsonProperty("photoUrls")
+    @SpeakeasyMetadata("form:name=photoUrls")
+    private java.util.List<String> photoUrls;
+
+    //Rest of Pet.java ....
+```
+
+Compare this to the OpenAPI Generator SDK `Pet` model that uses Gson annotations:
+
+```java
+public class Pet {
+  public static final String SERIALIZED_NAME_ID = "id";
+  @SerializedName(SERIALIZED_NAME_ID)
+  private Long id;
+
+  public static final String SERIALIZED_NAME_NAME = "name";
+  @SerializedName(SERIALIZED_NAME_NAME)
+  private String name;
+
+  public static final String SERIALIZED_NAME_CATEGORY = "category";
+  @SerializedName(SERIALIZED_NAME_CATEGORY)
+  private Category category;
+
+  public static final String SERIALIZED_NAME_PHOTO_URLS = "photoUrls";
+  @SerializedName(SERIALIZED_NAME_PHOTO_URLS)
+  private List<String> photoUrls = new ArrayList<>();
+
+  //Rest of Pet.java ....
+```
+
+Let's take a moment and identify what the differences are between the Jackson vs GSON libraries and what features each has.
+
+The Gson JSON library is easy to use and implement and well-suited to smaller projects. It provides an API for JSON support but doesn't support extensive configuration options.
+
+On the other hand, Jackson is designed to be more configurable and flexible when it comes to JSON serialization and deserialization. Jackson is the standard JSON-support library in many popular Java frameworks (like Spring, Jersey, and RESTEasy), it's widely used in the Java community, and it's actively supported and frequently updated. Jackson is also generally faster and offers extensive configuration options.
+
+The use of the Jackson library in the Speakeasy-generated SDK provides us with a firm foundation for building fast and scalable applications.
+
+## HTTP communication
+
+Java 11 (the minimum version supported by Speakeasy) significantly improved HTTP communication with the java.net.http package providing a powerful `HTTPClient` class for enhanced HTTP communication.
+
+Given the OpenAPI Generator SDK is Java 8 compatible, we suspected it might use some third-party libraries. On inspection, our suspicions were confirmed: The SDK uses a third-party library to handle HTTP communication.
+
+Take a look at the following method to add a new `Pet` object (from the `PetApi.java` file):
+
+```java
+  public Pet addPet(Pet pet) throws ApiException {
+      ApiResponse<Pet> localVarResp = addPetWithHttpInfo(pet);
+      return localVarResp.getData();
+  }
+```
+
+The `addPet` method in turn calls the `addPetWithHttpInfo(pet)` method:
+
+```java
+  public ApiResponse<Pet> addPetWithHttpInfo(Pet pet) throws ApiException {
+      okhttp3.Call localVarCall = addPetValidateBeforeCall(pet, null);
+      Type localVarReturnType = new TypeToken<Pet>(){}.getType();
+      return localVarApiClient.execute(localVarCall, localVarReturnType);
+  }
+```
+
+Note how the method uses the `okhttp3.Call` object.
+
+We examined the dependencies configured in the `build.gradle` file and discovered the `okhttp` dependency:
+
+```groovy
+implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+```
+
+Having established that the OpenAPI Generator SDK uses the OkHttp library, we were curious to see how the Speakeasy-generated SDK handles HTTP communication.
+
+Take a look at this extract from the `addPetJson` method in the `Pet.java` file of the Speakeasy SDK:
+
+```java
+HTTPRequest req = new HTTPRequest();
+req.setMethod("POST");
+req.setURL(url);
+Object _convertedRequest = Utils.convertToShape(request, Utils.JsonShape.DEFAULT,
+    new TypeReference<org.openapis.openapi.models.components.Pet>() {});
+SerializedBody serializedRequestBody = org.openapis.openapi.utils.Utils.serializeRequestBody(
+        _convertedRequest, "request", "json", false);
+if (serializedRequestBody == null) {
+    throw new Exception("Request body is required");
+}
+req.setBody(serializedRequestBody);
+
+req.addHeader("Accept", "application/json;q=1, application/xml;q=0");
+req.addHeader("user-agent", this.sdkConfiguration.userAgent);
+
+HTTPClient client = org.openapis.openapi.utils.Utils.configureSecurityClient(
+        this.sdkConfiguration.defaultClient, this.sdkConfiguration.securitySource.getSecurity());
+
+HttpResponse<InputStream> httpRes = client.send(req);
+```
+
+This method uses `HTTPClient`, `HTTPRequest`, and `HTTPResponse` objects. If we look at the import statements, we can see that these objects are generated from the following classes:
+
+```java
+import org.openapis.openapi.utils.HTTPClient;
+import org.openapis.openapi.utils.HTTPRequest;
+import java.net.http.HttpResponse;
+```
+
+The `HTTPClient` and `HTTPRequest` interfaces are both generated by Speakeasy.
+
+We can see the `HTTPClient` interface implemented in `SpeakeasyHTTPClient.java` to establish the HTTP communication method:
+
+```java
+import org.openapis.openapi.utils.HTTPClient;
+
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.io.InputStream;
+
+public class SpeakeasyHTTPClient implements HTTPClient {
+
+    @Override
+    public HttpResponse<InputStream> send(HttpRequest request)
+            throws IOException, InterruptedException, URISyntaxException {
+        HttpClient client = HttpClient.newHttpClient();
+        return client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+    }
+}
+```
+
+The Speakeasy SDK uses the Java HTTP APIs that were introduced in Java 11. Some of the benefits of using the built-in Java HTTP APIs are:
+
+- **Standardization:** By using the HTTP Client API supported in Java 11, the SDK uses the standards provided and supported by modern Java SDK providers. The `HttpClient` class integrates more easily with the other Java APIs in the Java SDK.
+- **Asynchronous support:** Asynchronous HTTP communication is not available in Java 8, making it harder to build scalable applications. The HTTP Client API asynchronous HTTP communication available in Java 11 provides a CompletableFuture object immediately after calling the API, which gives developers more control.
+- **Performance and efficiency:** The HTTP Client is created using a builder and allows for configuring client-specific settings, such as the preferred protocol version (HTTP/1.1 or HTTP/2). It also supports Observable APIs.
+- **Security, stability, and long-term support:** As a standard Java API, the HTTP Client is more stable and secure, and benefits from the long-term support cycles of new Java versions.
+
+## Retries
+
+The SDK created by Speakeasy can automatically retry requests.
+
+You can enable retries globally or per request using the `x-speakeasy-retries` extension in your OpenAPI specification document.
+
+Let's add the `x-speakeasy-retries` extension to the `addPet` method in the `petstore.yaml` file:
+
+```yaml
+# ...
+paths:
+  /pet:
+    # ...
+    post:
+      #...
+      operationId: addPet
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500        # 500 milliseconds
+          maxInterval: 60000          # 60 seconds
+          maxElapsedTime: 3600000     # 5 minutes
+          exponent: 1.5
+        statusCodes:
+          - 5XX
+        retryConnectionErrors: true
+```
+
+If you re-generate the SDK now, the new retry configuration will be included.
+
+For more information on configuring retries in your SDK, take a look at the [retries documentation](/docs/customize-sdks/retries).
+
+## SDK dependencies
+
+Let's compare dependencies in the two SDKs.
+
+Here are the OpenAPI Generator SDK dependencies in `build.gradle`:
+
+```groovy
+implementation 'io.swagger:swagger-annotations:1.6.8'
+implementation "com.google.code.findbugs:jsr305:3.0.2"
+implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+implementation 'com.squareup.okhttp3:logging-interceptor:4.10.0'
+implementation 'com.google.code.gson:gson:2.9.1'
+implementation 'io.gsonfire:gson-fire:1.9.0'
+implementation 'javax.ws.rs:jsr311-api:1.1.1'
+implementation 'javax.ws.rs:javax.ws.rs-api:2.1.1'
+implementation 'org.openapitools:jackson-databind-nullable:0.2.6'
+implementation group: 'org.apache.oltu.oauth2', name: 'org.apache.oltu.oauth2.client', version: '1.0.2'
+implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
+implementation "jakarta.annotation:jakarta.annotation-api:$jakarta_annotation_version"
+testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.1'
+testImplementation 'org.mockito:mockito-core:3.12.4'
+testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.1'
+```
+
+Here are the Speakeasy SDK dependencies from `build.gradle`:
+
+```
+implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.2'
+implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.16.2'
+implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.16.2'
+implementation 'org.openapitools:jackson-databind-nullable:0.2.6'
+implementation 'org.apache.httpcomponents:httpclient:4.5.14'
+implementation 'org.apache.httpcomponents:httpmime:4.5.14'
+implementation 'com.jayway.jsonpath:json-path:2.9.0'
+implementation 'commons-io:commons-io:2.15.1'
+```
+
+The OpenAPI Generator SDK implements more libraries than the Speakeasy SDK, possibly due to the compatibility requirements and limitations of Java 8. Depending on fewer third-party implementations provides the Speakeasy SDK with some advantages:
+
+- **Less maintenance:** Projects with fewer dependencies have a lower maintenance overhead and less versioning to keep track of long term.
+- **Reduced risk of dependency-related issues:** Third-party dependencies increase the risk of bugs and security failures that depend on the third-party provider to fix. A security flaw in a third-party dependency makes your application vulnerable.
+- **Improved performance:** Code generally works better in standard Java APIs as they have been through rigorous testing and QA cycles before being made available to the public.
+- **Easier adoption:** Projects tend to more readily accept SDK builds that rely on fewer third-party dependencies, due to strict policies regarding the use and management of these dependencies.
+
+## Handling non-nullable fields
+
+Let's see how Speakeasy's enhanced null safety and Optional support work on fields in the `Pet` object.
+
+Take a look at the following declaration taken from the `Pet` object in the Speakeasy SDK `org.openapis.openapi.models.components.Pet.java` file:
+
+```java
+    @JsonInclude(Include.NON_ABSENT)
+    @JsonProperty("status")
+    @SpeakeasyMetadata("form:name=status")
+    private Optional<? extends Status> status;
+```
+
+Note that the `@JsonInclude` annotation indicates it is `NON-ABSENT` and the `Optional` class is used. The status field here is an enum (`Status`) wrapped in the `Optional` class.
+
+Let's examine the `Status` enum object:
+
+```java
+public enum Status {
+    AVAILABLE("available"),
+    PENDING("pending"),
+    SOLD("sold");
+
+    @JsonValue
+    private final String value;
+
+    private Status(String value) {
+        this.value = value;
+    }
+
+    public String value() {
+        return value;
+    }
+}
+```
+
+Let's compare the Speakeasy SDK `status` field declaration to the same field in the OpenAPI Generator SDK. The following declaration is taken from the `org.openapitools.client.model.Pet.java` file:
+
+```java
+public enum StatusEnum {
+    AVAILABLE("available"),
+
+    PENDING("pending"),
+
+    SOLD("sold");
+
+    private String value;
+
+    StatusEnum(String value) {
+      this.value = value;
+    }
+
+    public String getValue() {
+      return value;
+    }
+
+    @Override
+    public String toString() {
+      return String.valueOf(value);
+    }
+
+    public static StatusEnum fromValue(String value) {
+      for (StatusEnum b : StatusEnum.values()) {
+        if (b.value.equals(value)) {
+          return b;
+        }
+      }
+      throw new IllegalArgumentException("Unexpected value '" + value + "'");
+    }
+
+    public static class Adapter extends TypeAdapter<StatusEnum> {
+      @Override
+      public void write(final JsonWriter jsonWriter, final StatusEnum enumeration) throws IOException {
+        jsonWriter.value(enumeration.getValue());
+      }
+
+      @Override
+      public StatusEnum read(final JsonReader jsonReader) throws IOException {
+        String value =  jsonReader.nextString();
+        return StatusEnum.fromValue(value);
+      }
+    }
+
+    public static void validateJsonElement(JsonElement jsonElement) throws IOException {
+      String value = jsonElement.getAsString();
+      StatusEnum.fromValue(value);
+    }
+  }
+
+  public static final String SERIALIZED_NAME_STATUS = "status";
+  @SerializedName(SERIALIZED_NAME_STATUS)
+  private StatusEnum status;
+```
+
+At first glance, the OpenAPI Generator SDK also uses an enum approach, representing the `status` field as an enum called `StatusEnum` with three possible values: `AVAILABLE`, `PENDING`, and `SOLD`. A lot of code is generated around this field to handle the enum, but the `Pet` object does not indicate that the OpenAPI Generator SDK `status` field is non-nullable at this point.
+
+In contrast, Speakeasy uses a direct approach to non-nullable fields. The Speakeasy SDK also uses a `Status` enum for the `status` field, but it is wrapped in the `Optional` class provided by the Java standard APIs.
+
+Declaring the `status` field as the `Status` type wrapped in the `Optional` class has some benefits to the developer:
+
+- It helps to avoid possible `NullPointerException` errors when accessing a `null` value.
+- It provides a modern way for developers to identify the absence of a value using the `isPresent()` method from the `Optional` class API and exposes other usable methods like `orElse()` and `orElseThrow()`.
+- It clearly states the intent and use of the code, which helps to reduce bugs in the long run.
+
+Let's see how client validation works by passing a `null` value to the `findPetsByStatus()` method, which expects `Optional<? extends Status> status`. We create the following builder pattern for a new request:
+
+```java
+FindPetsByStatusResponse res = sdk.pet().findPetsByStatus(null);
+
+if (res.body().isPresent()) {
+    // handle response
+}
+```
+
+When we execute this bit of code, we get the following exception:
+
+```
+java.lang.IllegalArgumentException: status cannot be null
+	at org.openapis.openapi.utils.Utils.checkNotNull(Utils.java:469)
+	at org.openapis.openapi.models.operations.FindPetsByStatusRequest$Builder.status(FindPetsByStatusRequest.java:108)
+	at org.openapis.openapi.Pet.findPetsByStatus(Pet.java:503)
+```
+
+The same exception is generated if we remove the `name` field from the `builder` declaration of a new `Pet` object:
+
+```java
+Pet req = Pet.builder()
+    .id(1)
+    .photoUrls(java.util.List.of(
+        "https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=1xw:0.74975xh;center,top&resize=1200:*"))
+    .category(Category.builder()
+        .id(1)
+        .name("Dogs")
+        .build())
+    .tags(java.util.List.of(
+        Tag.builder()
+                .build()))
+    .build();
+```
+
+When we execute the above code, we get the exception:
+
+```bash
+java.lang.IllegalArgumentException: name cannot be null
+ at org.openapis.openapi.utils.Utils.checkNotNull(Utils.java:469)
+ at org.openapis.openapi.models.components.Pet.<init>(Pet.java:62)
+ at org.openapis.openapi.models.components.Pet$Builder.build(Pet.java:297)
+ at org.openapis.openapi.Test.main(Test.java:40)
+```
+
+The null check validation generates this exception when the `Pet` object is initiated and certain values are null. If we look at the class constructor in our `Pet.java` model in the Speakeasy SDK:
+
+```java
+public Pet(
+            @JsonProperty("id") Optional<? extends Long> id,
+            @JsonProperty("name") String name,
+            @JsonProperty("category") Optional<? extends Category> category,
+            @JsonProperty("photoUrls") java.util.List<String> photoUrls,
+            @JsonProperty("tags") Optional<? extends java.util.List<Tag>> tags,
+            @JsonProperty("status") Optional<? extends Status> status) {
+        Utils.checkNotNull(id, "id");
+        Utils.checkNotNull(name, "name");
+        Utils.checkNotNull(category, "category");
+        Utils.checkNotNull(photoUrls, "photoUrls");
+        Utils.checkNotNull(tags, "tags");
+        Utils.checkNotNull(status, "status");
+        this.id = id;
+        this.name = name;
+        this.category = category;
+        this.photoUrls = photoUrls;
+        this.tags = tags;
+        this.status = status;
+    }
+```
+
+We can see that the exception is generated in the `Utils.checkNotNull()` method:
+
+```java
+public static <T> T checkNotNull(T object, String name) {
+    if (object == null) {
+        // IAE better than NPE in this use-case (NPE can suggest internal troubles)
+        throw new IllegalArgumentException(name + " cannot be null");
+    }
+    return object;
+}
+```
+
+Therefore, if we omit the `name` field or pass a `null` value in the `findPetByStatus()` method, an exception is generated by the check null validation because the `name` and `status` fields explicitly set to `null` in this case.
+
+Let's try creating a `Pet` object without a `name` field using the OpenAPI Generator SDK:
+
+```java
+PetApi apiInstance = new PetApi(defaultClient);
+ArrayList<String> snoopyPhotos = new ArrayList<>();
+snoopyPhotos.add("https://Snoopy.some_photo_platform.com");
+
+Pet pet = new Pet(); // Pet | Create a new pet in the store
+pet.setPhotoUrls(snoopyPhotos);
+try {
+    Pet result = apiInstance.addPet(pet);
+} catch (ApiException e) {
+    //handle exception
+}
+```
+
+When we execute the above code, we get a mixed result. The following exception is generated:
+
+```
+Exception in thread "main" java.lang.IllegalArgumentException: The required field `name` is not found in the JSON string: {"id":9223372036854775807,"photoUrls":["https://Snoopy.some_photo_platform.com"],"tags":[]}
+	at org.openapitools.client.model.Pet.validateJsonElement(Pet.java:361)
+	at org.openapitools.client.model.Pet$CustomTypeAdapterFactory$1.read(Pet.java:422)
+	at org.openapitools.client.model.Pet$CustomTypeAdapterFactory$1.read(Pet.java:412)
+	at com.google.gson.TypeAdapter$1.read(TypeAdapter.java:204)
+  ....
+```
+
+It appears that the `Pet` object was created on the API, but the call failed retrospectively on the client side. The exception was generated by the SDK's validation process, which checks the JSON response received from the API. You can see the created object in the JSON response included in the exception:
+
+```json
+{"id":9223372036854775807,"photoUrls":["https://Snoopy.some_photo_platform.com"],"tags":[]}
+```
+
+Validation failed because the name was missing from the JSON string. This validation method is not helpful, as it checks the response after the API call rather than before the request is sent. Consequently, an invalid object was created on the API and the client process failed.
+
+Speakeasy's proactive client validation and method of handling non-nullable fields with the use of the `Optional` class is elegant. Code that is easy to read, understand, and use, and that also helps to build null safety is essential for building robust, maintainable SDKs.
+
+## Generated documentation
+
+Both Speakeasy and OpenAPI Generator generate SDK documentation for the generated code.
+
+Each generator creates a README file to help users get started with the SDK. The OpenAPI Generator README outlines the SDK's compatibility with Java, Maven, and Gradle versions and identifies the available API routes. The Speakeasy README file is more complete and documents more examples.
+
+Speakeasy also generates additional documentation in the `docs` directory, including more detailed explanations of the models and operations; examples of creating, updating, and searching objects; error handling; and guidance on handling exceptions specific to the OpenAPI specification file. A handy "Getting Started" section details how to build the SDK.
+
+In general, we found the Speakeasy documentation to be more complete and helpful. We tested many API call examples from the documentation, and conclude that the Speakeasy docs are production-ready.
+
+## Supported Java versions
+
+The Speakeasy-generated SDK supports Java 11+ environments, and the SDK generated by OpenAPI Generator supports Java 8+.
+
+While the OpenAPI SDK supports more codebases including those still using Java 8, the Speakeasy SDK leverages the enhancements provided by Java 11. Java 8 was released in March 2014, and was the most widely used version of Java until version 11 was released in September 2019.
+
+In 2023, New Relic reported that Java 11 is used in around 56% of production applications, while Java 8 is still in use at around 33%. Both versions are important long-term support (LTS) versions.
+
+## Summary
+
+We've seen how easy it is to generate a powerful, idiomatic SDK for Java using Speakeasy.
+
+If you're building an API that developers rely on and would like to publish full-featured Java SDKs that follow best practices, we highly recommend giving the Speakeasy SDK generator a try.
+
+For more customization options for your SDK using the Speakeasy generator, please see the [Speakeasy documentation](/docs/customize-sdks).
+
+Join our Slack community to let us know how we can improve our Java SDK generator or suggest features.

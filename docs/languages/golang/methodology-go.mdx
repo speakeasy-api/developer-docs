@@ -1,0 +1,209 @@
+---
+title: "Create Go SDKs From OpenAPI / Swagger"
+description: "Speakeasy-created Go SDKs are generated from OpenAPI / Swagger specs and prioritize minimal dependencies, type safety, and easy debugging."
+---
+
+# Create Go SDKs From OpenAPI (Swagger)
+
+## SDK Overview
+
+Speakeasy's Go SDK is designed to build idiomatic Go modules and uses language-standard features. The SDK is backward compatible, requiring only Go 1.14, and will work with all newer compilers.
+
+The SDK is strongly typed, makes minimal use of third-party modules, and is straightforward to debug. 
+
+Speakeasy-generated SDKs should feel familiar to Go developers. Some of the Speakeasy Go SDK design choices are opinionated in a thoughtful and deliberate way. For example, many Go developers prefer to rely on zero values rather than pointers for unset optional values. However, as many REST APIs have nuanced distinctions between zero and null values, this approach is not generally practical for interoperability. To balance this, Speakeasy-created Go SDKs use pointers but include `nil`-safe getters to help offset the increased risk of panics caused by mishandled pointers.
+
+Core features of the Speakeasy Go SDK include:
+
+- Struct field tags and reflection-based marshaling and unmarshaling of data.
+- Pointers used for optional fields.
+- Automatic getters that provide `nil`-safety and hooks for building interfaces.
+- Context-aware method calls for programmatic timeouts and cancelation.
+- A `utils` package that segments off common operations, making generated code easier to follow and understand.
+- Variadic options functions are provided to simplify the construction process, whether you have many options or none.
+- Authentication support for OAuth flows and standard security mechanisms like HTTP Basic and application tokens.
+- Optional pagination support for supported APIs.
+- Optional support for retries in every operation.
+- Complex number types
+  - `"github.com/ericlager/decimal".Big`
+  - `"math/big".Int`
+- Date and time types using RFC 3339 formats.
+- Custom type enums using strings and ints.
+- Union types and combined types.
+
+The SDK includes minimal dependencies. The only third-party dependencies are:
+
+- `github.com/ericlagergren/decimal` - providing big decimal support features.
+- `github.com/cenkalti/backoff/v4` - implementing automatic retry support.
+- `github.com/spyzhov/ajson` - to help implement pagination.
+
+## Go Package Structure
+
+```yaml lib-structure.yaml
+|-- go.mod             # part of the standard go mod setup
+|-- go.sum             # part of the standard go mod setup
+|-- sdk.go             # defines the root SDK package and the generate SDK class and New() constructor
+|-- ...                # Other SDK classes
+|-- pkg                # Root for all additional provided packages
+|   └-- models         # Namespace for the SDK's models
+|   |   └-- operations # Namespace for the SDK's operations models, including request/response models for each API
+|   |   |   └-- ...
+|   |   └-- shared     # Namespace for the SDK's shared models, including those from OpenAPI components
+|   |       └-- ...
+|   |-- types          # Namespace for additional helper types used during marshaling and unmarshaling
+|   |   └-- ...
+|   └-- utils          # Namespace for utility classes and functions
+|-- docs               # Markdown files for the SDK's documentation
+|   └- ...
+└-- ...
+```
+
+## HTTP Client
+
+The Go SDK makes API calls that wrap an internal HTTP client. The requirements for the HTTP client are simple. It must match this interface:
+
+```go
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+```
+
+The built-in `net/http` client satisfies this interface and a default client based on the built-in is provided by default. To replace this default with a client of your own, you can implement this interface yourself or provide your own client configured as desired. Here's a simple example that adds a client with a 30-second timeout.
+
+```go
+import (
+	"net/http"
+	"time"
+	"github.com/myorg/your-go-sdk"
+)
+
+var (
+	httpClient = &http.Client{Timeout: 30 * time.Second}
+	sdkClient  = sdk.New(sdk.WithClient(httpClient))
+)
+````
+
+This can be a convenient way to configure timeouts, cookies, proxies, custom headers, and other low-level configuration.
+
+## Go Client Data Types and Enums
+
+The Speakeasy Go SDK has a strong preference for familiar built-in types. Because the Go language has a rich built-in type system, the Speakeasy Go SDK relies almost completely on it. Here is a list of types the SDK uses:
+
+- `string`
+- `time.Time`
+- `int`
+- `int64`
+- `big.Int`
+- `float32`
+- `float64`
+- `bool`
+
+
+Speakeasy provides a few custom types in the `types` package, which aid with marshaling and unmarshaling data exchanged with the server-side API. For example, `types.Date` is a thin wrapper around `time.Time` that can decode and encode dates in the `"2006-01-02"` format.
+
+Speakeasy also uses the `decimal.Big` class provided by `github.com/ericlagergren/decimal`. This is a better alternative to `big.Float`, as it provides high-precision floating point math that avoids the rounding errors that can sometimes occur with `big.Float`.
+
+## Pointer Types for Optional Fields
+
+When a field is optional or nullable in OpenAPI, Speakeasy uses pointer types in Go to represent these fields. This design choice allows for a clear distinction between unset values (nil) and zero values. For example:
+
+```go
+type Pet struct {
+    Name   string  `json:"name"`    // required field
+    ChipID *string `json:"chip_id"` // optional/nullable field
+}
+```
+
+When serializing a Pet struct to JSON, a nil pointer will be correctly represented as `null`:
+```go
+pet := Pet{Name: "Finn"} // ChipID is nil
+// Serializes to: {"name": "Finn", "chip_id": null}
+```
+
+To make working with pointer types more ergonomic, Speakeasy provides helper functions:
+
+```go
+// Helper function for string pointers
+func String(s string) *string { return &s }
+
+// Generic helper for any type
+func Pointer[T any](v T) *T { return &v }
+```
+
+These helpers allow for cleaner initialization of structs with pointer fields:
+```go
+pet := Pet{
+    Name:   "Finn",
+    ChipID: Pointer("173105fe2"),
+}
+```
+
+This approach eliminates the need for temporary variables when setting pointer fields while maintaining type safety and proper null handling.
+
+Enumeration types are built according to typical Go practices. Speakeasy defines a type alias to `string`, `int`, or `int64` as appropriate. Constants of this type are defined for the predefined values. Note that these are true type aliases (using `type X = string`) rather than new types (using `type X string`), meaning they are interchangeable with their underlying types.
+
+## Go SDK Generated Classes
+
+The Go SDK generates a `struct` for each request and response object and each component object. All fields in the `struct` objects are public. Optional fields are given pointer types and may be set to `nil`. A getter method is also defined for each public field. The `Get` prefix distinguishes the getters from the public field names, which remain directly accessible. The getters work correctly even when called on a `nil` value, in which case they return the zero value of the field.
+
+For example, the following code shows a nested component object where the inner object is optional, ensuring safety from `nil` pointer-related panics.
+
+```go
+var outer *shared.Outer
+var safe string = outer.GetInner().GetName()
+if safe == "" {
+  fmt.Println("Don't Panic")
+}
+// output: Don't Panic
+```
+
+The getters also provide useful hooks for defining interfaces.
+
+## Parameters
+
+As described above, the Speakeasy SDK will generate a class with public fields for each request and response object. Each field will be tagged to control marshaling and unmarshaling into other data formats while interacting with the underlying API. However, if the `maxMethodParams` value is set in `gen.yaml`, the generated struct will be limited to that number of parameters. These parameters will be positioned in the operation method after the context object and before the request object.
+
+```go
+// maxMethodParams: 1
+res, err := sdk.GetDrink(ctx, "Sangria")
+if err != nil {
+	return err
+}
+
+// work with res...
+```
+
+Compare this with the example in the next section where `maxMethodParams` is `0`.
+
+## Errors
+
+Following Go best practices, all operation methods in the Speakeasy SDK will return a response object and an error. Callers should always check for the presence of the error. The object used for errors is configurable per request. Any error response may return a custom error object. A generic error will be provided when any communication failure is detected during an operation.
+
+Here's an example of custom error handling in a theoretical SDK:
+
+```go
+longTea := operations.GetDrinkRequest{Name: "Long Island Iced Tea"}
+res, err := sdk.GetDrink(ctx, &longTea)
+var apiErr sdkerrors.APIError
+if errors.As(err, &apiErr) {
+    return fmt.Errorf("failed to get drink (%d): %s", apiErr.GetCode(), apiErr.GetMessage())
+} else if err != nil {
+    return fmt.Errorf("unknown error getting drink: %w", err)
+}
+
+// work with res...
+```
+
+## User Agent Strings
+
+The Go SDK will include a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests. This can be leveraged to track SDK usage amongst broader API usage. The format is as follows: 
+
+```stmpl
+speakeasy-sdk/go {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{PackageName}}
+```
+
+
+- `SDKVersion` is the version of the SDK, defined in `gen.yaml` and released.
+- `GenVersion` is the version of the Speakeasy generator.
+- `DocVersion` is the version of the OpenAPI document.
+- `PackageName` is the name of the package defined in `gen.yaml`.

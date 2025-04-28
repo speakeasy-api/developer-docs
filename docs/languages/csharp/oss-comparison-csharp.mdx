@@ -1,0 +1,1395 @@
+---
+title: "Comparison guide: OpenAPI/Swagger C# client generation"
+description: "Comparing the new Speakeasy C# SDK generator with the Open Source OpenAPI C# generator"
+keywords: [api, openapi, swagger, sdk generation, sdk, C#, sdk, developer experience, devex, dx]
+date: 2024-05-23
+---
+
+import { Table } from "@/mdx/components";
+
+# Comparison guide: OpenAPI/Swagger C# client generation
+
+Speakeasy produces idiomatic SDKs in various programming languages, including C#. The Speakeasy approach to SDK generation prioritizes a good developer journey to enable you as an API provider to focus on developing a streamlined experience for your users.
+
+In this article, we'll compare creating a C# SDK using Speakeasy to creating one using the open-source OpenAPI Generator. The table below is a summary of the comparison:
+
+<Table 
+  data={[
+    { feature: "Framework Support", speakeasy: "⚠️ Limited to .NET 5+", openapiGenerator: "✅ Wider range (.NET Framework 4.7, .NET Standard 1.3-2.1, .NET 6+)" },
+    { feature: ".NET Features", speakeasy: "✅ Full async/await support, interfaces for DI", openapiGenerator: "⚠️ Basic async/await support" },
+    { feature: "Dependencies", speakeasy: "✅ Minimal - Only Newtonsoft.Json and NodaTime", openapiGenerator: "❌ Multiple dependencies including JsonSubTypes, Newtonsoft.Json, RestSharp, Polly, System.Web" },   
+    { feature: "Code Style", speakeasy: "✅ Modern, idiomatic C# with object initializers", openapiGenerator: "⚠️ Traditional C# with constructors and property setters" },
+    { feature: "HTTP client", speakeasy: "✅ Uses built-in System.Net.Http", openapiGenerator: "❌ Relies on third-party RestSharp library" },
+    { feature: "Request retry", speakeasy: "✅ Built-in configurable retry support with multiple strategies", openapiGenerator: "❌ No built-in retry support" },
+    { feature: "Model implementation", speakeasy: "✅ Modern, concise approach using nullable types and attributes", openapiGenerator: "⚠️ Traditional approach with more verbose implementations" },   
+    { feature: "Serialization", speakeasy: "✅ Clean approach using JsonProperty attributes directly", openapiGenerator: "⚠️ More complex approach using DataContract and DataMember attributes" },
+    { feature: "Documentation", speakeasy: "✅ Comprehensive documentation with detailed examples and error handling", openapiGenerator: "⚠️ Basic documentation focusing on setup and API routes" },
+    { feature: "Error handling", speakeasy: "⚠️ Generic exceptions with stack traces", openapiGenerator: "✅ More descriptive custom exceptions" },
+    { feature: "Customization", speakeasy: "✅ Supports hooks and custom configurations", openapiGenerator: "❌ Limited customization options" },       
+  ]}
+  columns={[
+    { key: "feature", header: "Feature/Aspect" },
+    { key: "speakeasy", header: "Speakeasy" },
+    { key: "openapiGenerator", header: "OpenAPI Generator" }
+  ]}
+/>
+
+You can explore the Speakeasy [C# SDK documentation](/docs/languages/csharp/methodology-csharp) for more information. 
+
+For a detailed technical comparison, read on!
+
+## Installing the CLIs
+
+We'll start by installing the Speakeasy CLI and the OpenAPI Generator CLI.
+
+### Installing the Speakeasy CLI
+
+You can install the Speakeasy CLI by following the installation instructions [here](/docs/speakeasy-reference/cli/getting-started).
+
+After installation, you can check the version to ensure the installation was successful:
+
+```bash
+speakeasy -v
+```
+
+If you encounter any errors, take a look at the [Speakeasy SDK creation documentation](/docs/create-client-sdks).
+
+### Installing the OpenAPI Generator CLI
+
+Install the OpenAPI Generator CLI by running the following command in an terminal:
+
+```bash
+curl -o openapi-generator-cli.jar https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.2.0/openapi-generator-cli-7.2.0.jar
+```
+
+## Downloading the Swagger Petstore specification
+
+We need an OpenAPI specification YAML file to generate SDKs. We'll use the Swagger Petstore specification, which you can find at [https://petstore3.swagger.io/api/v3/openapi.yaml](https://petstore3.swagger.io/api/v3/openapi.yaml).
+
+In a terminal in your working directory, download the file and save it as `petstore.yaml` with the following command:
+
+```bash
+curl -o petstore.yaml https://petstore3.swagger.io/api/v3/openapi.yaml
+```
+
+## Validating the specification file
+
+Let's validate the spec using both the Speakeasy CLI and OpenAPI Generator.
+
+### Validating the Specification File Using Speakeasy
+
+Validate the spec with Speakeasy using the following command:
+
+```bash
+speakeasy validate openapi -s petstore.yaml
+```
+
+The Speakeasy validator returns the following:
+
+```bash
+
+╭────────────╮╭───────────────╮╭────────────╮
+│ Errors (0) ││ Warnings (10) ││ Hints (72) │
+├────────────┴┘               └┴────────────┴────────────────────────────────────────────────────────────╮
+│                                                                                                        │
+│ │ Line 250: operation-success-response - operation `updatePetWithForm` must define at least a single   │
+│ │ `2xx` or `3xx` response                                                                              │
+│                                                                                                        │
+│   Line 277: operation-success-response - operation `deletePet` must define at least a single `2xx` or  │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   Line 413: operation-success-response - operation `deleteOrder` must define at least a single `2xx` o │
+│   r                                                                                                    │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   Line 437: operation-success-response - operation `createUser` must define at least a single `2xx` or │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   Line 524: operation-success-response - operation `logoutUser` must define at least a single `2xx` or │
+│   `3xx` response                                                                                       │
+│                                                                                                        │
+│   ••                                                                                                   │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ ←/→ switch tabs  ↑/↓ navigate  ↵ inspect  esc quit
+
+```
+
+The Speakeasy CLI validation result gives us a handy tool for switching between the errors, warnings, and hints tabs with the option to navigate through the results on each tab.
+
+In this instance, Speakeasy generated ten warnings. Let's correct them before continuing.
+
+Notice that some of the warnings contain a `default` response. For completeness, we'd like to explicitly return a `200` HTTP response. We'll make the following modifications in the `petstore.yaml` file.
+
+When the `updatePetWithForm` operation executes successfully, we expect an HTTP `200` response with the updated `Pet` object to be returned.
+
+Insert the following after `responses` on line 250:
+
+```yaml
+"200":
+  description: successful operation
+  content:
+    application/xml:
+      schema:
+        $ref: "#/components/schemas/Pet"
+    application/json:
+      schema:
+        $ref: "#/components/schemas/Pet"
+```
+
+Similarly, following successful `createUser` and `updateUser` operations, we'd like to return an HTTP `200` response with a `User` object.
+
+Add the following text to both operations below `responses`:
+
+```yaml
+"200":
+  description: successful operation
+  content:
+    application/xml:
+      schema:
+        $ref: "#/components/schemas/User"
+    application/json:
+      schema:
+        $ref: "#/components/schemas/User"
+```
+
+Now we'll add the same response to four operations. Copy the following text:
+
+```yaml
+"200":
+    description: successful operation
+```
+
+Paste this response after `responses` for the following operations:
+
+- `deletePet`
+- `deleteOrder`
+- `logoutUser`
+- `deleteUser`
+
+We are left with three warnings indicating potentially unused or orphaned objects and operations.
+
+For unused objects, locate the following lines of code and delete them:
+
+```yaml
+Customer:
+  type: object
+  properties:
+    id:
+      type: integer
+      format: int64
+      example: 100000
+    username:
+      type: string
+      example: fehguy
+    address:
+      type: array
+      xml:
+        name: addresses
+        wrapped: true
+      items:
+        $ref: "#/components/schemas/Address"
+  xml:
+    name: customer
+Address:
+  type: object
+  properties:
+    street:
+      type: string
+      example: 437 Lytton
+    city:
+      type: string
+      example: Palo Alto
+    state:
+      type: string
+      example: CA
+    zip:
+      type: string
+      example: "94301"
+  xml:
+    name: address
+```
+
+To remove the unused request bodies, locate the following lines and delete them:
+
+```yaml
+requestBodies:
+  Pet:
+    description: Pet object that needs to be added to the store
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/Pet"
+      application/xml:
+        schema:
+          $ref: "#/components/schemas/Pet"
+  UserArray:
+    description: List of user object
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+```
+
+Now if you validate the file with the Speakeasy CLI, you'll notice there are no warnings:
+
+```
+╭────────────╮╭──────────────╮╭────────────╮
+│ Errors (0) ││ Warnings (0) ││ Hints (75) │
+├────────────┴┴──────────────┴┘            └─────────────────────────────────────────────────────────────╮
+│                                                                                                        │
+│ │ Line 51: missing-examples - Missing example for requestBody. Consider adding an example              │
+│                                                                                                        │
+│   Line 54: missing-examples - Missing example for requestBody. Consider adding an example              │
+│                                                                                                        │
+│   Line 57: missing-examples - Missing example for requestBody. Consider adding an example              │
+│                                                                                                        │
+│   Line 65: missing-examples - Missing example for responses. Consider adding an example                │
+│                                                                                                        │
+│   Line 68: missing-examples - Missing example for responses. Consider adding an example                │
+│                                                                                                        │
+│   •••••••••••••••                                                                                      │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ ←/→ switch tabs  ↑/↓ navigate  ↵ inspect  esc quit
+```
+
+### Validating the specification file using the OpenAPI Generator
+
+OpenAPI Generator requires Java runtime environment (JRE) version 11 or later installed. Confirm whether JRE is installed on your system by executing the following command:
+
+```bash
+java --version
+```
+
+If Java is installed, information about the version should be displayed similar to this:
+
+```bash
+java 17.0.8 2023-07-18 LTS
+Java(TM) SE Runtime Environment (build 17.0.8+9-LTS-211)
+Java HotSpot(TM) 64-Bit Server VM (build 17.0.8+9-LTS-211, mixed mode, sharing)
+```
+
+If you get an error or the JRE version is older than version 11, you need to update or [install Java](https://docs.oracle.com/goldengate/1212/gg-winux/GDRAD/java.htm#BGBFJHAB).
+
+Now you can validate the `petstore.yaml` specification file with OpenAPI Generator by running the following command in the terminal:
+
+```bash
+java -jar openapi-generator-cli.jar validate -i petstore.yaml
+```
+
+The OpenAPI Generator returns the following response, indicating no issues detected.
+
+```
+Validating spec (petstore.yaml)
+No validation issues detected.
+```
+
+Now that we have made the `petstore.yaml` file more complete by fixing the warnings, let's use it to create SDKs.
+
+## Creating SDKs
+
+We'll create C# SDKs using Speakeasy and OpenAPI Generator and then compare them.
+
+### Creating an SDK with Speakeasy
+
+To create a C# SDK from the `petstore.yaml` specification file using Speakeasy, run the following command in the terminal:
+
+```bash
+# Generate Pet store SDK using Speakeasy CLI generator
+speakeasy generate sdk --schema petstore.yaml --lang csharp --out petstore-sdk-csharp-speakeasy
+```
+
+The generator will return some logging results while the SDK is being created and a success indicator should appear upon completion.
+
+```
+SDK for csharp generated successfully ✓
+```
+
+### Creating an SDK with OpenAPI Generator
+
+Run the following command in the terminal to generate a C# SDK using OpenAPI Generator:
+
+```bash
+# Generate Pet store SDK using OpenAPI generator
+java -jar openapi-generator-cli.jar generate -i petstore.yaml -g csharp -o petstore-sdk-csharp-openapi
+```
+
+The generator returns various logs and finally a successful generation message.
+
+```
+################################################################################
+# Thanks for using OpenAPI Generator.                                          #
+# Please consider donation to help us maintain this project ?                  #
+# https://opencollective.com/openapi_generator/donate                          #
+#                                                                              #
+# This generator's contributed by Jim Schubert (https://github.com/jimschubert)#
+# Please support his work directly via https://patreon.com/jimschubert ?       #
+################################################################################
+```
+
+## SDK code compared: Project structure
+
+Let's compare the two project structures by printing a tree view of each SDK directory.
+
+Run the following command to get the Speakeasy SDK structure:
+
+```bash
+tree petstore-sdk-csharp-speakeasy
+```
+
+The results of the project structure are displayed as follows:
+
+```
+petstore-sdk-csharp-speakeasy
+│   .gitattributes
+│   .gitignore
+│   global.json
+│   Openapi.sln
+│   README.md
+│   USAGE.md
+│
+├───.speakeasy
+│       gen.lock
+│       gen.yaml
+│
+├───docs
+│   ├───Models
+│   │   ├───Components
+│   │   │       ApiResponse.md
+│   │   │       Category.md
+│   │   │       HTTPMetadata.md
+│   │   │       Order.md
+│   │   │       OrderStatus.md
+│   │   │       Pet.md
+│   │   │       Security.md
+│   │   │       Status.md
+│   │   │       Tag.md
+│   │   │       User.md
+│   │   │
+│   │   └───Requests
+│   │           AddPetFormResponse.md
+│   │           AddPetJsonResponse.md
+│   │           AddPetRawResponse.md
+│   │           CreateUserFormResponse.md
+│   │           CreateUserJsonResponse.md
+│   │           CreateUserRawResponse.md
+│   │           CreateUsersWithListInputResponse.md
+│   │           DeleteOrderRequest.md
+│   │           DeleteOrderResponse.md
+│   │           DeletePetRequest.md
+│   │           DeletePetResponse.md
+│   │           DeleteUserRequest.md
+│   │           DeleteUserResponse.md
+│   │           FindPetsByStatusRequest.md
+│   │           FindPetsByStatusResponse.md
+│   │           FindPetsByTagsRequest.md
+│   │           FindPetsByTagsResponse.md
+│   │           GetInventoryResponse.md
+│   │           GetInventorySecurity.md
+│   │           GetOrderByIdRequest.md
+│   │           GetOrderByIdResponse.md
+│   │           GetPetByIdRequest.md
+│   │           GetPetByIdResponse.md
+│   │           GetPetByIdSecurity.md
+│   │           GetUserByNameRequest.md
+│   │           GetUserByNameResponse.md
+│   │           LoginUserRequest.md
+│   │           LoginUserResponse.md
+│   │           LogoutUserResponse.md
+│   │           PlaceOrderFormResponse.md
+│   │           PlaceOrderJsonResponse.md
+│   │           PlaceOrderRawResponse.md
+│   │           Status.md
+│   │           UpdatePetFormResponse.md
+│   │           UpdatePetJsonResponse.md
+│   │           UpdatePetRawResponse.md
+│   │           UpdatePetWithFormRequest.md
+│   │           UpdatePetWithFormResponse.md
+│   │           UpdateUserFormRequest.md
+│   │           UpdateUserFormResponse.md
+│   │           UpdateUserJsonRequest.md
+│   │           UpdateUserJsonResponse.md
+│   │           UpdateUserRawRequest.md
+│   │           UpdateUserRawResponse.md
+│   │           UploadFileRequest.md
+│   │           UploadFileResponse.md
+│   │
+│   └───sdks
+│       ├───pet
+│       │       README.md
+│       │
+│       ├───sdk
+│       │       README.md
+│       │
+│       ├───store
+│       │       README.md
+│       │
+│       └───user
+│               README.md
+│
+└───Openapi
+    │   Openapi.csproj
+    │   Pet.cs
+    │   SDK.cs
+    │   Store.cs
+    │   User.cs
+    │
+    ├───Hooks
+    │       HookRegistration.cs
+    │       HookTypes.cs
+    │       SDKHooks.cs
+    │
+    ├───Models
+    │   ├───Components
+    │   │       ApiResponse.cs
+    │   │       Category.cs
+    │   │       HTTPMetadata.cs
+    │   │       Order.cs
+    │   │       OrderStatus.cs
+    │   │       Pet.cs
+    │   │       Security.cs
+    │   │       Status.cs
+    │   │       Tag.cs
+    │   │       User.cs
+    │   │
+    │   ├───Errors
+    │   │       SDKException.cs
+    │   │
+    │   └───Requests
+    │           AddPetFormResponse.cs
+    │           AddPetJsonResponse.cs
+    │           AddPetRawResponse.cs
+    │           CreateUserFormResponse.cs
+    │           CreateUserJsonResponse.cs
+    │           CreateUserRawResponse.cs
+    │           CreateUsersWithListInputResponse.cs
+    │           DeleteOrderRequest.cs
+    │           DeleteOrderResponse.cs
+    │           DeletePetRequest.cs
+    │           DeletePetResponse.cs
+    │           DeleteUserRequest.cs
+    │           DeleteUserResponse.cs
+    │           FindPetsByStatusRequest.cs
+    │           FindPetsByStatusResponse.cs
+    │           FindPetsByTagsRequest.cs
+    │           FindPetsByTagsResponse.cs
+    │           GetInventoryResponse.cs
+    │           GetInventorySecurity.cs
+    │           GetOrderByIdRequest.cs
+    │           GetOrderByIdResponse.cs
+    │           GetPetByIdRequest.cs
+    │           GetPetByIdResponse.cs
+    │           GetPetByIdSecurity.cs
+    │           GetUserByNameRequest.cs
+    │           GetUserByNameResponse.cs
+    │           LoginUserRequest.cs
+    │           LoginUserResponse.cs
+    │           LogoutUserResponse.cs
+    │           PlaceOrderFormResponse.cs
+    │           PlaceOrderJsonResponse.cs
+    │           PlaceOrderRawResponse.cs
+    │           Status.cs
+    │           UpdatePetFormResponse.cs
+    │           UpdatePetJsonResponse.cs
+    │           UpdatePetRawResponse.cs
+    │           UpdatePetWithFormRequest.cs
+    │           UpdatePetWithFormResponse.cs
+    │           UpdateUserFormRequest.cs
+    │           UpdateUserFormResponse.cs
+    │           UpdateUserJsonRequest.cs
+    │           UpdateUserJsonResponse.cs
+    │           UpdateUserRawRequest.cs
+    │           UpdateUserRawResponse.cs
+    │           UploadFileRequest.cs
+    │           UploadFileResponse.cs
+    │
+    └───Utils
+        │   AnyDeserializer.cs
+        │   BigIntStrConverter.cs
+        │   DecimalStrConverter.cs
+        │   EnumConverter.cs
+        │   FlexibleObjectDeserializer.cs
+        │   HeaderSerializer.cs
+        │   IsoDateTimeSerializer.cs
+        │   RequestBodySerializer.cs
+        │   ResponseBodyDeserializer.cs
+        │   SecurityMetadata.cs
+        │   SpeakeasyHttpClient.cs
+        │   SpeakeasyMetadata.cs
+        │   URLBuilder.cs
+        │   Utilities.cs
+        │
+        └───Retries
+                BackoffStrategy.cs
+                Retries.cs
+                RetryConfig.cs
+```
+
+The OpenAPI Generator SDK structure can be created with:
+
+```bash
+tree petstore-sdk-csharp-openapi
+```
+
+The results look like this:
+
+```
+petstore-sdk-csharp-openapi
+│   .gitignore
+│   .openapi-generator-ignore
+│   appveyor.yml
+│   git_push.sh
+│   Org.OpenAPITools.sln
+│   README.md
+│
+├───.openapi-generator
+│       FILES
+│       VERSION
+│
+├───api
+│       openapi.yaml
+│
+├───docs
+│       Address.md
+│       ApiResponse.md
+│       Category.md
+│       Customer.md
+│       Order.md
+│       Pet.md
+│       PetApi.md
+│       StoreApi.md
+│       Tag.md
+│       User.md
+│       UserApi.md
+│
+└───src
+    ├───Org.OpenAPITools
+    │   │   Org.OpenAPITools.csproj
+    │   │
+    │   ├───Api
+    │   │       PetApi.cs
+    │   │       StoreApi.cs
+    │   │       UserApi.cs
+    │   │
+    │   ├───Client
+    │   │   │   ApiClient.cs
+    │   │   │   ApiException.cs
+    │   │   │   ApiResponse.cs
+    │   │   │   ClientUtils.cs
+    │   │   │   Configuration.cs
+    │   │   │   ExceptionFactory.cs
+    │   │   │   GlobalConfiguration.cs
+    │   │   │   HttpMethod.cs
+    │   │   │   IApiAccessor.cs
+    │   │   │   IAsynchronousClient.cs
+    │   │   │   IReadableConfiguration.cs
+    │   │   │   ISynchronousClient.cs
+    │   │   │   Multimap.cs
+    │   │   │   OpenAPIDateConverter.cs
+    │   │   │   RequestOptions.cs
+    │   │   │   RetryConfiguration.cs
+    │   │   │
+    │   │   └───Auth
+    │   │           OAuthAuthenticator.cs
+    │   │           OAuthFlow.cs
+    │   │           TokenResponse.cs
+    │   │
+    │   └───Model
+    │           AbstractOpenAPISchema.cs
+    │           Address.cs
+    │           ApiResponse.cs
+    │           Category.cs
+    │           Customer.cs
+    │           Order.cs
+    │           Pet.cs
+    │           Tag.cs
+    │           User.cs
+    │
+    └───Org.OpenAPITools.Test
+        │   Org.OpenAPITools.Test.csproj
+        │
+        ├───Api
+        │       PetApiTests.cs
+        │       StoreApiTests.cs
+        │       UserApiTests.cs
+        │
+        └───Model
+                AddressTests.cs
+                ApiResponseTests.cs
+                CategoryTests.cs
+                CustomerTests.cs
+                OrderTests.cs
+                PetTests.cs
+                TagTests.cs
+                UserTests.cs
+```
+
+The Speakeasy-created SDK contains more generated files than the SDK from OpenAPI Generator, which is partly due to the Speakeasy SDK being less dependent on third-party libraries.
+
+## Model and usage
+
+The Speakeasy SDK follows an object-oriented approach to constructing model objects, leveraging C# support for object initializers. Here's an example of creating and updating a `Pet` object:
+
+```csharp
+var sdk = new SDK();
+var req = new Models.Components.Pet();
+{
+    Id = 10,
+    Name = "doggie",
+    Category = new Category()
+    {
+        Id = 1,
+        Name = "Dogs"
+    },
+    PhotoUrls = new List<string>() { "<value>" }
+};
+
+var res = await sdk.Pet.UpdatePetJsonAsync(req);
+```
+
+The model classes are defined as structured and type-safe, using C# classes and properties. Object initializer syntax makes it convenient to instantiate and populate model objects.
+
+The OpenAPI Generator SDK takes a similar approach to constructing model objects. Here's an example of adding a new `Pet` object:
+
+```csharp
+// Configure API client
+var config = new Configuration();
+config.BasePath = "/api/v3";
+
+//  using traditional constructor
+//  var photo = new List<string>() {
+//             "https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=1xw:0.74975xh;center,top&resize=1200:*"
+//             };
+//  var cat = new Category(10);
+//  var pet = new Pet(10,"openApiDoggie",cat,photo);
+
+// Create an instance of the API class using object initializer
+var apiInstance = new PetApi(config);
+try
+{   
+    var pet = new Pet();
+    {
+        Id = 10,
+        Name = "openAPiDoggie",
+        Category = new Category() { Id = 10 },
+        PhotoUrls = new List<string>() {
+            "https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=1xw:0.74975xh;center,top&resize=1200:*"
+        },
+    };
+
+    Pet result = apiInstance.AddPet(pet);
+    Console.WriteLine(result.ToString());
+
+}
+catch (ApiException e)
+{
+    Debug.Print("Exception when calling PetApi.AddPet: " + e.Message);
+    Debug.Print("Status Code: " + e.ErrorCode);
+    Debug.Print(e.StackTrace);
+}
+
+```
+
+Model classes are defined using constructors and property setters. While this approach is more verbose, it follows a more traditional style that may be familiar to developers coming from other backgrounds. Note that modern language features in .NET allow classes to be initialized using object initializers too, as shown in the example above.
+
+In the Speakeasy SDK, the model object is instantiated and populated using an object initializer, providing a more concise and fluent syntax. The OpenAPI Generator SDK, on the other hand, makes use of constructors and individual property setters, making the code more verbose, but also allowing the use of object initializers.
+
+Both SDKs provide mechanisms for handling exceptions and error cases when interacting with the API.
+
+## JSON serialization and deserialization
+
+The Speakeasy SDK uses attributes from the `Newtonsoft.Json` library for the JSON serialization and deserialization of objects.
+
+```csharp
+#nullable enable
+namespace Openapi.Models.Components
+{
+    using Newtonsoft.Json;
+    using Openapi.Models.Components;
+    using Openapi.Utils;
+    using System.Collections.Generic;
+
+    public class Pet
+    {
+        [JsonProperty("id")]
+        [SpeakeasyMetadata("form:name=id")]
+        public long? Id { get; set; }
+
+        [JsonProperty("name")]
+        [SpeakeasyMetadata("form:name=name")]
+        public string Name { get; set; } = default!;
+
+        [JsonProperty("category")]
+        [SpeakeasyMetadata("form:name=category,json")]
+        public Category? Category { get; set; }
+
+        [JsonProperty("photoUrls")]
+        [SpeakeasyMetadata("form:name=photoUrls")]
+        public List<string> PhotoUrls { get; set; } = default!;
+
+        [JsonProperty("tags")]
+        [SpeakeasyMetadata("form:name=tags,json")]
+        public List<Tag>? Tags { get; set; }
+
+        /// <summary>
+        /// pet status in the store
+        /// </summary>
+        [JsonProperty("status")]
+        [SpeakeasyMetadata("form:name=status")]
+        public Models.Components.Status? Status { get; set; }
+    }
+}
+
+```
+
+The `JsonProperty` attribute is used to map class properties to their corresponding JSON fields. The `SpeakeasyMetadata` attribute is used to provide additional metadata for form encoding and other purposes.
+
+By contrast, the OpenAPI Generator SDK uses the `Newtonsoft.Json.Converters` namespace for JSON serialization and deserialization:
+
+```csharp
+/// <summary>
+/// Pet
+/// </summary>
+ [DataContract(Name = "Pet")]
+ public partial class Pet : IValidatableObject
+ {
+    /// <summary>
+    /// pet status in the store
+    /// </summary>
+    /// <value>pet status in the store</value>
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum StatusEnum
+    {
+        /// <summary>
+        /// Enum Available for value: available
+        /// </summary>
+        [EnumMember(Value = "available")]
+        Available = 1,
+        /// <summary>
+        /// Enum Pending for value: pending
+        /// </summary>
+        [EnumMember(Value = "pending")]
+        Pending = 2,
+        /// <summary>
+        /// Enum Sold for value: sold
+        /// </summary>
+        [EnumMember(Value = "sold")]
+        Sold = 3
+    }
+
+    /// <summary>
+    /// pet status in the store
+    /// </summary>
+    /// <value>pet status in the store</value>
+    [DataMember(Name = "status", EmitDefaultValue = false)]
+    public StatusEnum? Status { get; set; }
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Pet" /> class.
+    /// </summary>
+    [JsonConstructorAttribute]
+    protected Pet() { }
+    /// <summary>
+    /// Initializes a new instance of the <see cref="Pet" /> class.
+    /// </summary>
+    /// <param name="id">id.</param>
+    /// <param name="name">name (required).</param>
+    /// <param name="category">category.</param>
+    /// <param name="photoUrls">photoUrls (required).</param>
+    /// <param name="tags">tags.</param>
+    /// <param name="status">pet status in the store.</param>
+        public Pet(long id = default(long), string name = default(string), Category category = default(Category), List<string> photoUrls = default(List<string>), List<Tag> tags = default(List<Tag>), StatusEnum? status = default(StatusEnum?))
+        {
+            // to ensure "name" is required (not null)
+            if (name == null)
+            {
+                throw new ArgumentNullException("name is a required property for Pet and cannot be null");
+            }
+
+            this.Name = name;
+
+            // to ensure "photoUrls" is required (not null)
+            if (photoUrls == null)
+            {
+                throw new ArgumentNullException("photoUrls is a required property for Pet and cannot be null");
+            }
+
+            this.PhotoUrls = photoUrls;
+            this.Id = id;
+            this.Category = category;
+            this.Tags = tags;
+            this.Status = status;
+
+        }
+
+        /// <summary>
+        /// Gets or Sets Id
+        /// </summary>
+        /// <example>10</example>
+        [DataMember(Name = "id", EmitDefaultValue = false)]
+        public long Id { get; set; }
+        /// <summary>
+        /// Gets or Sets Name
+        /// </summary>
+        /// <example>doggie</example>
+        [DataMember(Name = "name", IsRequired = true, EmitDefaultValue = true)]
+        public string Name { get; set; }
+}
+```
+
+
+The OpenAPI Generator SDK attempts to use default values in the constructor to handle nullable types by forcing default values.
+
+The `DataContract` and `DataMember` annotations from the `System.Runtime.Serialization` namespace specify which properties of a class should be included during serialization and deserialization.
+
+While both SDKs use the `Newtonsoft.Json` library, the Speakeasy SDK takes a more straightforward approach by directly using the `JsonProperty` attribute. The OpenAPI Generator SDK relies on `DataContract` and `DataMember` for the process.
+
+## Model implementation
+
+The Speakeasy SDK uses a more modern approach to defining model classes. Here's the `Pet` class implementation:
+
+```csharp
+#nullable enable
+namespace Openapi.Models.Components
+{
+    using Newtonsoft.Json;
+    using Openapi.Utils;
+    using System.Collections.Generic;
+
+    public class Pet
+    {
+        [JsonProperty("id")]
+        [SpeakeasyMetadata("form:name=id")]
+        public long? Id { get; set; }
+
+        [JsonProperty("name")]
+        [SpeakeasyMetadata("form:name=name")]
+        public string Name { get; set; } = default!;
+
+        [JsonProperty("category")]
+        [SpeakeasyMetadata("form:name=category,json")]
+        public Category? Category { get; set; }
+
+        [JsonProperty("photoUrls")]
+        [SpeakeasyMetadata("form:name=photoUrls")]
+        public List<string> PhotoUrls { get; set; } = default!;
+
+        [JsonProperty("tags")]
+        [SpeakeasyMetadata("form:name=tags,json")]
+        public List<Tag>? Tags { get; set; }
+
+        /// <summary>
+        /// pet status in the store
+        /// </summary>
+        [JsonProperty("status")]
+        [SpeakeasyMetadata("form:name=status")]
+        public Models.Components.Status? Status { get; set; }
+    }
+}
+
+```
+
+The Speakeasy SDK model class definitions follow a property-based approach, using properties decorated with `JsonProperty` attributes for JSON serialization and deserialization, and `SpeakeasyMetadata` attributes for additional metadata.
+
+Null safety is ensured by the `#nullable enable` directive, and nullable types like `long?` and non-null default values like `= default!` help to prevent unexpected `NullReferenceException` issues.
+
+By contrast, the OpenAPI Generator SDK's `Pet` class has a more traditional implementation:
+
+```csharp
+/// <summary>
+/// Pet
+/// </summary>
+[DataContract(Name = "Pet")]
+public partial class Pet : IValidatableObject
+{
+ /// <summary>
+ /// pet status in the store
+ /// </summary>
+ /// <value>pet status in the store</value>
+
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum StatusEnum
+    {
+    /// <summary>
+    /// Enum Available for value: available
+    /// </summary>
+    [EnumMember(Value = "available")]
+    Available = 1,
+    }
+
+    /// <summary>
+    /// pet status in the store
+    /// </summary>
+    /// <value>pet status in the store</value>
+    [DataMember(Name = "status", EmitDefaultValue = false)]
+    public StatusEnum? Status { get; set; }
+
+    public Pet(long id = default(long), string name = default(string), Category category = default(Category), List<string> photoUrls = default(List<string>), List<Tag> tags = default(List<Tag>), StatusEnum? status = default(StatusEnum?))
+    {
+        // to ensure "name" is required (not null)
+        if (name == null)
+        {
+            throw new ArgumentNullException("name is a required property for Pet and cannot be null");
+        }
+        this.Name = name;
+
+        // to ensure "photoUrls" is required (not null)
+        if (photoUrls == null)
+        {
+            throw new ArgumentNullException("photoUrls is a required property for Pet and cannot be null");
+        }
+
+        this.PhotoUrls = photoUrls;
+        this.Id = id;
+        this.Category = category;
+        this.Tags = tags;
+        this.Status = status;
+    }
+
+    /// <summary>
+    /// Returns the JSON string presentation of the object
+    /// </summary>
+    /// <returns>JSON string presentation of the object</returns>
+    public virtual string ToJson()
+    {
+        return Newtonsoft.Json.JsonConvert.SerializeObject(this, Newtonsoft.Json.Formatting.Indented);
+    }
+
+    /// <summary>
+    /// To validate all properties of the instance
+    /// </summary>
+    /// <param name="validationContext">Validation context</param>
+    /// <returns>Validation Result</returns>
+
+    IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> IValidatableObject.Validate(ValidationContext validationContext)
+    {
+        yield break;
+    }
+}
+```
+
+The OpenAPI Generator SDK uses data contracts and attributes from the `System.Runtime.Serialization` namespace for serialization and deserialization, and includes additional `ToString()`, `ToJson()`, and `Validate()` methods. The `StatusEnum` property is implemented as a separate enum, which adds complexity to the model class.
+
+The Speakeasy SDK model implementation is more concise and follows a modern and idiomatic approach to defining C# classes. The OpenAPI Generator SDK model implementation is more verbose and includes traditional features like validation and string representation methods.
+
+## HTTP communication
+
+The Speakeasy SDK handles HTTP communication using the `System.Net.Http` namespace, which is part of the .NET Base Class Library (BCL).
+
+Here's an example of the `AddPetJsonAsync` method from the `Pet` class:
+
+```csharp
+public async Task<AddPetJsonResponse> AddPetJsonAsync(Models.Components.Pet request)
+{
+    string baseUrl = this.SDKConfiguration.GetTemplatedServerUrl();
+    var urlString = baseUrl + "/pet";
+
+    var httpRequest = new HttpRequestMessage(HttpMethod.Post, urlString);
+    httpRequest.Headers.Add("user-agent", _userAgent);
+
+    var serializedBody = RequestBodySerializer.Serialize(request, "Request", "json", false, false);
+
+    if (serializedBody != null)
+    {
+        httpRequest.Content = serializedBody;
+    }
+
+    HttpResponseMessage httpResponse;
+    try
+    {
+        httpResponse = await _client.SendAsync(httpRequest);
+        // ... (handle response and exceptions)
+    }
+    catch (Exception error)
+    {
+     // ... (handle exceptions)
+    }
+    // ... (additional processing and return response)
+}
+```
+
+The `AddPetJsonAsync` method constructs a `HttpRequestMessage` object with the appropriate method and URL. It then serializes the request body, sets the necessary headers, and applies security and hooks. It sends the request using the `SendAsync` method, which returns an `HttpResponseMessage`.
+
+The OpenAPI Generator SDK has a more complicated approach to HTTP communication, defining several custom classes and types to manage the process. Ultimately, it relies on the `RestSharp` library and `RestSharp.Serializers` for executing the HTTP requests and handling serialization.
+
+Here's the `AddPetAsync` method from the `PetApi` class:
+
+```csharp
+public async System.Threading.Tasks.Task<Pet> AddPetAsync(Pet pet, int operationIndex = 0, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+{
+    Org.OpenAPITools.Client.ApiResponse<Pet> localVarResponse = await AddPetWithHttpInfoAsync(pet, operationIndex, cancellationToken).ConfigureAwait(false);
+    return localVarResponse.Data;
+}
+```
+
+The `AddPetAsync` method calls the `AddPetWithHttpInfoAsync` method, which handles the HTTP communication details. To make the HTTP request and process the response, the SDK uses a custom `AsynchronousClient` class, which internally uses the third-party `RestSharp` library for HTTPS communication.
+
+Both SDKs leverage async/await for asynchronous operations, but the Speakeasy SDK takes advantage of the built-in `System.Net.Http` namespace in .NET, providing a more integrated and efficient approach to HTTP communication. The custom HTTP communication implementation of the OpenAPI Generator SDK depends on a third-party library, which brings additional maintenance and compatibility considerations.
+
+## Retries
+
+The Speakeasy SDK provides built-in support for automatically retrying failed requests. You can configure retries globally or on a per-request basis using the `x-speakeasy-retries` extension in your OpenAPI specification document.
+
+Here's how the `AddPetJsonAsync` method handles retries:
+
+```csharp
+public async Task<AddPetJsonResponse> AddPetJsonAsync(Models.Components.Pet request, RetryConfig? retryConfig = null)
+{
+    if (retryConfig == null)
+    {
+        if (this.SDKConfiguration.RetryConfig != null)
+        {
+            retryConfig = this.SDKConfiguration.RetryConfig;
+        }
+        else
+        {
+            var backoff = new BackoffStrategy(
+                initialIntervalMs: 500L,
+                maxIntervalMs: 60000L,
+                maxElapsedTimeMs: 3600000L,
+                exponent: 1.5
+             );
+
+            retryConfig = new RetryConfig(
+                strategy: RetryConfig.RetryStrategy.BACKOFF,
+                backoff: backoff,
+                retryConnectionErrors: true
+            );
+        }
+    }
+    List<string> statusCodes = new List<string>
+    {
+        "5XX",
+    };
+
+    Func<Task<HttpResponseMessage>> retrySend = async () =>
+    {
+        var _httpRequest = await _client.CloneAsync(httpRequest);
+        return await _client.SendAsync(_httpRequest);
+    };
+
+    var retries = new Openapi.Utils.Retries.Retries(retrySend, retryConfig, statusCodes);
+
+    HttpResponseMessage httpResponse;
+    try
+    {
+        httpResponse = await retries.Run();
+         // ... (handle response and exceptions)
+    }
+    catch (Exception error)
+    {
+        // ... (handle exceptions)
+    }
+
+    // ... (additional processing and return response)
+}
+
+```
+
+If no `RetryConfig` is provided, the method checks for a global `RetryConfig` in the `SDKConfiguration`. If no global `RetryConfig` is found, a default `BackoffStrategy` is created with values for initial interval, maximum interval, maximum elapsed time, and exponential backoff factor.
+
+The `retrySend` function clones the original `HttpRequestMessage` prior to sending. This prevents it from being consumed by the `SendAsync` method, enabling subsequent resends.
+
+An instance of the `Retries` class is created, taking the `retrySend` function, `retryConfig`, and status codes as arguments.
+
+The `retries.Run()` method is then called to handle the entire retry logic and it returns the final `HttpResponseMessage`.
+
+Various retry strategies, like backoff or fixed interval, are supported and most options are configurable. The `x-speakeasy-retries` extension can be used in an OpenAPI specification file to configure retries for specific operations or globally.
+
+For more information on configuring retries in your SDK, take a look at the [retries documentation](/docs/customize-sdks/retries).
+
+The OpenAPI Generator SDK does not provide built-in support for automatic retries, and you would need to implement this functionality manually or by using a third-party library.
+
+### SDK dependencies
+
+The Speakeasy SDK has the following external dependencies:
+
+```xml
+<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+<PackageReference Include="NodaTime" Version="3.1.9" />
+```
+
+- **Newtonsoft.Json:** A JSON framework for .NET used for JSON serialization and deserialization.
+- **Noda Time:** A date and time API for .NET, providing a better implementation than the built-in `System.DateTime` components.
+
+The OpenAPI Generator SDK has the following external dependencies:
+
+- **JsonSubTypes:** A library used for handling JSON polymorphism, useful for dealing with inheritance hierarchies in JSON data.
+- **Newtonsoft.Json:** a JSON framework for .NET, which is used for JSON serialization and deserialization in the SDK.
+- **RestSharp:** A library for consuming RESTful web services in .NET, used for making HTTP requests and handling responses.
+- **Polly:** A .NET resilience and transient-fault-handling library that allows developers to express policies such as Retry, Circuit Breaker, Timeout, Bulkhead Isolation, and Fallback in a fluent and thread-safe way.
+
+The OpenAPI Generator SDK project file includes a reference to the `System.Web` assembly, which is part of the .NET Framework and provides classes for building web applications.
+
+While both SDKs use the Newtonsoft.Json library for JSON handling, the Speakeasy SDK has a more minimalistic approach to dependencies and only includes the `NodaTime` library for date and time handling. The OpenAPI Generator SDK includes additional dependencies like `RestSharp` for HTTP communication, `JsonSubTypes` for JSON polymorphism, and `Polly` for resilience and fault handling.
+
+The more dependencies an SDK has, the more prone it is to compatibility issues with new releases and internal complexity, making maintenance and enhancement more difficult.
+
+## Handling non-nullable fields
+
+Let's compare how the two SDKs handle non-nullable fields using the provided code snippets for the `Status` field and enum.
+
+In the Speakeasy SDK the `Status` field is defined as follows:
+
+```csharp
+/// <summary>
+/// pet status in the store
+/// </summary>
+[JsonProperty("status")]
+[SpeakeasyMetadata("form:name=status")]
+public Models.Components.Status? Status { get; set; }
+
+```
+
+
+The `Status` property is of type `Models.Components.Status?`, which is a nullable enum type. The `?` after the type name indicates that the property can be assigned a `null` value.
+
+The `Status` enum is defined as follows:
+
+```csharp
+
+public enum Status
+{
+    [JsonProperty("available")]
+    Available,
+
+    [JsonProperty("pending")]
+    Pending,
+
+    [JsonProperty("sold")]
+    Sold
+
+}
+```
+
+The enum members are decorated with the `JsonProperty` attribute, which specifies the JSON property name for each member.
+
+In the OpenAPI Generator SDK, the `Status` field is defined as follows:
+
+```csharp
+/// <summary>
+/// pet status in the store
+/// </summary>
+/// <value>pet status in the store</value>
+[DataMember(Name = "status", EmitDefaultValue = false)]
+public StatusEnum? Status { get; set; }
+```
+
+
+The `Status` property is of type `StatusEnum?`, which is a nullable enum type.
+
+
+The `StatusEnum` is defined as follows:
+
+```csharp
+/// <summary>
+/// pet status in the store
+/// </summary>
+/// <value>pet status in the store</value>
+[JsonConverter(typeof(StringEnumConverter))]
+public enum StatusEnum
+{
+    /// <summary>
+    /// Enum Available for value: available
+    /// </summary>
+    [EnumMember(Value = "available")]
+    Available = 1,
+
+    /// <summary>
+    /// Enum Pending for value: pending
+    /// </summary>
+    [EnumMember(Value = "pending")]
+    Pending = 2,
+
+    /// <summary>
+    /// Enum Sold for value: sold
+    /// </summary>
+    [EnumMember(Value = "sold")]
+    Sold = 3
+}
+```
+
+The `StatusEnum` is decorated with the `JsonConverter` attribute, which specifies that the `StringEnumConverter` should be used for JSON serialization and deserialization. The enum members are decorated with the `EnumMember` attribute, which specifies the JSON value for each member.
+
+Both SDKs handle non-nullable fields similarly by using nullable types (`Status?` and `StatusEnum?`), allowing the SDK to accommodate scenarios where the API response may not include a value for the `Status` field.
+
+The SDKs differ in how the enums are defined and decorated with attributes for JSON serialization and deserialization:
+
+- The Speakeasy SDK uses the `JsonProperty` attribute directly on the enum members to specify the JSON property name.
+- The OpenAPI Generator SDK uses the `JsonConverter` and `EnumMember` attributes to handle JSON serialization and deserialization for the enum.
+
+The same goal is achieved in both cases, but the Speakeasy approach is more straightforward, as it directly maps the enum members to the corresponding JSON property names.
+
+Let's look at how the two SDKs handle this when passing a null value to the `FindPetsByStatus` method.
+
+When you run the following code from the Speakeasy SDK:
+
+```csharp
+try
+{
+    var res = await sdk.Pet.FindPetsByStatusAsync(null);
+    if (res.Body != null)
+    {
+        //handle response
+     }
+}
+catch (Exception ex)
+{
+    Console.WriteLine(ex.Message + "\\n" + ex.StackTrace);
+}
+```
+
+The Speakeasy SDK throws an exception with the following output:
+
+```
+API error occurred
+at Openapi.Pet.FindPetsByStatusAsync(Nullable`1 status) in C:\Users\devi\Documents\git\speak-easy\sdks\petstore-sdk-csharp-speakeasy\Openapi\Pet.cs:line 852
+at Program.<Main>$(String[] args) in C:\Users\devi\Documents\git\speak-easy\sdks\petstore-sdk-csharp-speakeasy\conSpeakEasyTester\Program.cs:line 11
+```
+
+The Speakeasy SDK throws an `SDKException` with the message "API error occurred" when encountering an error during the API call. It also includes the stack trace, which can be helpful for debugging purposes.
+
+When you run the following code from the OpenAPI Generator SDK:
+
+```csharp
+try
+{
+    // Add a new pet to the store
+    // Pet result = apiInstance.AddPet(pet);
+    var res = apiInstance.FindPetsByStatus(null);
+    Debug.WriteLine(res);
+
+}
+catch (ApiException e)
+{
+    Console.WriteLine("Exception when calling PetApi.AddPet: " + e.Message);
+    Console.WriteLine("Status Code: " + e.ErrorCode);
+    Console.WriteLine(e.StackTrace);
+}
+```
+
+The OpenAPI Generator SDK throws an `ApiException` with the following output:
+
+```
+Org.OpenAPITools.Client.ApiException: 'Error calling FindPetsByStatus: No status provided. Try again?'
+```
+
+The OpenAPI Generator SDK throws an `ApiException` with a more descriptive error message, but it does not include the stack trace by default.
+
+Both SDKs handle the null value scenario by throwing an exception, which is a reasonable approach to prevent invalid data from being passed to the API.
+
+The Speakeasy SDK throws a more generic "API error occurred" exception but provides the stack trace, which can be helpful for debugging. The OpenAPI Generator SDK throws a more descriptive `ApiException` with a customized error message, but it does not include the stack trace by default.
+
+Let's see what happens when we pass an empty name field to the SDKs.
+
+If we remove the name field from the class initialization or even set it to `null`, the Speakeasy SDK doesn't throw an error and creates a pet object with empty or null values provided.
+
+To show the details of the pet object created, let's add a method to the `Pet` model class in `sdks\OpenApi\Models\Components\Pet.cs`:
+
+```csharp
+  public override string ToString()
+ {
+      string categoryString = Category != null ? Category.ToString() : "null";
+      string photoUrlsString = PhotoUrls != null ? string.Join(", ", PhotoUrls) : "null";
+
+      string tagsString = Tags != null ? string.Join(", ", Tags) : "null";
+      string statusString = Status != null ? Status.ToString() : "null";
+
+      return $"Pet:\n" +
+             $"  Id: {Id}\n" +
+             $"  Name: {Name}\n" +
+             $"  Category: {categoryString}\n" +
+             $"  PhotoUrls: {photoUrlsString}\n" +
+             $"  Tags: {tagsString}\n" +
+             $"  Status: {statusString}";
+ }
+```
+
+Now if you run the following code:
+
+```csharp
+    var req = new Openapi.Models.Components.Pet()
+    {
+        Id = 10,
+        Name = null,
+        Category = new Category()
+        {
+            Id = 1
+        },
+        PhotoUrls = new List<string>()
+        {
+            "https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=1xw:0.74975xh;center,top&resize=1200:*"
+        },
+    };
+
+    Console.WriteLine(req.ToString());
+```
+
+You get the following result, showing that the pet object was created without a value for the `Name` field:
+
+```
+Pet:
+  Id: 10
+  Name:
+  Category: Openapi.Models.Components.Category
+  PhotoUrls: https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=1xw:0.74975xh;center,top&resize=1200:*
+  Tags: null
+  Status: null
+```
+
+Let's do the same with the OpenAPI Generator SDK:
+
+```csharp
+    var pet = new Pet() 
+    {
+        Id = 10,
+        Name = null,
+        Category = new Category() { Id = 10 },
+        PhotoUrls = new List<string>() {
+            "https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=1xw:0.74975xh;center,top&resize=1200:*"
+        },
+ };
+
+    Pet result = apiInstance.AddPet(pet);
+    Console.WriteLine(result.ToString());
+```
+
+The OpenAPI Generator SDK throws an `ArgumentNullException` error with a more descriptive error message:
+
+```
+    System.ArgumentNullException: 'Value cannot be null. (Parameter 'name is a required property for Pet and cannot be null')'
+```
+
+It appears that the error is thrown from the model class directly, so we cannot continue with bad data.
+
+In this case, the OpenAPI Generator SDK handled the null or empty values better than the Speakeasy SDK when creating a Pet. The Speakeasy SDK allows you to create the pet with empty name values, a small issue that can be handled in development, but worth taking note of.
+
+## Generated documentation
+
+Both Speakeasy and OpenAPI Generator create SDK documentation for generated code.
+
+The OpenAPI Generator README outlines the SDK dependencies and supported frameworks, provides steps for getting started (including installing dependencies and building the project in various operating systems), and describes available API routes. The Speakeasy README also provides API routes and includes more detailed getting-started examples.
+
+OpenAPI Generator generates some documentation in a docs directory, but it is not very detailed.
+
+Additional documentation generated by Speakeasy includes more detailed explanations of the models and operations; examples of creating, updating, and searching objects; error handling; and guidance on handling exceptions specific to the OpenAPI specification file.
+
+Some default test cases are created for both but are only for guidance.
+
+## Supported .NET versions
+
+The Speakeasy-generated SDK supports .NET 5.+ environments. We successfully tested it with .NET 6.
+
+The SDK generated by OpenAPI Generator claims to support a range of versions, including .NET Framework 4.7, .NET Standard 1.3-2.1, and .NET 6 and later. We targeted .NET 6 to ensure we have the same language features available in both SDKs.
+
+Although more versions are supported in the OpenAPI Generator, .NET 5+ is the modern stack and will be used more in new developments.
+
+## Summary
+
+Compared to the SDK generated by OpenAPI Generator, the Speakeasy-generated SDK is lightweight, concise, and idiomatic, with a modern approach to model implementation and built-in retry support. The Speakeasy generator uses modern techniques that follow best practices, and the Speakeasy documentation makes it easy to get started.
+
+If you are building an API that developers rely on and would like to publish full-featured SDKs that follow best practices, give the Speakeasy SDK generator a try.
+
+[Join our Slack community](https://join.slack.com/t/speakeasy-dev/shared_invite/zt-1cwb3flxz-lS5SyZxAsF_3NOq5xc8Cjw) to let us know how we can improve our C# SDK generator or suggest features.

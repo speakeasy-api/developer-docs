@@ -1,0 +1,93 @@
+---
+title: Override accept headers
+description: "APIs can support multiple content types for responses. Learn how to use headers in Speakeasy SDKs to receive the data in the format you prefer."
+slug: "/customize-sdks/override-accept-headers/"
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+# Override Accept Headers
+
+The OpenAPI specification makes it easy for you to use the `content` directive to specify which endpoints in your API support multiple content types.
+
+In this example, our get-all-users endpoint can return a response encoded either as unstructured `text/plain` data or as a structured `application/json` document.
+
+```yaml
+/getall:
+  get:
+    operationId: getAll
+    tags:
+      - users
+    responses:
+      "200":
+        description: OK
+        content:
+          text/plain:
+            schema:
+              type: string
+          application/json:
+            schema:
+              type: string
+```
+
+When invoking the operation normally, your Speakeasy SDK will automatically default to the first option in the list, in this case, `text/plain`.
+
+For any API operations that specify multiple accept headers in your OpenAPI specification, your Speakeasy SDK provides a mechanism to override the accept header so that you can receive your data in the format you prefer.
+
+## Accept Header Override in Go
+
+In Go, all types from all operations are collected into a global `AcceptHeaderEnum` type that can be found in `sdk/operations/options.go`.
+
+```go
+type AcceptHeaderEnum string
+
+const (
+	AcceptHeaderEnumApplicationJson        AcceptHeaderEnum = "application/json"
+	AcceptHeaderEnumTextPlain              AcceptHeaderEnum = "text/plain"
+)
+```
+
+By invoking the `WithAcceptHeaderOverride` function with the appropriate `AcceptHeaderEnum`, you can create the optional parameter that you can then pass to your operation:
+
+```go
+s := sdk.New()
+ctx := context.Background()
+res, err := s.Users.GetAll(ctx, operations.WithAcceptHeaderOverride(operations.AcceptHeaderEnumApplicationJSON))
+```
+
+## Accept Header Override in Python and TypeScript
+
+In Python and TypeScript, each operation with multiple specified accept headers will have an enum created that provides the acceptable options. The name of the enum will be the tag name, followed by the operation name, followed by `AcceptEnum`. For the example above, that would be `UsersGetAllAcceptEnum`.
+
+<CodeWithTabs>
+    ```typescript !!tabs TypeScript
+    import { UsersGetAllAcceptEnum } from "../src/sdk/users";
+
+    const s = new SDK({});
+
+    const res = await s.users.getAll(undefined, undefined, UsersGetAllAcceptEnum.applicationJSON);
+    ```
+
+    ```python !!tabs Python
+    from sdk.users import ResponseBodyOptionalGetAcceptEnum
+
+    s = SDK()
+
+    res = s.users.get_all(
+        accept_header_override=UsersGetAllAcceptEnum.APPPLICATION_JSON
+    )
+    ```
+
+</CodeWithTabs>
+
+## Unspecified Accept Headers
+
+While we strongly recommend adding all accept headers to your OpenAPI spec, in Go, it is possible to override the accept header to an unspecified value.
+
+```go
+s := sdk.New()
+ctx := context.Background()
+res, err := s.Users.GetAll(ctx, operations.WithAcceptHeaderOverride("application/json+debug"))
+```
+
+There is no support for unspecified accept headers in Python or TypeScript.

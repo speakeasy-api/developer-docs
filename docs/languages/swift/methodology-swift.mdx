@@ -1,0 +1,137 @@
+---
+title: "Create Swift SDKs from OpenAPI / Swagger"
+description: "Generate a Swift client from your Swagger / OpenAPI spec in minutes with Speakeasy."
+---
+
+
+# Create Swift SDKs from OpenAPI / Swagger
+
+Speakeasy Swift SDKs are designed to be seamlessly integrated alongside your users' existing code:
+
+- **Modern and idiomatic:** Speakeasy Swift SDKs use modern, idiomatic Swift features such as async/await for concurrency, protocols, throwing functions for error handling, and the [`Codable`](https://developer.apple.com/documentation/swift/codable) protocol for JSON serialization and deserialization.
+- **Type-safe:** Where appropriate, Speakeasy Swift SDKs use structures and enumerated types to ensure your users are passing the correct data to your endpoints.
+- **Backwards compatible:** iOS 13+ is supported, ensuring your users can target a wide range of devices and users.
+- **Zero-dependency:** Speakeasy Swift SDKs have zero dependencies to minimize binary size and package resolution time.
+- **Well-documented:** Speakeasy Swift SDKs are well-documented and can be used to generate modern and idiomatic documentation sites using the Apple [DocC documentation format](https://developer.apple.com/documentation/docc) that feel right at home for Swift developers.
+
+## Swift SDK Design
+
+Speakeasy Swift SDKs include a few main components:
+
+- A `Client` class, which is the workhorse and entry point for making requests to your API.
+- A Swift protocol (interface), which defines functions for the available operations that are exposed by your API. This API protocol is also namespaced by any [tags](https://swagger.io/docs/specification/grouping-operations-with-tags/) you define in your API specification and adopted by the `Client` class.
+- Request and response objects (defined as Swift structures), which are used to structure data for API requests and are deserialized from API responses.
+
+### Client Class and API Protocols
+
+Speakeasy Swift SDKs provide a `Client` class for your users to interact with your API. This class uses the Apple [`URLSession`](https://developer.apple.com/documentation/foundation/urlsession) and [`URLRequest`](https://developer.apple.com/documentation/foundation/urlrequest) types to construct, make, and handle the responses of network requests.
+
+The SDKs serialize request data and deserialize server responses using a rich type system, which frees users from having to manually convert data types and handle errors.
+
+The available operations of your API are defined using a Swift protocol, providing an easy reference for the functions your users can perform against your API. This protocol is adopted by the `Client` class.
+
+### Request and Response Models
+
+Speakeasy Swift SDKs translate the data types required by your API operations into request objects, either Swift structs or enumerated types, depending on your API specification. For example, an operation that takes a set of optional parameters to query a set of pets could be implemented as a request:
+
+```swift
+public struct PetFilter {
+  public let name: String?
+  public let breed: String?
+  public let minimumAge: Int?
+
+  public init(name: String?, breed: String?, minimumAge: Int?) {
+    self.name = name
+    self.breed = breed
+    self.minimumAge = minimumAge
+  }
+}
+```
+
+This approach allows your users to pass data to each API operation, which is then serialized into the appropriate format and included in the endpoint path, request body, or headers when making the actual request to your API.
+
+### Type-Safe Security and Server Models
+
+While the OpenAPI Specification allows for maximum flexibility in defining server configuration and authorization and authentication strategies, Speakeasy Swift SDKs take advantage of enumerated types to ensure that your users provide you with the right data for these values at the right call sites.
+
+For example, Speakeasy Swift SDKs trivially support any security schemes defined by your API specification:
+
+```swift
+public enum Security {
+  case apiKey(String)
+  case authToken(String)
+}
+```
+
+Our Swift SDKs also provide type-safe server configuration based on your specification, including any substituted variables comprised of primitive or custom types:
+
+```swift
+public enum GlobalServers {
+  /// Corresponds to `https://example.com`
+  case server1
+  /// Corresponds to `https://{hostname}:{port}`
+  case server2(hostname: String = "localhost", port: String = "35123")
+  /// Corresponds to `http://{environment}.example.com`
+  case server3(environment: Environment = .staging)
+}
+```
+
+These security and server configuration parameters are also provided at the operation level, depending on your API specification.
+
+### Enumerated Responses
+
+The OpenAPI specification allows each of your API operations to define multiple response types, and our Swift SDKs make use of this to return enumerated values for each operation function. This allows your users to easily distinguish between and use response values returned by your API.
+
+While these are enumerated types, Speakeasy SDKs include helper functions to access the right data when you need it:
+
+```swift
+public enum PetsResponse {
+  case empty
+  case pets(Shared.PetsModel)
+  case error(Shared.Error)
+
+  var isEmpty: Bool {
+      if case .empty = self {
+          return true
+      } else {
+          return false
+      }
+  }
+
+  public func pets() throws -> Shared.PetsModel {
+      guard case .pets(let value) = self else {
+          throw PetStoreError.missingResponseData
+      }
+      return value
+  }
+
+  public func error() throws -> Shared.Error {
+      guard case .error(let value) = self else {
+          throw PetStoreError.missingResponseData
+      }
+      return value
+  }
+}
+```
+
+This allows you to easily determine whether a response is empty, or get either the pets or error model and handle any errors if the response is not of the type you expect.
+
+### Errors
+
+Speakeasy Swift SDKs provide a comprehensive and detailed error type that provides your customers with information in cases where anything goes wrong, from constructing a request URL, to network errors, to any problems that occur when deserializing response values.
+
+This type conforms to the Swift `Error` protocol, as well as providing detailed reasoning and descriptive error information.
+
+## Swift Package Management
+
+Speakeasy Swift SDKs support distribution using the [Swift Package Manager](https://www.swift.org/package-manager/) out-of-the-box. This makes it easy to distribute your SDKs to your customers via any hosted Git repository (usually GitHub), versioned using [Git tags](https://git-scm.com/book/en/v2/Git-Basics-Tagging).
+
+**Coming soon:** Speakeasy will soon support the distribution of your Swift SDKs through [CocoaPods](https://cocoapods.org/).
+
+## Documentation
+
+Speakeasy uses the Apple [DocC documentation format](https://developer.apple.com/documentation/docc) to generate documentation for your SDK automatically.
+
+**Coming soon:** The Speakeasy [Generation Action](https://github.com/speakeasy-api/sdk-generation-action) will soon allow you to automatically maintain a documentation site hosted by GitHub Pages so that your users can easily browse the documentation for your Swift SDK.
+
+![Generated Swift documentation](./assets/swift-docs.png)

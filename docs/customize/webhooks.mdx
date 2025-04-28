@@ -1,0 +1,264 @@
+---
+title: "Add webhooks to your SDKs"
+description: "Learn how to generate webhook types in your Speakeasy client SDKs and define incoming webhook requests and responses for consistent API interactions."
+slug: "/customize-sdks/webhooks/"
+---
+
+import { Callout, Screenshot, Table } from "@/mdx/components";
+import webhooksBillingImage from '../assets/webhooks-billing.png';
+
+# Add webhooks to your SDKs
+
+## Why use the webhooks feature?
+
+* **Built-in SDK support:** It simplifies webhook adoption through built-in SDK support.
+* **Abstracted complexity:** Consumers don't need to worry about cryptographic operations or dependencies.
+* **Default security:** Consumers have to verify the signature in order to unpack the webhook data.
+* **Type-safe consumption:** Consumers get schema-validated data and types.
+* **Type-safe sending:** Producers can send schema-validated data through type-safe SDK methods.
+
+## Getting started
+
+<Callout title="Info" type="info">
+  Webhooks are a paid add-on, [reach out to us to discuss pricing](https://www.speakeasy.com/book-demo).
+</Callout>
+
+1. You must have a [Speakeasy Business or Enterprise plan](/pricing).
+2. Enable the webhooks add-on to your account under `settings/billing`:
+
+<Screenshot
+  variant="web"
+  url="app.speakeasy.com"
+  image={{
+    src: webhooksBillingImage,
+    alt: "Webhooks add on in the Speakeasy dashboard."
+  }}
+/>
+
+## Example
+
+<Callout title="GitHub example source code" type="info">
+  You can see the full source code for this example in the [webhooks example repo](https://github.com/speakeasy-api/examples/tree/main/webhooks-ts).
+</Callout>
+
+### OpenAPI
+
+```yaml
+# !focus(1,20:50,59,71)
+openapi: 3.1.0 # You must use OpenAPI 3.1.0 or higher
+info:
+  title: Petstore API
+  version: 1.0.0
+servers:
+  - url: https://petstore.swagger.io/v2
+paths:
+  /pets:
+    post:
+      operationId: addPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+      responses:
+        '200':
+          description: Okay
+x-speakeasy-webhooks:
+  security:
+    type: signature
+    headerName: x-signature
+    signatureTextEncoding: base64
+    algorithm: hmac-sha256
+webhooks:
+  pet.created:
+    post:
+      operationId: sendPetCreated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetCreated'
+      responses:
+        '200':
+          description: Okay
+  pet.deleted:
+    post:
+      operationId: sendPetDeleted
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetDeleted'
+      responses:
+        '200':
+          description: Okay
+components:
+  schemas:
+    PetCreated:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - pet.created # This is the payload discriminator
+        pet:
+          $ref: '#/components/schemas/Pet'
+      required:
+        - type
+        - pet
+    PetDeleted:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - pet.deleted # This is the payload discriminator
+        id:
+          type: string
+      required:
+        - type
+        - id
+    Pet:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+        - id
+```
+
+### For webhook consumers
+
+<Callout title="">
+The `validateWebhook()` function is currently only implemented in the TypeScript SDK, with support for additional languages planned for future releases. While other languages will generate webhook types, this discriminator method is TypeScript-only.
+</Callout>
+
+```typescript
+import { Petstore } from "petstore";
+const sdk = new Petstore();
+
+const data = await sdk.validateWebhook({
+  request,
+  secret: "<secret>",
+});
+
+console.log(data);
+
+if (data.type === "pet.created") {
+  console.log("Pet created", data.pet);
+}
+
+if (data.type === "pet.deleted") {
+  console.log("Pet deleted", data.id);
+}
+```
+
+**Error handling**
+
+```typescript
+import { Petstore } from "petstore";
+import { SDKValidationError } from "petstore/models/errors/sdkvalidationerror.js";
+import { WebhookAuthenticationError } from "petstore/types/webhooks.js";
+
+const sdk = new Petstore();
+
+try {
+  await sdk.validateWebhook({
+    request,
+    secret: "<secret>",
+  });
+} catch (error) {
+  if (error instanceof WebhookAuthenticationError) {
+      // Thrown when signature verification fails, usually due to:
+      // - Incorrect webhook secret
+      // - Modified request payload
+      // - Wrong signature format
+      console.error("Webhook authentication failed", error);
+  }
+  if (error instanceof SDKValidationError) {
+    // Thrown when the webhook request body is unrecognised, usually due
+    // to an outdated SDK version or un-docummented payloads
+    console.error("Webhook request body is invalid", error);
+  }
+  throw error;
+}
+
+```
+
+### For webhook producers
+
+```typescript
+import { Petstore } from "petstore";
+
+const sdk = new Petstore();
+
+const data = await sdk.sendPetCreated(
+  {
+    url: "https://example.com/my-webhook-handler",
+    secret: "<secret>",
+  },
+  {
+    type: "pet.created",
+    pet: { id: "dog" },
+  }
+);
+```
+
+## `x-speakeasy-webhooks`
+
+The `x-speakeasy-webhooks` extension is used to define the webhooks for your API.
+
+<Table
+  data={[
+    { property: "`security`", type: "`WebhookSecurity`", description: "The security configuration for the webhooks." }
+  ]}
+  columns={[
+    { key: "property", header: "Property" },
+    { key: "type", header: "Type" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+### `x-speakeasy-webhooks.security`
+
+<Table
+  data={[
+    { property: "`type`", type: "`string`", description: "The type of security to use for the webhooks. Valid values are `signature` and `custom`." },
+    { property: "`headerName`", type: "`string`", description: "The name of the header to use for the security token / signature." },
+    { property: "`signatureTextEncoding`", type: "`string`", description: "The text encoding of the signature. Applicable to `type: signature`." },
+    { property: "`algorithm`", type: "`string`", description: "The algorithm to use for the signature. Valid values are: `hmac-sha256`." }
+  ]}
+  columns={[
+    { key: "property", header: "Property" },
+    { key: "type", header: "Type" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+### `x-speakeasy-webhooks.security.type: signature`
+
+```yaml
+x-speakeasy-webhooks:
+  security:
+    type: signature
+    headerName: x-signature
+    signatureTextEncoding: base64
+    algorithm: hmac-sha256
+```
+
+This will apply HMAC SHA256 to the body of the webhook request and put it in a header.
+
+### `x-speakeasy-webhooks.security.type: custom`
+
+```yaml
+x-speakeasy-webhooks:
+  security:
+    type: custom
+```
+
+This generates the `src/hooks/webhooks-custom-security.ts` boilerplate file, which you can then use to modify the security logic.
+
+See the source code for this example in the [GitHub repo](https://github.com/speakeasy-api/examples/tree/main/webhooks-custom-security-ts).

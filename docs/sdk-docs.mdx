@@ -1,0 +1,632 @@
+---
+title: Editing Your SDK Docs
+description: "Managed SDKs: Learn how to generate developer-friendly documentation for your SDKs."
+sidebar_label: "Customize Documentation"
+---
+
+import { CodeWithTabs, Table } from "@/mdx/components";
+
+# Editing Your SDK Docs
+
+Speakeasy-managed SDKs include a `README.md` file that contains at least the following sections by default:
+
+- `## Summary`: A brief introduction based on the `info` and `externalDocs` attributes defined in the OpenAPI document.
+- `## Table of Contents`: A list of links to all available sections in the README.
+- `## SDK Installation`: An installation snippet based on the package name provided in the `gen.yaml` file.
+- `## SDK Example Usage`: An example usage snippet based on the first operation in the OpenAPI document.
+- `## SDK Available Operations`: Links to documentation that covers all the SDK's methods.
+
+Here's what it looks like put together:
+
+````markdown
+# github.com/client-sdk
+
+  <!-- Start Summary [summary] -->
+
+## Summary
+
+<The `info.summary` provided in your OpenAPI specification>
+
+<The `info.description` provided in your OpenAPI specification>
+
+For more information about the API: [<externalDocs.description>](externalDocs.url)
+
+  <!-- End Summary [summary] -->
+
+  <!-- Start Table of Contents [toc] -->
+
+## Table of Contents
+<!-- $toc-max-depth=2 -->
+* [OpenAPI SDK](#openapi-sdk)
+  * [SDK Installation](#sdk-installation)
+  * [SDK Example Usage](#sdk-example-usage)
+  * [Available Resources and Operations](#available-resources-and-operations)
+  * ...
+* [Development](#development)
+  * [Maturity](#maturity)
+  * [Contributions](#contributions)
+<!-- End Table of Contents [toc] -->
+
+  <!-- Start SDK Installation [installation] -->
+
+## SDK Installation
+
+```bash
+go get github.com/client-sdk
+```
+
+  <!-- End SDK Installation [installation] -->
+
+  <!-- Start SDK Example Usage [usage] -->
+
+## SDK Example Usage
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+
+    "github.com/client-sdk"
+    "github.com/client-sdk/pkg/models/shared"
+    "github.com/client-sdk/pkg/models/operations"
+)
+
+func main() {
+    ctx := context.Background()
+
+    opts := []sdk.SDKOption{
+        sdk.WithSecurity(shared.Security{
+            APIKey: shared.SchemeAPIKey{
+                APIKey: "YOUR_API_KEY",
+            },
+        }),
+    }
+
+    s := sdk.New(opts...)
+
+    res, err := s.ListPets(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    if res.Pets != nil {
+        // handle response
+    }
+}
+```
+
+  <!-- End SDK Example Usage [usage] -->
+
+  <!-- Start SDK Available Operations [operations] -->
+
+## SDK Available Operations
+
+- `ListPets` - List all pets
+  <!-- End SDK Available Operations [operations] -->
+  <!-- Placeholder for Future Speakeasy SDK Sections -->
+````
+
+You can enhance your README by adding content before or after any of the three main sections (**SDK Installation**, **SDK Example Usage**, and **SDK Available Options**). The generator will not overwrite any content you have added to the `README.md` file. The generator will automatically keep the content within the walled-off sections between the `<!-- Start ... [tag] -->` and `<!-- End ... [tag] -->` comments, but the rest is up to you to maintain.
+
+If you would like to take over the management of automatically generated sections, you can do the following:
+
+1. Remove the `<!-- Start ... [tag] -->` section comment.
+2. Find the matching `<!-- End ... [tag] -->` comment and change it to `<!-- No ... [tag] -->`, which marks that section as managed by you. (This step is important. If you only remove the "Start" comment, the section may be re-inserted as described below.)
+3. Edit the content between those comments as you see fit.
+
+If you change your mind at any time and want to go back to having Speakeasy manage a section, you can either delete the `<!-- No ... [tag] -->` comment from the file, or replace it with `<!-- Start ... [tag] --><!-- End ... [tag] -->`, and the next generation will re-insert the Speakeasy-managed content into your file.
+
+Speakeasy may provide additional sections as new features are released or as you alter your SDK configuration by changing your OpenAPI specification and `gen.yaml` configuration. These new sections will be inserted above the comment named `<!-- Placeholder for Future Speakeasy SDK Sections -->`. (The placeholder heading will always be present in the file, and if you remove it, it will be added again just below the last README section.) Any missing sections will be inserted here during generation, so if you do not want a section inserted, be sure to follow the steps above to convert it to a `<!-- No ... [tag] -->` section rather than removing it entirely.
+
+## Usage Examples
+
+### Main Usage section
+
+By default, `USAGE.md` and the **SDK Example Usage** section in the main `README.md` file will showcase a usage example from a random operation in the OpenAPI document. You can specify one or more operations to be used as the main usage example(s) by setting the `x-speakeasy-usage-example: true` extension to any operation in the OpenAPI document.
+
+The `x-speakeasy-usage-example` extension can be further configured to associate each usage snippet with a custom header, description, and relative positioning.
+
+<Table
+  data={[
+    {
+      key: "`title`",
+      description: "The title text to be used for the usage example (an empty string indicates no title)."
+    },
+    {
+      key: "`description`",
+      description: "The description for the usage example (an empty string indicates no description)."
+    },
+    {
+      key: "`position`",
+      description: "Usage examples are sorted from lowest to highest based on the `position` value. Usage examples that share a `position` value will be sorted in the order they appear in the document."
+    }
+  ]}
+  columns={[
+    { key: "key", header: "Key" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+This may be particularly useful for guiding users through a specific set of instructions or a "getting started" section. For example:
+
+```yaml
+paths:
+  /pets:
+    get:
+      x-speakeasy-usage-example:
+        title: List the pets
+        description: Now you can get all of the pets that have been added.
+        position: 2
+      summary: List all pets
+      operationId: ListPets
+      tags:
+        - pets
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pets"
+    put:
+      x-speakeasy-usage-example:
+        title: Add your pet
+        description: First, add your own pet.
+        position: 1
+      summary: Add pet
+      operationId: AddPet
+      tags:
+        - pets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Pet"
+      responses:
+        "200":
+          description: OK
+```
+
+This YAML will result in the following being added to the `README.md` and `USAGE.md` files:
+
+````markdown
+### Add your pet
+
+First, add your own pet.
+
+```csharp
+using PetStore;
+using PetStore.Models.Pets;
+
+var sdk = new PetstoreSDK();
+
+var req = new Pet();
+
+var res =  await sdk.Pets.AddPetAsync(req);
+```
+
+### List the pets
+
+Now you can get all of the pets that have been added.
+
+```csharp
+using PetStore;
+using PetStore.Models.Pets;
+
+var sdk = new PetstoreSDK();
+var res =  await sdk.Pets.ListPetsAsync();
+```
+````
+
+### Table of Contents
+
+To generate a more detailed Table of Contents, you can edit the value of the `$toc-max-depth` parameter in your `README.md` and subheadings will get updated upon regeneration:
+```markdown
+<!-- $toc-max-depth=3 -->
+* [openapi](#openapi)
+  * [SDK Installation](#sdk-installation)
+  * [SDK Example Usage](#sdk-example-usage)
+    * [Example 1](#example-1)
+    * [Example 2](#example-2)
+    * [Example 3](#example-3)
+  * [Custom Header](#custom-header)
+* ...
+```
+
+To ensure custom headings are properly referenced when manually adding sections to your `README.md` file, the basic markdown syntax should be respected:
+```markdown
+## Section Heading (level 2)
+### Subsection Heading (level 3)
+...
+```
+
+### Feature sections
+
+Specific usage snippets can also be selected for other sections in the main `README.md`, provided they meet the requirements to showcase the feature at play. To do so, use the `x-speakeay-usage-example` extension and specify a list of section `tags` (referring to `<-- Start Section [tag] -->` placeholders).
+
+For example, if you wish to select an operation for both the **Override Server URL Per-Operation** and the **Retries** sections, you can use the following:
+
+```yaml
+/webhooks/subscribe:
+  post:
+    operationId: subscribeToWebhooks
+    servers:
+      - url: https://speakeasy.bar
+    x-speakeasy-usage-example:
+      tags:
+        - server
+        - retries
+    x-speakeasy-retries:
+      strategy: backoff
+      backoff:
+        initialInterval: 10
+        maxInterval: 200
+        maxElapsedTime: 1000
+        exponent: 1.15
+```
+
+The supported `tags` and their associated conditions are listed in this table:
+
+<Table
+  data={[
+    {
+      section: "Global Parameters",
+      subsection: "",
+      tag: "global-parameters",
+      conditions: "One of the `parameters` must originate from `x-speakeasy-globals`."
+    },
+    {
+      section: "Event Streaming",
+      subsection: "",
+      tag: "eventstream",
+      conditions: "One of the response must use the `text/event-stream` content type."
+    },
+    {
+      section: "Pagination",
+      subsection: "",
+      tag: "pagination",
+      conditions: "`x-speaskeasy-pagination` must be set for the operation."
+    },
+    {
+      section: "Retries",
+      subsection: "",
+      tag: "retries",
+      conditions: "`x-speakeasy-retries` must be set for the operation."
+    },
+    {
+      section: "Error Handling",
+      subsection: "",
+      tag: "errors",
+      conditions: "One of the responses must be an error with custom content data."
+    },
+    {
+      section: "Server Selection",
+      subsection: "Per-Client",
+      tag: "server",
+      conditions: "`servers` must **not** be set at the operation level."
+    },
+    {
+      section: "Server Selection",
+      subsection: "Per-Operation",
+      tag: "server",
+      conditions: "Operation must define its own `servers` array."
+    },
+    {
+      section: "Authentication",
+      subsection: "Per-Client",
+      tag: "security",
+      conditions: "`security` must **not** be set for the operation."
+    },
+    {
+      section: "Authentication",
+      subsection: "Per-Operation",
+      tag: "security",
+      conditions: "Operation must define its own `security` array."
+    },
+    {
+      section: "SDK Example Usage",
+      subsection: "",
+      tag: "usage",
+      conditions: "None (same effect as `x-speakeasy-usage-example: true`)."
+    }
+  ]}
+  columns={[
+    { key: "section", header: "README section" },
+    { key: "subsection", header: "Sub-section" },
+    { key: "tag", header: "tag" },
+    { key: "conditions", header: "Conditions for selection to be effective" }
+  ]}
+/>
+
+If you wish to select an operation for the main usage section as well as other sections, you can use the `usage` tag:
+
+```yaml
+/drinks/{page}:
+  get:
+    operationId: listDrinks
+    x-speakeasy-pagination:
+      type: offsetLimit
+      inputs:
+        - name: page
+          in: parameters
+          type: page
+    x-speakeasy-usage-example:
+      title: "Browse available drinks"
+      position: 2
+      tags:
+        - usage
+        - pagination
+```
+
+Note: The `title`, `description`, and `position` attributes only affect the main **SDK Example Usage** section.
+
+### Values
+
+When generating usage examples, Speakeasy defaults to using any `example` values provided for schemas within your OpenAPI document. If no examples are present, Speakeasy will try to determine the most relevant example to generate from either the `format` field of a schema or the property name of a schema in an object.
+
+For example, if the schema has `format: email` or is within a property called `email`, Speakeasy will generate a random email address as an example value.
+
+### Security Schemes
+
+For security schemes, the OpenAPI Specification does not allow you to specify examples of the values needed to populate the security details when initializing the SDKs. To provide custom examples for these values, add the `x-speakeasy-example` extension to the `securitySchemes` in your OpenAPI document.
+
+For example:
+
+```yaml
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      name: api_key
+      in: header
+      x-speakeasy-example: YOUR_API_KEY
+```
+
+The `x-speakeasy-example` value must be a string value and will be used as the example value for the Security Scheme. If the Security Scheme is a basic auth scheme, the example value will be a key-value pair that consists of a username and password split by a `;` character, such as `YOUR_USERNAME;YOUR_PASSWORD`.
+
+## Comments
+
+### Code Comments
+
+As part of the SDK generation, the Speakeasy CLI will generate comments for operations and models in generated SDKs. These comments are generated from the OpenAPI specification, based on the summary or description of the operation or schema. Comments are generated in the target language docstring format.
+
+For example, in Python, the comments will be generated as [PEP 257](https://www.python.org/dev/peps/pep-0257/)-compliant docstrings.
+
+By default, comments are generated for all operations and models. To disable comment generation for your SDK, modify your `gen.yaml` file to disable them, like so:
+
+```yaml
+# ...
+generation:
+  comments:
+    disabled: true
+```
+
+### Operation Comments
+
+Comments for each method in the generated SDK will be generated from the summary or description of the Operation. For example, if you have an Operation like the following:
+
+```yaml
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List all pets
+      description: Get a list of all pets in the system
+      responses:
+        "200":
+          description: A list of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+```
+
+The generated SDK will have a method commented like so:
+
+<CodeWithTabs>
+
+```go !!tabs Go
+// ListPets - List all pets
+// Get a list of all pets in the system
+func (s *SDK) ListPets(ctx context.Context) (*operations.ListPetsResponse, error) {
+// ...
+}
+```
+
+```python !!tabs Python
+def list_pets(self) -> operations.ListPetsResponse:
+    r"""List all pets
+    Get a list of all pets in the system
+    """
+    # ...
+```
+
+```typescript !!tabs TypeScript
+  /**
+   * ListPets - List all pets
+   *
+   * Get a list of all pets in the system
+  **/
+  ListPets(
+    config?: AxiosRequestConfig
+  ): Promise<operations.ListPetsResponse> {
+    // ...
+  }
+```
+
+```java !!tabs Java
+  /**
+   * ListPets - List all pets
+   *
+   * Get a list of all pets in the system
+  **/
+  public ListPetsResponse listPets() {
+    // ...
+  }
+```
+
+```csharp !!tabs C#
+  /// <summary>
+  /// List all pets
+  ///
+  /// <remarks>
+  /// Get a list of all pets in the system
+  /// </remarks>
+  /// </summary>
+  Task<ListPetsResponse> ListPetsAsync();
+```
+
+**Note:** In C#, the operation comment will appear on the function definition on the interface, not the class itself.
+
+</CodeWithTabs>
+
+If both the summary and description are present, the summary will be used as the first line of the comment and the description will be used as the second line of the comment. If just the description is present, it will be used as the first line of the comment. If both are present, but you would like to omit the description as it might be too verbose, you can use the `omitdescriptionifsummarypresent` option in your `gen.yaml` file, as follows:
+
+```yaml
+# ...
+generation:
+  comments:
+    omitDescriptionIfSummaryPresent: true
+```
+
+### Model Comments
+
+For each model in the generated SDK, comments are generated from the description of the schema. For example, if you have the following schema:
+
+```yaml
+components:
+  schemas:
+    Pet:
+      type: object
+      description: A pet sold in the pet store
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+```
+
+The generated SDK will have a model commented like so:
+
+<CodeWithTabs>
+
+```go !!tabs Go
+// Pet
+// A pet sold in the pet store
+type Pet struct {
+    // ...
+```
+
+```python !!tabs Python
+@dataclass_json
+@dataclass
+class Pet:
+    r"""Pet
+    A pet sold in the pet store
+    """
+    # ...
+```
+
+```typescript !!tabs TypeScript
+// Pet
+/**
+ * A pet sold in the pet store
+**/
+export class Pet extends SpeakeasyBase {
+    // ...
+```
+
+```java !!tabs Java
+/**
+ * Pet
+ *
+ * A pet sold in the pet store
+**/
+public class Pet {
+    // ...
+}
+```
+
+```csharp !!tabs C#
+/// <summary>
+/// A pet sold in the pet store
+/// </summary>
+public class Pet {
+    // ...
+}
+```
+
+</CodeWithTabs>
+
+### Per-SDK Comments
+
+You can configure comments that only display in the SDK for a single language. For example, if you need the comment for the TypeScript or the Golang SDK to say something different from the others, or you want to control the documentation separately for each language, you can use the Speakeasy `x-speakeasy-docs` extension. Anywhere you can set the `summary` or `description`, you can also add `x-speakeasy-docs` with per-language text for the docs.
+
+Consider the following parameter description:
+
+```yaml
+parameters:
+  - name: type
+    in: query
+    description: This query parameter names the type of drink to filter the results by. If not provided, all drinks will be returned.
+    required: false
+    schema:
+      $ref: "#/components/schemas/DrinkType"
+    x-speakeasy-docs:
+      go:
+        description: The type field names the type of drink to filter the results by. If set to nil, all drinks will be returned.
+      python:
+        description: The ``type`` field names the type of drink to filter the results by. If set to ``None``, all drinks will be returned.
+      typescript:
+        description: This field is the type of drink to filter the results by. If set to null, all drinks will be returned.
+```
+
+The documentation generated for each SDK will contain different comments specific to the respective programming languages.
+
+## Class Names
+
+By default, Speakeasy SDKs will be generated with the class name, `SDK`. However, you can configure a custom class name by modifying your `gen.yaml` file to include:
+
+```yaml
+generation:
+  sdkClassName: "myClassName"
+```
+
+This will yield a package like this:
+
+```go
+package petshop
+
+import (
+	"net/http"
+
+	"openapi/pkg/utils"
+)
+
+var ServerList = []string{
+	"http://petstore.speakeasy.io/v1",
+}
+
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+type PetShop struct {
+	Pets *Pets
+
+	_defaultClient  HTTPClient
+	_securityClient HTTPClient
+
+	_serverURL  string
+	_language   string
+	_sdkVersion string
+	_genVersion string
+}
+```

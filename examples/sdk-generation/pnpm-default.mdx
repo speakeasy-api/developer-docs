@@ -1,0 +1,75 @@
+---
+title: "Switching default package manager to pnpm"
+description: "Configure pnpm as the default package manager in the SDK generation workflow."
+image: "/assets/examples/generic.png"
+date: 2024-12-05
+authors:
+  - name: Logan Gingerich
+  - image_url: '/assets/author-headshots/logan.jpg'
+tags:
+  - SDK Generation
+is_featured: false
+featured_image: "/assets/examples/generic.png"
+---
+
+# Switching default package manager to `pnpm`
+
+## Prerequisite
+
+- A GitHub repository with the Speakeasy [SDK Generation GitHub Action](https://github.com/speakeasy-api/sdk-generation-action) integrated and enabled.
+
+## Adding `pnpm` Support
+
+1. Open the GitHub Actions workflow file (e.g., `.github/workflows/sdk-generation.yaml`).
+2. Modify the `generate` job to include the `pnpm_version` input. This ensures pnpm is installed during the action.
+
+### Example Workflow File
+
+```yaml
+name: Generate
+permissions:
+  checks: write
+  contents: write
+  pull-requests: write
+  statuses: write
+'on':
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force generation of SDKs
+        type: boolean
+        default: false
+      set_version:
+        description: Optionally set a specific SDK version
+        type: string
+jobs:
+  generate:
+    uses: speakeasy-api/sdk-generation-action/.github/workflows/workflow-executor.yaml@v15
+    with:
+      force: ${{ github.event.inputs.force }}
+      mode: pr
+      set_version: ${{ github.event.inputs.set_version }}
+      speakeasy_version: latest
+      working_directory: packages/sdk
+      pnpm_version: "9.19.4"  # Specify the required pnpm version
+    secrets:
+      github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      npm_token: ${{ secrets.NPM_TOKEN_ELEVATED }}
+      speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+```
+## (Optional) Verifying `pnpm` Installation
+
+Ensure pnpm is used in the workflow by adding a step to verify its presence:
+
+```yaml
+steps:
+  - name: Verify pnpm installation
+    run: pnpm --version
+```
+
+This outputs the installed `pnpm` version for confirmation during workflow execution.
+
+## Additional Notes
+
+- Use the same `pnpm_version` as used in local development for consistency.
+- Ensure any `package.json` files are compatible with pnpm. Run `pnpm install` locally to verify.

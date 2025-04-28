@@ -1,0 +1,158 @@
+---
+slug: "/security-callbacks"
+sidebar_label: Customize Authentication
+description: "Customize your security and authentication SDK settings for OAuth."
+---
+
+import { CodeWithTabs, Table } from "@/mdx/components";
+
+# Security callbacks
+
+Instead of providing credentials once during SDK instantiation, you can pass a custom authentication function that allows end users to manage secrets dynamically. Custom authentication functions can be used to automatically refresh tokens or retrieve secrets from a secret store.
+
+## Language support
+
+<Table 
+  data={[
+    { language: "TypeScript", status: "✅" },
+    { language: "Python", status: "✅" },
+    { language: "Go", status: "✅" },
+    { language: "C#", status: "✅" },
+    { language: "Java", status: "✅" },
+    { language: "PHP", status: "🏗️" },
+    { language: "Swift", status: "🏗️" },
+    { language: "Ruby", status: "🏗️" }
+  ]}
+  columns={[
+    { key: "language", header: "Language" },
+    { key: "status", header: "Status" }
+  ]}
+/>
+
+## Example: Bearer authentication
+
+In this example, bearer authentication is used as the only security scheme:
+
+```yaml
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+```
+
+The callback function passed when initializing the SDK acts as a _security source_ and is called whenever a request is made, allowing tokens to be refreshed if needed.
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import { SDK } from "<packageName>";
+import { Security } from "<packageName>/models";
+
+const sdk = new SDK({
+  security: async (): Promise<Security> => {
+    // refresh token here
+    const token = "<YOUR_JWT>";
+    return { bearerAuth: token };
+  },
+});
+```
+
+```python !!tabs Python
+import requests
+import sdk
+from sdk.components import Security
+
+def callback() -> Security:
+    # refresh token here
+    token = "<YOUR_JWT>"
+    return Security(bearer_auth=token)
+
+s = sdk.SDK(security=with_authorization(callback))
+```
+
+```go !!tabs Go
+import (
+	"context"
+  sdk "speakeasy"
+	"speakeasy/components"
+)
+
+s := sdk.New(
+    sdk.WithSecuritySource(func(ctx context.Context) (components.Security, error) {
+        // refresh token here
+        token := "<YOUR_JWT>"
+        return components.Security{BearerAuth: token}, nil
+    }),
+)
+```
+
+```java !!tabs Java
+import dev.speakeasyapi.speakeasy.SDK;
+import dev.speakeasyapi.speakeasy.SecuritySource;
+import dev.speakeasyapi.speakeasy.models.components.Security;
+
+
+class BearerSource implements SecuritySource {
+
+    public Security getSecurity() {
+        // refresh token here
+        return Security.builder()
+            .bearerAuth("<YOUR_JWT>")
+            .build();
+    }
+}
+```
+
+```java !!tabs Java
+import dev.speakeasyapi.speakeasy.SDK;
+import dev.speakeasyapi.speakeasy.SecuritySource;
+import dev.speakeasyapi.speakeasy.models.components.Security;
+
+SDK s = SDK.builder()
+    .securitySource(new BearerSource())
+    .build();
+```
+
+```csharp !!tabs C#
+using Speakeasy;
+using Speakeasy.Models.Components;
+
+
+Func<Security> tokenSource = () =>
+{
+    // refresh token here
+    var token = "<YOUR_JWT>"
+
+    return new Security { BearerAuth = token}
+}
+
+var sdk = new SDK(securitySource: tokenSource);
+```
+
+```php !!tabs PHP
+use Speakeasy\Speakeasy;
+
+$sdk = Speakeasy\SDK::builder()
+    ->setSecuritySource(
+        function (): Security {
+            //refresh token here
+            var token = "<YOUR_JWT>";
+
+            return new Security(bearerAuth: $token);
+        }
+    )->build();
+
+try {
+    $res = $sdk->drinks->listDrinks();
+
+    if ($res->Drinks != null) {
+        // handle response
+    }
+} catch (Errors\ErrorThrowable $e) {
+    // handle exception
+}
+```
+</CodeWithTabs>

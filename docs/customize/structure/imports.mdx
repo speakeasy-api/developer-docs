@@ -1,0 +1,417 @@
+---
+title: Customize imports
+description: "How to customize the import paths and model locations of generated SDKs."
+slug: "/customize-sdks/imports/"
+---
+
+import { Callout, Spotlight, CodeWithTabs } from "@/mdx/components";
+
+
+
+
+# Customize imports
+
+Speakeasy allows you to customize the paths we generate models to and your users import models from.
+
+By default, Speakeasy uses an OpenAPI-based naming scheme for the namespaces models are bucketed into, for example:
+
+<Callout title="Info" type="info">
+  Currently only supported for C#, Go, Python, TypeScript, and Unity SDKs. More
+  languages will be added soon.
+</Callout>
+
+<Spotlight>
+
+#### !!steps Components
+
+Models generated from components are placed in the `models/components` directory, or the target language idiomatic equivalent.
+
+```yaml ! sdk-tree.yaml focus=3:6
+!from ./assets/sdk-tree.yaml
+```
+
+---
+
+#### !!steps Operations
+
+Models generated from operations are placed in the `models/operations` directory, or the target language idiomatic equivalent.
+
+```yaml ! sdk-tree.yaml focus=7:12
+!from ./assets/sdk-tree.yaml
+```
+
+---
+
+#### !!steps Errors
+
+Models that are used in error status codes are placed in the `models/errors` directory (or the idiomatic equivalent for the target language).
+
+```yaml ! sdk-tree.yaml focus=13:16
+!from ./assets/sdk-tree.yaml
+```
+
+</Spotlight>
+
+<Callout title="Warning" type="warning">
+  The default names for the model directories are consistent across most
+  target languages, but C# makes the exception that the `models/Operations` directory is
+  called `models/Requests` by default.
+</Callout>
+
+## Customize import paths
+
+<Spotlight>
+
+### !!steps imports
+
+Customize where path models are generated to and imported from by modifying the configuration in the `gen.yaml` file.
+
+Configuration like what is shown will result in a file structure as above.
+
+```yaml ! custom-imports.yaml focus=6:13
+!from ./assets/custom-imports.yaml
+```
+
+---
+
+### !!steps option
+
+The `option` key determines the type of bucketing scheme that is used for the models.
+
+Only `openapi` is currently supported. This will bucket models into `components`, `operations`, `errors`, `callbacks`, and `webhooks` directories.
+
+```yaml ! custom-imports.yaml focus=7
+!from ./assets/custom-imports.yaml
+```
+
+---
+
+### !!steps paths
+
+The `paths` section contains a map of bucket names to paths relative to the root of the generated SDK.
+
+- `shared` refers to the models generated from the `components` section of the OpenAPI specification. (Note: `shared` is a legacy name for the bucket, retained for backward compatibility.)
+- `operations` refers to the models generated for the request and responses of operations in the OpenAPI specification.
+- `errors` refers to the models generated for schemas referenced in error status codes responses.
+- `callbacks` refers to models generated for schemas within the `callbacks` section of an operation.
+- `webhooks` refers to models generated from the `webhooks` section of an OpenAPI 3.1 document.
+
+```yaml ! custom-imports.yaml focus=8:13
+!from ./assets/custom-imports.yaml
+```
+
+</Spotlight>
+
+You can customize these paths to any path that exists relative to the root of the SDK.
+
+<Callout title="CAUTION" type="warning">
+  If you are providing custom path names, make sure there is no conflict with
+  any of the existing directories in the SDK. Conflicts will result in
+  compilation issues.
+</Callout>
+
+Different buckets can also be configured to use the same path, for example:
+
+```yaml gen.yaml
+typescript:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: models
+      errors: models
+      operations: models
+      shared: models
+      webhooks: models
+```
+
+This will result in all models being generated to the `models` directory. The generator will then resolve any class name conflicts by prefixing or suffixing class names to ensure they are unique.
+
+## Customize global imports
+
+You can configure the generator to work with a global import path for all models.
+
+For example:
+
+```typescript
+import { User, GetDrinkRequest, SDK } from '@speakeasy/bar'
+```
+
+Instead of:
+
+```typescript
+import { SDK } from '@speakeasy/bar'
+import { User } from '@speakeasy/bar/dist/models/components/user'
+import { GetDrinkRequest } from '@speakeasy/bar/dist/models/operations/user'
+```
+
+You will configure global imports slightly differently for different languages:
+
+<br></br>
+
+
+<CodeWithTabs>
+
+{/* TODO: make sure title and tabs title works */}
+```yaml !!tabs TypeScript
+# For TypeScript to configure global imports, the `imports` section of your `gen.yaml` needs to include the following:
+
+typescript:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: models
+      errors: models
+      operations: models
+      shared: models
+      webhooks: models
+
+# OR
+
+typescript:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: ""
+      errors: ""
+      operations: ""
+      shared: ""
+      webhooks: ""
+
+# For global imports in TypeScript, models will always be generated to the `models` directory, regardless of whether the `""` or `"models"` path is specified. However, global imports will only kick in if one of these two values is used for all buckets. This is to ensure the root directory isn&apos;t cluttered with files.
+
+# The configuration example above will result in a directory structure like this:
+/
+├─ src
+│  ├─ models/
+│  │  ├─ user.ts
+│  │  ├─ drink.ts
+│  │  ├─ getuser.ts
+│  │  ├─ updateuser.ts
+│  │  ├─ getdrink.ts
+│  │  ├─ updatedrink.ts
+│  │  ├─ sdkerror.ts
+│  │  ├─ responseerror.ts
+│  │  ├─ index.ts
+│  │  └─ ...
+│  └─ ...
+└─ ...
+
+# Import models like so:
+# import { User, GetDrinkRequest, SDK } from '@speakeasy/bar'
+```
+
+
+
+```yaml !!tabs Python
+# For Python to configure global imports, the `imports` section of your `gen.yaml` needs to include the following:
+
+python:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: models
+      errors: models
+      operations: models
+      shared: models
+      webhooks: models
+
+# OR
+
+python:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: ""
+      errors: ""
+      operations: ""
+      shared: ""
+      webhooks: ""
+
+# For global imports in Python, models will always be generated to the `models` directory, regardless of whether the `""` or `"models"` path is specified. However, global imports will only kick in if one of these two values is used for all buckets. This is to ensure the root directory isn&apos;t cluttered with files.
+
+# The configuration example above will result in a directory structure as follows:
+/
+├─ src
+│  ├─ sdk/
+│  │  ├─ models/
+│  │  |  ├─ user.py
+│  │  │  ├─ drink.py
+│  │  │  ├─ getuser.py
+│  │  │  ├─ updateuser.py
+│  │  │  ├─ getdrink.py
+│  │  │  ├─ updatedrink.py
+│  │  │  ├─ sdkerror.py
+│  │  │  ├─ responseerror.py
+│  │  │  └─ __init__.py
+│  │  └─ ...
+│  └─ ...
+└─ ...
+
+# Import like so:
+# import speakeasybar
+
+# Instead of:
+# import speakeasybar
+# from speakeasybar.models import operations, components
+```
+
+```yaml !!tabs Go
+# For Go to configure global imports, the `imports` section of your `gen.yaml` needs to include the following:
+
+go:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: ""
+      errors: ""
+      operations: ""
+      shared: ""
+      webhooks: ""
+
+# This configuration will instruct the generator to create models at the root of the SDK and result in the following directory structure:
+/
+├─ user.go
+├─ drink.go
+├─ getuser.go
+├─ updateuser.go
+├─ getdrink.go
+├─ updatedrink.go
+├─ sdkerror.go
+├─ responseerror.go
+└─ ...
+
+# Note: This configuration will result in the root directory being cluttered with files.
+
+# Import models like so:
+# import (
+#   "github.com/speakeasy/bar"
+# )
+
+# Instead of:
+# import (
+#   "github.com/speakeasy/bar"
+#   "github.com/speakeasy/bar/models/operations"
+#   "github.com/speakeasy/bar/models/components"
+# )
+```
+
+```yaml !!tabs C#
+# For C# to configure global imports, the `imports` section of your `gen.yaml` needs to include the following:
+
+csharp:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: Models
+      errors: Models
+      operations: Models
+      shared: Models
+      webhooks: Models
+
+# OR
+
+csharp:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: ""
+      errors: ""
+      operations: ""
+      shared: ""
+      webhooks: ""
+
+# For global imports in C#, models will always be generated to the `Models` directory, regardless of whether the `""` or `"Models"` path is specified. However, global imports will only kick in if one of these two values is used for all buckets. This is to ensure the root directory isn&apos;t cluttered with files.
+
+# The above configuration will result in a directory structure like this:
+
+/
+├─ {{packageName}}/
+│  ├─ Models/
+│  │  ├─ User.cs
+│  │  ├─ Drink.cs
+│  │  ├─ GetUserRequest.cs
+│  │  ├─ GetUserResponse.cs
+│  │  ├─ UpdateUserRequest.cs
+│  │  ├─ UpdateUserResponse.cs
+│  │  ├─ GetDrinkRequest.cs
+│  │  ├─ GetDrinkResponse.cs
+│  │  ├─ UpdateDrinkRequest.cs
+│  │  ├─ UpdateDrinkResponse.cs
+│  │  ├─ SDKError.cs
+│  │  ├─ ResponseError.cs
+│  │  └─ ...
+│  └─ ...
+└─ ...
+
+# As all the models will be under the root namespace of the SDK, import models like so:
+# using SpeakeasyBar;
+```
+
+```yaml !!tabs Unity
+# For Unity to configure global imports, the `imports` section of your `gen.yaml` needs to include the following:
+
+unity:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: Models
+      errors: Models
+      operations: Models
+      shared: Models
+      webhooks: Models
+
+# OR
+
+unity:
+  ...
+  imports:
+    option: openapi
+    paths:
+      callbacks: ""
+      errors: ""
+      operations: ""
+      shared: ""
+      webhooks: ""
+
+# For global imports in Unity, models will always be generated to the `Models` directory, regardless of whether the `""` or `"Models"` path is specified. However, global imports will only kick in if one of these two values is used for all buckets. This is to ensure the root directory isn&apos;t cluttered with files.
+
+# The configuration example above will result in a directory structure like this:
+/
+├─ {{packageName}}/
+│  ├─ Models/
+│  │  ├─ User.cs
+│  │  ├─ Drink.cs
+│  │  ├─ GetUserRequest.cs
+│  │  ├─ GetUserResponse.cs
+│  │  ├─ UpdateUserRequest.cs
+│  │  ├─ UpdateUserResponse.cs
+│  │  ├─ GetDrinkRequest.cs
+│  │  ├─ GetDrinkResponse.cs
+│  │  ├─ UpdateDrinkRequest.cs
+│  │  ├─ UpdateDrinkResponse.cs
+│  │  ├─ SDKError.cs
+│  │  ├─ ResponseError.cs
+│  │  └─ ...
+│  └─ ...
+└─ ...
+
+# As all the models will be under the root namespace of the SDK, import models like so:
+#using SpeakeasyBar;
+```
+</CodeWithTabs>
+
+<Callout title="CAUTION" type="warning">
+Global imports will cause namespace pollution for the import and file clutter in the directory models are generated to.
+
+Large APIs containing many models (especially many inline models) will inevitably lead to name conflicts. Rename types verbosely to ensure each class is unique within the namespace.
+
+</Callout>

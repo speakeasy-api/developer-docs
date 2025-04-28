@@ -1,0 +1,600 @@
+---
+title: Custom code with SDK hooks
+description: "Learn how to use SDK hooks to customize code generation."
+---
+
+import { CodeWithTabs, Callout, Table } from "@/mdx/components";
+
+# Custom Code With SDK Hooks
+
+<Callout title="Availability" type="info">
+  SDK Hooks are available for [Business and Enterprise users](/pricing) only.
+</Callout>
+
+SDK Hooks enable custom logic to be added to SDK functions and request lifecycles across supported SDKs. These hooks allow for transformations, tracing, logging, validation, and error handling during different stages of the SDK's lifecycle.
+
+Hooks can be applied to the following lifecycle events:
+
+- **On SDK initialization:** Modify the base server URL, wrap or override the HTTP client, add tracing, inject global headers, and manage authentication.
+- **Before request:** Cancel an outgoing request, transform the request contents, or add tracing.
+- **After success:** When a successful response is received, add tracing and logging, validate the response, return an error, or transform the raw response before deserialization.
+- **After error:** On connection errors or unsuccessful responses, add tracing and logging or transform the returned error.
+
+## Add a Hook
+
+Hooks are supported in SDKs generated with the latest Speakeasy CLI. Each supported language includes a hooks directory in the generated code:
+
+<Table
+  data={[
+    { language: "Go", directory: "`internal/hooks`" },
+    { language: "Python", directory: "`src/{sdk_name}/_hooks`" },
+    { language: "TypeScript", directory: "`src/hooks`" },
+    { language: "Java", directory: "`src/main/java/{package_path}/hooks`" },
+    { language: "C#", directory: "`{root_path}/Hooks`" },
+    { language: "Ruby", directory: "`lib/{sdk_name}/sdk_hooks`" }
+  ]}
+  columns={[
+    { key: "language", header: "Language" },
+    { key: "directory", header: "Directory Path" }
+  ]}
+/>
+
+### Steps to Add a Hook
+
+1. **Create a hook implementation.**
+
+Add the custom hook implementation in a new file inside the `hooks` directory. The generator won't override files added to this directory.
+
+2. **Locate the registration file.**
+
+Find the appropriate registration file for the language:
+
+<Table
+  columns={[
+    { key: "language", header: "Language" },
+    { key: "path", header: "Registration File Path" }
+  ]}
+  data={[
+    { language: "Go", path: "`internal/hooks/registration.go`" },
+    { language: "Python", path: "`src/{sdk_name}/_hooks/registration.py`" },
+    { language: "TypeScript", path: "`src/hooks/registration.ts`" },
+    { language: "Java", path: "`src/main/java/{package_path}/hooks/SDKHooks.java`" },
+    { language: "C#", path: "`{root_path}/Hooks/HookRegistration.cs`" },
+    { language: "Ruby", path: "`lib/{sdk_name}/sdk_hooks/registration.rb`" }
+  ]}
+/>
+
+3. **Instantiate and register your hook.**
+
+In the registration file, find the method `initHooks/init_hooks/initialize/InitHooks`. This method includes a hooks parameter, allowing hooks to be registered for various lifecycle events.
+
+Instantiate the hook here and register it for the appropriate event.
+
+<CodeWithTabs>
+
+```go !!tabs Go
+package hooks
+
+func initHooks(h *Hooks) {
+    myHook := &ExampleHook{}
+    h.registerBeforeRequestHook(myHook)
+}
+```
+
+```python !!tabs Python
+from .customhooks import ExampleHook
+from .types import Hooks
+
+
+def init_hooks(hooks: Hooks):
+    hooks.register_before_request_hook(ExampleHook())
+```
+
+```typescript !!tabs TypeScript
+import { Hooks } from "./types";
+
+export function initHooks(hooks: Hooks) {
+    const myHook = new ExampleHook();
+    hooks.registerBeforeRequestHook(myHook);
+}
+```
+
+```java !!tabs Java
+package com.package.hooks;
+
+public final class SDKHooks {
+
+    public static final void initialize(com.package.utils.Hooks hooks) {
+        ExampleHook exampleHook = new ExampleHook();
+        hooks.registerBeforeRequestHook(exampleHook);
+    }
+
+}
+```
+
+```csharp !!tabs C#
+namespace <namespace>
+{
+    public static class HookRegistration
+    {
+        public static void InitHooks(IHooks hooks)
+        {
+            var exampleHook = new ExampleHook();
+            hooks.RegisterBeforeRequestHook(exampleHook);
+        }
+    }
+}
+```
+
+```php !!tabs PHP
+<?php
+
+declare(strict_types=1);
+
+namespace <namespace>;
+
+class HookRegistration
+{
+    /**
+     * @param  Hooks  $hooks
+     */
+    public static function initHooks(Hooks $hooks): void
+    {
+        $exampleHook = new ExampleHook();
+
+        $hooks->registerBeforeRequestHook($exampleHook);
+    }
+}
+```
+
+```ruby !!tabs Ruby
+def self.init_hooks(hooks)
+  example_hook = ExampleHook.new
+  hooks.register_before_request_hook example_hook
+end
+```
+
+</CodeWithTabs>
+
+<Callout title="Note" type="info">
+The registration file is generated once and will not be overwritten. After the initial generation, you have full control and ownership of it.
+</Callout>
+
+Here are example hook implementations for each of the lifecycle events across different languages:
+
+<CodeWithTabs>
+
+```go !!tabs Go
+package hooks
+
+import (
+	"net/http"
+)
+
+type ExampleHook struct{}
+
+var (
+	_ sdkInitHook       = (*ExampleHook)(nil)
+	_ beforeRequestHook = (*ExampleHook)(nil)
+	_ afterSuccessHook  = (*ExampleHook)(nil)
+	_ afterErrorHook    = (*ExampleHook)(nil)
+)
+
+func (i *ExampleHook) SDKInit(baseURL string, client HTTPClient) (string, HTTPClient) {
+	// modify the baseURL or wrap the client used by the SDK here and return the updated values
+	return baseURL, client
+}
+
+func (i *ExampleHook) BeforeRequest(hookCtx BeforeRequestContext, req *http.Request) (*http.Request, error) {
+	// modify the request object before it is sent, such as adding headers or query parameters, or return an error to stop the request from being sent
+	return req, nil
+}
+
+func (i *ExampleHook) AfterSuccess(hookCtx AfterSuccessContext, res *http.Response) (*http.Response, error) {
+	// modify the response object before deserialization or return an error to stop the response from being deserialized
+	return res, nil
+}
+
+func (i *ExampleHook) AfterError(hookCtx AfterErrorContext, res *http.Response, err error) (*http.Response, error) {
+	// modify the response before it is deserialized as a custom error or the error object before it is returned or return an error wrapped in the FailEarly error in this package to exit from the hook chain early
+	return res, err
+}
+```
+
+```python !!tabs Python
+from typing import Optional, Tuple, Union
+
+import httpx
+
+from ..types import (
+    AfterErrorContext,
+    AfterErrorHook,
+    AfterSuccessContext,
+    AfterSuccessHook,
+    BeforeRequestContext,
+    BeforeRequestHook,
+    HttpClient,
+    SDKInitHook,
+)
+
+
+class ExampleHook(SDKInitHook, BeforeRequestHook, AfterSuccessHook, AfterErrorHook):
+
+    def sdk_init(self, base_url: str, client: HttpClient) -> Tuple[str, HttpClient]:
+        # modify the base_url or wrap the client used by the SDK here and return the
+        # updated values
+
+        return base_url, client
+
+    def before_request(
+        self, hook_ctx: BeforeRequestContext, request: httpx.Request
+    ) -> Union[httpx.Request, Exception]:
+        # modify the request object before it is sent, such as adding headers or query
+        # parameters, or raise an exception to stop the request
+
+        return request
+
+    def after_success(
+        self, hook_ctx: AfterSuccessContext, response: httpx.Response
+    ) -> Union[httpx.Response, Exception]:
+        # modify the response object before deserialization or raise an exception to stop
+        # the response from being returned
+
+        return response
+
+    def after_error(
+        self,
+        hook_ctx: AfterErrorContext,
+        response: Optional[httpx.Response],
+        error: Optional[Exception],
+    ) -> Union[Tuple[Optional[httpx.Response], Optional[Exception]], Exception]:
+        # modify the response before it is deserialized as a custom error or the error
+        # object before it is returned or raise an exception to stop processing of other
+        # error hooks and return early
+
+        return response, error
+```
+
+```typescript !!tabs TypeScript
+import { HTTPClient } from "../lib/http";
+import {
+  AfterErrorContext,
+  AfterErrorHook,
+  AfterSuccessContext,
+  AfterSuccessHook,
+  BeforeRequestContext,
+  BeforeRequestHook,
+  SDKInitHook,
+  SDKInitOptions,
+} from "./types";
+
+export class ExampleHook
+  implements SDKInitHook, BeforeRequestHook, AfterSuccessHook, AfterErrorHook
+{
+  sdkInit(opts: SDKInitOptions): SDKInitOptions {
+    const { baseURL, client } = opts;
+
+    // modify the baseURL or wrap the client used by the SDK here and return the updated values
+    return { baseURL: baseURL, client: client };
+  }
+
+  beforeRequest(hookCtx: BeforeRequestContext, request: Request): Request {
+    // modify the request object before it is sent, such as adding headers or query parameters, or throw an error to stop the request from being sent
+    return request;
+  }
+
+  afterSuccess(hookCtx: AfterSuccessContext, response: Response): Response {
+    // modify the response object before deserialization or throw an error to stop the response from being deserialized
+    return response;
+  }
+
+  afterError(
+    hookCtx: AfterErrorContext,
+    response: Response | null,
+    error: unknown,
+  ): { response: Response | null; error: unknown } {
+    // modify the response before it is deserialized as a custom error or the error object before it is returned or throw an error to stop processing of other error hooks and return early
+    return { response, error };
+  }
+}
+```
+
+```java !!tabs Java
+package dev.speakeasyapi.speakeasy.hooks;
+
+import dev.speakeasyapi.speakeasy.utils.Utils;
+import dev.speakeasyapi.speakeasy.utils.Hook.AfterError;
+import dev.speakeasyapi.speakeasy.utils.Hook.AfterErrorContext;
+import dev.speakeasyapi.speakeasy.utils.Hook.AfterSuccess;
+import dev.speakeasyapi.speakeasy.utils.Hook.AfterSuccessContext;
+import dev.speakeasyapi.speakeasy.utils.Hook.BeforeRequest;
+import dev.speakeasyapi.speakeasy.utils.Hook.BeforeRequestContext;
+import dev.speakeasyapi.speakeasy.utils.Hook.SdkInit;
+import dev.speakeasyapi.speakeasy.utils.Hook.SdkInitData;
+
+import java.io.InputStream;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.Optional;
+
+final class ExampleHook implements BeforeRequest, AfterError, AfterSuccess, SdkInit {
+
+    @Override
+    public SdkInitData sdkInit(SdkInitData data) {
+        // modify the baseURL or wrap the client used by the SDK here and return the updated values
+        return new SdkInitData(data.baseUrl(), data.client());
+    }
+
+    @Override
+    public HttpRequest beforeRequest(BeforeRequestContext context, HttpRequest request) throws Exception {
+        // modify the request object before it is sent, such as adding headers or query parameters
+        // or throw an error to stop the request from being sent
+
+        // Note that HttpRequest is immutable. With JDK 16 and later you can use
+        // `HttpRequest.newBuilder(HttpRequest, BiPredicate<String, String>)` to copy the request
+        // and modify it (the predicate is for filtering headers). If that method is not
+        // available then use `Helpers.copy` in the generated `utils` package.
+
+        return request;
+    }
+
+    @Override
+    public HttpResponse<InputStream> afterSuccess(AfterSuccessContext context, HttpResponse<InputStream> response)
+            throws Exception {
+        // modify the response object before deserialization or throw an exception to stop the
+        // response from being deserialized
+        return response;
+    }
+
+    @Override
+    public HttpResponse<InputStream> afterError(AfterErrorContext context,
+            Optional<HttpResponse<InputStream>> response, Optional<Exception> error) throws Exception {
+        // modify the response before it is deserialized as a custom error or the exception
+        // object before it is thrown or throw a  FailEarlyException to stop processing of
+        // other error hooks and return early
+        return response;
+    }
+}
+```
+
+```csharp !!tabs C#
+namespace Speakeasy.Hooks
+{
+    using Speakeasy.Utils;
+    using Speakeasy.Models.Components;
+
+    public class ExampleHook : ISDKInitHook, IBeforeRequestHook, IAfterSuccessHook, IAfterErrorHook
+    {
+        public (string, ISpeakeasyHttpClient) SDKInit(string baseURL, ISpeakeasyHttpClient client)
+        {
+            // modify the baseURL or wrap the client used by the SDK here and return the updated values
+            return (baseURL, client);
+        }
+
+        public async Task<HttpRequestMessage> BeforeRequestAsync(BeforeRequestContext hookCtx, HttpRequestMessage request)
+        {
+            // modify the request object before it is sent, such as adding headers or query parameters, or throw an exception to stop the request from being sent
+            return request;
+        }
+
+        public async Task<HttpResponseMessage> AfterSuccessAsync(AfterSuccessContext hookCtx, HttpResponseMessage response)
+        {
+            // modify the response object before deserialization or throw an exception to stop the response from being returned
+            return response;
+        }
+
+        public async Task<(HttpResponseMessage?, Exception?)> AfterErrorAsync(AfterErrorContext hookCtx, HttpResponseMessage? response, Exception error)
+        {
+            // modify the response before it is deserialized as a custom error
+            // return (response, null);
+
+            // OR modify the exception object before it is thrown
+            // return (null, error);
+
+            // OR abort the processing of subsequent AfterError hooks
+            // throw new FailEarlyException("return early", error);
+
+            // response and error cannot both be null
+            return (response, error);
+        }
+    }
+}
+```
+
+
+```php !!tabs PHP
+namespace Speakeasy\Hooks;
+
+class ExampleHook implements AfterErrorHook, AfterSuccessHook, BeforeRequestHook, SDKInitHook
+{
+    public function sdkInit(string $baseUrl, \GuzzleHttp\ClientInterface $client): SDKRequestContext
+    {
+        // modify the baseURL or wrap the client used by the SDK here and return the updated values
+        return new SDKRequestContext($baseUrl, new TestClient($client));
+    }
+
+    public function beforeRequest(BeforeRequestContext $context, RequestInterface $request): RequestInterface
+    {
+        // modify the request object before it is sent, such as adding headers or query parameters, or throw an exception to stop the request from being sent
+        return $request;
+    }
+
+    public function afterSuccess(AfterSuccessContext $context, ResponseInterface $response): ResponseInterface
+    {
+        // modify the response object before deserialization or throw an exception to stop the response from being returned
+        return $response;
+    }
+
+    public function afterError(AfterErrorContext $context, ?ResponseInterface $response, ?\Throwable $exception): ErrorResponseContext
+    {
+        // modify the response before it is deserialized as a custom error
+        // return new ErrorResponseContext($response, null);
+
+        // OR modify the exception object before it is thrown
+        // return new ErrorResponseContext(null, $exception);
+
+        // OR abort the processing of subsequent AfterError hooks
+        // throw new FailEarlyException("return early", $exception);
+
+        // response and error cannot both be null
+        return new ErrorResponseContext($response, $exception);
+    }    
+}
+
+```
+
+```ruby !!tabs Ruby
+# typed: true
+# frozen_string_literal: true
+
+require_relative './types'
+require 'sorbet-runtime'
+
+module ExampleSDK
+  module SDKHooks
+    class ExampleHook
+      extend T::Sig
+      include AbstractSDKInitHook
+      include AbstractBeforeRequestHook
+      include AbstractAfterSuccessHook
+      include AbstractAfterErrorHook
+
+      sig do
+        override.params(
+          base_url: String,
+          client: Faraday::Connection
+        ).returns([String, Faraday::Connection])
+      end
+      def sdk_init(base_url:, client:)
+        # modify the base_url or wrap the client used by the SDK here and return
+        # the updated values
+
+        return base_url, client
+      end
+
+      sig do
+        override.params(
+          hook_ctx: BeforeRequestHookContext,
+          request: Faraday::Request
+        ).returns(Faraday::Request)
+      end
+      def before_request(hook_ctx:, request:)
+        # modify the request object before it is sent, such as adding headers or
+        # query parameters, or raise an exception to stop the request
+
+        request
+      end
+
+      sig do
+        override.params(
+          hook_ctx: AfterSuccessHookContext,
+          response: Faraday::Response
+        ).returns(Faraday::Response)
+      end
+      def after_success(hook_ctx:, response:)
+        # modify the response object before deserialization or raise an
+        # exception to stop the response from being returned
+
+        response
+      end
+
+      sig do
+        override.params(
+          error: T.nilable(StandardError),
+          hook_ctx: AfterErrorHookContext,
+          response: T.nilable(Faraday::Response)
+        ).returns(T.nilable(Faraday::Response))
+      end
+      def after_error(error:, hook_ctx:, response:)
+        # modify the response before it is deserialized or raise an exception to
+        # stop processing of other error hooks and return early
+
+        response
+      end
+    end
+  end
+end
+```
+
+</CodeWithTabs>
+
+## Adding Dependencies
+
+To add dependencies needed for SDK hooks, configure the `additionalDependencies` section in the `gen.yaml` file. <br/><br/>
+
+<CodeWithTabs>
+```yaml !!tabs Go
+configVersion: 2.0.0
+go:
+additionalDependencies:
+  # Pass a map of Go package names to the version to be added to the `go.mod` file of the SDK.
+  "github.com/google/uuid": v1.6.0
+```
+
+ 
+```yaml !!tabs Python
+configVersion: 2.0.0
+python:
+  additionalDependencies:
+    dev:
+      - "pytest>=6.0.0"
+      - "flake8>=3.9.0"
+    main:
+      - "requests>=2.25.0"
+      - "pydantic>=1.8.0"
+```
+
+
+```yaml !!tabs TypeScript
+typescript:
+additionalDependencies:
+  #  Pass a map of npm package names to their version pattern for `dependencies`, `devDependencies`, or `peerDependencies`.
+  dependencies:
+    uuid: ^9.0.1
+  devDependencies:
+    "@types/uuid": "^9.0.8"
+  peerDependencies: {}
+```
+
+ 
+```yaml !!tabs Java
+java:
+additionalDependencies:
+  # Pass an array of `scope:groupId:artifactId:version` strings, for example, `implementation:com.fasterxml.jackson.core:jackson-databind:2.16.2`.
+  - implementation:com.fasterxml.jackson.core:jackson-databind:2.16.0
+  - api:org.apache.commons:commons-compress:1.26.1
+```
+
+
+```yaml !!tabs C#
+csharp:
+  additionalDependencies:
+    - package: RestSharp
+      version: 106.12.0
+      includeAssets: all
+      privateAssets: contentFiles; build; native; analyzers; buildTransitive
+      excludeAssets: none
+```
+
+
+```yaml !!tabs PHP
+php:
+  additionalDependencies:
+    require:
+      "firebase/php-jwt": "^6.10"
+    require-dev:
+      "roave/security-advisories": "dev-latest"
+```
+
+ 
+```yaml !!tabs Ruby
+configVersion: 2.0.0
+ruby:
+  additionalDependencies:
+    runtime:
+      "faraday-net_http_persistent": "~>2.3"
+    development:
+      "rubocop-faker": "1.3.0"
+```
+
+</CodeWithTabs>

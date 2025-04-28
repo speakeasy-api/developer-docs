@@ -1,0 +1,133 @@
+---
+description: "How to generate code samples for your OpenAPI document that match your SDK."
+sidebar_label: "Generate Code Samples"
+slug: "/code-samples/"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Generating code samples for your SDK
+
+This guide explains how code samples are generated for an SDK and how to apply them to an OpenAPI document.
+
+## What is the code samples extension?
+
+Many API documentation providers provide code snippets in multiple languages to help developers understand how to use the API. However, these snippets
+may not correspond to a usage snippet from an existing SDK provided by the API, which reduces the value of the API documentation and can lead to inconsistent integrations, depending on whether a user discovers the API docs or the SDK first.
+
+The `x-codeSamples` extension (previously called `x-code-samples`) is a widely accepted OpenAPI Specification extension that enables the addition of custom code samples in multiple languages to operation IDs in an OpenAPI document.
+When custom code samples are added using the code samples extension, documentation providers will render the usage snippet in the right-hand panel of the documentation page:
+
+For a full breakdown of the code samples extension, see our [guide](/guides/openapi/x-codesamples).
+
+## Configuring code samples
+
+Speakeasy provides code samples in the form of [overlays](/docs/prep-openapi/overlays/create-overlays#what-are-overlays). This ensures that your code samples can be trivially applied to your OpenAPI document without needing to upstream the changes.
+
+The setup for using overlays to apply code samples is configured in your workflow file, as follows:
+
+```yaml .speakeasy/workflow.yaml
+# ...
+targets:
+  my-target:
+    target: typescript
+    source: my-source
+    codeSamples:
+      output: code-samples.yaml # Optional, if you would like a local copy of your code samples to be produced
+      registry:
+        location: registry.speakeasy.com/my-org/my-workspace/my-source-typescript-code-samples
+      blocking: false # Optional, defaults to true if not present
+```
+
+In the above example, a code samples overlay containing TypeScript usage snippets for all operations in the `my-source` OpenAPI document will be
+generated and written to `code-samples.yaml` and pushed to the Speakeasy registry.
+
+<Callout title="Why use the registry?" >
+  Speakeasy will automatically load code samples that are pushed to the registry and apply them to your OpenAPI document.
+  This saves you from having to manually configure a workflow to integrate your code samples into your base document.
+  Removing the `registry` section from your workflow file will disable this feature and require you to manually apply code samples to your OpenAPI document.
+</Callout>
+
+### Overrides
+
+To override the `lang` and `label` values, you can add either or both of the following options to the `codeSamples` section in your `workflow.yaml` file:
+
+```yaml
+targets:
+  my-target:
+    codeSamples:
+      # ...
+      langOverride: <any string> # set `lang` to this value in all code samples
+      labelOverride:
+        omit: true # omit the label field entirely from the output
+        # OR
+        fixedValue: <any string> # set the label to this value in all code samples
+```
+
+### Styles
+
+For certain documentation providers like ReadMe, you will need to override the default style of code samples in your OpenAPI document.
+To override the default style, modify the following option in the `codeSamples` section of your `workflow.yaml` file:
+
+```yaml
+targets:
+  my-target:
+    codeSamples:
+      # ...
+      style: readme # Default is 'standard'
+```
+
+## Automatic code sample URLs
+
+For paid accounts, Speakeasy provides an elegant solution for exposing code samples to documentation providers through its automated code sample URLs product.
+
+For a full breakdown of the feature, see the [guide](/docs/automated-code-sample-urls).
+
+## Manually applying code samples to an OpenAPI document
+
+Alternatively, you can manually set up code sample integrations by pulling together code sample images in your repository with a simple workflow.
+
+```yaml .speakeasy/workflow.yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  docs-source:
+    inputs:
+      - location: { { your_api_spec } } # local or remote references supported
+    overlays:
+      - location: registry.speakeasyapi.dev/<org>/<workspace>/my-typescript-sdk-code-samples # location of the code samples from previous step
+      - location: registry.speakeasyapi.dev/<org>/<workspace>/my-go-sdk-code-samples
+      - location: registry.speakeasyapi.dev/<org>/<workspace>/my-python-sdk-code-samples
+    output: openapi.yaml
+targets: {}
+```
+
+```yaml .github/workflows/sdk_generation.yaml
+name: Generate
+permissions:
+  checks: write
+  contents: write
+  pull-requests: write
+  statuses: write
+"on":
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force generation of SDKs
+        type: boolean
+        default: false
+  schedule:
+    - cron: 0 0 * * *
+jobs:
+  generate:
+    uses: speakeasy-api/sdk-generation-action/.github/workflows/workflow-executor.yaml@v15
+    with:
+      force: ${{ github.event.inputs.force }}
+      mode: pr
+    secrets:
+      github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+```
+
+Now you can run `speakeasy run`. If you use registry references, the source and code samples will always be up to date with the main branch of your SDK repos.
+

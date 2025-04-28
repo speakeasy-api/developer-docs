@@ -1,0 +1,420 @@
+---
+title: "Deprecations"
+description: "Learn how to use deprecations to sunset parts of your API."
+slug: "/customize-sdks/deprecations/"
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+# Deprecations
+
+The OpenAPI Specification allows you to deprecate parts of your API, such as methods, parameters, and properties. When you deprecate a part of your API, the SDK will generate relevant `deprecated` annotations in the code and add a `⚠️ Deprecated` label to the SDK docs.
+
+In addition to labeling deprecated parts of an API, Speakeasy extensions are available to customize the messaging of deprecated items.
+
+## Deprecate Methods
+
+Deprecate methods in an SDK using the `deprecated` field in the OpenAPI schema. This will add a `deprecated` annotation to the generated method and a `⚠️ Deprecated` label to the SDK docs.
+
+Use the `x-speakeasy-deprecation-message` extension to customize the deprecation message displayed in code and the SDK docs.
+
+Use the `x-speakeasy-deprecation-replacement` extension to specify the method that should be used instead of the deprecated method.
+
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      deprecated: true
+      x-speakeasy-deprecation-message: This API will be removed in our next release, please refer to the beverages endpoint.
+      x-speakeasy-deprecation-replacement: listBeverages
+      responses:
+        "200":
+          description: OK
+      tags:
+        - drinks
+  /beverages:
+    get:
+      operationId: listBeverages
+      responses:
+        "200":
+          description: OK
+      tags:
+        - beverages
+```
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+    /**
+     * Get a list of drinks.
+     *
+     * @remarks
+     * Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+     *
+     * @deprecated method: This API will be removed in our next release, please refer to the beverages endpoint. Use listBeverages instead.
+     */
+    async listDrinks(
+        input: operations.ListDrinksRequest,
+        options?: RequestOptions
+    ): Promise<operations.ListDrinksResponse> {}
+    ```
+
+    ```python !!tabs Python
+    def list_drinks(self, request: operations.ListDrinksRequest) -> operations.ListDrinksResponse:
+        r"""Get a list of drinks.
+        Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+
+        Deprecated method: This API will be removed in our next release, please refer to the beverages endpoint. Use list_beverages instead.
+        """
+    ```
+
+    ```go !!tabs Go
+    // ListDrinks - Get a list of drinks.
+    // Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+    //
+    // Deprecated method: This API will be removed in our next release, please refer to the beverages endpoint. Use ListBeverages instead.
+    func (s *Drinks) ListDrinks(ctx context.Context, request operations.ListDrinksRequest) (*operations.ListDrinksResponse, error) {}
+    ```
+
+    ```java !!tabs Java
+    /**
+     * Get a list of drinks.
+     * Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+     * @param request The request object containing all of the parameters for the API call.
+     * @return The response from the API call.
+     * @throws Exception if the API call fails.
+     * @deprecated method: This API will be removed in our next release, please refer to the beverages endpoint. Use listBeverages instead.
+     */
+    @Deprecated
+    public org.openapis.openapi.models.operations.ListDrinksResponse listDrinks(
+            org.openapis.openapi.models.operations.ListDrinksRequest request) throws Exception {}
+    ```
+
+    ```csharp !!tabs C#
+    [Obsolete("This method will be removed in a future release, please migrate away from it as soon as possible. Use ListBeverages instead")]
+    public async Task<ListDrinksResponse> ListDrinksAsync() {}
+    ```
+
+    ```php !!tabs PHP
+    /**
+     * Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+     * @param request The request object containing all of the parameters for the API call.
+     * @return The response from the API call.
+     * @throws \OpenAPI\OpenAPI\SDKException
+     * @deprecated  method: This API will be removed in our next release, please refer to the beverages endpoint. Use listBeverages instead.
+     */
+    public function listDrinks(Shared\ListDrinksRequest $request): ListDrinksResponse
+    ```
+</CodeWithTabs>
+
+## Deprecate Parameters
+
+Deprecate parameters in an SDK using the `deprecated` field in the OpenAPI schema. This will add a `deprecated` annotation to the corresponding field in the generated objects and remove the parameter from any relevant usage examples in the SDK docs.
+
+Use the `x-speakeasy-deprecation-message` extension to customize the deprecation message displayed in code and the SDK docs.
+
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks.
+      description: Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+      tags:
+        - drinks
+      parameters:
+        - name: ingredient
+          in: query
+          description: Filter by ingredient.
+          required: false
+          schema:
+            type: string
+            example: "vodka"
+        - name: name
+          in: query
+          description: Filter by name.
+          required: false
+          deprecated: true
+          x-speakeasy-deprecation-message: We no longer support filtering by name.
+          schema:
+            type: string
+            example: "martini"
+        - name: limit
+          in: query
+          description: Limit the number of results.
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            example: 100
+```
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+export type ListDrinksRequest = {
+    /**
+     * Filter by ingredient.
+     */
+    ingredient?: string | undefined;
+    /**
+     * Filter by name.
+     *
+     * @deprecated field: We no longer support filtering by name.
+     */
+    name?: string | undefined;
+    /**
+     * Limit the number of results.
+     */
+    limit?: number | undefined;
+};
+```   
+
+```python !!tabs Python
+
+@dataclasses.dataclass
+class ListDrinksRequest:
+ingredient: Optional[str] = dataclasses.field(default=None, metadata={'query_param': { 'field_name': 'ingredient', 'style': 'form', 'explode': True }})
+r"""Filter by ingredient."""
+name: Optional[str] = dataclasses.field(default=None, metadata={'query_param': { 'field_name': 'name', 'style': 'form', 'explode': True }})
+r"""Filter by name.
+
+    Deprecated field: We no longer support filtering by name.
+    """
+    limit: Optional[int] = dataclasses.field(default=None, metadata={'query_param': { 'field_name': 'limit', 'style': 'form', 'explode': True }})
+    r"""Limit the number of results."""
+    ```
+
+```go !!tabs Go
+type ListDrinksRequest struct {
+	// Filter by ingredient.
+	Ingredient *string `queryParam:"style=form,explode=true,name=ingredient"`
+	// Filter by name.
+	//
+	// Deprecated field: We no longer support filtering by name.
+	Name *string `queryParam:"style=form,explode=true,name=name"`
+	// Limit the number of results.
+	Limit *int64 `queryParam:"style=form,explode=true,name=limit"`
+}
+    ```
+
+```java !!tabs Java
+public class ListDrinksRequest {
+
+    /**
+     * Filter by ingredient.
+     */
+    @SpeakeasyMetadata("queryParam:style=form,explode=true,name=ingredient")
+    private Optional<? extends String> ingredient;
+
+    /**
+     * Filter by name.
+     * @deprecated field: We no longer support filtering by name.
+     */
+    @SpeakeasyMetadata("queryParam:style=form,explode=true,name=name")
+    @Deprecated
+    private Optional<? extends String> name;
+
+    /**
+     * Limit the number of results.
+     */
+    @SpeakeasyMetadata("queryParam:style=form,explode=true,name=limit")
+    private Optional<? extends Long> limit;
+
+}
+```
+
+```csharp !!tabs C#
+public class ListDrinksRequest
+{
+
+    /// <summary>
+    /// Filter by ingredient.
+    /// </summary>
+    [SpeakeasyMetadata("queryParam:style=form,explode=true,name=ingredient")]
+    public string? Ingredient { get; set; }
+
+    /// <summary>
+    /// Limit the number of results.
+    /// </summary>
+    [SpeakeasyMetadata("queryParam:style=form,explode=true,name=limit")]
+    public long? Limit { get; set; }
+
+    /// <summary>
+    /// Filter by name.
+    /// </summary>
+    [Obsolete("This field will be removed in a future release, please migrate away from it as soon as possible")]
+    [SpeakeasyMetadata("queryParam:style=form,explode=true,name=name")]
+    public string? Name { get; set; }
+
+}
+```
+
+```php !!tabs PHP
+class ListDrinksRequest
+{
+
+    /**
+     * Filter by ingredient.
+     * @var ?string $ingredient
+     */
+    #[SpeakeasyMetadata('queryParam:style=form,explode=true,name=ingredient')]
+    private ?string ingredient;
+
+    /**
+     * Filter by name.
+     * @var ?string name
+     * @deprecated field: We no longer support filtering by name.
+     */
+    #[SpeakeasyMetadata('queryParam:style=form,explode=true,name=name')]
+    private ?string name;
+
+    /**
+     * Limit the number of results.
+     * @var ?float limit
+     */
+    #[SpeakeasyMetadata("queryParam:style=form,explode=true,name=limit")]
+    private ?float limit;
+
+}
+```
+
+</CodeWithTabs>
+
+## Deprecate Properties
+
+Deprecate properties in an SDK using the `deprecated` field in the OpenAPI schema. This will add a `deprecated` annotation to the corresponding property in the generated objects and remove the property from any relevant usage examples in the SDK docs.
+
+Use the `x-speakeasy-deprecation-message` extension to customize the deprecation message displayed in code and the SDK docs.
+
+```yaml
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        name:
+          type: string
+        stock:
+          type: integer
+        productCode:
+          type: string
+        sku:
+          type: string
+          deprecated: true
+          x-speakeasy-deprecation-message: We no longer support the SKU property.
+      required:
+        - name
+        - stock
+        - productCode
+```
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+    export type Drink = {
+        name: string;
+        stock: number;
+        productCode: string;
+        /**
+        * @deprecated field: We no longer support the SKU property.
+        */
+        sku?: string | undefined;
+    };
+    ```
+
+    ```python !!tabs Python
+    @dataclass_json(undefined=Undefined.EXCLUDE)
+    @dataclasses.dataclass
+    class Drink:
+        name: str = dataclasses.field(metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('name') }})
+        stock: int = dataclasses.field(metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('stock') }})
+        product_code: str = dataclasses.field(metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('productCode') }})
+        sku: Optional[str] = dataclasses.field(default=None, metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('sku'), 'exclude': lambda f: f is None }})
+        r"""Deprecated field: We no longer support the SKU property."""
+    ```
+
+    ```go !!tabs Go
+    type Drink struct {
+        Name        string `json:"name"`
+        Stock       int64  `json:"stock"`
+        ProductCode string `json:"productCode"`
+        // Deprecated field: We no longer support the SKU property.
+        Sku *string `json:"sku,omitempty"`
+    }
+    ```
+
+    ```java !!tabs Java
+    public class Drink {
+
+        @JsonProperty("name")
+        private String name;
+
+        @JsonProperty("stock")
+        private long stock;
+
+        @JsonProperty("productCode")
+        private String productCode;
+
+        /**
+        * @deprecated field: We no longer support the SKU property.
+        */
+        @JsonInclude(Include.NON_ABSENT)
+        @JsonProperty("sku")
+        @Deprecated
+        private Optional<? extends String> sku;
+    }
+    ```
+
+    ```csharp !!tabs C#
+    public class Drink
+    {
+        [SpeakeasyMetadata("queryParam:name=name")]
+        public string Name { get; set; } = default!;
+
+        [SpeakeasyMetadata("queryParam:name=productCode")]
+        public string ProductCode { get; set; } = default!;
+
+        [Obsolete("This field will be removed in a future release, please migrate away from it as soon as possible")]
+        [SpeakeasyMetadata("queryParam:name=sku")]
+        public string? Sku { get; set; }
+
+        [SpeakeasyMetadata("queryParam:name=stock")]
+        public long Stock { get; set; } = default!;
+    }
+
+```
+
+```php !!tabs PHP
+class Drink
+{
+    /**
+      * @var ?string $name
+      */
+    #[SpeakeasyMetadata("queryParam:name=name")]
+    public ?string $name = null;
+
+    /**
+      * @var string productCode
+      */
+    #[SpeakeasyMetadata("queryParam:name=productCode")]
+    public string $productCode;
+
+    /**
+    * @var ?string sku
+    * @deprecated field: This field will be removed in a future release, please migrate away from it as soon as possible
+    */
+    #[SpeakeasyMetadata("queryParam:name=sku")]
+    public ?string sku = null;
+
+    /**
+      * @var float stock
+      */
+    #[SpeakeasyMetadata("queryParam:name=stock")]
+    public float stock;
+}
+```
+
+</CodeWithTabs>

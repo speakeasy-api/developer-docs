@@ -1,0 +1,245 @@
+---
+title: "Map API Entities to Terraform Resources"
+description: |
+  Learn how to map your API entities to Terraform resources and specify CRUD operations.
+---
+
+# TO DO
+Figure out why its failing to render
+
+{/* #  Map API Entities to Terraform Resources
+
+Add the `x-speakeasy-entity` annotation to objects in your OpenAPI spec to include them as entities in the Terraform provider.
+
+As a component:
+
+```yaml
+components:
+  schemas:
+    Order:
+      description: An order helps you make coffee
+      x-speakeasy-entity: Order
+      properties:
+        id:
+          type: integer
+          description: Numeric identifier of the order.
+        name:
+          type: string
+          description: Product name of the coffee.
+        price:
+          type: number
+          description: Suggested cost of the coffee.
+      required:
+        - name
+        - price
+      type: object
+```
+
+Or inline in a path:
+
+```yaml
+paths:
+  /order:
+    post:
+      tags:
+        - Order
+      summary: Create a coffee order
+      x-speakeasy-entity-operation: Order#create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              x-speakeasy-entity: Order
+              properties:
+                id:
+                  type: integer
+                  description: Numeric identifier of the order.
+                name:
+                  type: string
+                  description: Product name of the coffee.
+                price:
+                  type: number
+                  description: Suggested cost of the coffee.
+              required:
+                - name
+                - price
+              type: object
+```
+
+```tf
+resource "yourprovider_order" "example" {
+  name = "Filter Blend"
+  price = 11.5
+}
+```
+
+Where you place the `x-speakeasy-entity` annotation affects the Terraform provider structure.
+- **At the top level:** Properties are nested objects.
+- **At a lower level:** Properties above the annotation are flattened.
+
+
+**Top Level** 
+```yaml 
+Pet:
+  x-speakeasy-entity: Pet
+  ...
+```
+
+
+```tf
+resource "yourprovider_pet" "example" {
+  data = { name = "Filter Blend" }
+}
+```
+
+**Lower Level**
+```yaml 
+Pet:
+  properties:
+    data:
+      x-speakeasy-entity: Pet
+      ...
+```
+
+
+```tf
+resource "yourprovider_pet" "example" {
+  name = "Filter Blend"
+}
+```
+
+<Callout title="Warning" type="warning">
+Properties above the `x-speakeasy-entity` annotation are flattened, which could cause conflicts. Apply the annotation carefully to align the structure of the Terraform provider with your API&apos;s intended user interaction.
+</Callout>
+
+## Specify CRUD Operations for API Endpoints
+
+The `x-speakeasy-entity-operation` annotation specifies CRUD (create, read, update, and delete) operations associated with each endpoint in your OpenAPI spec for a Terraform entity. The value determines the behavior of operations such as create, read, update, and delete and is structured as `Entity#operation,operation,...#order`:
+  - `Entity` represents the name of the entity.
+  - `operation` can be one or more of `create`, `read`, `update`, and `delete`, concatenated with commas.
+  - `order` is optional and can be used to define additional API calls that should be invoked for a given CRUD invocation.
+
+### Behavior of Operations
+
+- `Entity:create` makes the entity a Terraform resource.
+- `Entity:read` ensures consistency with Terraform state, updates attributes, and generates a data source.
+- `Entity:update` provides update support for the resource. Without it, any attribute change requires resource replacement (`ForceNew`).
+- `Entity:delete` enables deletion of the resource. Without it, no action is taken on deletion.
+- `Entity:create,update` **(idempotent operations)** indicates the API is idempotent. Combine these operations to allow the same API call to create new objects and update existing ones, depending on attribute changes.
+
+```yaml
+paths:
+  /pet:
+    post:
+      tags:
+        - pet
+      summary: Add a new pet to the store
+      x-speakeasy-entity-operation: Pet#create
+  /pet/{petId}:
+    get:
+      tags:
+        - pet
+      summary: Info for a specific pet
+      x-speakeasy-entity-operation: Pet#read
+    update:
+      tags:
+        - pet
+      summary: Update the pet
+      x-speakeasy-entity-operation: Pet#update
+    delete:
+      tags:
+        - pet
+      summary: Delete the pet 
+      x-speakeasy-entity-operation: Pet#delete
+```
+
+### Multiple API Operations for One Resource
+
+When multiple API operations are necessary for a single resource, use the additional entity-ordering capabilities of the `x-speakeasy-entity-operation` annotation.
+
+```yaml
+paths:
+  /pet/{petId}:
+    get:
+      x-speakeasy-entity-operation: Pet#read#1
+  /animal:
+    get:
+      x-speakeasy-entity-operation: Pet#read#2
+```
+
+Multiple API operations for one resource can be combined with multiple entity operations of [one API operation for multiple resources](#one-api-operation-for-multiple-resources) as necessary.
+
+### One API Operation for Multiple Resources
+
+When a single API operation is necessary for multiple resources, use multiple entity operation entries with the `x-speakeasy-entity-operation` annotation.
+
+```yaml
+parameters:
+  - in: query
+    name: id
+    required: false
+    schema:
+      type: string
+operationId: GetAnimal
+x-speakeasy-entity-operation:
+  - Cat#read
+  - Dog#read
+```
+
+One API operation for multiple resources can be combined with the entity operation ordering of [multiple API operations for one resource](#multiple-api-operations-for-one-resource) as necessary.
+
+### Manual association between Operations and Resource / Data Sources
+
+The default behavior within Speakeasy is to automatically infer a data source from all operations that have an `x-speakeasy-entity-operation: Entity#read` association defined.
+
+For some APIs, you might want the data source to use a "search" endpoint (e.g., search for an entity by name, where name is non-unique), while using a "get" operation for the resource (e.g., to find an entity by ID for state reconciliation).
+
+In this case, you can use an object syntax for the `x-speakeasy-entity-operation` annotation to explicitly control whether an operation generates a resource, a data source, or both:
+
+```yaml
+paths:
+  "/example":
+    get:
+      operationId: getThing
+      x-speakeasy-entity-operation:
+        terraform-datasource: null
+        terraform-resource: Thing#read
+```
+
+This syntax allows you to:
+- Prevent automatic generation of a data source by setting `terraform-datasource` to `null`
+- Prevent invocation of the operation during the resource's Read method ("invoked as part of terraform state refresh") by setting `terraform-resource` to `null`
+
+For example, the configuration above declares that `getThing` is associated with just a resource, and a data source should not be automatically generated.
+
+### Resources with Soft Delete
+
+By default, a generated managed resource uses the HTTP 404 Not Found status code on read to automatically remove the resource from the Terraform state which causes the next Terraform plan to propose recreating the resource. For resource APIs that support soft delete (grace time period before the resource is fully deleted), the `x-speakeasy-soft-delete-property` annotation adds a check against a read response property to also propose resource recreation.
+
+For managed resources, any `x-speakeasy-soft-delete-property` attribute is omitted from the schema and state. For data resources, the attribute remains to preserve client-side filtering capabilities.
+
+In this example, the resource will be proposed for recreation if the `deleted_at` property has a value:
+
+```yaml
+paths:
+  "/example":
+    get:
+      x-speakeasy-entity-operation: Example#read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schema/ExampleGetResponse"
+components:
+  schemas:
+    ExampleGetResponse:
+      type: object
+      properties:
+        # ...
+        deleted_at:
+          type: string
+          format: date-time
+          x-speakeasy-soft-delete-property: true
+``` */}

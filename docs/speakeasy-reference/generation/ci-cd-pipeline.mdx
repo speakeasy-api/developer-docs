@@ -1,0 +1,142 @@
+---
+slug: "/ci-cd-pipeline"
+sidebar_label: CI/CD Workflow for SDK Management
+description: "Manage CI/CD (the automatic generation and publishing of Client SDKs) in a repo containing the generated SDKs."
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+# Workflow matrix
+
+
+<Callout title="Tip" > To quickly set up the workflow, run `speakeasy configure github` in the root of the SDK repository. This automates the setup and commits the necessary files. For more complex or custom configurations, the following is supported. </Callout>
+
+## Workflow inputs
+
+```yml
+"on":
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force generation of SDKs
+        type: boolean
+        default: false
+      set_version:
+        description: optionally set a specific SDK version
+        type: string
+```
+
+The inputs to the workflow determine how the SDKs will be generated.
+
+<Table 
+  data={[
+    { name: "speakeasy_version", description: "Version of the Speakeasy CLI to use. Use \"latest\" to always use the latest version.", type: "string", default: "latest" },
+    { name: "mode", description: "Workflow mode: `direct` commits changes directly to the branch, `pr` creates a pull request, or `test` fully runs through generation without modifying any GitHub state.", type: "string", default: "direct" },
+    { name: "force", description: "Forces SDK generation, even if no changes are detected.", type: "boolean", default: "false" },
+    { name: "set_version", description: "Manually set a specific version for the SDK being generated.", type: "string", default: "None" }
+  ]}
+  columns={[
+    { key: "name", header: "Input Name" },
+    { key: "description", header: "Description" },
+    { key: "type", header: "Type" },
+    { key: "default", header: "Default" }
+  ]}
+/>
+
+
+## Workflow jobs
+
+The generate job utilizes the Speakeasy SDK generation action. It references the `workflow-executor.yaml` from the `sdk-generation-action` repo, which handles the core operations like pulling the OpenAPI document, validating it, and generating the SDKs.
+
+### With
+
+```yml
+jobs:
+  generate:
+    uses: speakeasy-api/sdk-generation-action/.github/workflows/workflow-executor.yaml@v15
+    with:
+      force: ${{ github.event.inputs.force }}
+      mode: pr
+      set_version: ${{ github.event.inputs.set_version }}
+      speakeasy_version: latest
+```
+
+<Table 
+  data={[
+    { name: "speakeasy_version", description: "Version of the Speakeasy CLI to use. Use \"latest\" to always use the latest version.", type: "string", default: "latest" },
+    { name: "mode", description: "Workflow mode: `direct` commits changes directly to the branch, `pr` creates a pull request, or `test` fully runs through generation without modifying any GitHub state.", type: "string", default: "direct" },
+    { name: "force", description: "Forces SDK generation, even if no changes are detected.", type: "boolean", default: "false" },
+    { name: "set_version", description: "Manually set a specific version for the SDK being generated.", type: "string", default: "None" }
+  ]}
+  columns={[
+    { key: "name", header: "Input Name" },
+    { key: "description", header: "Description" },
+    { key: "type", header: "Type" },
+    { key: "default", header: "Default" }
+  ]}
+/>
+
+### Secrets
+
+```yml
+secrets:
+  github_access_token: ${{ secrets.GITHUB_TOKEN }}
+  npm_token: ${{ secrets.NPM_TOKEN }}
+  speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+```
+
+
+<Table 
+  data={[
+    { name: "github_access_token", description: "GitHub access token with write access to the repository. Used to push changes and create PRs." },
+    { name: "speakeasy_api_key", description: "API key for authenticating with the Speakeasy CLI." },
+    { name: "npm_token", description: "Token to authenticate publishing to npm registry." },
+    { name: "pypi_token", description: "Token to authenticate publishing to PyPi for Python packages." },
+    { name: "packagist_token", description: "Token to authenticate publishing to Packagist for PHP packages." },
+    { name: "ossrh_username", description: "Username for publishing the Java package to the OSSRH repository." },
+    { name: "ossrh_password", description: "Password for publishing the Java package to the OSSRH repository." },
+    { name: "java_gpg_secret_key", description: "GPG secret key used for signing the Java package." },
+    { name: "java_gpg_passphrase", description: "Passphrase for the GPG secret key." },
+    { name: "rubygems_auth_token", description: "Auth token (API key) for publishing to RubyGems." },
+    { name: "nuget_api_key", description: "API key for publishing to the Nuget registry." },
+    { name: "slack_webhook_url", description: "Optional: Slack Webhook URL for posting workflow failure notifications." },
+    { name: "terraform_gpg_secret_key", description: "GPG secret key used for signing the Terraform provider." },
+    { name: "terraform_gpg_passphrase", description: "Passphrase for the Terraform GPG secret key." }
+  ]}
+  columns={[
+    { key: "name", header: "Secret Name" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+## Workflow outputs
+
+The workflow provides outputs that indicate which SDKs were regenerated and can trigger further actions in the pipeline, such as validating, testing, and publishing the SDKs.
+
+<Table 
+  data={[
+    { name: "python_regenerated", description: "Indicates if the Python SDK was regenerated." },
+    { name: "python_directory", description: "Directory where the Python SDK was generated." },
+    { name: "typescript_regenerated", description: "Indicates if the TypeScript SDK was regenerated." },
+    { name: "typescript_directory", description: "Directory where the TypeScript SDK was generated." },
+    { name: "java_regenerated", description: "Indicates if the Java SDK was regenerated." },
+    { name: "java_directory", description: "Directory where the Java SDK was generated." },
+    { name: "go_regenerated", description: "Indicates if the Go SDK was regenerated." },
+    { name: "go_directory", description: "Directory where the Go SDK was generated." },
+    { name: "php_regenerated", description: "Indicates if the PHP SDK was regenerated." },
+    { name: "php_directory", description: "Directory where the PHP SDK was generated." },
+    { name: "ruby_regenerated", description: "Indicates if the Ruby SDK was regenerated." },
+    { name: "ruby_directory", description: "Directory where the Ruby SDK was generated." },
+    { name: "swift_regenerated", description: "Indicates if the Swift SDK was regenerated." },
+    { name: "swift_directory", description: "Directory where the Swift SDK was generated." },
+    { name: "terraform_regenerated", description: "Indicates if the Terraform SDK was regenerated." },
+    { name: "terraform_directory", description: "Directory where the Terraform SDK was generated." },
+    { name: "docs_regenerated", description: "Indicates if the SDK documentation was regenerated." },
+    { name: "branch_name", description: "The branch name used for generating the SDK or the PR." },
+    { name: "commit_hash", description: "The commit hash generated for the SDK (in direct mode)." }
+  ]}
+  columns={[
+    { key: "name", header: "Output Name" },
+    { key: "description", header: "Description" }
+  ]}
+/>

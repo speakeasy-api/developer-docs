@@ -1,0 +1,463 @@
+---
+title: Customize responses
+description: "Learn how to customize response formats."
+slug: "/customize-sdks/responses/"
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+
+# Customize responses
+
+## Response formats
+
+When generating SDKs, response formats determine the structure of response types in supported languages. You can choose from three available response formats.
+
+Configure the response format for a given target in the `gen.yaml` file:
+
+```yaml
+typescript:  # Python and Go can be configured in a similar way
+  responseFormat: flat  # Or envelope-http, or envelope
+
+  packageName: @acme/super-sdk
+  version: 0.1.0
+  author: Speakeasy
+
+  templateVersion: v2
+  clientServerStatusCodesAsErrors: true
+  maxMethodParams: 4
+  flattenGlobalSecurity: true
+  inputModelSuffix: input
+  outputModelSuffix: output
+  additionalDependencies:
+    dependencies: {}
+    devDependencies: {}
+    peerDependencies: {}
+  imports:
+    option: openapi
+    paths:
+      callbacks: models/callbacks
+      errors: models/errors
+      operations: models/operations
+      shared: models/components
+      webhooks: models/webhooks
+```
+
+The following sections will reference this specification:
+
+```yaml
+  /payments/{id}:
+    get:
+      operationId: getPayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Details about a payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+components:
+  schemas:
+    Payment:
+      type: object
+      required: [id,amount,currency]
+      properties:
+        id:
+          type: integer
+        amount:
+          type: number
+        currency:
+          type: string
+```
+
+### `responseFormat: flat`
+
+The flat response format is the simplest and most ergonomic option, as it avoids generating a wrapper type, giving SDK users direct access to the response value.
+
+When `responseFormat: flat` is enabled, the generated SDK code will return the `Payment` type directly with no indirection:
+
+
+<CodeWithTabs>
+    ```typescript !!tabs TypeScript
+    export class SDK extends ClientSDK {
+      async getPayment(id: string, options?: RequestOptions): Promise<components.Payment> {}
+    }
+    ```
+
+```python !!tabs Python
+    class SDK:
+        def get_payment(self, id: str) -> components.Payment:
+    ```
+
+```go !!tabs Go
+    func (s *SDK) GetPayment(ctx context.Context, id string) (*components.Payment, error) {}
+    ```
+
+```csharp !!tabs C#
+    public async Task<Payment> GetPaymentAsync(string id){}
+    ```
+
+```php !!tabs PHP
+    public function getPayment(string $id, ?Options $options = null): Payment
+    ```
+
+</CodeWithTabs>
+
+To debug HTTP metadata, users can pass a [custom client](/docs/customize-sdks/custom-http-client) to the SDK instance.
+
+
+### `responseFormat: envelope-http`
+
+The `envelope-http` format builds response types with a wrapper that holds the response value and associated HTTP metadata.
+
+When `envelope-http` is enabled, the generated SDK code will produce the response types below:
+
+<CodeWithTabs>
+    ```typescript !!tabs TypeScript
+    class SDK extends ClientSDK {
+        async getPayment(id: string, options?: RequestOptions): Promise<operations.GetPaymentResponse> {}
+    }
+
+    /*--------------------------------*/
+
+    export type GetPaymentResponse = {
+        httpMeta: components.HTTPMetadata;
+
+        /**
+         * Details about a payment
+         */
+        payment?: components.Payment | undefined;
+    };
+
+    /*--------------------------------*/
+
+    export type HTTPMetadata = {
+      /**
+       * Raw HTTP response; suitable for custom response parsing
+       */
+      response: Response;
+      /**
+       * Raw HTTP request; suitable for debugging
+       */
+      request: Request;
+    };
+    ```
+
+    ```python !!tabs Python
+    class SDK:
+        def get_payment(self, id: str) -> operations.GetPaymentResponse:
+    
+    ####################################
+
+    @dataclasses.dataclass
+    class GetPaymentResponse:
+        http_meta: components_httpmetadata.HTTPMetadata = dataclasses.field()
+
+        payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
+        r"""Details about a payment"""
+
+    ####################################
+
+    @dataclass_json(undefined=Undefined.EXCLUDE)
+    @dataclasses.dataclass
+    class HTTPMetadata:
+        response: requests.Response = dataclasses.field(metadata={'dataclasses_json': { 'exclude': lambda f: True }})
+        r"""Raw HTTP response; suitable for custom response parsing"""
+        request: requests.Request = dataclasses.field(metadata={'dataclasses_json': { 'exclude': lambda f: True }})
+        r"""Raw HTTP request; suitable for debugging"""
+    ```
+
+
+    ```go !!tabs Go
+    func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
+   
+    /*--------------------------------*/
+   
+    type GetPaymentResponse struct {
+      HTTPMeta components.HTTPMetadata
+
+      // Details about a payment
+      Payment *components.Payment
+    }
+
+    /*--------------------------------*/
+
+    type HTTPMetadata struct {
+      // Raw HTTP response; suitable for custom response parsing
+      Response *http.Response `json:"-"`
+      // Raw HTTP request; suitable for debugging
+      Request *http.Request `json:"-"`
+    }
+    ```
+
+    ```csharp !!tabs C#
+    Task<GetPaymentResponse> GetPaymentAsync(string id);
+
+    /*--------------------------------*/
+
+    public class GetPaymentResponse
+    {
+        public HTTPMetadata HttpMeta { get; set; } = default!;
+        // Details about a payment
+        public Payment? Payment { get; set; } = default!;
+    }
+
+    /*--------------------------------*/
+
+    public class HTTPMetadata
+    {
+
+        /// <summary>
+        /// Raw HTTP response; suitable for custom response parsing
+        /// </summary>
+        [JsonProperty("-")]
+        public HttpResponseMessage Response { get; set; } = default!;
+
+        /// <summary>
+        /// Raw HTTP request; suitable for debugging
+        /// </summary>
+        [JsonProperty("-")]
+        public HttpRequestMessage Request { get; set; } = default!;
+    }
+    ```
+
+    ```php !!tabs PHP
+    class SDK
+    {
+        public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
+    }
+
+    /*--------------------------------*/
+
+    class GetPaymentResponse
+    {
+        /**
+        *
+        * @var Shared\HTTPMetadata $httpMeta
+        */
+        #[\Speakeasy\Serializer\Annotation\Exclude]
+
+        public ?Shared\HTTPMetadata $httpMeta;
+
+        /**
+        * Details about a payment
+        *
+        * @var ?Payment $payment
+        */
+        public Payment? Payment { get; set; } = default!;
+
+    }
+
+    /*--------------------------------*/
+
+    class HTTPMetadata
+    {
+        /**
+        * Raw HTTP response; suitable for custom response parsing
+        *
+        * @var \Psr\Http\Message\ResponseInterface $response
+        */
+        #[\Speakeasy\Serializer\Annotation\Exclude]
+
+        public \Psr\Http\Message\ResponseInterface $response;
+
+        /**
+        * Raw HTTP request; suitable for debugging
+        *
+        * @var \Psr\Http\Message\RequestInterface $request
+        */
+        #[\Speakeasy\Serializer\Annotation\Exclude]
+
+        public \Psr\Http\Message\RequestInterface $request;
+
+    }
+    ```
+</CodeWithTabs>
+
+Built-in HTTP metadata is included in both custom and built-in error types that are thrown or returned from the SDK.
+
+Of the three response formats, `envelope-http` provides the most details about the underlying HTTP requests but adds a layer of indirection with a wrapper value.
+
+#### Accessing HTTP headers with envelope-http
+
+When using `envelope-http`, you can access HTTP headers through the `httpMeta.response.headers` property, providing a cleaner structure than using `rawResponse`:
+
+```typescript
+const { data } = useEmployeesGetSuspense({
+  companyId,
+  page: currentPage,
+  per: itemsPerPage,
+});
+
+console.log(data.httpMeta.response.headers.get('x-total-count'));
+```
+
+#### Headers in SDKs
+
+Headers in SDKs are treated as metadata rather than structured response objects for several reasons:
+- Headers are metadata, separate from the main response payload
+- The dynamic nature of headers makes strict typing impractical
+- This approach follows standard SDK behavior across the industry
+
+While headers can be defined with types in OpenAPI, SDKs generally don't expose them as typed properties. The `envelope-http` format provides a clear separation between HTTP metadata (including headers) and the main response payload.
+
+### `responseFormat: envelope`
+
+The `responseFormat: envelope` format builds response types with a wrapper that holds the response value and minimal information about the underlying HTTP response.
+
+> Using `envelope-http` instead of `envelope` is recommended as it
+> provides a more complete view of the HTTP request and response.
+
+When `responseFormat: envelope` is enabled, the generated SDK code will produce the response types below:
+
+  <CodeWithTabs>
+
+    ```typescript !!tabs TypeScript
+    class SDK extends ClientSDK {
+        async getPayment(id: string, options?: RequestOptions): Promise<operations.GetPaymentResponse> {}
+    }
+
+    /*--------------------------------*/
+    
+    export type GetPaymentResponse = {
+      /**
+       * HTTP response content type for this operation
+       */
+      contentType: string;
+      /**
+       * HTTP response status code for this operation
+       */
+      statusCode: number;
+      /**
+       * Raw HTTP response; suitable for custom response parsing
+       */
+      rawResponse: Response;
+      /**
+       * Details about a payment
+       */
+      payment?: components.Payment | undefined;
+    };
+    ```
+
+    ```python !!tabs Python
+    class SDK:
+        def get_payment(self, id: str) -> operations.GetPaymentResponse:
+   
+    ####################################
+
+    @dataclasses.dataclass
+    class GetPaymentResponse:
+        http_meta: components_httpmetadata.HTTPMetadata = dataclasses.field()
+
+        payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
+        r"""Details about a payment"""
+    
+    ####################################
+
+    @dataclasses.dataclass
+    class GetPaymentResponse:
+        content_type: str = dataclasses.field()
+        r"""HTTP response content type for this operation"""
+        status_code: int = dataclasses.field()
+        r"""HTTP response status code for this operation"""
+        raw_response: requests_http.Response = dataclasses.field()
+        r"""Raw HTTP response; suitable for custom response parsing"""
+        payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
+        r"""Details about a payment"""
+    ```
+
+    ```go !!tabs Go
+    func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
+   
+    /*--------------------------------*/
+
+    type GetPaymentResponse struct {
+      // HTTP response content type for this operation
+      ContentType string
+      // HTTP response status code for this operation
+      StatusCode int
+      // Raw HTTP response; suitable for custom response parsing
+      RawResponse *http.Response
+      // Details about a payment
+      Payment *components.Payment
+    }
+    ```
+
+    ```csharp !!tabs C#
+    Task<GetPaymentResponse> GetPaymentAsync(string id);
+
+    /*--------------------------------*/
+
+    public class GetPaymentResponse
+    {
+
+        /// <summary>
+        /// HTTP response content type for this operation
+        /// </summary>
+        public string? ContentType { get; set; } = default!;
+
+        /// <summary>
+        /// HTTP response status code for this operation
+        /// </summary>
+        public int StatusCode { get; set; } = default!;
+
+        /// <summary>
+        /// Raw HTTP response; suitable for custom response parsing
+        /// </summary>
+        public HttpResponseMessage RawResponse { get; set; } = default!;
+
+        /// <summary>
+        /// OK
+        /// </summary>
+        public Payment? Res { get; set; }
+    }
+    ```
+
+    ```php !!tabs PHP
+    class SDK
+    {
+        public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
+    }   
+    
+    /*--------------------------------*/
+
+    class GetPaymentResponse
+    {
+        /**
+        * HTTP response content type for this operation
+        *
+        * @var string $contentType
+        */
+        public string $contentType;
+
+        /**
+        * HTTP response status code for this operation
+        *
+        * @var int $statusCode
+        */
+        public int $statusCode;
+
+        /**
+        * Raw HTTP response; suitable for custom response parsing
+        *
+        * @var \Psr\Http\Message\ResponseInterface $rawResponse
+        */
+        public \Psr\Http\Message\ResponseInterface $rawResponse;
+
+        /**
+        * Details about a payment
+        *
+        * @var ?Payment $payment
+        */
+        public ?Payment $payment = null;
+
+    }
+    ```
+
+  </CodeWithTabs>

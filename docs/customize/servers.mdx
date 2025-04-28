@@ -1,0 +1,241 @@
+---
+title: "Configure servers"
+description: "Learn how to configure server behavior in your Speakeasy client SDKs. Customize URLs, define multiple servers, and use templated URLs."
+slug: "/customize-sdks/servers/"
+---
+
+import { CodeWithTabs, Callout } from "@/mdx/components";
+
+# Configure Your Servers
+
+## Default Behavior
+
+The OpenAPI specification allows you to define an array of servers that can be used to make requests to the API. These servers are generally used to define different environments (for example, production, development, and testing) available for the API.
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Example
+  version: 0.0.1
+servers:
+  - url: https://prod.example.com # Used as the default URL by the SDK
+    description: Our production environment
+  - url: https://sandbox.example.com
+    description: Our sandbox environment
+```
+
+The Speakeasy SDK Generator automatically selects the first server URL from the OpenAPI document's servers list as the default endpoint. While this default is commonly set to the production server, it's flexible to accommodate your application's development cycle by reordering or modifying the server list.
+
+## Declare Base Server URL
+
+Speakeasy SDKs are battery-included, meaning they are designed to work out of the box with minimal configuration from end users.
+
+If your OpenAPI document lacks server definitions (both at the global level and for individual operations) or relies on relative paths for server URLs, it's essential to set a default server endpoint. Set the default server endpoint by specifying a `baseServerUrl` in your SDK Generator configuration file (`gen.yaml`). This ensures your SDK always has a primary server to connect to for its operations.
+
+```yaml
+# ...
+generation:
+  baseServerUrl: "https://prod.example.com"
+```
+
+## Use Templated URLs
+
+[Templated](https://spec.openapis.org/oas/v3.0.3#server-object) URLs provide a dynamic method to customize server endpoints based on runtime parameters, making them ideal for applications that serve multiple clients or operate in varied environments.
+
+```yaml
+servers:
+  - url: https://{customer}.yourdomain.com
+    variables:
+      customer:
+        default: api
+        description: The name of the customer sending API requests.
+```
+
+These placeholders can then be replaced with specific values at runtime, allowing for customer-specific or environment-specific configurations without altering the SDK.
+
+<Callout title="Note" type="info">
+  Please note that the templating feature is only supported for global server
+  URLs and is not yet supported for per-operation server URLs.
+</Callout>
+
+## Managing Multiple Servers With IDs
+
+For a better developer experience, you can define an ID for each server using the `x-speakeasy-server-id` extension. This simplifies the process of selecting between servers at SDK initialization.
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Example
+  version: 0.0.1
+servers:
+  - url: https://prod.example.com # Used as the default URL by the SDK
+    description: Our production environment
+    x-speakeasy-server-id: prod
+  - url: https://sandbox.example.com
+    description: Our sandbox environment
+    x-speakeasy-server-id: sandbox
+```
+
+## Dynamic Server Declaration at Runtime
+
+Dynamic server selection allows developers to switch between multiple predefined servers at runtime, offering flexibility across different deployment environments or client configurations.
+
+<Callout title="Note" type="info">
+  The Speakeasy README file accompanying your generated SDK will include
+  SDK-specific examples to guide you through the process of dynamically
+  selecting servers.
+</Callout>
+
+### Methods
+
+#### Server Selection by Index
+
+Specify a server from the predefined list based on its index.
+
+<CodeWithTabs>
+
+```go !!tabs Go
+s := sdk.New(
+		sdk.WithServerIndex(1)
+)
+```
+
+```python !!tabs Python
+s = sdk.SDK(
+    server_idx=1,
+)
+```
+
+```typescript !!tabs TypeScript
+const sdk = new SDK({
+    serverIdx: 1,
+});
+```
+
+```csharp !!tabs C#
+const sdk = new SDK(serverIndex: 1);
+```
+
+```php !!tabs PHP
+$sdk = OpenAPI\SDK::builder()->withServerIndex(1)->build();
+```
+
+</CodeWithTabs>
+
+#### Global URL Override
+
+Set a global server URL at SDK initialization, overriding the base URL.
+
+<CodeWithTabs>
+
+```go !!tabs Go
+s := sdk.New(
+    // if the x-speakeasy-server-id extension is not used
+		sdk.WithServerURL("https://sandbox.example.com")
+
+    // with x-speakeasy-server-id extension
+    sdk.WithServer("sandbox"),
+)
+```
+
+```python !!tabs Python
+s = sdk.SDK(
+  # if the x-speakeasy-server-id extension is not used
+  server_url="https://sandbox.example.com"
+
+  # with x-speakeasy-server-id extension
+  server="sandbox"
+
+)
+```
+
+```typescript !!tabs TypeScript
+const sdk = new SDK({
+    // if the x-speakeasy-server-id extension is not used
+    serverURL: "https://sandbox.example.com",
+
+    // with x-speakeasy-server-id extension
+    server: "sandbox",
+});
+```
+
+```csharp !!tabs C#
+const sdk = new SDK(
+    // if the x-speakeasy-server-id extension is not used
+    serverURL: "https://sandbox.example.com",
+
+    // with x-speakeasy-server-id extension
+    server: "sandbox",
+);
+```
+
+```php !!tabs PHP
+$sdk = OpenAPI\SDK::builder()->
+    // if the x-speakeasy-server-id extension is not used
+    withServerUrl("https://sandbox.example.com")
+    // with x-speakeasy-server-id extension
+    withServer("snadbox")->build();
+```
+
+</CodeWithTabs>
+
+#### Per-Client or Per-Operation Override
+
+Override the server URL for specific instances or API calls.
+
+<CodeWithTabs>
+
+```go !!tabs Go
+res, err := s.Tag1.ListTest1(
+    ctx,
+    operationSecurity,
+    sdk.WithServerURL("https://sandbox.example.com"),
+    page,
+    headerParam1,
+    queryParam1,
+)
+```
+
+```python !!tabs Python
+res = s.tag1.list_test1(
+    "<YOUR_API_KEY>",
+    server_url="https://sandbox.example.com",
+    page=100,
+    header_param1='some example header param',
+    query_param1='some {{example}} query param'
+)
+```
+
+```typescript !!tabs TypeScript
+const result = await sdk.tag1.listTest1(operationSecurity, page, headerParam1, queryParam1, {
+    serverURL: "https://sandbox.example.com",
+});
+```
+
+```csharp !!tabs C#
+var res = await sdk.Tag1.ListTest1Async(
+    security: operationSecurity,
+    page: page,
+    headerParam1: headerParam1,
+    queryParam1: queryParam1,
+    serverURL: "https://sandbox.example.com"
+);
+```
+
+```php !!tabs PHP
+$response = $sdk.tag1.listTest1(
+    security: operationSecurity,
+    page: page,
+    headerParam1: headerParam1,
+    queryParam1: queryParam1,
+    serverURL: "https://sandbox.example.com"
+);
+```
+
+</CodeWithTabs>
+
+<Callout title="CAUTION" type="warning">
+  If you choose to configure the SDK URL at runtime and relative paths were used
+  in the OpenAPI document, make sure that you account for the `baseURL` when
+  initializing the SDK server configuration.
+</Callout>

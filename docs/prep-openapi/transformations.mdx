@@ -1,0 +1,143 @@
+---
+title: "Transformations"
+description: "Transformations are predefined functions in Speakeasy workflow that can be applied to an OpenAPI document to change its structure."
+---
+
+import { Spotlight } from "@/mdx/components";
+
+# Transformations
+
+Transformations are predefined functions that modify an OpenAPI document's structure.
+
+Speakeasy currently supports the following transformations:
+
+- **Remove unused components:** Removes components not referenced by any operation
+- **Filter operations:** Filters operations down to a defined set of operation IDs
+- **Cleanup:** Reformats the document for better readability and compliance with various parsing tools
+- **Format:** Changes the order of keys at various levels in the document for improved human readability
+- **Convert Swagger to OpenAPI:** Converts a Swagger 2.0 document to an OpenAPI 3.0.x document
+
+## Transformations vs. overlays
+
+Transformations and overlays both modify OpenAPI documents but differ in key ways:
+
+- **Transformations** operate dynamically and account for changes to the underlying document, staying "always up to date." For example,
+if an OpenAPI document updates and a previously unused component becomes used by a newly-added operation, the `removeUnused` transformation will no longer remove it.
+- **Overlays** offer more flexibility and can transform almost any document into any other document. However, overlays remain static and do not adapt with the underlying document.
+For example, when removing an unused component, an overlay continues to remove it even if the underlying document changes and the component becomes used.
+
+
+## Using transformations
+
+Apply transformations to an OpenAPI document in two ways:
+
+1. [Using the CLI](#using-the-cli): The easiest and most flexible approach
+2. [As part of a Speakeasy workflow](#in-workflow-files): The most powerful approach, requiring more initial setup
+
+### Using the CLI
+
+Apply a transformation to an OpenAPI document with the `speakeasy openapi transform` command. The interactive CLI guides through the process. Example commands:
+
+- `speakeasy openapi transform remove-unused -s openapi.yaml`
+- `speakeasy openapi transform filter-operations -s openapi.yaml --operations=getPets,createPet`
+- `speakeasy openapi transform cleanup -s openapi.yaml`
+- `speakeasy openapi transform format -s openapi.yaml`
+- `speakeasy openapi transform convert-swagger -s swagger.yaml`
+
+### In workflow files
+
+The greatest utility comes from using transformations in the `workflow.yaml` file. This keeps the OpenAPI document always up to date with desired transformations, though it requires more initial setup.
+
+Note that the `convert-swagger` transformation cannot be applied as part of a workflow.
+
+<Spotlight>
+### !!steps Remove unused components
+
+Remove unused components from the OpenAPI document, preventing inclusion in the generated SDK.
+
+```yaml ! workflow.yaml
+# !focus(8)
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  api-source:
+    inputs:
+      - location: ./openapi.yaml
+    transformations:
+      - removeUnused: true
+      - filterOperations:
+          operations: getPets, createPet
+          include: true
+      - cleanup: true
+      - format: true
+```
+
+---
+### !!steps Filter operations
+
+Keep or remove specified operations from the OpenAPI document.
+
+```yaml ! workflow.yaml
+# !focus(9:11)
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  api-source:
+    inputs:
+      - location: ./openapi.yaml
+    transformations:
+      - removeUnused: true
+      - filterOperations:
+          operations: getPets, createPet
+          include: true # exclude: true
+      - cleanup: true
+      - format: true
+```
+
+---
+### !!steps Cleanup
+
+Clean up the OpenAPI document for improved readability and compliance with various parsing tools.
+
+```yaml ! workflow.yaml
+# !focus(12)
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  api-source:
+    inputs:
+      - location: ./openapi.yaml
+    transformations:
+      - removeUnused: true
+      - filterOperations:
+          operations: getPets, createPet
+          include: true
+      - cleanup: true
+      - format: true
+```
+
+---
+### !!steps Format
+
+Reorder keys at various document levels for enhanced human readability.
+
+```yaml ! workflow.yaml
+# !focus(13)
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  api-source:
+    inputs:
+      - location: ./openapi.yaml
+    transformations:
+      - removeUnused: true
+      - filterOperations:
+          operations: getPets, createPet
+          include: true
+      - cleanup: true
+      - format: true
+```
+
+---
+
+</Spotlight>

@@ -1,0 +1,260 @@
+---
+title: "Define global parameters"
+description: "How to define global parameters in your OpenAPI spec and automatically populate related operation parameters."
+slug: "/customize-sdks/globals/"
+---
+
+import { CodeWithTabs, Callout } from "@/mdx/components";
+
+
+# Define global parameters
+
+Use the `x-speakeasy-globals` extension to define parameters that can be configured globally on the main SDK instance. These parameters will be automatically populated for any operations that use them. This is especially useful for configurations that are required across all operations, such as customer IDs.
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Test
+  version: 0.0.1
+servers:
+  - url: https://httpbin.org
+x-speakeasy-globals:
+  parameters:
+    - name: customerId
+      in: path
+      schema:
+        type: string
+paths:
+  /api/{customerId}:
+    get:
+      operationId: getTest
+      parameters:
+        - name: customerId # If this matches a global parameter it will be populated automatically
+          in: path
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: OK
+```
+
+If the `name`, `in`, and `schema` values of a global parameter match a parameter in an operation, the global parameter will be populated automatically. If the global parameter is not used in the operation, it will be ignored.
+
+## Preferred method: Using component references
+
+The preferred way to define global parameters is by referencing a component. This ensures consistency and reusability:
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Test
+  version: 0.0.1
+servers:
+  - url: https://httpbin.org
+x-speakeasy-globals:
+  parameters:
+    - $ref: "#/components/parameters/CustomerId"
+paths:
+  /api/{customerId}:
+    get:
+      operationId: getTest
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      responses:
+        "200":
+          description: OK
+components:
+  parameters:
+    CustomerId:
+      name: customerId
+      in: path
+      schema:
+        type: string
+```
+
+## Supported parameter types
+
+Global parameters can be used with `in: query`, `in: path`, or `in: header` fields. Only primitive types such as `string`, `number`, `integer`, `boolean`, and `enums` are supported for global parameters.
+
+The global parameter definitions in the sample above will generate the following output:
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import { Speakeasybar } from "speakeasy";
+
+async function run() {
+    const sdk = new Speakeasybar({
+        customerId: "1291fbe8-4afb-4357-b1de-356b65c417ca", // customerId can be set when instantiating the SDK and is used for all compatible operations
+    });
+
+    const result = await sdk.getCustomer({});
+
+    // Handle the result
+    console.log(result);
+}
+
+run();
+```
+
+```python !!tabs Python
+import speakeasy
+from speakeasy.models import operations
+
+s = speakeasy.SDK(
+    customer_id='1291fbe8-4afb-4357-b1de-356b65c417ca', # customer_id can be set when instantiating the SDK and is used for all compatible operations
+)
+
+req = operations.GetCustomerRequest()
+
+res = s.get_customer(req)
+
+if res is not None:
+    # handle response
+    pass
+```
+
+```go !!tabs Go
+package main
+
+import (
+	"context"
+	"log"
+	"speakeasy"
+	"speakeasy/models/operations"
+)
+
+func main() {
+	s := speakeasy.New(
+		speakeasy.WithCustomerID(speakeasy.String("1291fbe8-4afb-4357-b1de-356b65c417ca")), // CustomerID can be set when instantiating the SDK and is used for all compatible operations
+	)
+
+	ctx := context.Background()
+	res, err := s.GetCustomer(ctx, operations.GetCustomerRequest{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if res != nil {
+		// handle response
+	}
+}
+```
+
+```java !!tabs Java
+package hello.world;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import org.openapis.openapi.SDK;
+import org.openapis.openapi.models.components.*;
+import org.openapis.openapi.models.operations.*;
+import org.openapis.openapi.models.operations.GetCustomerRequest;
+import org.openapis.openapi.models.operations.GetCustomerResponse;
+import static java.util.Map.entry;
+
+public class Application {
+
+    public static void main(String[] args) {
+        try {
+            SDK sdk = SDK.builder()
+                .customerId("1291fbe8-4afb-4357-b1de-356b65c417ca") // customerId can be set when instantiating the SDK and is used for all compatible operations
+                .build();
+
+            GetCustomerRequest req = GetCustomerRequest.builder()
+                .build();
+
+            GetCustomerResponse res = sdk.getCustomer()
+                .request(req)
+                .call();
+
+            // handle response
+        } catch (org.openapis.openapi.models.errors.SDKError e) {
+            // handle exception
+        } catch (Exception e) {
+            // handle exception
+        }
+    }
+}
+```
+
+```csharp !!tabs C#
+using Openapi;
+using Openapi.Models.Components;
+using Openapi.Models.Operations;
+
+var sdk = new SDK(
+    customerId: "1291fbe8-4afb-4357-b1de-356b65c417ca");
+
+try {
+  var res = await sdk.GetCustomer(new GetCustomerRequest());
+  // handle response
+} catch (SDKException ex) {
+  // handle exception
+}
+```
+
+```php !!tabs PHP
+<?php
+
+declare(strict_types=1);
+
+require 'vendor/autoload.php';
+
+use OpenAPI\OpenAPI;
+use OpenAPI\OpenAPI\Models\Components;
+use OpenAPI\OpenAPI\Models\Operations;
+
+$sdk = OpenAPI\SDK::builder()->setCustomerId("1291fbe8-4afb-4357-b1de-356b65c417ca")->build();
+
+try {
+    $response = $sdk->getCustomer(request=new GetCusomterRequest());
+    // handle response
+} catch (OpenAPI\ErrorThrowable $e) {
+    // handle exception
+}
+```
+
+</CodeWithTabs>
+
+## Hiding global parameters from method signatures
+
+<Callout type="warning" title="Limited Support">
+  Currently, this feature is only supported in Go, Python, and TypeScript.
+</Callout>
+
+To hide global parameters from method signatures, use the `x-speakeasy-globals-hidden` extension. This is useful when you want the global parameter to be set only once during SDK instantiation and not be overridden in individual operations.
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Test
+  version: 0.0.1
+servers:
+  - url: https://httpbin.org
+x-speakeasy-globals:
+  parameters:
+    - name: customerId
+      in: path
+      schema:
+        type: string
+      x-speakeasy-globals-hidden: true # This will hide the global parameter from all operations
+paths:
+  /api/{customerId}:
+    get:
+      operationId: getTest
+      parameters:
+        - name: customerId
+          in: path
+          schema:
+            type: string
+          required: true
+      responses:
+        "200":
+          description: OK
+```
+
+You can control the visibility of the global parameter by setting `x-speakeasy-globals-hidden` to `true` on the global parameter definition or on the operation parameter that matches the global parameter. Setting it globally hides the parameter from all operations. Setting it on a specific operation hides it only for that operation.

@@ -1,0 +1,156 @@
+---
+title: "OpenAPI overview and best practices"
+description: "OpenAPI / Swagger basics and best practices for constructing an OpenAPI document."
+---
+
+import { Spotlight } from "@/mdx/components";
+
+# OpenAPI overview and best practices
+
+OpenAPI is a standard for describing RESTful APIs. OpenAPI defines an API's core elements, like endpoints, request and response data formats, authentication methods, and more.
+
+Several versions of the OpenAPI Specification are in circulation: 2.0 (known as Swagger), 3.0, and 3.1.
+
+Speakeasy supports OpenAPI versions 3.0 and 3.1 and recommends OpenAPI version 3.1 for all projects. The advantage of OpenAPI version 3.1 is its full compatibility with [JSON Schema](https://json-schema.org/), providing access to a large ecosystem of tools and libraries.
+
+## OpenAPI best practices
+
+OpenAPI offers extensive flexibility and can describe any HTTP API, including REST APIs and even RPC-based calls. The OpenAPI Specification provides several valid approaches to achieving the same result.
+
+With this flexibility, constructing an OpenAPI document suitable for code generation requires careful consideration. Speakeasy recommends following specific best practices when writing OpenAPI documents. The sections below outline key points to consider when creating an OpenAPI description.
+
+<Spotlight>
+## !!steps servers
+
+Add multiple `servers` to define different environments or versions. This is especially useful for separating production and testing environments.
+
+```yaml ! openapi.yaml focus=5:9
+!from ./assets/openapi.yaml
+```
+
+## !!steps tags
+
+The `tags` property contains an optional list of values used to group or categorize a set of operations. **_Strongly recommended_** to always define `tags` for operations, though not required.
+
+**In code generation**
+
+Tags namespace methods in the SDK. For example, with a tag called `drinks`, all methods for that tag will be namespaced under `drinks.listDrinks()`. Create multi-level namespaces by using a `.` in the tag name, for example, `menu.drinks` becomes `menu.drinks.listDrinks()`.
+
+```yaml ! openapi.yaml focus=15:16
+!from ./assets/openapi.yaml
+```
+
+## !!steps operationId
+
+The `operationId` value is a unique identifier for the operation. It **_must_** be unique in the document and is **_case sensitive_**. **_Strongly recommended_** to always define an `operationId`, though not required.
+
+**In code generation**
+
+The `operationId` value creates the name of the method generated for the operation. Follow a consistent pattern for naming operations, for example, `listDrinks`, `createDrink`, `updateDrink`, and `deleteDrink`.
+
+When generating a spec from an API framework, ensure `operationId` values are human-readable. Some frameworks, like FastAPI, create long `operationId` identifiers that result in non-idiomatic method names.
+
+```yaml ! openapi.yaml focus=17
+!from ./assets/openapi.yaml
+```
+
+## !!steps Examples
+
+Adding `Examples` improves OpenAPI document usability by providing examples that illustrate the expected request and response structures.
+
+```yaml ! openapi.yaml focus=28:36
+!from ./assets/openapi.yaml
+```
+
+## !!steps $ref
+
+In OpenAPI, the `$ref` keyword references components defined in the Components Object. These components are commonly used for reusable elements like schemas, parameters, responses, and examples.
+
+**In code generation**
+
+Component schemas describe the request and response bodies of operations, serving as the basis for generating SDK types. Using components prevents issues where multiple types are defined for the same data structure.
+
+```yaml ! openapi.yaml focus=27,51:64
+!from ./assets/openapi.yaml
+```
+
+**Dedicated Error Classes**
+
+Define dedicated error classes by creating response objects with specific HTTP status codes, such as `400 Bad Request` or `404 Not Found`, accompanied by clear descriptions and structured schemas to convey detailed error information.
+If the error class name doesn't clearly indicate the error type, use the `x-speakeasy-name-override` extension to rename it.
+
+```yaml ! openapi.yaml focus=37:42
+!from ./assets/openapi.yaml
+```
+
+## !!steps title
+
+The `title` property provides a human-readable title for each schema, improving the readability of the OpenAPI document.
+
+```yaml ! openapi.yaml focus=47
+!from ./assets/openapi.yaml
+```
+
+## !!steps Description
+
+Use the `description` field to provide clear and concise information about the purpose, behavior, and expected usage of API elements.
+
+```yaml ! openapi.yaml focus=53
+!from ./assets/openapi.yaml
+```
+
+</Spotlight>
+
+## Extending OpenAPI
+
+The OpenAPI Specification lacks an exhaustive vocabulary for describing API functionality. To overcome specification gaps, add extension fields to an OpenAPI document that describe additional metadata and functionality.
+
+Extensions typically follow a naming format of `x-<vendor>-<function>`, where `<vendor>` is the name of the vendor or tool that created the extension and `<function>` is the goal accomplished by the extension.
+
+A [range of Speakeasy extensions](/docs/customize-sdks/) help prepare OpenAPI documents for code generation. Some of the most commonly used extensions are described below.
+
+<Spotlight>
+
+## !!steps x-speakeasy-name-override
+
+This extension overrides the name of a class, operation, or parameter. The most common use case is overriding `operationId` values in an OpenAPI document to simplify the generated SDK method names.
+
+When `operationId` identifiers follow a consistent pattern, define the name override globally using a regular expression to match the `operationId` and replace it with a new name.
+
+In this instance, the SDK will contain a method `menu.drinks.list()` rather than the longer `menu.drinks.list_drinks_v2_get()`.
+
+```yaml ! openapi.yaml focus=10:12,19
+!from ./assets/extending-openapi.yaml
+```
+
+## !!steps x-speakeasy-group
+
+Sometimes, the `tags` in an OpenAPI document may already serve an unrelated purpose, such as autogenerating labels in documentation. In this scenario, using something other than `tags` to organize and group methods may be necessary.
+
+Add the `x-speakeasy-group` field to any operation in the OpenAPI document to define custom namespaces and override any `tags` associated with the method.
+
+In this case, the `listDrinks` operation is added to a `menu.drinks` namespace rather than a `menu` namespace.
+
+```yaml ! openapi.yaml focus=18
+!from ./assets/extending-openapi.yaml
+```
+
+## !!steps x-speakeasy-usage-example
+
+Documentation forms an important part of any SDK. This extension allows selecting which operation is featured at the top of the `README.md`.
+
+Select the API operation that users frequently use. At a Speakeasy, that would likely be getting the list of drinks on offer.
+
+```yaml ! openapi.yaml focus=20
+!from ./assets/extending-openapi.yaml
+```
+
+## !!steps x-speakeasy-example
+
+Another useful documentation extension is `x-speakeasy-example`, which provides an example value to be used in the `Authentication` section of the SDK `README.md`. This example signals to users that the SDK should be instantiated with their security token.
+
+```yaml ! openapi.yaml focus=45
+!from ./assets/extending-openapi.yaml
+```
+
+</Spotlight>

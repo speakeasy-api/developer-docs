@@ -1,0 +1,895 @@
+---
+title: How to generate an OpenAPI/Swagger document with Django
+description: "Generating an OpenAPI document with Django and using it to create SDKs with Speakeasy."
+---
+
+import { Callout } from "@/mdx/components";
+
+
+# How to generate an OpenAPI document with Django and Django REST framework
+
+OpenAPI is a tool for defining and sharing REST APIs, and Django can be paired with Django REST framework to build such APIs.
+
+This guide walks you through generating an OpenAPI document from a Django project and using it to create SDKs with Speakeasy, covering the following steps:
+
+1. Setting up a simple Django REST API with `djangorestframework`
+2. Integrating `drf-spectacular`
+3. Creating the OpenAPI document to describe the API
+4. Customizing the OpenAPI schema
+5. Using the Speakeasy CLI to create an SDK based on the schema
+6. Integrating SDK creation into CI/CD workflows
+
+## Requirements
+
+This guide assumes you have a basic understanding of Django project structure and how REST APIs work.
+
+You will also need the following installed on your machine:
+
+- Python version 3.8 or higher
+- Django
+
+  You can install Django using the following command:
+
+  ```bash Terminal
+  pip install django
+  ```
+
+- Django REST Framework
+
+  You can install Django REST Framework using the following command:
+
+  ```bash Terminal
+  pip install djangorestframework
+  ```
+
+## Example Django REST API repository
+
+<Callout title="Example repository" type="info">
+The source code for the completed example is available in the [**Speakeasy Django example repository**](https://github.com/speakeasy-api/django-openapi-example).
+</Callout>
+
+The example repository contains all the code covered in this guide. You can clone it and follow along with the tutorial or use it as a reference to add to your own Django project.
+
+---
+
+## Creating the OpenAPI document to describe an API
+
+To better understand the process of generating an OpenAPI document with Django, let's start by inspecting some simple CRUD endpoints for an online library, along with a `Book` class and a serializer for the data.
+
+### Models, serializers, and views
+
+Let's look at the key components of our Django REST API:
+
+### Book Model
+
+First, let's examine the `books/models.py` file, which contains a `Book` model with validation fields:
+
+```python models.py
+from django.db import models
+
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+    author = models.CharField(max_length=100)
+    published_year = models.IntegerField()
+```
+
+### Book Serializer
+
+Next, let's look at the `books/serializers.py` file, which defines a `BookSerializer` for serializing and deserializing Book data:
+
+```python serializers.py
+from rest_framework import serializers
+from .models import Book
+
+class BookSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Book
+        fields = ['id', 'title', 'author', 'published_year']
+```
+
+### Book Views
+
+The `books/views.py` file contains a `BookViewSet` that handles CRUD operations for the Book model:
+
+```python views.py
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import Book
+from .serializers import BookSerializer
+
+class BookViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows books to be viewed or edited.
+    """
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+
+    @action(detail=True, methods=['get'])
+    def author_books(self, request, pk=None):
+        """
+        Returns all books written by the same author as the specified book.
+        """
+        try:
+            book = self.get_object()
+        except Book.DoesNotExist:
+            return Response(
+                {"error": "Book not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        author_books = Book.objects.filter(author=book.author).exclude(id=book.id)
+        serializer = self.get_serializer(author_books, many=True)
+        return Response(serializer.data)
+```
+
+This code defines a simple Django REST API with CRUD operations for the `Book` model. The `BookViewSet` provides a way to interact with the `Book` model through the API. It also contains a custom action called `author_books` that retrieves all books by the same author.
+
+### URL Configuration
+
+The `books/urls.py` file maps the `BookViewSet` to the `/books` endpoint:
+
+```python urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import BookViewSet
+
+router = DefaultRouter()
+router.register(r'books', BookViewSet)
+
+urlpatterns = [
+    path('', include(router.urls)),
+]
+```
+
+And in the `books_project/urls.py` file, the router is included in the main Django URL configuration:
+
+```python project_urls.py
+from django.contrib import admin
+from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/', include('books.urls')),
+]
+```
+
+
+
+## Integrate `drf-spectacular`
+
+Django no longer supports the built-in OpenAPI document generation, so we'll use the `drf-spectacular` package to generate the OpenAPI document.
+
+Run the following to install `drf-spectacular`:
+
+```bash Terminal
+pip install drf-spectacular
+```
+
+### Setting up drf-spectacular
+
+First, open the `books_project/settings.py` file to see how `drf-spectacular` is configured:
+
+```python settings.py
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+
+    # Third party apps
+    'rest_framework',
+    'drf_spectacular',
+
+    # Local apps
+    'books',
+]
+```
+
+Adding `'drf_spectacular'` to the `INSTALLED_APPS` list enables OpenAPI document generation for your Django project.
+
+Next, check the `REST_FRAMEWORK` configuration object, which sets the schema class used to create the OpenAPI document:
+
+```python settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+```
+
+The `SPECTACULAR_SETTINGS` dictionary contains additional settings for OpenAPI document generation that you can customize to fit your project:
+
+```python settings.py
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Library API',
+    'DESCRIPTION': 'A simple API for managing books in a library',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SERVERS': [
+        {'url': 'http://localhost:8000', 'description': 'Local Development server'},
+        {'url': 'https://api.example.com', 'description': 'Production server'},
+    ],
+    'TAGS': [
+        {'name': 'books', 'description': 'Book operations'},
+    ],
+    'EXTENSIONS_TO_SCHEMA_FUNCTION': lambda generator, request, public: {
+        'x-speakeasy-retries': {
+            'strategy': 'backoff',
+            'backoff': {
+                'initialInterval': 500,
+                'maxInterval': 60000,
+                'maxElapsedTime': 3600000,
+                'exponent': 1.5,
+            },
+            'statusCodes': ['5XX'],
+            'retryConnectionErrors': True,
+        }
+    }
+}
+```
+
+In the `books_project/urls.py` file, the OpenAPI schema and Swagger UI endpoints are added alongside the `api/` endpoint:
+
+```python project_urls.py
+from django.contrib import admin
+from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/', include('books.urls')),
+]
+```
+
+
+### Apply migrations and run the server
+
+To inspect and interact with the OpenAPI document, you need to apply database migrations and run the development server.
+
+Apply database migrations:
+
+```bash Terminal
+python manage.py makemigrations
+python manage.py migrate
+```
+
+Run the development server:
+
+```bash Terminal
+python manage.py runserver
+```
+
+You can now access the API and documentation:
+
+* Visit `http://127.0.0.1:8000/api/books/` to interact with the book API.
+* Visit `http://127.0.0.1:8000/swagger/` for Swagger documentation.
+
+### OpenAPI document generation
+
+Now that we understand our Django REST API, we can generate the OpenAPI document using `drf-spectacular` with the following command:
+
+```bash Terminal
+python manage.py spectacular --file openapi.yaml
+```
+
+### Exploring the Generated OpenAPI Document
+
+Running the command generates an OpenAPI document in the `openapi.yaml` file. Let's look at some key sections:
+
+#### Document Header
+
+The beginning of the document contains general information about the API:
+
+```yaml openapi.yaml
+openapi: 3.0.3
+info:
+  title: Library API
+  description: A simple API for managing books in a library
+  version: 1.0.0
+  contact: {}
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+      # More properties follow...
+```
+
+#### Settings Influence on Generated Document
+
+The values in `SPECTACULAR_SETTINGS` directly influence the OpenAPI document generation. For example, the title, description, and version in the settings:
+
+```python settings.py
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Library API',
+    'DESCRIPTION': 'A simple API for managing books in a library',
+    'VERSION': '1.0.0',
+    # Other settings...
+}
+```
+
+These values appear in the OpenAPI document:
+
+```yaml openapi.yaml
+info:
+  title: Library API
+  description: A simple API for managing books in a library
+  version: 1.0.0
+```
+
+#### Server Information
+
+The server URLs specified in the settings appear in the document as well:
+
+```yaml openapi.yaml
+servers:
+  - url: http://localhost:8000
+    description: Local Development server
+  - url: https://api.example.com
+    description: Production server
+```
+
+#### Model Parameters
+
+The fields we defined in our Django models are also reflected in the OpenAPI document. For example, the `Book` model fields:
+
+```python models.py
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+    author = models.CharField(max_length=100)
+    published_year = models.IntegerField()
+```
+
+These fields appear in the OpenAPI document's schema definitions:
+
+```yaml openapi.yaml
+Book:
+  type: object
+  properties:
+    id:
+      type: integer
+      readOnly: true
+    title:
+      type: string
+      maxLength: 100
+    author:
+      type: string
+      maxLength: 100
+    published_year:
+      type: integer
+  required:
+    - title
+    - author
+    - published_year
+```
+
+The OpenAPI document captures all the essential information about our API, including endpoints, parameters, request bodies, responses, and schemas. This document can then be used to generate client SDKs or API documentation.
+
+
+## OpenAPI document customization
+
+The OpenAPI document generated by `drf-spectacular` may not be detailed enough for all use cases. Fortunately, it can be customized to better serve information about your API endpoints. You can add descriptions, tags, examples, and more to make the documentation more informative and user-friendly.
+
+In the [customized](https://github.com/speakeasy-api/django-openapi-example/tree/customized) branch of the example repository, you can find a customized OpenAPI document that demonstrates the available options for modifying your generated document.
+
+The `drf-spectacular` package provides decorators to directly modify the schema for your views and viewsets.
+
+- `@extend_schema_view`: Allows customization of all methods in a viewset.
+- `@extend_schema`: Allows customization of individual methods or actions.
+
+### Customizing the API Schema
+
+Let's explore how to enhance the OpenAPI document by customizing the schema of the `BookViewSet`. Here's an updated version of the `books/views.py` file with added annotations:
+
+```python views.py
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
+from .models import Book
+from .serializers import BookSerializer
+
+# Use extend_schema_view to customize the entire viewset
+@extend_schema_view(
+    list=extend_schema(
+        summary="List all books",
+        description="Get a list of all books in the library.",
+        responses={
+            200: BookSerializer(many=True)
+        },
+        tags=["books"],
+    ),
+    retrieve=extend_schema(
+        summary="Get a specific book",
+        description="Retrieve details for a specific book by its ID.",
+        responses={
+            200: BookSerializer,
+            404: OpenApiResponse(description="Book not found"),
+        },
+        tags=["books"],
+    ),
+    # Other methods...
+)
+class BookViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows books to be viewed or edited.
+    """
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+
+    # Use extend_schema to customize a specific action
+    @extend_schema(
+        summary="Find books by the same author",
+        description="Returns all books written by the same author as the specified book.",
+        responses={
+            200: BookSerializer(many=True),
+            404: OpenApiResponse(
+                description="Book not found",
+                examples=[
+                    OpenApiExample(
+                        "Error Response",
+                        value={"error": "Book not found"},
+                        status_codes=["404"],
+                    )
+                ]
+            )
+        },
+        tags=["books", "authors"],
+        parameters=[
+            OpenApiParameter(
+                name="sort",
+                description="Sort order for the books",
+                required=False,
+                type=str,
+                enum=["title", "published_year"],
+            ),
+        ],
+        examples=[
+            OpenApiExample(
+                "Book list example",
+                value=[
+                    {
+                        "id": 1,
+                        "title": "The Great Gatsby",
+                        "author": "F. Scott Fitzgerald",
+                        "published_year": 1925
+                    },
+                    {
+                        "id": 2,
+                        "title": "Tender Is the Night",
+                        "author": "F. Scott Fitzgerald",
+                        "published_year": 1934
+                    }
+                ],
+                response_only=True,
+                status_codes=["200"],
+            )
+        ],
+        extensions={
+            "x-speakeasy-retries": {
+                "strategy": "backoff",
+                "backoff": {
+                    "initialInterval": 500,
+                    "maxInterval": 60000,
+                    "maxElapsedTime": 3600000,
+                    "exponent": 1.5,
+                },
+                "statusCodes": ["5XX"],
+                "retryConnectionErrors": True,
+            }
+        }
+    )
+    @action(detail=True, methods=['get'])
+    def author_books(self, request, pk=None):
+        # Implementation details...
+        pass
+```
+
+#### Using @extend_schema_view
+
+The `@extend_schema_view` decorator allows you to customize all methods in a viewset at once. In our example, we're customizing the `list` and `retrieve` operations with summaries, descriptions, and response details.
+
+This will appear in the generated OpenAPI document as:
+
+```yaml openapi.yaml
+paths:
+  /api/books/:
+    get:
+      operationId: books_list
+      summary: List all books
+      description: Get a list of all books in the library.
+      parameters:
+        # Standard parameters here
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+      tags:
+        - books
+```
+
+#### Customizing Individual Actions with @extend_schema
+
+For specific actions like `author_books`, we use the `@extend_schema` decorator to add detailed documentation:
+
+```python views.py
+@extend_schema(
+    summary="Find books by the same author",
+    description="Returns all books written by the same author as the specified book.",
+    # Other options...
+)
+@action(detail=True, methods=['get'])
+def author_books(self, request, pk=None):
+    # Implementation...
+```
+
+This will generate OpenAPI documentation for this endpoint:
+
+```yaml openapi.yaml
+/api/books/{id}/author_books/:
+  get:
+    operationId: books_author_books
+    summary: Find books by the same author
+    description: Returns all books written by the same author as the specified book.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: sort
+        in: query
+        description: Sort order for the books
+        required: false
+        schema:
+          type: string
+          enum:
+            - title
+            - published_year
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/Book'
+            examples:
+              Book list example:
+                value:
+                  - id: 1
+                    title: The Great Gatsby
+                    author: F. Scott Fitzgerald
+                    published_year: 1925
+                  - id: 2
+                    title: Tender Is the Night
+                    author: F. Scott Fitzgerald
+                    published_year: 1934
+      '404':
+        description: Book not found
+        content:
+          application/json:
+            examples:
+              Error Response:
+                value:
+                  error: Book not found
+    tags:
+      - books
+      - authors
+```
+
+#### Adding Custom Parameters
+
+You can add custom query parameters to your endpoints using `OpenApiParameter`:
+
+```python views.py
+parameters=[
+    OpenApiParameter(
+        name="sort",
+        description="Sort order for the books",
+        required=False,
+        type=str,
+        enum=["title", "published_year"],
+    ),
+]
+```
+
+#### Adding Examples
+
+Examples help API users understand the expected responses:
+
+```python views.py
+examples=[
+    OpenApiExample(
+        "Book list example",
+        value=[
+            {
+                "id": 1,
+                "title": "The Great Gatsby",
+                "author": "F. Scott Fitzgerald",
+                "published_year": 1925
+            },
+            # More examples...
+        ],
+        response_only=True,
+        status_codes=["200"],
+    )
+]
+```
+
+#### Adding Retry Logic
+
+You can add retry configuration at the global level in `settings.py`:
+
+```python settings.py
+'EXTENSIONS_TO_SCHEMA_FUNCTION': lambda generator, request, public: {
+    'x-speakeasy-retries': {
+        'strategy': 'backoff',
+        'backoff': {
+            'initialInterval': 500,
+            'maxInterval': 60000,
+            'maxElapsedTime': 3600000,
+            'exponent': 1.5,
+        },
+        'statusCodes': ['5XX'],
+        'retryConnectionErrors': True,
+    }
+}
+```
+
+Or apply it to specific endpoints using the `extensions` parameter in `@extend_schema`:
+
+```python views.py
+extensions={
+    "x-speakeasy-retries": {
+        "strategy": "backoff",
+        "backoff": {
+            "initialInterval": 500,
+            "maxInterval": 60000,
+            "maxElapsedTime": 3600000,
+            "exponent": 1.5,
+        },
+        "statusCodes": ["5XX"],
+        "retryConnectionErrors": True,
+    }
+}
+```
+
+In summary, the `drf-spectacular` package provides a variety of ways to customize the OpenAPI document for your Django REST API. You can use decorators, tags, descriptions, parameters, fields, examples, and global settings to modify the document according to your requirements.
+
+- **Decorators (@extend_schema and @extend_schema_view):** Customize individual methods or entire views.
+- **Tags and descriptions:** Organize endpoints for better readability.
+- **Parameters:** Define custom parameters using `OpenApiParameter`.
+- **OpenAPI components:** Use `OpenApiExample` to provide reusable components or examples.
+- **Global settings (`SPECTACULAR_SETTINGS`):** Modify the global behavior of `drf-spectacular`.
+
+For more information about customizing the OpenAPI schema with `drf-spectacular`, refer to the official [`drf-spectacular` documentation](https://drf-spectacular.readthedocs.io/en/latest/).
+
+
+
+## Creating SDKs for a Django REST API
+
+To create a Python SDK for the Django REST API, run the following command:
+
+```bash Terminal
+speakeasy quickstart
+```
+
+Follow the onscreen prompts to provide the configuration details for your new SDK, such as the name, schema location, and output path. When prompted, enter `openapi.yaml` for the OpenAPI document location, select a language, and generate.
+
+## Add SDK generation to your GitHub Actions
+
+The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows for integrating the Speakeasy CLI into your CI/CD pipeline, so that your SDKs are recreated whenever your OpenAPI document changes.
+
+You can set up Speakeasy to automatically push a new branch to your SDK repositories for your engineers to review before merging the SDK changes.
+
+For an overview of how to set up automation for your SDKs, see the Speakeasy [SDK Generation Action and Workflows](/docs/speakeasy-reference/workflow-file) documentation.
+
+## SDK customization
+
+Explore the effects of your newly generated OpenAPI document on the SDK created by Speakeasy.
+
+After creating your SDK with Speakeasy, you will find a new directory containing the generated SDK code. Let's explore this code a bit further.
+
+These examples assume a Python SDK named `books-python` was generated from the example Django project above. Edit any paths to reflect your environment if you want to follow in your own project.
+
+### Exploring the Generated SDK
+
+After generating your SDK with Speakeasy, let's explore the key files and how they relate to your OpenAPI document.
+
+#### The Book Class
+
+Navigate to the `books-python/src/books` directory to find the generated SDK code. The `book.py` file contains the `Book` class that corresponds to your Django model:
+
+```python book.py
+from __future__ import annotations
+import dateutil.parser
+from datetime import datetime
+from marshmallow import fields
+from typing import Any, Dict, List, Optional, Union
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+from books import utils
+
+
+@dataclass_json
+@dataclass
+class Book:
+    """A book in the library API"""
+    
+    id: Optional[int] = None
+    title: str = None
+    author: str = None
+    published_year: int = None
+    
+    def unmarshal(
+        obj: Union[Dict[str, Any], str]
+    ) -> Book:
+        """
+        Unmarshals a Book from a dictionary or a JSON string.
+        """
+        if isinstance(obj, str):
+            obj = utils.loads(obj)
+            
+        return Book(
+            id=obj.get("id"),
+            title=obj.get("title"),
+            author=obj.get("author"),
+            published_year=obj.get("published_year"),
+        )
+```
+
+#### API Client Code
+
+The `api.py` file contains methods that call the web API from an application using the SDK:
+
+```python api.py
+class BooksSDK:
+    """SDK for accessing the Library API"""
+    
+    def __init__(
+        self,
+        security: Optional[shared.Security] = None,
+        retries: Optional[utils.RetryConfig] = None,
+        server_url: Optional[str] = None,
+        server_idx: Optional[int] = None,
+        client_config: Optional[client.ClientConfig] = None,
+    ):
+        """Initialize the SDK client"""
+        
+        if server_url is not None:
+            self.server_url = server_url
+        elif server_idx is not None:
+            self.server_url = utils.SERVERS[server_idx]
+        else:
+            self.server_url = utils.SERVERS[0]
+            
+        self.client_config = client_config
+        self.security = security
+        self.retries = retries
+```
+
+Notice several important parameters:
+
+1. The `server_url` parameter, which comes from the `SERVERS` key in your `SPECTACULAR_SETTINGS`:
+
+```python api.py
+self.server_url = utils.SERVERS[0]  # Default to first server
+```
+
+2. The `retries` parameter, which is generated from your retry configuration:
+
+```python api.py
+self.retries = retries
+```
+
+#### Making API Requests
+
+These parameters are used to build requests to your API endpoints:
+
+```python api.py
+def list_books(
+    self,
+    request_options: Optional[utils.RequestOptions] = None,
+) -> operations.BooksListResponse:
+    """List all books in the library"""
+    
+    base_url = self.server_url
+    
+    url = utils.generate_url(base_url, "/api/books/")
+    
+    headers = {}
+    headers["Accept"] = "application/json"
+    
+    client = self.get_client()
+    
+    retry_config = request_options.retry_config if request_options and request_options.retry_config is not None else self.retries
+    
+    return utils.retry(
+        lambda: client.request("GET", url, headers=headers),
+        retry_config
+    )
+```
+
+#### Retry Logic Implementation
+
+The SDK includes a retry implementation based on your OpenAPI extensions:
+
+```python retries.py
+class RetryConfig:
+    """Configuration for retry behavior"""
+
+    def __init__(
+        self,
+        strategy: str = None,
+        backoff: Optional[BackoffStrategy] = None,
+        retry_connection_errors: bool = False,
+        status_codes: Optional[List[str]] = None,
+    ):
+        """Initialize retry configuration"""
+        
+        self.strategy = strategy
+        self.backoff = backoff
+        self.retry_connection_errors = retry_connection_errors
+        self.status_codes = status_codes
+
+# The implementation of the retry logic
+def retry(
+    callback: Callable[[], Response],
+    config: Optional[RetryConfig] = None,
+) -> Response:
+    """
+    Retries the given callback based on the retry configuration.
+    """
+    if config is None or config.strategy != "backoff" or config.backoff is None:
+        return callback()
+
+    retry_attempt = 0
+    status_codes = _parse_status_codes(config.status_codes)
+
+    while True:
+        try:
+            response = callback()
+
+            # Check if we should retry based on the status code
+            if response.status_code in status_codes:
+                if retry_attempt >= config.backoff.max_retries:
+                    return response
+
+                _sleep_with_jitter(config.backoff, retry_attempt)
+                retry_attempt += 1
+                continue
+
+            return response
+
+        except requests.exceptions.ConnectionError as e:
+            if not config.retry_connection_errors or retry_attempt >= config.backoff.max_retries:
+                raise e
+
+            _sleep_with_jitter(config.backoff, retry_attempt)
+            retry_attempt += 1
+```
+
+This retry logic directly reflects the configuration you provided in the `x-speakeasy-retries` extension in your OpenAPI document, ensuring consistent behavior between your API documentation and the generated SDK.
+
+
+## Summary
+
+In this guide, we showed you how to generate an OpenAPI document for a Django API and use Speakeasy to create an SDK based on the OpenAPI document. The step-by-step instructions included adding relevant tools to the Django project, generating an OpenAPI document, enhancing it for improved creation, using Speakeasy OpenAPI extensions, and interpreting the basics of the generated SDK.
+
+We also explored automating SDK generation through CI/CD workflows and improving API operations.

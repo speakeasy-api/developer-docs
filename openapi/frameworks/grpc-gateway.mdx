@@ -1,0 +1,496 @@
+---
+title: How To Generate an OpenAPI Spec With gRPC Gateway
+description: "How to create OpenAPI schemas and great SDKs for your gRPC server"
+---
+
+import { Callout } from "@/mdx/components";
+
+
+# How to generate an OpenAPI/Swagger spec with gRPC Gateway
+
+You may want to provide a RESTful API in addition to your gRPC service without the need to duplicate your code.
+
+[gRPC Gateway](https://grpc-ecosystem.github.io/grpc-gateway/) is a popular tool for generating RESTful APIs from gRPC service definitions.
+
+In this tutorial, we'll take a detailed look at how to use gRPC Gateway to generate an OpenAPI schema based on a Protocol Buffers (protobuf) gRPC service definition. Afterward, we can use Speakeasy to read our generated OpenAPI schema and create a production-ready SDK.
+
+<Callout title="Tip" >
+  If you want to follow along, you can use the [**gRPC Speakeasy Bar example
+  repository**](https://github.com/speakeasy-api/speakeasy-grpc-gateway-example).
+</Callout>
+
+## An Overview of gRPC Gateway
+
+[gRPC Gateway](https://grpc-ecosystem.github.io/grpc-gateway/) is a [protoc](https://github.com/protocolbuffers/protobuf) plugin that reads gRPC service definitions and generates a reverse proxy server that translates a RESTful JSON API into gRPC.
+
+This way, you can expose an HTTP endpoint that can be called by clients that don't support gRPC. The generated server code will forward incoming JSON requests to your gRPC server and translate the responses to JSON.
+
+gRPC Gateway also generates an OpenAPI schema that describes your API. You can use this schema to create SDKs for your API.
+
+## OpenAPI Versions
+
+gRPC Gateway outputs OpenAPI 2.0, and Speakeasy supports OpenAPI 3.0 and 3.1. To generate an OpenAPI 3.0 or 3.1 schema, you'll need to convert the OpenAPI 2.0 schema to at least OpenAPI 3.0.
+
+## The Protobuf to REST SDK Pipeline
+
+To generate a REST API with a developer-friendly SDK, we'll follow these three core steps:
+
+1. **gRPC to OpenAPI:** First, we will use gRPC Gateway to produce an OpenAPI schema based on our protobuf service definition. This generated schema is in OpenAPI 2.0 format.
+
+2. **OpenAPI 2.0 to OpenAPI 3.x:** Next, as gRPC Gateway's output schema is in OpenAPI 2.0 and we need at least OpenAPI 3.0 for our SDK, we will convert the generated schema from OpenAPI 2.0 to OpenAPI 3.0.
+
+3. **OpenAPI 3.x to SDK:** Finally, once we have the OpenAPI 3.0 schema, we will leverage Speakeasy to create our SDK based on the OpenAPI 3.0 schema derived from the previous steps.
+
+By following these steps, we can ensure we have a robust, production-ready SDK that adheres to our API's specifications.
+
+## Step-by-Step Tutorial: From Protobuf to OpenAPI to an SDK
+
+Now let's walk through generating an OpenAPI schema and SDK for our Speakeasy Bar gRPC service.
+
+### Check Out the Example Repository
+
+If you would like to follow along, start by cloning the example repository:
+
+```bash Terminal
+git clone git@github.com:speakeasy-api/speakeasy-grpc-gateway-example.git
+cd speakeasy-grpc-gateway-example
+```
+
+### Install Go
+
+To generate an OpenAPI schema from a protobuf file, we'll need to install Go and protoc.
+
+This tutorial was written using Go 1.21.4.
+
+On macOS, install Go by running:
+
+```bash Terminal
+brew install go
+```
+
+Alternatively, follow the [Go installation instructions](https://go.dev/doc/install) for your platform.
+
+### Install Buf
+
+We'll use the [Buf CLI](https://buf.build/) as an alternative to protoc so that we can save our generation configuration as YAML. Buf is compatible with protoc plugins.
+
+On macOS, install Buf by running:
+
+```bash Terminal
+brew install bufbuild/buf/buf
+```
+
+Alternatively, follow the [Buf CLI installation instructions](https://buf.build/docs/installation) for your platform.
+
+### Install Buf Modules
+
+We'll use Buf modules to manage our dependencies.
+
+```bash Terminal
+cd proto
+buf mod update
+cd ..
+```
+
+### Install protoc-gen-go
+
+Buf requires the `protoc-gen-go` plugin to generate Go code from protobuf files.
+
+Install `protoc-gen-go` by running:
+
+```bash Terminal
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+```
+
+Make sure that the `protoc-gen-go` binary is in your `$PATH`. On macOS, you can achieve that by running the following command if the `go/bin` directory is not already in your path.
+
+```bash Terminal
+export PATH=${PATH}:`go env GOPATH`/bin
+```
+
+### Install Go Requirements
+
+```bash Terminal
+go mod tidy
+go install \
+    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway \
+    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2 \
+    google.golang.org/protobuf/cmd/protoc-gen-go \
+    google.golang.org/grpc/cmd/protoc-gen-go-grpc
+```
+
+### Generate the Go Code
+
+We'll use Buf to generate the Go code from the protobuf file.
+
+Run the following in the terminal:
+
+```bash Terminal
+buf generate
+```
+
+Buf reads the configuration in `buf.gen.yaml`, then generates the Go code in the `proto` directory.
+
+This will generate the `proto/speakeasy/v1/speakeasy.pb.go`, `proto/speakeasy/v1/speakeasy_grpc.pb.go`, and `proto/speakeasy/v1/speakeasy.pb.gw.go` files.
+
+### Generate the OpenAPI Schema
+
+Because we have the `openapiv2` protoc plugin configured in our `buf.gen.yaml` file, Buf will generate an OpenAPI schema and save it as `openapi/speakeasy/v1/speakeasy.swagger.json`.
+
+This is the OpenAPI 2.0 schema that gRPC Gateway generates by default.
+
+### Convert the OpenAPI Schema to OpenAPI 3.0
+
+We'll use the excellent [kin-openapi](https://github.com/getkin/kin-openapi) Go library to convert the OpenAPI 2.0 schema to OpenAPI 3.0.
+
+In `convert/convert.go`, we use `kin-openapi` to unmarshal `openapi/speakeasy/v1/speakeasy.swagger.json`, then convert it to OpenAPI 3.0, then marshal it back to JSON, and finally write it to `openapi/speakeasy/v1/speakeasy.openapi.json`.
+
+To do the conversion, run the following in the terminal:
+
+```bash Terminal
+go run convert/convert.go
+```
+
+## How To Customize the API Schema
+
+By modifying the protobuf service definition, we can customize the generated OpenAPI schema.
+
+We'll start with a basic example and add options to enhance the schema.
+
+## Understanding the Speakeasy Bar Protobuf Service
+
+Let's explore the Speakeasy Bar protobuf service definition in `proto/speakeasy/v1/speakeasy.proto`. This is the starting point for our gRPC service:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+syntax = "proto3";
+
+package speakeasy.v1;
+
+message Drink {
+  string product_code = 1;
+  string name = 2;
+  string description = 3;
+  double price = 4;
+}
+
+message GetDrinkRequest {
+  string product_code = 1;
+}
+
+message GetDrinkResponse {
+  Drink drink = 1;
+}
+
+message ListDrinksRequest {
+  // Empty request
+}
+
+message ListDrinksResponse {
+  repeated Drink drinks = 1;
+}
+
+service SpeakeasyService {
+  rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+    option (google.api.http) = {
+      get: "/v1/drinks/{product_code}"
+    };
+  }
+
+  rpc ListDrinks(ListDrinksRequest) returns (ListDrinksResponse) {
+    option (google.api.http) = {
+      get: "/v1/drinks"
+    };
+  }
+}
+```
+
+The service defines one object type called `Drink` with properties like `product_code`, `name`, `description`, and `price`. It also defines a service called `SpeakeasyService` that has two methods:
+
+1. `GetDrink`: Retrieves a single drink by its product code
+2. `ListDrinks`: Lists all available drinks
+
+### Adding API Information to the Service
+
+We can enhance our protobuf definition by adding information about the API to improve the generated OpenAPI schema. We'll use the `options.openapiv2_swagger` option from `grpc.gateway.protoc_gen_openapiv2`:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Speakeasy Bar API"
+    description: "An API for the Speakeasy Bar, featuring a variety of cocktails and drinks."
+    version: "0.1.0"
+  }
+  host: "api.speakeasybar.com"
+  schemes: HTTP
+  schemes: HTTPS
+  consumes: "application/json"
+  produces: "application/json"
+  tags: [
+    {
+      name: "drinks"
+      description: "Operations related to drinks and cocktails offered by the Speakeasy Bar."
+    }
+  ]
+};
+```
+
+This adds several important pieces of information to our API:
+
+1. **Title, Description, and Version**: Basic information about our API that appears in the `info` object of the generated OpenAPI schema:
+
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Speakeasy Bar API",
+    "description": "An API for the Speakeasy Bar, featuring a variety of cocktails and drinks.",
+    "version": "0.1.0"
+  },
+  ...
+}
+```
+
+2. **Server Information**: We add a server to the API using the `host` key. Our conversion script will add the `servers` object to the generated OpenAPI schema:
+
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "servers": [
+    {
+      "url": "https://api.speakeasybar.com"
+    }
+  ]
+}
+```
+
+### Adding Descriptions and Examples to Components
+
+To create an SDK that offers a great developer experience, we recommend adding descriptions and examples to all fields in OpenAPI components. We'll enhance the `Drink` object type:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+message Drink {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "Drink"
+      description: "A drink available at the Speakeasy Bar."
+      example: "{\"product_code\":\"602a7da9-b8bb-46e6-b288-457b561029b8\",\"name\":\"Old Fashioned\",\"description\":\"A classic cocktail made with whiskey, sugar, bitters, and a twist of citrus.\",\"price\":12.99}"
+    }
+  };
+  
+  string product_code = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The unique identifier for the drink."
+    pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    format: "uuid"
+    example: "\"602a7da9-b8bb-46e6-b288-457b561029b8\""
+  }];
+  
+  string name = 2 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The name of the drink."
+    example: "\"Old Fashioned\""
+    min_length: 1
+  }];
+  
+  string description = 3 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "A description of the drink."
+    example: "\"A classic cocktail made with whiskey, sugar, bitters, and a twist of citrus.\""
+  }];
+  
+  double price = 4 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The price of the drink in USD."
+    example: "12.99"
+    minimum: 0
+  }];
+}
+```
+
+In this enhanced definition:
+
+1. We add a `title`, `description`, and `example` to the `Drink` object type. The `example` is a stringified JSON object.
+
+2. We use `openapiv2_field` to add options to the fields in the `Drink` object type. For example, we add a `description`, `pattern`, `format`, and `example` to the `productCode` field:
+
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "productCode": {
+    "type": "string",
+    "description": "The unique identifier for the drink.",
+    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    "format": "uuid",
+    "example": "602a7da9-b8bb-46e6-b288-457b561029b8"
+  }
+}
+```
+
+If you use Speakeasy to create an SDK, this description and example will appear in the generated documentation and usage examples. For instance, in the TypeScript SDK's documentation:
+
+```typescript sdk/docs/sdks/drinks/README.md
+import { SDK } from "openapi";
+
+(async() => {
+  const sdk = new SDK();
+
+  const res = await sdk.drinks.getDrink({
+    productCode: "602a7da9-b8bb-46e6-b288-457b561029b8",
+  });
+
+  if (res.statusCode == 200) {
+    // handle response
+  }
+})();
+```
+
+Note how the `productCode` field is represented by our UUID example instead of a random string.
+
+### Customizing the OperationId
+
+By default, the `operationId` is the method name in the protobuf service definition. We can customize the `operationId` for each method using `options.openapiv2_operation`:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+  option (google.api.http) = {
+    get: "/v1/drinks/{product_code}"
+  };
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+    operation_id: "getDrink"
+    // More options...
+  };
+}
+```
+
+This appears in the generated OpenAPI schema:
+
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "operationId": "getDrink"
+}
+```
+
+### Adding Descriptions and Tags to Methods
+
+We can also add descriptions and tags to methods using `options.openapiv2_operation`:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+  option (google.api.http) = {
+    get: "/v1/drinks/{product_code}"
+  };
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+    operation_id: "getDrink"
+    summary: "Get a drink"
+    description: "Get a drink by its product code."
+    tags: "drinks"
+    // More options...
+  };
+}
+```
+
+This adds tags and descriptions to the operation in the OpenAPI schema:
+
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "tags": [
+    "drinks"
+  ],
+  "summary": "Get a drink",
+  "description": "Get a drink by its product code."
+}
+```
+
+### Adding Tag Descriptions
+
+We can add descriptions to tags in the protobuf definition by using `options.openapiv2_swagger`:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  // Other options...
+  tags: [
+    {
+      name: "drinks"
+      description: "Operations related to drinks and cocktails offered by the Speakeasy Bar."
+    }
+  ]
+};
+```
+
+This adds descriptions to tags in the OpenAPI schema:
+
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "tags": [
+    {
+      "name": "drinks",
+      "description": "Operations related to drinks and cocktails offered by the Speakeasy Bar."
+    }
+  ]
+}
+```
+
+### Adding OpenAPI Extensions
+
+gRPC Gateway allows us to add OpenAPI extensions to the schema using the `extensions` field in our protobuf service definition. For example, we can add the [Speakeasy retries extension](/docs/customize-sdks/retries) called `x-speakeasy-retries`, which causes the SDK to retry failed requests:
+
+```cpp proto/speakeasy/v1/speakeasy.proto
+rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+  option (google.api.http) = {
+    get: "/v1/drinks/{product_code}"
+  };
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+    // Other options...
+    extensions: {
+      key: "x-speakeasy-retries"
+      value: {
+        string_value: "{\"strategy\":\"backoff\",\"backoff\":{\"initialInterval\":500,\"maxInterval\":60000,\"maxElapsedTime\":3600000,\"exponent\":1.5},\"statusCodes\":[\"5XX\"],\"retryConnectionErrors\":true}"
+      }
+    }
+  };
+}
+```
+
+This adds the extension to the OpenAPI schema:
+
+```json openapi/speakeasy/v1/speakeasy.openapi.json
+{
+  "x-speakeasy-retries": {
+    "strategy": "backoff",
+    "backoff": {
+      "initialInterval": 500,
+      "maxInterval": 60000,
+      "maxElapsedTime": 3600000,
+      "exponent": 1.5
+    },
+    "statusCodes": [
+      "5XX"
+    ],
+    "retryConnectionErrors": true
+  }
+}
+```
+
+## Create an SDK With Speakeasy
+
+Now that we have an OpenAPI 3.0 schema, we can create an SDK with Speakeasy. Speakeasy will create documentation and usage examples based on the descriptions and examples we added.
+
+We'll use the `speakeasy quickstart` command to create an SDK for the Speakeasy Bar gRPC service.
+
+Run the following in the terminal:
+
+```bash Terminal
+speakeasy quickstart
+```
+
+Follow the onscreen prompts to provide the necessary configuration details for your new SDK such as the name, schema location and output path. Enter `openapi/speakeasy/v1/speakeasy.openapi.json` when prompted for the OpenAPI document location and select TypeScript when prompted for which language you would like to generate.
+
+## Example Protobuf Definition and SDK Generator
+
+The source code for our complete example is available in the [**gRPC Speakeasy Bar example repository**](https://github.com/speakeasy-api/speakeasy-grpc-gateway-example).
+
+The repository contains a TypeScript SDK and instructions on how to create more SDKs.
+
+You can clone this repository to test how changes to the protobuf definition result in changes to the SDK.
+
+After modifying your protobuf definition, you can run the following in the terminal to create a new SDK:
+
+```bash Terminal
+buf generate && go run convert/convert.go && speakeasy quickstart
+```
+
+Happy generating!

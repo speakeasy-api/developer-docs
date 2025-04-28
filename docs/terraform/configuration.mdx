@@ -1,0 +1,129 @@
+---
+title: "Configuration"
+description: "Learn how to configure environment values and manage custom resources in your Terraform provider."
+---
+
+
+
+# Configuration
+
+## Configuring Environment Values
+
+Use the `environmentVariables` configuration in your `gen.yaml` to set up default values for provider variables to be pulled in from a user environment variable. This is useful for mapping known environment values that will hold an API key into the provider.
+
+``` yaml
+terraform:
+  environmentVariables:
+    - env: EXAMPLE_SERVER_URL_FROM_ENV_VAR
+      providerAttribute: server_url
+    - env: EXAMPLE_ACCESS_TOKEN
+      providerAttribute: access_token
+```
+
+The `environmentVariables` configuration is expected to be a list of objects with `{env: string, providerAttribute: string}` keys and values. These will create associations from environment variables (referenced as `env`) with provider attributes (referenced as `providerAttribute`).
+
+## Additional Provider Configurations
+
+Enable Terraform configurations to specify additional provider-wide customizations in the generation configuration (`gen.yaml`) file with the `additionalProviderAttributes` configuration, for example:
+
+```yaml
+terraform:
+  additionalProviderAttributes:
+    # ... configuration ...
+```
+
+### Custom HTTP Headers
+
+Set the `httpHeaders` configuration with the desired attribute name to enable Terraform configurations to specify a mapping of additional HTTP headers for all HTTP requests.
+
+In this example, HTTP header customization is enabled using the `http_headers` provider attribute name:
+
+```yaml
+terraform:
+  additionalProviderAttributes:
+    httpHeaders: http_headers
+```
+
+This configuration enables provider configuration such as:
+
+```hcl
+provider "examplecloud" {
+  http_headers = {
+    "X-Example-Header" = "example-value"
+  }
+}
+```
+
+### Skip TLS Verification
+
+Set the `tlsSkipVerify` configuration with the desired attribute name to enable Terraform configurations to specify a boolean to disable TLS verification in the HTTP client.
+
+In this example, TLS verification customization is enabled using the `tls_skip_verify` provider attribute name:
+
+```yaml
+terraform:
+  additionalProviderAttributes:
+    tlsSkipVerify: tls_skip_verify
+```
+
+This configuration enables provider configuration such as:
+
+```hcl
+provider "examplecloud" {
+  tls_skip_verify = true
+}
+```
+
+## Custom Resources or Data Sources
+
+If you would like to include an existing resource that is outside of the Speakeasy-generated provider, reference it in `gen.yaml` like so:
+
+```yaml
+terraform:
+  additionalResources:
+    - importAlias: custom
+      importLocation: github.com/custom/terraform-provider-example/src/custom_resource
+      resource: custom.NewCustomResource
+  additionalDataSources:
+    - importAlias: custom
+      importLocation: github.com/custom/terraform-provider-example/src/custom_datasource
+      datasource: custom.NewCustomDataSource
+```
+
+The `additionalResources` key is expected to contain a list of `{ importLocation?: string, importAlias?: string, resource: string }` objects. Each `resource` will be inserted into the provider resource list. If `importLocation` or `importAlias` is defined, Speakeasy will add that to the import list at the top of the provider file. The value of `resource` is arbitrary text, and could contain a function invocation if desired.
+
+The `additionalDataSources` key follows the same syntax, but with `datasource` as the text string to be inserted into the list instead of `resource`.
+
+To learn more about how to write a Terraform resource, please consult the [official Terraform documentation](https://developer.hashicorp.com/terraform/plugin/framework).
+
+## Modifying Resource and Data Source Descriptions
+
+The `x-speakeasy-entity-description` extension allows you to modify the description of a Terraform resource or data source. This is useful when augmenting the documentation in your OpenAPI specification with documentation for your specific resources. This documentation is expected to be in Markdown format. Use this extension alongside your `x-speakeasy-entity` extension.
+
+Alternatively, a template folder can be written to customize any or all aspects of generated documentation in alignment with [terraform-plugin-docs](https://github.com/hashicorp/terraform-plugin-docs).
+
+```yaml
+components:
+  schemas:
+    Order:
+      description: An order helps you make coffee
+      x-speakeasy-entity: Order
+      x-speakeasy-entity-description: |
+        The order resource allows you to declaratively construct an order for coffee.
+
+        resource "speakeasy_order" "example" {
+          name = "Filter Blend"
+          price = 11.5
+        }
+```
+
+## Deduplicate Terraform Types
+
+The `terraform` types folder includes a representation of your data models that is appropriate for the `terraform-plugin-framework` type system. However, if you have multiple types with the same *signature* (e.g. the same set of child property *types*), there might be a lot of these types that are effectively duplicated. To minimize the git repository / binary size, it might make sense to deduplicate these by re-using types with the same *signature* across different resources. If you would like to enable this, set the following configuration option:
+
+This option is `false` by default.
+
+```yaml
+terraform:
+  enableTypeDeduplication: true
+```

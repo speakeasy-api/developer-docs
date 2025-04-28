@@ -1,0 +1,313 @@
+---
+title: "Create PHP SDKs from OpenAPI documents"
+description: "Learn how Speakeasy creates a PHP SDK from an OpenAPI document."
+---
+
+# Create PHP SDKs from OpenAPI documents
+
+## PHP SDK overview
+
+The Speakeasy PHP SDK is designed to be easy to use and debug, and uses object-oriented programming in PHP for a robust and strongly-typed experience.
+
+Some core features of the SDK are:
+
+- Class-based objects using reflection and property attributes to aid serialization.
+- A `Utils` package for common operations, simplifying generated code and making it easier to debug.
+- A convenient builder pattern manages the SDK configuration, and request level options.
+- Support for some OAuth flows and other standard security mechanisms.
+
+## New PHP features
+
+Since the release of PHP 8 in 2020, the language has introduced additional type features, enabling better support for OpenAPI. Some of the features we take advantage of are:
+
+- Union types
+
+  ```php
+  private int|float $age;
+- Enums
+
+  ```php
+  enum HTTPMethods: string {
+   case GET = 'get';
+   case POST = 'post';
+  }
+  ```
+
+## External libraries
+
+The Speakeasy PHP SDK seeks to support the majority of the OpenAPI Specification features, and as such, supports some features that aren't contained in the PHP standard library.
+
+Speakeasy fills the gaps using some external dependencies, which are detailed below.
+
+### Dates
+
+PHP has only date-time objects, not date objects. Speakeasy uses [Brick\DateTime](https://github.com/brick/date-time) for date support. For example:
+
+```php
+public function deserializeDateTimeToJson(JsonDeserializationVisitor $visitor, string $data, array $type, Context $context): mixed
+{
+  return \Brick\DateTime\LocalDate::parse($data);
+}
+```
+
+### Complex numbers
+
+PHP doesn't have support for arbitrary precision numbers, so we use the [Brick\Math](https://github.com/brick/math) library for complex number support.
+
+To learn more about Speakeasy's complex number support, please read [this page](/docs/customize/data-model/complex-numbers).
+
+### HTTP client
+
+The SDK uses [Guzzle](https://docs.guzzlephp.org/en/stable) to provide a default HTTP client implementation, `\GuzzleHttp\Client`, for making API calls, which can be overridden. The client must implement the `\GuzzleHttp\ClientInterface`.
+
+To override the HTTP client, pass the client during construction:
+
+```php
+use GuzzleHttp\Client;
+
+$client = new Client([
+  'timeout' => 2.0,
+]);
+
+$sdk = SDK::builder()->setClient(
+  $client
+)->build();
+```
+
+This allows for full customization of low-level features, like proxies, custom headers, timeouts, cookies, and others.
+
+### Exhaustive type system
+
+Speakeasy uses a combination of the [phpDocumentor TypeResolver](https://github.com/phpDocumentor/TypeResolver) library and the built-in standard library type specifications to provide exhaustive type checking across all aspects of the generated SDK.  
+
+### Serialization
+
+Speakeasy uses [JMS Serializer](https://jmsyst.com/libs/serializer) for serialization due to its union support, which other serialization libraries lack.
+
+JMS Serializer checks types received in responses at runtime, guaranteeing strong typing not only in comment annotations, but also while the application is in use and transferring data.
+
+Files in the Speakeasy-created PHP SDK include the line `declare(strict_types=1);`, which causes PHP to throw a `TypeError` if a function accepts or returns an invalid type at runtime.
+
+### Type checking and linting
+
+Speakeasy uses a combination of [PHPStan](https://phpstan.org) and [Laravel Pint](https://laravel.com/docs/11.x/pint) for linting, performing quality control, and statically analyzing the SDK.
+
+### Quality and security
+
+Speakeasy also uses [Roave Security Advisories](https://github.com/Roave/SecurityAdvisories) to ensure that its dependencies do not have any known security advisories.
+
+### Tests
+
+[PHPUnit](https://phpunit.de/documentation.html) is included with the SDK for running tests. However, no tests are created for the SDK automatically.
+
+## PHP SDK package structure
+
+```sh
+├── src/                # Root directory for all PHP source files
+│   ├── SDK.php         # The main SDK class
+│   ├── SDKBuilder.php
+│   ├── SDKConfiguration.php
+│   ├── ...             # Other SDK classes, one per tag
+│   ├── Models/
+│   │   ├── Components/ # Contains data types used in requests
+│   │   ├── Operations/ # Contains all the functions in the API
+│   │   └── Errors/
+│   │       └── SDKException.php  # The error that all requests can throw
+│   └── Utils/          # Contains shared utility classes for transforming data
+│       └── ...
+├── docs/               # Contains Markdown files for the SDK documentation
+│   └── ...
+├── composer.json       # Configuration for PHP Composer
+└── vendor              # External dependencies
+```
+
+## PHP SDK data types and classes
+
+The Speakeasy PHP SDK uses native types wherever possible:
+
+- `string`
+- `DateTime`
+- `int`
+- `float`
+- `bool`
+
+Where no native data types are available, the Speakeasy PHP SDK uses libraries:
+
+- `Brick\DateTime\LocalDate`
+- `Brick\Math\BigInteger`
+- `Brick\Math\BigDecimal`
+
+The generated classes are standard PHP classes with public properties. These classes use attributes, docstrings, annotations and reflection to help guide serialization.
+
+## Parameters
+
+When configured, Speakeasy will include up to a specified number of parameters directly in the function signatures, rather than providing the list of parameters as an object to be passed to the operation methods.
+
+The maximum number of parameters to be placed in the method signature is set in the `maxMethodParams` option in the `gen.yaml` file. If `maxMethodParams` is not set or is set to `0`, no method parameters will be added.
+
+## Errors
+
+The Speakeasy PHP SDK throws exceptions using the appropriate `error` class as defined in the sdk specification. You can then wrap your requests in a `try` block to handle the error in the response.
+
+## User agent strings
+
+The PHP SDK includes a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests, which can be leveraged to track SDK usage amongst broader API usage. The format is as follows:
+
+```stmpl
+speakeasy-sdk/php {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{PackageName}}
+```
+
+- `SDKVersion` is the version of the SDK defined in `gen.yaml` and released.
+- `GenVersion` is the version of the Speakeasy generator.
+- `DocVersion` is the version of the OpenAPI document.
+- `PackageName` is the name of the package defined in `gen.yaml`.
+
+## Feature examples
+
+Let's take a look at how OpenAPI features are mapped to PHP code. We'll use snippets from the [Swagger PetStore 3.1](https://petstore31.swagger.io/) OpenAPI document, [`openapi.yaml`](https://petstore31.swagger.io/api/v31/openapi.yaml). If you're not familiar with the example, it provides operations for managing users, customers, pets, and orders for pets in a hypothetical pet store.
+
+### Tags
+
+Each `tag` in the OpenAPI document becomes one file of top-level operations, such as `Pet.php`, `Store.php`, and `User.php` for:
+
+```yaml
+tags:
+  - name: pet
+    description: Everything about your Pets
+    externalDocs:
+      description: Find out more
+      url: http://swagger.io
+...
+```
+
+### Security
+
+The Swagger Petstore OpenAPI document uses API key security and OAuth 2.0:
+
+```yaml
+/pet/{petId}:
+ security:
+    - api_key: []
+    - petstore_auth:
+        - write:pets
+        - read:pets
+...
+components:
+  securitySchemes:
+    petstore_auth:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://petstore31.swagger.io/oauth/authorize
+          scopes:
+            write:pets: modify pets in your account
+            read:pets: read your pets
+    api_key:
+      type: apiKey
+      name: api_key
+      in: header
+```
+
+The PHP SDK creates a security class you can call with either scheme:
+
+```php
+use OpenAPI\OpenAPI\Utils\SpeakeasyMetadata;
+class GetPetByIdSecurity
+{
+ /**
+  *
+  * @var ?string $apiKey
+  */
+ #[SpeakeasyMetadata('security:scheme=true,type=apiKey,subtype=header,name=api_key')]
+ public ?string $apiKey = null;
+
+ /**
+  *
+  * @var ?string $petstoreAuth
+  */
+ #[SpeakeasyMetadata('security:scheme=true,type=oauth2,name=Authorization')]
+ public ?string $petstoreAuth = null;
+
+ /**
+  * @param  ?string  $apiKey
+  * @param  ?string  $petstoreAuth
+  */
+ public function __construct(?string $apiKey = null, ?string $petstoreAuth = null)
+ {
+  $this->apiKey = $apiKey;
+  $this->petstoreAuth = $petstoreAuth;
+ }
+}
+
+# Example call:
+
+$requestSecurity = new Operations\GetPetByIdSecurity();
+$requestSecurity->apiKey = '<YOUR_API_KEY_HERE>';
+$response = $sdk->pet->getPetById($requestSecurity, 504151);
+```
+
+The implicit flow is the only OAuth flow currently supported.
+
+### Enums
+
+Speakeasy uses native types in PHP 8 for enums.
+
+```php
+enum Status: string
+{
+  case Available = 'available';
+  case Pending = 'pending';
+  case Sold = 'sold';
+}
+```
+
+### Typed parameters
+
+Consider the following example of an array of strings in `openapi.yaml`:
+
+```yaml
+/pet/findByTags:
+ get:
+   operationId: findPetsByTags
+   parameters:
+      - name: tags
+        in: query
+        required: false
+        explode: true
+        schema:
+          type: array
+          items:
+            type: string
+```
+
+The PHP SDK types the parameter in a DocBlock.
+
+```php
+/** Finds Pets by tags
+ * @param  ?array<string>  $tags
+ * @return Operations\FindPetsByTagsResponse
+ * @throws \OpenAPI\OpenAPI\Models\Errors\SDKException
+ */
+public function findPetsByTags(?array $tags = null,):   Operations\FindPetsByTagsResponse {
+```
+
+You can use `oneOf` in an OpenAPI document like this:
+
+```yaml
+Pet:
+  type: object
+  properties:
+    age:
+      oneOf:
+      - type: integer
+      - type: string
+```
+
+The `age` property will be typed as a union in PHP:
+
+```php
+/**
+ *
+ * @param  int|string|null  $age
+ */
+```

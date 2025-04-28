@@ -1,0 +1,46 @@
+from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
+
+app = FastAPI(
+    summary="A simple API to manage burgers and orders",
+    description="This API is used to manage burgers and orders in a restaurant",
+    version="0.1.0",
+    title="APItizing Burger API",
+)
+
+@app.get("/")
+def root():
+    return {"message": "Root"}
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        summary=app.summary,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    # Add retries
+    openapi_schema["x-speakeasy-retries"] = {
+        "strategy": "backoff",
+        "backoff": {
+            "initialInterval": 500,
+            "maxInterval": 60000,
+            "maxElapsedTime": 3600000,
+            "exponent": 1.5,
+        },
+        "statusCodes": [
+            "5XX",
+        ],
+        "retryConnectionErrors": True,
+    }
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi

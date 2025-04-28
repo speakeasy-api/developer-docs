@@ -1,0 +1,156 @@
+---
+slug: /code-samples-api/
+title: The Code Samples API
+description: "Fetch usage snippets for Speakeasy-generated SDKs using the Code Samples API."
+---
+
+import { Callout } from "@/mdx/components";
+
+
+# The Code Samples API
+
+<Callout title="Note" type="info">
+
+This feature is for **Speakeasy Enterprise** customers. To inquire about
+access, please contact a Speakeasy representative, or [book a demo](/book-demo).
+
+</Callout>
+
+## Overview
+
+The Speakeasy Code Samples API is a streamlined solution for accessing rich,
+up-to-date SDK usage examples for Speakeasy managed SDK's. These examples can be
+easily integrated into an organization's documentation sites, tools, or 
+developer portal, and they'll stay up to date automatically.
+
+This API is ideal for organizations who:
+
+- Use Speakeasy to generate SDKs from OpenAPI specifications,
+- Need reliable, up-to-date SDK usage examples for their APIs, and
+- Want custom tooling for SDK code samples in their documentation.
+
+## Usage
+
+### Prerequisites
+
+<Callout title="IMPORTANT" type="warning">
+
+To use the Code Samples API, the following prerequisites are required:
+
+- A Speakeasy Enterprise Subscription,
+- An [Automated Code Sample URL](/docs/code-samples/automated-code-sample-urls), configured for the desired
+  Speakeasy SDK, and
+- A Speakeasy API Key for the workspace associated with the desired SDK.
+
+</Callout>
+
+### TypeScript SDK
+
+The Code Samples SDK can be used in TypeScript projects to fetch snippets. The
+library also ships with some convenient features such as **React Query hooks**, and
+a **React Component**.
+
+For instructions on how to install and use the TypeScript SDK, refer to the
+[GitHub repo's README file](https://github.com/speakeasy-api/speakeasy-code-samples-ts/tree/main?tab=readme-ov-file#sdk-example-usage).
+
+#### The React Component
+
+This library includes a React component that fetches and highlights code
+snippets using `codehike`. Along with displaying the snippet, it shows a
+loading state during fetching and provides a fallback view if an error occurs.
+
+The component can be used as follows:
+
+```tsx App.tsx
+import { SpeakeasyCodeSamplesCore } from "@speakeasyapi/code-samples/core";
+import {
+  CodeSampleFilenameTitle,
+  CodeSamplesViewer,
+  SpeakeasyCodeSamplesProvider,
+} from "@speakeasyapi/code-samples/react";
+
+const speakeasyCodeSamples = new SpeakeasyCodeSamplesCore({
+  apiKey: "<YOUR_API_KEY_HERE>",
+  registryUrl: "https://spec.speakeasy.com/org/ws/my-source",
+});
+
+function App() {
+  return (
+    <SpeakeasyCodeSamplesProvider client={speakeasyCodeSamples}>
+      <CodeSamplesViewer
+        copyable
+        defaultLang={"typescript"}
+        title={CodeSampleFilenameTitle}
+        operation={"getPassageText"}
+        // client={speakeasyCodeSamples} 
+        // 👆 optional, if you want to pass the client directly 
+        // instead of using the context provider
+      />
+    </SpeakeasyCodeSamplesProvider>
+  );
+}
+```
+
+
+
+## REST API Reference
+
+<h3 className="_tracking-tight _text-slate-900 dark:_text-white _mt-10 _text-h4-mobile md:_text-h4">Retrieve usage snippets</h3>
+
+`GET /v1/code_sample`
+
+Retrieves usage snippets from an OpenAPI document stored in the registry. The endpoint supports filtering by programming language and operation ID.
+
+<h4 className="_tracking-tight _text-slate-900 dark:_text-white _mt-10 _mb-4 _text-h5-mobile md:_text-h5">Query Parameters</h4>
+
+**`registry_url`** <span className="text-xs font-secondary-mono text-brand-warning-500 ml-2">required, type: string</span>
+- **Description**: The registry URL from which to retrieve the snippets
+- **Example**: `https://spec.speakeasy.com/my-org/my-workspace/my-source`
+
+**`operation_ids`** <span className="text-xs font-secondary-mono text-brand-warning-500 ml-2">type: string[]</span>
+- **Description**: The operation IDs to retrieve snippets for
+- **Example**: `getPets`
+
+**`method_paths`** <span className="text-xs font-secondary-mono text-brand-warning-500 ml-2">type: {`{ method: string, path: string }[]`}</span>
+- **Description**: The method paths to retrieve snippets for
+- **Example**: `[{"method": "get", "path": "/pets"}]`
+
+**`languages`** <span className="text-xs font-secondary-mono text-brand-warning-500 ml-2">type: string[]</span>
+- **Description**: The programming languages to retrieve snippets for
+- **Example**: `["python", "javascript"]`
+
+
+<h4 className="_tracking-tight _text-slate-900 dark:_text-white _mt-10 _text-h5-mobile md:_text-h5">Example Request</h4>
+
+```shell example-request.sh
+curl -G "https://app.speakeasy.com/v1/code_sample" \
+  -H "X-Api-Key: <SPEAKEASY_API_KEY_HERE>" \
+  --data-urlencode "registry_url=https://spec.speakeasy.com/my-org/my-workspace/my-source" \
+  -d "languages=go" \
+  -d "languages=typescript" \
+  -d "operation_ids=getPets"
+```
+
+<h4 className="_tracking-tight _text-slate-900 dark:_text-white _mt-10 _text-h5-mobile md:_text-h5">Example Response</h4>
+
+```json 200 - Success
+{
+  "snippets": [
+    {
+      "operationId": "getPetById",
+      "path": "/pet/{id}",
+      "method": "get",
+      "language": "typescript",
+      "code": "import { Petstore } from \"petstore-sdk\";\n\nconst petstore = new Petstore({\n  apiKey: \"<YOUR_API_KEY_HERE>\",\n});\n\nasync function run() {\n  const result = await petstore.pet.getById({\n    id: 137396,\n  });\n\n  // Handle the result\n  console.log(result);\n}\n\nrun();"
+    }
+  ]
+}
+```
+
+```json 4XX - Error
+{
+  "status_code": 404,
+  "message": "no snippets found for given operation IDs and languages -- err_not_found: not found"
+}
+```
+

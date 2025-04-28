@@ -1,0 +1,190 @@
+---
+title: "Generate Python SDKs from OpenAPI / Swagger"
+description: "Learn how Speakeasy generates a Python client from an OpenAPI / Swagger spec."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Generate Python SDKs from OpenAPI / Swagger
+
+<Callout title="OSS Comparison" type="info">
+For a comparison between the Speakeasy Python SDK and some popular open-source generators, see [**this page**](/post/speakeasy-oss-python-generator).
+</Callout>
+
+
+## SDK Overview
+
+Speakeasy-generated Python SDKs are designed to be best in class, providing a seamless developer experience and full type safety, alongside asynchronous support.
+
+The core Python SDK features include:
+- Fully type-annotated classes and methods with full Pydantic models and associated TypedDicts.
+- Async and Sync methods for all endpoints.
+- Support for streaming uploads and downloads.
+- Support for Server-Sent Events (SSE).
+- Authentication support for OAuth flows and support for standard security mechanisms (HTTP Basic, application tokens, etc.).
+- Optional pagination support for supported APIs.
+- Optional support for retries in every operation.
+- Complex number types including big integers and decimals.
+- Date and date/time types using RFC3339 date formats.
+- Custom type enums using strings and integers (including Open Enums).
+- Union types and combined types.
+
+
+### Python Package Structure
+
+```yaml
+├── src
+|   └── {Package Name}         # Root module for the SDK where {SDK Class Name} is the provided name of the SDK
+|       ├── {SDK Class Name}.py  # The main SDK class
+|       ├── ...                  # Other SDK classes
+|       ├── models               # Module for SDK's models
+|       |   |── shared           # Submodule providing the SDK's models generated from components in the OpenAPI document
+|       |   |── operations       # Submodule providing the SDK's operations models which generally house the request/response models for each API document
+|       |   └── ...
+|       └── utils                # Module for the SDK's utility classes
+├── docs                         # Markdown files for the SDK's documentation
+|   └── ...
+├── setup.py                     # Package setup
+└── ...
+```
+
+Python dependencies and packaging for publishing are handled using `poetry`.
+
+
+##  Python Type Safety
+
+Modern Python uses type hints to improve code readability and so do Speakeasy-generated Python SDKs! Speakeasy-generated Python SDKs expose type annotations for developers to perform type checks at runtime and increase type safety, we also employ Pydantic models to ensure that the data passed to and from the SDK is valid at runtime.
+
+### The generated models
+
+Speakeasy uses `pydantic` for all generated models to correctly serialize and deserialize objects; whether the objects are passed as query parameters, path parameters, or request bodies. Metadata based on the definitions provided by the OpenAPI document are appended to fields.
+
+For example, this is the generated class for the [Drink](https://github.com/speakeasy-sdks/template-sdk/blob/main/openapi.yaml#L312) component from our [SpeakeasyBar template repository](https://github.com/speakeasy-sdks/template-sdk):
+```python
+class Drink(BaseModel):
+    name: str
+    r"""The name of the drink."""
+    price: float
+    r"""The price of one unit of the drink in US cents."""
+    type: Optional[DrinkType] = None
+    r"""The type of drink."""
+    stock: Optional[int] = None
+    r"""The number of units of the drink in stock, only available when authenticated."""
+    product_code: Annotated[Optional[str], pydantic.Field(alias="productCode")] = None
+    r"""The product code of the drink, only available when authenticated."""
+```
+
+Python also generates matching `TypedDict` classes for each model, which can be used to pass in dictionaries to the SDK methods without the need to import the model classes.
+
+```python
+class DrinkTypedDict(TypedDict):
+    name: str
+    r"""The name of the drink."""
+    price: float
+    r"""The price of one unit of the drink in US cents."""
+    type: NotRequired[DrinkType]
+    r"""The type of drink."""
+    stock: NotRequired[int]
+    r"""The number of units of the drink in stock, only available when authenticated."""
+    product_code: NotRequired[str]
+    r"""The product code of the drink, only available when authenticated."""
+```
+
+which allows methods to be called one of two ways:
+
+```python
+res = s.orders.create_order(drinks=[
+    {
+        "type": bar.OrderType.INGREDIENT,
+        "product_code": "AC-A2DF3",
+        "quantity": 138554,
+    },
+])
+```
+
+or 
+
+```python
+res = s.orders.create_order(drinks=[
+    Drink(
+        type=bar.OrderType.INGREDIENT,
+        product_code="AC-A2DF3",
+        quantity=138554,
+    ),
+])
+```
+
+## Async vs Sync Methods
+
+Speakeasy-generated Python SDKs provide both synchronous and asynchronous methods for all endpoints. The SDK uses the `httpx` library for making HTTP requests, which supports both synchronous and asynchronous requests.
+
+Synchronous:
+```python
+res = s.orders.create_order(drinks=[
+    Drink(
+        type=bar.OrderType.INGREDIENT,
+        product_code="AC-A2DF3",
+        quantity=138554,
+    ),
+])
+```
+
+Asynchronous:
+```python
+res = await s.orders.create_order_async(drinks=[
+    Drink(
+        type=bar.OrderType.INGREDIENT,
+        product_code="AC-A2DF3",
+        quantity=138554,
+    ),
+])
+```
+
+## HTTP Client
+
+To make API calls, the Python SDK instantiates its own HTTP client using the `Client` class from the `httpx` library. This allows authentication settings to persist across requests and reduce overhead.
+
+## Parameters
+
+If configured, Speakeasy will generate methods with parameters for each parameter defined in the OpenAPI document, as long as the number of parameters is less than or equal to the configured `maxMethodParams` value in the `gen.yaml` file.
+
+If the number of parameters exceeds the configured `maxMethodParams` value or is set to `0`, a request object will be generated for the method to pass in all parameters as a single object.
+
+
+## Errors
+
+The Python SDK will raise exceptions for any network or invalid request errors.
+
+For unsuccessful responses, if a custom error response is specified in your spec file, the SDK will unmarshal the HTTP response details into the custom error response to be thrown as an exception.  When no custom response is specified in your spec, the SDK will throw an `SDKException` with details of the failed response.
+
+```python
+import sdk
+from sdk.models import errors
+
+s = sdk.SDK()
+res = None
+try:
+    res = s.errors.status_get_x_speakeasy_errors(status_code=385913)
+except errors.StatusGetXSpeakeasyErrorsResponseBody as e:
+    # handle exception
+except errors.SDKError as e:
+    # handle exception
+
+if res is not None:
+    # handle response
+    pass
+```
+
+
+## User Agent Strings
+
+The Python SDK includes a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests. This can be leveraged to track SDK usage amongst broader API usage. The format is as follows: 
+
+```stmpl
+speakeasy-sdk/python {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{PackageName}}
+```
+Where
+- `SDKVersion` is the version of the SDK, defined in `gen.yaml` and released
+- `GenVersion` is the version of the Speakeasy generator
+- `DocVersion` is the version of the OpenAPI document
+- `PackageName` is the name of the package defined in `gen.yaml`

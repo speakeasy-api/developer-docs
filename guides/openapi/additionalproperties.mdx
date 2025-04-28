@@ -1,0 +1,133 @@
+---
+description: "Using additional properties with Speakeasy."
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+# Understanding `additionalProperties`
+
+In a standard JSON schema, the [`additionalProperties`](https://json-schema.org/understanding-json-schema/reference/object#additional-properties) keyword controls whether objects can include properties beyond those explicitly defined. By default, if `additionalProperties` is not specified, it's considered to be `true`, allowing objects to carry arbitrary additional data.
+
+## The Speakeasy approach
+
+At Speakeasy, we diverge from the standard approach by setting `additionalProperties` to `false` unless explicitly defined otherwise. This approach encourages defining fully-typed objects, promoting clear and comprehensive documentation of their structure. This method aligns with the common developer expectation of creating APIs with precise and predictable data models.
+
+API developers generally prefer closed objects as the default, rather than open ones, and setting `additionalProperties: false` in the spec would be tedious. Most backend frameworks that generate OpenAPI schemas rarely add `additionalProperties: false`, even when that behavior is intended.
+
+## Using `additionalProperties: true`
+
+Setting `additionalProperties` to `true` is beneficial for schemas that need flexibility to dynamically accommodate unknown fields. This setting is ideal for scenarios where the data model may extend beyond the initially defined properties, allowing for future growth without requiring schema revisions.
+
+Imagine a scenario where an API endpoint accepts user-generated content with a set of core properties but also needs to be open to future extensions. By setting `additionalProperties` to `true`, the API can accept and store these extensions without needing schema updates for each new property.
+
+```yaml openapi.yaml
+components:
+  schemas:
+    FlexibleObject:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+      additionalProperties: true
+```
+
+This schema allows for the inclusion of any additional user-provided properties alongside the defined `title` and `description`.
+
+<CodeWithTabs>
+```typescript !!tabs TypeScript
+export type FlexibleObject = {
+    title: string;
+    description: string;
+    additionalProperties: Record<string, any>;  // 👈 
+}
+
+```
+
+```python !!tabs Python
+@dataclass
+class FlexibleObject:
+    title: str = dataclasses.field(metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('title') }})
+    description:  str = dataclasses.field(metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('description') }})
+    additional_properties: Optional[Dict[str, Any]] = dataclasses.field(default=None, metadata={'dataclasses_json': { 'exclude': lambda f: f is None }}) // 👈 
+
+```
+
+```go !!tabs Go 
+type FlexibleObject struct {
+	Title                 string                 `json:"title"`
+	Description           string                `json:"description"`
+	AdditionalProperties map[string]interface{} `additionalProperties:"true" json:"-"`// 👈 
+}
+```
+
+```java !!tabs Java
+public class FlexibleObject {
+  public FlexibleObject(String title, String description) {...}
+  public String title() {...}
+  public String description() {...}
+  public Map<String, Object> additionalProperties() {...}
+  ...
+}
+```
+</CodeWithTabs>
+
+## Using typed `additionalProperties`
+
+For use cases that need to accommodate arbitrary additional data within a constrained type, Speakeasy allows `additionalProperties` to be defined with a specific type or schema, enabling the creation of flexible yet type-safe objects.
+
+```yaml openapi.yaml
+components:
+  schemas:
+    StringOnlyObject:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+      additionalProperties:
+        type: string
+```
+
+In this schema, alongside the explicitly defined `name`, any additional properties must be strings, ensuring a consistent data type across all properties.
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+export type StringOnlyObject = {
+    title: string;
+    description: string;
+    additionalProperties: Record<string, string>;
+};
+
+```
+
+```python !!tabs Python
+@dataclass
+class StringOnlyObject:
+    title: str = dataclasses.field(metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('title') }})
+    description:  str = dataclasses.field(metadata={'dataclasses_json': { 'letter_case': utils.get_field_name('description') }})
+    additional_properties: Optional[Dict[str, str]] = dataclasses.field(default=None, metadata={'dataclasses_json': { 'exclude': lambda f: f is None }})
+
+```
+
+```go !!tabs Go 
+type StringOnlyObject struct {
+	Title                 string                 `json:"title"`
+	Description           string                `json:"description"`
+	AdditionalProperties map[string]string `additionalProperties: type: string json:"-"`
+}
+```
+
+```java !!tabs Java
+public class FlexibleObject {
+  public FlexibleObject(String title, String description) {...}
+  public String title() {...}
+  public String description() {...}
+  public Map<String, String> additionalProperties() {...}
+  ...
+}
+```
+</CodeWithTabs>

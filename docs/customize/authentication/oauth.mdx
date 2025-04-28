@@ -1,0 +1,971 @@
+---
+slug: "/oauth"
+sidebar_label: OAuth Methods
+description: "Customize your security and authentication SDK settings for OAuth."
+---
+
+import { CodeWithTabs, Table } from "@/mdx/components";
+
+# OAuth 2.0 authentication
+
+Speakeasy fully supports the OAuth 2.0 security implementation. This includes type generation for OAuth schemas and in many cases
+the complete management of the token refresh flow. End users of Speakeasy SDKs don't need to retrieve and manage access tokens manually.
+
+API builders also have the option to leverage Speakeasy's [custom security schemes](/docs/customize/authentication/custom-security-schemes) to implement custom OAuth flows that aren't part of
+the standard OpenAPI specification.
+
+This document covers the following types of OAuth 2.0 flows:
+
+<Table 
+  data={[
+    { 
+      type: "`client credentials`", 
+      description: "[Docs](#client-credentials-flow)" 
+    },
+    { 
+      type: "`authorization flow`", 
+      description: "[Docs](#authorization-code-flow)" 
+    },
+    { 
+      type: "`resource owner password credentials flow`", 
+      description: "[Docs](#resource-owner-password-credentials-flow)" 
+    },
+    { 
+      type: "`custom token refresh flow`", 
+      description: "[Docs](#custom-refresh-token-flow)" 
+    }
+  ]}
+  columns={[
+    { key: "type", header: "OAuth 2.0 type" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+Other custom flows can be implemented using a combination of [hooks](/docs/customize/code/sdk-hooks) and [custom security schemes](/docs/customize/authentication/custom-security-schemes).
+
+## Client credentials flow
+
+OAuth 2.0 defines several methods for building a request to the `tokenUrl` endpoint. Speakeasy supports the following authentication methods:
+
+- [`client_secret_post`](#client_secret_post) (default method)
+- [`client_secret_basic`](#client_secret_basic)
+- [`authorization-code`](#authorization-code-flow) (with hooks)
+- [Custom flows](#custom-refresh-token-flow) (with hooks and [custom security schemes](/docs/customize/authentication/custom-security-schemes))
+
+Define `type: oauth2` and `flows: clientCredentials` to prompt users for a client ID and client secret when instantiating the SDK. The client credentials flow is used to obtain an access token for API requests.
+
+### client_secret_post
+
+The `client_secret_post` method sends the client credentials in the request body as `application/x-www-form-urlencoded` form data. This is the default authentication method used by Speakeasy when no specific method is specified.
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://speakeasy.bar/oauth2/token/
+          # client_secret_post is the default method, so no additional configuration is needed
+          scopes: {}
+```
+
+When using this method, the client ID and client secret are sent in the request body as form parameters:
+
+```
+client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&grant_type=client_credentials
+```
+
+### client_secret_basic
+
+The `client_secret_basic` method sends the client credentials in the `Authorization` header using the `Basic` authentication scheme. The client ID and client secret are combined with a colon separator, Base64-encoded, and sent in the header.
+
+To use this method, add the `x-speakeasy-token-endpoint-authentication: client_secret_basic` extension to your OAuth security scheme:
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://speakeasy.bar/oauth2/token/
+          x-speakeasy-token-endpoint-authentication: client_secret_basic
+          scopes: {}
+```
+
+When using this method, the client ID and client secret are sent in the Authorization header:
+
+```
+Authorization: Basic base64(client_id:client_secret)
+```
+
+This method is preferred by some OAuth providers for security reasons, as it keeps credentials out of request bodies and server logs.
+
+### tokenUrl
+
+The `tokenUrl` property in OAuth 2.0 flows can be specified in two formats:
+
+1. An absolute URL (e.g., `https://api.example.com/auth/token`)
+2. A pathname (e.g., `/auth/token`)
+
+When a pathname is provided instead of an absolute URL, Speakeasy resolves it relative to the user's configured server URL. This is particularly useful in environments where you have multiple server configurations and need the token endpoint to adapt accordingly.
+
+For example, if your OpenAPI specification includes a pathname:
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /clientcredentials/token
+          scopes:
+            read: Read access
+            write: Write access
+```
+
+And the user has configured their server URL as `https://api.example.com`, the effective token URL will be `https://api.example.com/clientcredentials/token`.
+
+Alternatively, you can specify an absolute URL:
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.mycompany.com/clientcredentials/token
+          scopes:
+            read: Read access
+            write: Write access
+```
+
+This feature allows for more flexible authentication configurations across different environments without requiring changes to the OpenAPI specification.
+
+### Example OpenAPI configuration
+
+Here's a complete example showing how to configure OAuth client credentials flow in your OpenAPI specification:
+
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks.
+      description: Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
+      security:
+        - clientCredentials:
+            - read:drinks
+      tags:
+        - drinks
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://speakeasy.bar/oauth2/token/
+          # Uncomment the following line to use client_secret_basic instead of the default client_secret_post
+          # x-speakeasy-token-endpoint-authentication: client_secret_basic
+          scopes: {}
+security:
+  - clientCredentials:
+      - read:basic
+```
+
+Global scopes defined for the OAuth 2.0 scheme are requested alongside any operation-specific scopes when making API requests.
+
+To enable client credentials flow in the SDK, add the following to the `gen.yaml` file:
+
+```yaml
+configVersion: 2.0.0
+generation:
+  auth:
+    OAuth2ClientCredentialsEnabled: true
+```
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import { SDK } from "speakeasy";
+
+async function run() {
+  const sdk = new SDK({
+    security: {
+      clientID: "<YOUR_CLIENT_ID_HERE>",
+      clientSecret: "<YOUR_CLIENT_SECRET_HERE>",
+    },
+  });
+
+  const result = await sdk.drinks.listDrinks();
+
+  // Handle the result
+  console.log(result);
+}
+
+run();
+```
+
+```python !!tabs Python
+import speakeasy
+from speakeasy.models import components
+
+s = speakeasy.SDK(
+    security=components.Security(
+        client_id="<YOUR_CLIENT_ID_HERE>",
+        client_secret="<YOUR_CLIENT_SECRET_HERE>",
+    ),
+)
+
+
+res = s.drinks.list_drinks()
+
+if res.drinks is not None:
+    # handle response
+    pass
+```
+
+```go !!tabs Go
+package main
+
+import (
+	"context"
+	"log"
+	"speakeasy"
+	"speakeasy/models/components"
+)
+
+func main() {
+	s := speakeasy.New(
+		speakeasy.WithSecurity(components.Security{
+			ClientID:     "<YOUR_CLIENT_ID_HERE>",
+			ClientSecret: "<YOUR_CLIENT_SECRET_HERE>",
+		}),
+	)
+
+	ctx := context.Background()
+	res, err := s.Drinks.ListDrinks(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if res.Drinks != nil {
+		// handle response
+	}
+}
+```
+
+```java !!tabs Java
+package hello.world;
+
+import dev.speakeasyapi.speakeasy.SDK;
+import dev.speakeasyapi.speakeasy.models.components.*;
+import dev.speakeasyapi.speakeasy.models.components.Security;
+import dev.speakeasyapi.speakeasy.models.operations.*;
+import dev.speakeasyapi.speakeasy.models.operations.ListDrinksResponse;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import static java.util.Map.entry;
+
+public class Application {
+
+    public static void main(String[] args) {
+        try {
+            SDK sdk = SDK.builder()
+                .clientCredentials(ClientCredentials.builder()
+                    .clientID("<YOUR_CLIENT_ID_HERE>")
+                    .clientSecret("<YOUR_CLIENT_SECRET_HERE>")
+                    .build())
+                .build();
+
+            ListDrinksResponse res = sdk.drinks().listDrinks()
+                .call();
+
+            if (res.drinks().isPresent()) {
+                // handle response
+            }
+        } catch (dev.speakeasyapi.speakeasy.models.errors.SDKError e) {
+            // handle exception
+        } catch (Exception e) {
+            // handle exception
+        }
+    }
+}
+```
+
+```csharp !!tabs C#
+using Speakeasy;
+using Speakeasy.Models.Components;
+
+var sdk = new SDK(
+    security: new Security()
+    {
+        ClientID = "<YOUR_CLIENT_ID_HERE>",
+        ClientSecret = "<YOUR_CLIENT_SECRET_HERE>"
+    }
+);
+
+try
+{
+    var res = await sdk.Drinks.ListDrinksAsync();
+
+    if (res.Drinks != null)
+    {
+        // handle response
+    }
+}
+catch (Exception ex)
+{
+   // handle exception
+}
+```
+
+```php !!tabs PHP
+use Speakeasy\Client\Credentials;
+use Speakeasy\Client\Credentials\Models\Components;
+use Speakeasy\Client\Credentials\Models\Operations;
+
+$sdk = Credentials\SDK::builder()
+    ->setSecurity(
+        new Components\Security(
+            clientID: '<YOUR_CLIENT_ID_HERE>',
+            clientSecret: '<YOUR_CLIENT_SECRET_HERE>',
+        )
+    )->build();
+
+try {
+    $res = $sdk->drinks->listDrinks();
+
+    if ($res->Drinks != null) {
+        // handle response
+    }
+} catch (Errors\ErrorThrowable $e) {
+    // handle exception
+}
+```
+</CodeWithTabs>
+
+## Resource Owner Password Credentials flow
+Also known informally as OAuth 2.0 Password flow.
+
+Resource Owner Password Credentials (ROPC) flow is designed for obtaining access tokens directly in exchange for a username and password. 
+
+Below is an example of how ROPC Flow is configured in `openapi.yaml`. You'll note that 
+`oauth2` security scheme is linked to the `listProducts` operation and that the scope `products:read` is 
+required by the `listProducts` operation.
+
+```yaml
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      summary: List all products.
+      responses:
+        "200":
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Products"
+      security:
+        - oauth2: [products:read]
+
+components:
+  securitySchemes:
+      oauth2:
+        type: oauth2
+        flows:
+          password:
+            tokenUrl: http://localhost:35456/oauth2/token
+            scopes:
+              products:read: Permission to read/list products
+              products:create: Permission to create products
+              products:delete: Permission to delete products
+              admin: Full permission including managing product inventories
+```
+To enable OAuth 2.0 ROPC flow in the SDK, add the following to the `gen.yaml` file:
+```yaml
+configVersion: 2.0.0
+generation:
+  auth:
+    OAuth2PasswordEnabled: true
+```
+
+When making a call using this flow, the SDK security is configured with these parameters:
+
+<Table
+  columns={[
+    { key: "parameter", header: "Parameter" },
+    { key: "notes", header: "Notes" }
+  ]}
+  data={[
+    { parameter: "`username`", notes: "mandatory" },
+    { parameter: "`password`", notes: "mandatory" },
+    { parameter: "`clientID`", notes: "optional" },
+    { parameter: "`clientSecret`", notes: "optional" }
+  ]}
+/>
+
+Below are usage examples in different languages:
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+const sdk = new SDK({
+    oauth2: {
+      username: "testuser",
+      password: "testpassword",
+      clientID: "beezy",
+      clientSecret: "secret",
+    }
+  });
+
+const result = await sdk.listProducts();
+```
+
+```java !!tabs Java
+SDK sdk = SDK.builder() 
+    .oauth2(Oauth2Input.of( 
+        Oauth2Credentials.builder()
+            .username("testuser") 
+            .password("testpassword") 
+            .clientID("beezy") 
+            .clientSecret("secret") 
+            .build()))
+    .build();
+ListProductsResponse res = sdk.listProducts().call();
+```
+</CodeWithTabs>
+
+It is also possbile to bypass token retrievals by passing an explicit token to the SDK object:
+
+<CodeWithTabs>
+```typescript !!tabs TypeScript
+const sdk = new SDK({
+    oauth2: "THE_TOKEN"
+});
+
+const result = await sdk.listProducts();
+```
+
+```java !!tabs Java
+SDK sdk = SDK.builder() 
+    .oauth2(Oauth2Input.of("THE_TOKEN"))
+    .build();
+ListProductsResponse res = sdk.listProducts().call();
+```
+</CodeWithTabs>
+
+## Authorization code flow
+
+Authorization code flows can vary in implementation, but there are typically some secret values that need to be passed during the code token exchange.
+
+The format for the secret values can also vary but a very common format is:
+
+```html
+<Term>
+  <Base64><Client ID />:<Client Secret /></Base64></Term>
+```
+
+- `<Term>` often being `Basic` or `Bearer`
+- The following string being some format of Client ID and Client Secret, combined with a `:` and then base64 encoded.
+
+To allow for any possible formatting Speakeasy offers support for Hooks, these hooks allow you to alter a request before it is sent to the server.
+
+For this example we will be using the names `id` and `secret`, but you can use any names you like.
+
+First we will define a custom security schema, documention for that [can be found here](/docs/customize/authentication/custom-security-schemes)
+
+```yaml
+tokenRequest:
+  type: http
+  scheme: custom
+  x-speakeasy-custom-security-scheme:
+    schema:
+      properties:
+        id:
+          type: string
+          example: app-speakeasy-123
+        secret:
+          type: string
+          example: MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI
+      required:
+        - id
+        - secret
+  description: The string `Basic` with your ID and Secret separated with colon (:), Base64-encoded. For example, Client_ID:Client_Secret Base64-encoded is Q2xpZW50X0lEOkNsaWVudF9TZWNyZXQ=.
+```
+
+This security schema will then be applied to our OAuth token exchange endpoint.
+
+```yaml
+paths:
+  /oauth/token:
+    post:
+      tags:
+        - OAuth2
+      summary: OAuth2 Token
+      description: Get an OAuth2 token for the API.
+      operationId: getToken
+      security:
+        - tokenRequest: []
+```
+
+This custom security schema allows us to supply the Id and Secret needed for the token exchange directly to that method, and generate the unique header value needed with a hook.
+
+Next we add the hook to generate that header.
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import type {BeforeRequestContext, BeforeRequestHook, Hooks} from "./types.js";
+import {GetTokenSecurity} from "../models/operations/gettoken.js";
+import {stringToBase64} from "../lib/base64.js";
+
+class OAuthTokenRequestHook implements BeforeRequestHook {
+  beforeRequest(hookCtx: BeforeRequestContext, request: Request): Request {
+    switch (hookCtx.operationID) {
+      case "getToken": {
+        let sec = hookCtx.securitySource;
+        if (typeof sec === "function") {
+          sec = sec();
+        }
+        if (!sec) {
+          throw new Error("security source is not defined");
+        }
+
+        const customSec = sec as GetTokenSecurity;
+        const encoded = stringToBase64(
+          [customSec.Id || "", customSec.Secret || ""].join(":"),
+        );
+        request.headers.set("Authorization", `Basic ${encoded}`);
+
+        break;
+      }
+    }
+
+    return request;
+  }
+}
+```
+
+</CodeWithTabs>
+
+Now that the hook is added, when you are using the SDK to acquire an OAuth token, you can pass in the values and the hook will generate the special header for you.
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import { SDK } from "SDK";
+
+const sdk = new SDK();
+
+async function run() {
+  const result = await sdk.oAuth2.getToken({
+    Id: process.env["SDK_ID"] ?? "",
+    Secret: process.env["SDK_SECRET"] ?? "",
+  }, {
+    grantType: "authorization_code",
+    code: "1234567890",
+    redirectUri: "https://example.com/oauth/callback",
+  });
+
+  // Handle the result
+  console.log(result);
+}
+
+run();
+```
+
+</CodeWithTabs>
+
+## Custom refresh token flow
+
+To enable custom OAuth refresh token handling, implement [security callbacks](/docs/customize/authentication/security-callbacks) along with additional configuration outside the OpenAPI spec.
+
+### Step 1: Define OAuth security in the OpenAPI spec
+
+```yaml
+  /oauth2/token:
+    get:
+      operationId: auth
+      security:
+        - []
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: string
+                required:
+                  - access_token
+  /example:
+    get:
+      operationId: example
+      responses:
+        200:
+          description: OK
+components:
+  securitySchemes:
+    auth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://speakeasy.bar/oauth2/token/
+          scopes: {}
+security:
+  - auth: []
+```
+
+### Step 2: Add a callback function to the SDK
+
+Add a file called `oauth` with the appropriate file extension for the programming language (for example, `oauth.ts` for TypeScript, `oauth.py` for Python, `oauth.go` for Go, and so on) to implement OAuth token exchange logic.
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import * as z from "zod";
+import { SDK_METADATA } from "./lib/config";
+
+// TypeScript SDKs use Zod for runtime data validation. We can use Zod
+// to describe the shape of the response from the OAuth token endpoint. If the
+// response is valid, Speakeasy can safely access the token and its expiration time.
+const tokenResponseSchema = z.object({
+  access_token: z.string(),
+  expires_in: z.number().positive(),
+});
+
+// This is a rough value that adjusts when we consider an access token to be
+// expired. It accounts for clock drift between the client and server
+// and slow or unreliable networks.
+const tolerance = 5 * 60 * 1000;
+
+/**
+ * A callback function that can be used to obtain an OAuth access token for use
+ * with SDKs that require OAuth security. A new token is requested from the
+ * OAuth provider when the current token has expired.
+ */
+export function withAuthorization(
+  clientID: string,
+  clientSecret: string,
+  options: { tokenStore?: TokenStore; url?: string } = {},
+) {
+  const {
+    tokenStore = new InMemoryTokenStore(),
+    // Replace this with your default OAuth provider's access token endpoint.
+    url = "https://oauth.example.com/token",
+  } = options;
+
+  return async (): Promise<string> => {
+    const session = await tokenStore.get();
+
+    // Return the current token if it has not expired yet.
+    if (session && session.expires > Date.now()) {
+      return session.token;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          // Include the SDK's user agent in the request so requests can be
+          // tracked using observability infrastructure.
+          "user-agent": SDK_METADATA.userAgent,
+        },
+        body: new URLSearchParams({
+          client_id: clientID,
+          client_secret: clientSecret,
+          grant_type: "client_credentials",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unexpected status code: " + response.status);
+      }
+
+      const json = await response.json();
+      const data = tokenResponseSchema.parse(json);
+
+      await tokenStore.set(
+        data.access_token,
+        Date.now() + data.expires_in * 1000 - tolerance,
+      );
+
+      return data.access_token;
+    } catch (error) {
+      throw new Error("Failed to obtain OAuth token: " + error);
+    }
+  };
+}
+
+/**
+ * A TokenStore is used to save and retrieve OAuth tokens for use across SDK
+ * method calls. This interface can be implemented to store tokens in memory,
+ * a shared cache like Redis or a database table.
+ */
+export interface TokenStore {
+  get(): Promise<{ token: string; expires: number } | undefined>;
+  set(token: string, expires: number): Promise<void>;
+}
+
+/**
+ * InMemoryTokenStore holds OAuth access tokens in memory for use by SDKs and
+ * methods that require OAuth security.
+ */
+export class InMemoryTokenStore implements TokenStore {
+  private token = "";
+  private expires = Date.now();
+
+  constructor() {}
+
+  async get() {
+    return { token: this.token, expires: this.expires };
+  }
+
+  async set(token: string, expires: number) {
+    this.token = token;
+    this.expires = expires;
+  }
+}
+```
+
+```typescript !!tabs TypeScript-Axios (v1)
+import axios from "axios";
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function withAuthorization(clientID: string, clientSecret: string) {
+  return async (): Promise<{ auth: string }> => {
+    const tokenEndpoint = "https://speakeasy.bar/oauth2/token/";
+    const data = {
+      grant_type: "client_credentials",
+      client_id: clientID,
+      client_secret: clientSecret,
+    };
+    try {
+      const response = await axios.post(tokenEndpoint, data);
+      return { auth: response.data.access_token };
+    } catch (error) {
+      throw new Error("Failed to obtain OAuth token");
+    }
+  };
+}
+```
+
+```python !!tabs Python
+import requests
+from sdk.components import Security
+
+
+def with_authorization(client_id: str, client_secret: str) -> Security:
+  token_endpoint = 'https://speakeasy.bar/oauth2/token/'
+  data = {
+      'grant_type': 'client_credentials',
+      'client_id': client_id,
+      'client_secret': client_secret,
+  }
+  try:
+      response = requests.post(token_endpoint, data=data)
+      response.raise_for_status()
+      return Security(auth=response.json()['access_token'])
+  except Exception as e:
+      raise Exception(f'Failed to obtain OAuth token: {str(e)}')
+```
+
+```go !!tabs Go
+package speakeasy
+
+import (
+	"speakeasy/components"
+)
+
+func withAuthorization(clientID string, clientSecret string) func(context.Context) (components.Security, error) {
+	return func(ctx context.Context) (components.Security, error) {
+
+      // Please implement callback here
+
+      return components.Security{Auth: "<YOUR_OAUTH_TOKEN>"}, nil
+	}
+}
+```
+
+```java !!tabs Java
+import dev.speakeasyapi.speakeasy.SecuritySource;
+import dev.speakeasyapi.speakeasy.models.components.Security;
+
+
+class OAuth implements SecuritySource {
+
+    private String clientID;
+    private String clientSecret;
+
+    public OAuth(String clientID, String clientSecret) {
+        this.clientID = clientID;
+        this.clientSecret = clientSecret;
+    }
+
+    public Security getSecurity() {
+
+        // Please implement callback here
+
+        return Security.builder()
+            .auth("<YOUR_OAUTH_TOKEN>")
+            .build();
+    }
+}
+```
+
+```csharp !!tabs C#
+namespace Speakeasy.Callbacks
+{
+    using Speakeasy;
+    using Speakeasy.Models.Components;
+
+    public static class OAuth
+    {
+
+        public static Security withAuthorization(string clientID, string clientSecret)
+        {
+            // Please implement callback here
+
+            return new Security { Auth = "<YOUR_OAUTH_TOKEN>"}
+        }
+    }
+}
+```
+</CodeWithTabs>
+
+### Step 3: Pass the callback function in SDK instantiation
+
+Update the README to show how to pass the callback function when instantiating the SDK:
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+import { SDK } from "speakeasy";
+
+const sdk = new SDK({
+  security: withAuthorization("client_id", "client_secret"),
+});
+
+await s.drinks.listDrinks();
+```
+
+```python !!tabs Python
+import sdk
+
+s = sdk.SDK(security=with_authorization("<YOUR_CLIENT_ID>", "<YOUR_CLIENT_SECRET>"))
+res = s.drinks.list_drinks()
+```
+
+
+```go !!tabs Go
+import (
+	"context"
+  sdk "speakeasy"
+)
+
+s := sdk.New(
+    sdk.WithSecuritySource(withAuthorization(
+        "<YOUR_CLIENT_ID>",
+        "<YOUR_CLIENT_SECRET>",
+    )),
+)
+ctx := context.Background()
+s.Drinks.ListDrinks(ctx)
+```
+
+```java !!tabs Java
+import dev.speakeasyapi.speakeasy.OAuth;
+import dev.speakeasyapi.speakeasy.SDK;
+
+OAuth securitySource = new OAuth("<YOUR_CLIENT_ID>", "<YOUR_CLIENT_SECRET>");
+
+SDK s = SDK.builder()
+    .securitySource(securitySource)
+    .build();
+
+ListDrinksResponse res = s.Drinks.listDrinks().call();
+```
+
+```csharp !!tabs C#
+using Speakeasy;
+using Speakeasy.Callbacks;
+
+var sdk = new SDK(securitySource: OAuth.withAuthorization)
+
+var res = await sdk.Drinks.ListDrinksAsync();
+```
+
+</CodeWithTabs>
+
+## OAuth 2.0 scopes
+
+### Global security with OAuth 2.0 scopes
+
+When defining global security settings for OAuth 2.0, the SDK automatically requests the necessary scopes for all operations. This setup is useful for APIs where most endpoints share the same level of access. Global scopes are defined in the OpenAPI specification and applied to all requests unless specifically overridden.
+
+The following OpenAPI definition applies global OAuth 2.0 scopes:
+
+```yaml
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://speakeasy.bar/oauth2/token/
+          scopes:
+            read: Grants read access
+            write: Grants write access
+
+security:
+  - oauth2:
+      - read # Apply the read scope globally
+      - write # Apply the write scope globally
+```
+
+The SDK automatically generates tokens with both `read` and `write` scopes. When making a request, the SDK checks whether the token contains the required scopes for the operation. If the token lacks the necessary scopes or has expired, a new token is requested with the correct scopes.
+
+
+### Per-operation security with OAuth 2.0 scopes
+
+For more control over specific API operations, per-operation security settings can be used. This allows different scopes to be applied to individual operations, overriding the global settings.
+
+The following OpenAPI definition applies an operation-specific OAuth scope for the `listDrinks` operation:
+
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks.
+      description: Retrieves a list of drinks, requiring the `read` scope.
+      security:
+        - oauth2:
+            - read # Apply the read scope for this operation
+```
+
+In this case, the SDK requests a token with the `read` scope only when calling the `listDrinks` operation. If the token does not meet the required scope for the operation or has expired, the SDK regenerates the token with the correct scope.
+
+Here's how the SDK can be used with per-operation security:
+
+```ts
+import { SDK } from "speakeasy";
+
+const sdk = new SDK();
+
+const result = await sdk.drinks.listDrinks({
+  security: {
+    clientID: "<YOUR_CLIENT_ID_HERE>",
+    clientSecret: "<YOUR_CLIENT_SECRET_HERE>",
+  },
+});
+```

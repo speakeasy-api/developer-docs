@@ -1,0 +1,809 @@
+---
+title: "Comparison guide: OpenAPI/Swagger Go client generation"
+description: "Comparing the new Speakeasy Go SDK generator with the most popular open source OpenAPI Go generators"
+keywords: [api, openapi, swagger, sdk generation, go, golang, sdk, developer experience, devex, dx]
+---
+
+import { Table } from "@/mdx/components";
+
+# Comparison guide: OpenAPI/Swagger Go client generation
+
+Speakeasy generates idiomatic Go SDKs based on OpenAPI specifications.
+
+In this post, we'll take a look at why many of our users choose to switch from OpenAPI Generate and other open-source generators to Speakeasy to generate their Go SDKs.
+
+Open-source SDK generators play an important role in experimentation and smaller custom integrations but we believe that teams should publish high-quality SDKs for their APIs that offer the best developer experience. Usable SDKs drive adoption by making it easier for developers to switch to your API.
+
+At Speakeasy, we generate idiomatic client SDKs in a variety of languages. Our generators follow principles that ensure we generate SDKs that offer the best developer experience so that you can focus on building your API, and your developer-users can focus on delighting their users.
+
+## Go SDK generator options
+
+We'll compare four Go SDK generators:
+
+1.  The [Go generator](https://openapi-generator.tech/docs/generators/go/) from the [OpenAPI Generator](https://openapi-generator.tech/) project.
+2.  [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen), an open-source OpenAPI Client and Server Code Generator.
+3.  [ogen](https://ogen.dev/), an open-source OpenAPI v3 code generator for Go.
+4.  The [Speakeasy SDK generator](/docs/speakeasy-reference/cli/getting-started).
+
+Below is the summary of how the four evaluated generators compare. Our recommendation is to use Speakeasy for generating Go SDKs for your APIs (1st SDK free). If you are committed to using an open source generator, we strongly recommend that you use [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen)
+
+<Table 
+  data={[
+    { feature: "**Version Support**", speakeasy: "✅ Go 1.14+", openapiGenerator: "⚠️ Variable support", oapiCodegen: "✅ Good compatibility", ogen: "⚠️ Newer Go versions" },
+    { feature: "**Dependencies**", speakeasy: "✅ 3 deps", openapiGenerator: "❌ 1500+ deps, requires Java", oapiCodegen: "✅ No external deps", ogen: "✅ No external deps" },
+    { feature: "**Go Idiomaticity**", speakeasy: "✅ Native Go patterns", openapiGenerator: "❌ Non-idiomatic", oapiCodegen: "✅ Simple patterns", ogen: "⚠️ Custom patterns" },
+    { feature: "**Nil-safe Getters**", speakeasy: "✅ Built-in safety", openapiGenerator: "❌ No safety", oapiCodegen: "❌ No safety", ogen: "❌ Custom optionals" },
+    { feature: "**Union Types**", speakeasy: "✅ Full support", openapiGenerator: "❌ No support", oapiCodegen: "⚠️ Limited support", ogen: "✅ Full support" },
+    { feature: "**Enums**", speakeasy: "✅ Type-safe", openapiGenerator: "❌ Strings only", oapiCodegen: "✅ Type-safe", ogen: "✅ Type-safe" },
+    { feature: "**Complex Numbers**", speakeasy: "✅ Big decimal", openapiGenerator: "❌ Basic types", oapiCodegen: "❌ Basic types", ogen: "❌ Basic types" },
+    { feature: "**Error Handling**", speakeasy: "✅ Custom types", openapiGenerator: "⚠️ Generic errors", oapiCodegen: "⚠️ Basic errors", ogen: "✅ Good errors" },
+    { feature: "**Retries**", speakeasy: "✅ Built-in", openapiGenerator: "❌ No support", oapiCodegen: "❌ No support", ogen: "❌ No support" },
+    { feature: "**Pagination**", speakeasy: "✅ Built-in", openapiGenerator: "⚠️ Manual only", oapiCodegen: "⚠️ Manual only", ogen: "⚠️ Manual only" },
+    { feature: "**Documentation**", speakeasy: "✅ Complete docs", openapiGenerator: "⚠️ Basic docs", oapiCodegen: "❌ Minimal docs", ogen: "⚠️ Basic docs" },
+    { feature: "**CI/CD Integration**", speakeasy: "✅ GitHub Actions", openapiGenerator: "❌ Manual only", oapiCodegen: "❌ Manual only", ogen: "❌ Manual only" }
+  ]}
+  columns={[
+    { key: "feature", header: "Feature" },
+    { key: "speakeasy", header: "Speakeasy" },
+    { key: "openapiGenerator", header: "OpenAPI Generator" },
+    { key: "oapiCodegen", header: "oapi-codegen" },
+    { key: "ogen", header: "ogen" }
+  ]}
+/>
+
+If you want the detailed technical breakdown, full of code comparisons, read on!
+
+## Installing SDK generators
+
+To start our comparison, we installed all four generators on a local machine running macOS.
+
+### Installing the OpenAPI Generator CLI
+
+OpenAPI Generator depends on Java, [which we covered at length previously](/post/speakeasy-oss-python-generator#our-experience-installing-the-openapi-generator-cli). We concluded that managing the OpenAPI Generator Java dependencies manually just wasn't worth the effort.
+
+Installing `openapi-generator` using Homebrew installs `openjdk@11` and its many dependencies:
+
+```bash
+brew install openapi-generator
+```
+
+This adds the `openapi-generator` CLI to our path.
+
+### Installing oapi-codegen
+
+We install oapi-codegen using the Go package manager:
+
+```bash
+go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest
+```
+
+This command installs the oapi-codegen Go module and [its dependencies](https://github.com/deepmap/oapi-codegen/blob/master/go.mod).
+
+### Installing ogen
+
+We followed the [ogen quick start](https://ogen.dev/docs/intro) to install ogen:
+
+```bash
+go install -v github.com/ogen-go/ogen/cmd/ogen@latest
+```
+
+This installs the ogen Go module with [its dependencies](https://github.com/ogen-go/ogen/blob/main/go.mod).
+
+### How to install the Speakeasy CLI
+
+To install the Speakeasy CLI, follow the steps in the [Speakeasy Getting Started](/docs/speakeasy-reference/cli/getting-started) guide.
+
+In the terminal, run:
+
+```bash
+brew install speakeasy-api/homebrew-tap/speakeasy
+```
+
+Next, authenticate with Speakeasy by running the following:
+
+```bash
+speakeasy auth login
+```
+
+This installs the Speakeasy CLI as a single binary without any dependencies.
+
+## Downloading the Swagger Petstore specification
+
+Before we run our generators, we'll need an OpenAPI specification to generate a Go SDK for. The standard specification for testing OpenAPI SDK generators and Swagger UI generators is the [Swagger Petstore](https://petstore3.swagger.io/).
+
+We'll download the YAML specification at [https://petstore3.swagger.io/api/v3/openapi.yaml](https://petstore3.swagger.io/api/v3/openapi.yaml) to our working directory and name it `petstore.yaml`:
+
+```bash
+curl https://petstore3.swagger.io/api/v3/openapi.yaml --output petstore.yaml
+```
+
+## Validating the Spec
+
+Both the OpenAPI Generator and Speakeasy CLI can validate an OpenAPI spec. We'll run both and compare the output.
+
+### Validation using OpenAPI Generator
+
+To validate `petstore.yaml` using OpenAPI Generator, run the following in the terminal:
+
+```bash
+openapi-generator validate -i petstore.yaml
+```
+
+The OpenAPI Generator returns two warnings:
+
+```
+Warnings:
+	- Unused model: Address
+	- Unused model: Customer
+
+[info] Spec has 2 recommendation(s).
+```
+
+### Validation using Speakeasy
+
+We'll validate the spec with Speakeasy by running the following in the terminal:
+
+```bash
+speakeasy validate openapi -s petstore.yaml
+```
+
+The Speakeasy validator returns ten warnings, seven hints that some methods don't specify any return values and three unused components. Each warning includes a detailed JSON-formatted error with line numbers.
+
+Since both validators validated the spec with only warnings, we can assume that both will generate SDKs without issues.
+
+## Generating an SDK
+
+Now that we know our OpenAPI spec is valid, we can start generating SDKs.
+
+We'll generate each SDK in a unique subdirectory, relative to where we saved the `petstore.yaml` spec file.
+
+### OpenAPI generate
+
+OpenAPI Generator features SDK generators for multiple languages, often with multiple options per language. We'll test the Go generator in this post.
+
+We'll generate an SDK by running the following in the terminal:
+
+```bash
+# Generate Petstore SDK using go generator
+openapi-generator generate \
+  --input-spec petstore.yaml \
+  --generator-name go \
+  --output ./petstore-sdk-go-openapi
+```
+
+This command will print a list of files generated and populate the new `petstore-sdk-go-openapi` directory.
+
+### Generating an SDK using oapi-codegen
+
+Before we generate an SDK using oapi-codegen, we'll need to create a new directory for this SDK.
+
+Run the following in the terminal:
+
+```bash
+mkdir petstore-sdk-go-oapi-codegen && cd petstore-sdk-go-oapi-codegen
+```
+
+Create a Go module in the new directory:
+
+```bash
+go mod init petstore-sdk-go-oapi-codegen
+```
+
+Then run the oapi-codegen Go module:
+
+```bash
+go run github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest -package petstore ../petstore.yaml > petstore.gen.go
+```
+
+### Generating an SDK using ogen
+
+We followed the ogen quick start documentation.
+
+Create a new directory for our ogen SDK and navigate to it in the terminal:
+
+```bash
+mkdir petstore-sdk-go-ogen && cd petstore-sdk-go-ogen
+```
+
+Create a new Go module in this directory:
+
+```bash
+go mod init petstore-sdk-go-ogen
+```
+
+Copy the `petstore.yaml` spec into this directory:
+
+```bash
+cp ../petstore.yaml .
+```
+
+Create a new file called `generate.go` with the following contents:
+
+```go
+package project
+
+//go:generate go run github.com/ogen-go/ogen/cmd/ogen@latest --target petstore --clean --no-server petstore.yaml
+```
+
+Then run the following from our new directory:
+
+```bash
+go generate ./...
+```
+
+In our testing, this resulted in a stack trace and returned an error status:
+
+```
+INFO	convenient	Convenient errors are not available	{"reason": "operation has no \"default\" response", "at": "petstore.yaml:59:9"}
+generate:
+    main.run
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/cmd/ogen/main.go:304
+  - build IR:
+    main.generate
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/cmd/ogen/main.go:64
+  - make ir:
+    github.com/ogen-go/ogen/gen.NewGenerator
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/generator.go:112
+  - operations:
+    github.com/ogen-go/ogen/gen.(*Generator).makeIR
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/generator.go:130
+  - path "/pet": put:
+    github.com/ogen-go/ogen/gen.(*Generator).makeOps
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/generator.go:171
+  - requestBody:
+    github.com/ogen-go/ogen/gen.(*Generator).generateOperation
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/gen_operation.go:49
+  - contents:
+    github.com/ogen-go/ogen/gen.(*Generator).generateRequest
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/gen_request_body.go:27
+  - media: "application/x-www-form-urlencoded":
+    github.com/ogen-go/ogen/gen.(*Generator).generateContents
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/gen_contents.go:330
+  - form parameter "tags":
+    github.com/ogen-go/ogen/gen.(*Generator).generateFormContent
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/gen_contents.go:206
+  - nested objects not allowed:
+    github.com/ogen-go/ogen/gen.isParamAllowed
+        /Users/ritza/go/pkg/mod/github.com/ogen-go/ogen@v0.69.1/gen/gen_parameters.go:184
+exit status 1
+generate.go:3: running "go": exit status 1
+```
+
+The function `isParamAllowed` in `gen/gen_parameters.go` on line 184 throws the error that nested objects are not allowed in form parameters. This seems to indicate that ogen does not yet support generating an SDK for a form request that takes nested objects as parameters, such as a pet's tags, when updating a pet in our schema.
+
+The ogen documentation references a spec to download, so we'll replace `petstore.yaml` with their spec by running the following:
+
+```bash
+curl https://raw.githubusercontent.com/ogen-go/web/main/examples/petstore.yml --output petstore.yaml
+```
+
+With this new simplified spec, we'll try the generator again:
+
+```bash
+go generate ./...
+```
+
+The generator runs without errors and prints a log line:
+
+```
+INFO	convenient	Convenient errors are not available	{"reason": "operation has no \"default\" response", "at": "petstore.yaml:19:9"}
+```
+
+This log line seems to indicate that some operations don't return a default response.
+
+### Speakeasy generate
+
+Finally, we'll generate an SDK using the Speakeasy CLI.
+
+```bash
+# Generate Petstore SDK using Speakeasy go generator
+speakeasy generate sdk \
+    --schema petstore.yaml \
+    --lang go \
+    --out ./petstore-sdk-go-speakeasy/
+```
+
+This command prints a log of warnings and information, then completes successfully.
+
+## SDK code compared: Package structure
+
+We now have four different Go SDKs for the Petstore API:
+
+* `./petstore-sdk-go-openapi/`, generated by OpenAPI Generator.
+* `./petstore-sdk-go-oapi-codegen/`, generated by oapi-codegen.
+* `./petstore-sdk-go-ogen/`, generated by ogen.
+* `./petstore-sdk-go-speakeasy/`, generated by Speakeasy.
+
+We'll start our comparison by looking at the structure of each generated SDK.
+
+Let's print a tree structure for each SDK's directory. Run `tree` in the terminal from our root directory:
+
+```bash
+tree -L 3 -F petstore-sdk-go-*
+```
+
+We'll split the output by directory for each SDK below.
+
+### OpenAPI Generator SDK structure
+
+```bash
+petstore-sdk-go-openapi/
+├── README.md
+├── api/
+│   └── openapi.yaml
+├── api_pet.go
+├── api_store.go
+├── api_user.go
+├── client.go
+├── configuration.go
+├── docs/
+│   ├── Address.md
+│   ├── APIResponse.md
+│   ├── Category.md
+│   ├── Customer.md
+│   ├── Order.md
+│   ├── Pet.md
+│   ├── PetApi.md
+│   ├── StoreApi.md
+│   ├── Tag.md
+│   ├── User.md
+│   └── UserApi.md
+├── git_push.sh
+├── go.mod
+├── go.sum
+├── model_address.go
+├── model_api_response.go
+├── model_category.go
+├── model_customer.go
+├── model_order.go
+├── model_pet.go
+├── model_tag.go
+├── model_user.go
+├── response.go
+├── test/
+│   ├── api_pet_test.go
+│   ├── api_store_test.go
+│   └── api_user_test.go
+└── utils.go
+
+OpenAPI Generator creates a relatively flat directory structure, with dedicated directories only for a copy of the spec (`api/openapi.yaml`), documentation (`docs/`), and tests (`test/`).
+
+### oapi-codegen SDK structure
+
+```bash
+petstore-sdk-go-oapi-codegen/
+├── go.mod
+└── petstore.gen.go
+```
+
+oapi-codegen creates only one file for all generated code, with no tests or documentation outside this file. This generator appears to be better suited to generating a small and specific client or server as part of a larger project, rather than generating a usable SDK that can be packaged for users.
+
+### ogen SDK structure
+
+```bash
+petstore-sdk-go-ogen/
+├── generate.go
+├── go.mod
+├── petstore/
+│   ├── oas_cfg_gen.go
+│   ├── oas_client_gen.go
+│   ├── oas_interfaces_gen.go
+│   ├── oas_json_gen.go
+│   ├── oas_parameters_gen.go
+│   ├── oas_request_encoders_gen.go
+│   ├── oas_response_decoders_gen.go
+│   ├── oas_schemas_gen.go
+│   └── oas_validators_gen.go
+└── petstore.yaml
+```
+
+ogen also generates relatively few files, which does not seem to be because this generation was based on a simpler spec. This generator does not seem to split schemas into different files and does not create any tests or documentation.
+
+### Speakeasy SDK structure
+
+```bash
+petstore-sdk-go-speakeasy/
+├── README.md*
+├── USAGE.md*
+├── docs/
+│   ├── models/
+│   │   ├── operations/
+│   │   └── shared/
+│   └── sdks/
+│       ├── pet/
+│       ├── sdk/
+│       ├── store/
+│       └── user/
+├── files.gen*
+├── gen.yaml*
+├── go.mod*
+├── go.sum*
+├── pet.go*
+├── pkg/
+│   ├── models/
+│   │   ├── operations/
+│   │   └── shared/
+│   ├── types/
+│   │   ├── bigint.go*
+│   │   ├── date.go*
+│   │   └── datetime.go*
+│   └── utils/
+│       ├── contenttype.go*
+│       ├── form.go*
+│       ├── headers.go*
+│       ├── pathparams.go*
+│       ├── queryparams.go*
+│       ├── requestbody.go*
+│       ├── retries.go*
+│       ├── security.go*
+│       └── utils.go*
+├── sdk.go*
+├── store.go*
+└── user.go*
+```
+
+Speakeasy generates a clear file structure, split into directories for models, types, and other utils. It also creates documentation, split by models and endpoints.
+
+## Models
+
+Let's compare how a pet is represented in each of the four SDKs:
+
+### OpenAPI Generator pet model
+
+```go
+// OpenAPI Generator pet model
+type Pet struct {
+	Id *int64 `json:"id,omitempty"`
+	Name string `json:"name"`
+	Category *Category `json:"category,omitempty"`
+	PhotoUrls []string `json:"photoUrls"`
+	Tags []Tag `json:"tags,omitempty"`
+	// pet status in the store
+	Status *string `json:"status,omitempty"`
+}
+```
+
+OpenAPI Generator does not seem to take the spec's enum for pet status when generating the pet model. Status in this model is a pointer to a string, while other generators create a type to validate the status field. This model includes struct tags for JSON only.
+
+### oapi-codegen pet model
+
+```go
+// oapi-codegen pet model
+type Pet struct {
+	Category  *Category `json:"category,omitempty"`
+	Id        *int64    `json:"id,omitempty"`
+	Name      string    `json:"name"`
+	PhotoUrls []string  `json:"photoUrls"`
+	Status *PetStatus `json:"status,omitempty"`
+	Tags   *[]Tag     `json:"tags,omitempty"`
+}
+```
+
+The oapi-codegen pet model is similar to the OpenAPI Generator version, but it makes the `Tags` field a pointer to a slice of `Tag`, making it possible for this field to be `nil` (which would be omitted from the JSON due to `omitempty`).
+
+The `Status` field is not a simple string pointer, but a pointer to `PetStatus`, which provides better type safety, since `PetStatus` is a type alias for `string` with specific allowable values.
+
+### ogen pet model
+
+```go
+// ogen pet model
+type Pet struct {
+	ID        OptInt64     `json:"id"`
+	Name      string       `json:"name"`
+	PhotoUrls []string     `json:"photoUrls"`
+	Status    OptPetStatus `json:"status"`
+}
+```
+
+The pet model generated by ogen lacks the `Tags` and `Category` fields because these fields are not present in the simplified spec used.
+
+This struct uses a different approach to optional fields. It uses `OptInt64` and `OptPetStatus` types. We'll look at how ogen differs from Speakeasy in terms of nullable fields below.
+
+### Speakeasy pet model
+
+```go
+// Speakeasy pet model
+type Pet struct {
+	Category  *Category `json:"category,omitempty" form:"name=category,json"`
+	ID        *int64    `json:"id,omitempty" form:"name=id"`
+	Name      string    `json:"name" form:"name=name"`
+	PhotoUrls []string  `json:"photoUrls" form:"name=photoUrls"`
+	// pet status in the store
+	Status *PetStatus `json:"status,omitempty" form:"name=status"`
+	Tags   []Tag      `json:"tags,omitempty" form:"name=tags,json"`
+}
+```
+
+This struct is similar to the OpenAPI Generator version but includes additional `form` struct tags, which are likely used to specify how these fields should be encoded and decoded when used in form data (such as in an HTTP POST request).
+
+Like the oapi-codegen version, `Status` is a `*PetStatus` rather than a `*string`.
+
+## Nullable fields
+
+Let's focus on the difference between how ogen and Speakeasy handle the nullable `Status` field.
+
+Here's the relevant code generated by ogen:
+
+```go
+type PetStatus string
+
+const (
+	PetStatusAvailable PetStatus = "available"
+	PetStatusPending   PetStatus = "pending"
+	PetStatusSold      PetStatus = "sold"
+)
+
+// OptPetStatus is optional PetStatus.
+type OptPetStatus struct {
+	Value PetStatus
+	Set   bool
+}
+```
+
+While much safer than the OpenAPI Generator's pointer to a string type, the ogen `OptPetStatus` is not idiomatic and provides no benefit over using pointers, as Speakeasy does:
+
+```go
+type PetStatus string
+
+const (
+	PetStatusAvailable PetStatus = "available"
+	PetStatusPending   PetStatus = "pending"
+	PetStatusSold      PetStatus = "sold"
+)
+
+func (e PetStatus) ToPointer() *PetStatus {
+	return &e
+}
+```
+
+The Speakeasy approach provides the same strong typing as the ogen version. It defines `PetStatus` as a custom string type and defines allowable values as constants. This practice ensures that you can't accidentally set a `PetStatus` to an invalid value.
+
+The way Speakeasy handles the `PetStatus` type is more idiomatic to Go, which generally favors simplicity and readability. Instead of defining a new struct like `OptPetStatus`, Speakeasy uses a built-in language feature (pointers) to achieve the same effect. This approach is simpler, more consistent with the rest of the language, and easier to understand and use.
+
+## SDK dependencies
+
+The ogen and oapi-codegen SDKs don't add any dependencies to the generated modules, so we'll compare dependencies between OpenAPI Generator and Speakeasy SDKs.
+
+We'll run the following for each of these two SDKs:
+
+```bash
+go mod graph
+```
+
+For Speakeasy, this command prints the following:
+
+```
+openapi github.com/cenkalti/backoff/v4@v4.2.0
+openapi github.com/spyzhov/ajson@v0.8.0
+```
+
+The output for the OpenAPI Generator version is too long to show here, so we'll do a count instead:
+
+```bash
+go mod graph | wc -l
+#> 1538
+```
+
+Speakeasy purposefully generates SDKs with fewer dependencies, which leads to faster installs, reduced build times, and less exposure to potential security vulnerabilities.
+
+To see why the Speakeasy SDK depends on an exponential backoff module, let's discuss retries.
+
+## Retries
+
+The SDK generated by Speakeasy can automatically retry failed network requests or retry requests based on specific error responses, providing a straightforward developer experience for error handling.
+
+To enable this feature, we need to use the Speakeasy `x-speakeasy-retries` extension to the OpenAPI spec. We'll update the OpenAPI spec to add retries to the `addPet` operation as a test.
+
+Edit `petstore.yaml` and add the following to the `addPet` operation:
+
+```yaml
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500        # 500 milliseconds
+          maxInterval: 60000          # 60 seconds
+          maxElapsedTime: 3600000     # 5 minutes
+          exponent: 1.5
+```
+
+Add this snippet to the operation:
+
+```yaml
+#...
+paths:
+  /pet:
+    # ...
+    post:
+      #...
+      operationId: addPet
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500        # 500 milliseconds
+          maxInterval: 60000          # 60 seconds
+          maxElapsedTime: 3600000     # 5 minutes
+          exponent: 1.5
+```
+
+Now we'll rerun the Speakeasy generator to enable retries for failed network requests when creating a new pet. It is also possible to enable retries for the SDK as a whole by adding global `x-speakeasy-retries` at the root of the OpenAPI spec.
+
+## Generated documentation
+
+Both Speakeasy and OpenAPI generate documentation for the generated code.
+
+Each generator creates a `README.md` file at the base directory of the generated SDK. This file serves as a primary source of documentation for the SDK users. You have the option to [customize this README](/docs/customize-sdks/sdk-docs) using Speakeasy to suit your needs better. For example, you could add your brand's logo, provide links for support, outline a code of conduct, or include any other information that could be useful to the developers using the SDK.
+
+The Speakeasy-generated documentation really shines when it comes to usage examples, which include working usage examples for all operations, complete with imports and appropriately formatted string examples. For instance, if a string is formatted as `email` in our OpenAPI spec, Speakeasy generates usage examples with strings that look like email addresses. Types formatted as `uri` will generate examples that look like URLs. This makes example code clear and scannable.
+
+We'll test this by adding `format: uri` to the items in the `photoUrls` array. Let's compare the generated example code for the `addPet` endpoint after adding this string format.
+
+### Usage example generated by OpenAPI
+
+Here's the example from the OpenAPI-generated documentation:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "github.com/GIT_USER_ID/GIT_REPO_ID"
+)
+
+func main() {
+    pet := *openapiclient.NewPet("doggie", []string{"PhotoUrls_example"}) // Pet | Create a new pet in the store
+
+    configuration := openapiclient.NewConfiguration()
+    apiClient := openapiclient.NewAPIClient(configuration)
+    resp, r, err := apiClient.PetApi.AddPet(context.Background()).Pet(pet).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `PetApi.AddPet``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `AddPet`: Pet
+    fmt.Fprintf(os.Stdout, "Response from `PetApi.AddPet`: %v\n", resp)
+}
+```
+
+Note how the OpenAPI example only includes required fields and ignores the URI string format from our spec.
+
+### Usage example generated by Speakeasy
+
+This is what Speakeasy generates as a usage example:
+
+```go
+package main
+
+import(
+	"context"
+	"log"
+	"openapi"
+	"openapi/pkg/models/shared"
+	"openapi/pkg/models/operations"
+)
+
+func main() {
+    s := sdk.New()
+
+    ctx := context.Background()
+    res, err := s.Pet.AddPetJSON(ctx, shared.Pet{
+        Category: &shared.Category{
+            ID: sdk.Int64(1),
+            Name: sdk.String("Dogs"),
+        },
+        ID: sdk.Int64(10),
+        Name: "doggie",
+        PhotoUrls: []string{
+            "https://ecstatic-original.info",
+        },
+        Status: shared.PetStatusSold.ToPointer(),
+        Tags: []shared.Tag{
+            shared.Tag{
+                ID: sdk.Int64(681820),
+                Name: sdk.String("Stacy Moore"),
+            },
+            shared.Tag{
+                ID: sdk.Int64(697631),
+                Name: sdk.String("Brenda Wisozk"),
+            },
+            shared.Tag{
+                ID: sdk.Int64(670638),
+                Name: sdk.String("Connie Herzog"),
+            },
+            shared.Tag{
+                ID: sdk.Int64(315428),
+                Name: sdk.String("Corey Hane III"),
+            },
+        },
+    }, operations.AddPetJSONSecurity{
+        PetstoreAuth: "",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    if res.Pet != nil {
+        // handle response
+    }
+}
+```
+
+The example generated by Speakeasy includes all available fields and correctly formats the example string in the `PhotoUrls` field.
+
+We'll also compare how OpenAPI and Speakeasy generate documentation for the `Status` field in our pet model.
+
+### OpenAPI generate does not document enums
+
+The OpenAPI-generated documentation reflects the generated code's omission of valid options for the `Status` field. Here's the pet model documentation generated by OpenAPI:
+
+#### Pet properties generated by OpenAPI
+
+<Table 
+  data={[
+    { name: "**Id**", type: "Pointer to **int64**", description: "", notes: "[optional]" },
+    { name: "**Name**", type: "**string**", description: "", notes: "" },
+    { name: "**Category**", type: "Pointer to **Category**", description: "", notes: "[optional]" },
+    { name: "**PhotoUrls**", type: "**[]string**", description: "", notes: "" },
+    { name: "**Tags**", type: "Pointer to **[]Tag**", description: "", notes: "[optional]" },
+    { name: "**Status**", type: "Pointer to **string**", description: "pet status in the store", notes: "[optional]" }
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "type", header: "Type" },
+    { key: "description", header: "Description" },
+    { key: "notes", header: "Notes" }
+  ]}
+/>
+
+### Speakeasy generates documentation showing valid values
+
+Here's how Speakeasy documents the pet model:
+
+#### Pet fields generated by Speakeasy
+
+<Table 
+  data={[
+    { field: "`Category`", type: "*Category", required: ":heavy_minus_sign:", description: "N/A", example: "" },
+    { field: "`ID`", type: "**int64*", required: ":heavy_minus_sign:", description: "N/A", example: "10" },
+    { field: "`Name`", type: "*string*", required: ":heavy_check_mark:", description: "N/A", example: "doggie" },
+    { field: "`PhotoUrls`", type: "[]*string*", required: ":heavy_check_mark:", description: "N/A", example: "" },
+    { field: "`Status`", type: "*PetStatus", required: ":heavy_minus_sign:", description: "pet status in the store", example: "" },
+    { field: "`Tags`", type: "[]Tag", required: ":heavy_minus_sign:", description: "N/A", example: "" }
+  ]}
+  columns={[
+    { key: "field", header: "Field" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" },
+    { key: "example", header: "Example" }
+  ]}
+/>
+
+In the example above, `PetStatus` links to the following documentation:
+
+#### PetStatus values generated by Speakeasy
+
+<Table 
+  data={[
+    { name: "`PetStatusAvailable`", value: "available" },
+    { name: "`PetStatusPending`", value: "pending" },
+    { name: "`PetStatusSold`", value: "sold" }
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "value", header: "Value" }
+  ]}
+/>
+
+## Automation
+
+This comparison focuses on the installation and usage of command line generators, but the Speakeasy generator can also run as part of a CI workflow, for instance as a [GitHub Action](https://github.com/speakeasy-api/sdk-generation-action), to make sure your SDK is always up to date when your API spec changes.
+
+## Summary
+
+We've seen how Speakeasy generates lightweight, idiomatic SDKs for Go.
+
+If you're building an API that developers rely on and would like to publish full-featured Go SDKs that follow best practices, we strongly recommend giving the [Speakeasy SDK generator](/docs/speakeasy-reference/cli/getting-started) a try.
+
+[Join our Slack community](https://join.slack.com/t/speakeasy-dev/shared_invite/zt-1cwb3flxz-lS5SyZxAsF_3NOq5xc8Cjw) to let us know how we can improve our Go SDK generator or to suggest features.

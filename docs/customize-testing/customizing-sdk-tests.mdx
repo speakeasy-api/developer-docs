@@ -1,0 +1,83 @@
+---
+title: "Customizing SDK Tests"
+description: "Learn how to customize SDK tests after they are boostrapped."
+---
+
+# Customizing SDK Tests
+
+## Regenerate tests from scratch
+
+By default tests will only be populated from modifications to the `tests.arazzo.yaml` file once they have been boostrapped.
+If you would like to regenerate all of your SDK tests from scratch, you can run the following command:
+
+```bash
+speakeasy configure tests --rebuild
+```
+
+
+## Disable auto generation of tests for specific operations
+
+When `generateNewTests` is enabled in the `.speakeasy/gen.yaml` file, all new operations found on the next generation after they are added will automatically have workflows created for then in the `.speakeasy/tests.arazzo.yaml` file and therefore tests will be generated for them.
+
+To disable auto generation of tests for specific operations, the `x-speakeasy-test` extension can be added to the operation in the OpenAPI document.
+
+```yaml
+openapi: 3.1.0
+# ...
+paths:
+  /example1:
+    get:
+      x-speakeasy-test: false # Disables auto generation of tests for this operation
+      # ...
+# ...
+```
+
+alternatively if a workflow/test already exists that references the operation in the `.speakeasy/tests.arazzo.yaml` file, then no new workflow will be created for the operation.
+
+
+## Grouping tests
+
+By default, all tests will be generated into a single file related to the main SDK class for example `sdk.test.ts` , `test_sdk.py`, or `SDKTest.java`. This can be configured by adding a `x-speakeasy-test-group` extension to the workflow which will determine which tests will be grouped together in seperate test files.
+
+```yaml
+arazzo: 1.0.0
+# ...
+workflows:
+  - workflowId: some-test
+    x-speakeasy-test-group: user # All tests in the user group will end up in the `user.test.ts`/`test_user.py`/`user_test.go` files
+    # ...
+```
+
+
+## Generate tests only for specific targets
+
+By default, all tests will be generated for all supported targets. Using the `x-speakeasy-test-targets` or `x-speakeasy-test-targets-exclude` extensions, it is possible to generate tests only for specific targets. This may be useful if tests are either not needed for certain languages or they may be failing in a certain language.
+
+```yaml
+arazzo: 1.0.0
+# ...
+workflows:
+  - workflowId: some-test
+    x-speakeasy-test-targets: # Only generate tests for the typescript target
+      - typescript
+    # ...
+```
+or
+```yaml
+arazzo: 1.0.0
+# ...
+workflows:
+  - workflowId: some-test
+    x-speakeasy-test-targets-exclude: # generate tests for all languages except typescript
+      - typescript
+    # ...
+```
+
+## Customizing SDK Test Manifests
+
+Directly modifying SDK tests is not common, but you can customize the actual content of an existing SDK test by modifying the `.speakeasy/tests.arazzo.yaml` file.
+To learn more about these kinds of modifications see [here](/docs/api-contract-tests#writing-custom-end-to-end-tests).
+
+## Next Steps
+
+- [Setup testing in GitHub Actions](/docs/customize-testing/github-actions)

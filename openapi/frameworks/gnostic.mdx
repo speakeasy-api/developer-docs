@@ -1,0 +1,619 @@
+---
+title: How To Generate an OpenAPI Spec With Gnostic
+description: "Take an OpenAPI document and end with a fully functional gRPC server. Create a RESTful gateway to the gRPC server and generate SDKs in multiple languages."
+---
+
+
+# How to generate an OpenAPI/Swagger spec with Gnostic
+
+In this tutorial, we'll start with an OpenAPI document and end with a fully functional gRPC server. We'll also create a RESTful gateway to the gRPC server, and create SDKs in multiple languages.
+
+You might rightfully ask why we would want to do all of this, and there's no better way to illustrate a need than by starting with a real example that is entirely plausible and definitely not made up.
+
+Picture this: You're tasked with setting up an underground bar in the far reaches of the galaxy. Interstellar travelers from far and wide look forward to drinks they've never even dreamt of.
+
+Because this is the far future and, obviously, everyone is still using gRPC, we better set up a gRPC server that can handle billions of requests from light years away. gRPC helps us keep throughput high and latency low—both essential elements of an interstellar API. However, even civilizations that have mastered the Dyson Sphere know better than to use gRPC in the browser and other clients. So we'll need to create an HTTP server to complement our gRPC server. Our users will need SDKs to query our endpoints.
+
+There's no AI in the Laniakea Supercluster of galaxies who'd be willing to code all of this token by token, so let's help them generate as much of this as possible.
+
+We're working with enough acronyms to make our heads spin faster than the neutron star and the space jokes aren't helping.
+
+Let's break this down step by step and park the science fiction for the moment. Here's what we'll do:
+
+1. Create an OpenAPI document describing our API.
+2. Set up a development environment using Docker and dev containers.
+3. Install a handful of dependencies.
+4. Use Gnostic to generate a binary protocol buffer description of our API.
+5. Use the Gnostic gRPC plugin to generate an annotated protocol buffer description of our API.
+6. Transcode that description to create a gRPC API.
+7. Create our server logic as a Go package.
+8. Generate a gRPC gateway to handle HTTP requests and pass these to our server.
+9. Use Speakeasy to create SDKs in Python and TypeScript.
+10. And finally, test all of this by requesting some spectacular drinks.
+
+## Example gRPC and REST API Server Repository
+
+The source code for our complete example is available in the [**Speakeasy gRPC and REST example repository**](https://github.com/speakeasy-api/grpc-rest-service).
+
+This repository already contains all the generated code we'll cover in this tutorial. You can clone it and follow along with the tutorial, or use it as a reference to build your own gRPC and REST API server.
+
+## Creating an OpenAPI Document to Describe an API
+
+As a start, and for the sake of shipping our server, we'll create an API with only two endpoints.
+
+The first endpoint is `createDrink`: Create a new drink based on the provided ingredients and return the drink's name, description, recipe, and possibly a photo.
+
+Our second endpoint is `getDrink`: Create a new drink based only on the drink's name. Return a list of ingredients with quantities, a recipe, and a photo.
+
+## Creating the OpenAPI Document
+
+Let's take a detailed tour of our API by exploring `bar.yaml`.
+
+### OpenAPI Version
+
+We'll start by creating an OpenAPI 3.0.0 document. Gnostic, unfortunately, only supports OpenAPI 3.0.0, so we'll have to make sure our document is compliant.
+
+```yaml bar.yaml
+openapi: 3.0.0
+```
+
+### API Information
+
+Next, we'll create an info object that describes our API:
+
+```yaml bar.yaml
+info:
+  title: Intergalactic Bar API
+  version: 1.0.0
+  description: "An API for a cosmic bar that serves drinks from across the galaxy."
+```
+
+### Server Configuration
+
+Now let's define the servers where our API will be hosted:
+
+```yaml bar.yaml
+servers:
+  - url: http://localhost:8080
+    description: Local server
+```
+
+### Endpoints
+
+Let's define the endpoints for our API:
+
+#### Create Drink Endpoint
+
+The `/create-drink` endpoint accepts a POST request with the ingredients:
+
+```yaml bar.yaml
+paths:
+  /create-drink:
+    post:
+      summary: Create a new drink based on ingredients
+      operationId: createDrink
+      description: "Supply a list of ingredients and get back a new drink recipe."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngredientsRequest'
+```
+
+The endpoint returns a drink response:
+
+```yaml bar.yaml
+      responses:
+        200:
+          description: "Successfully created a new drink"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponse'
+        400:
+          description: "Invalid request"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+```
+
+#### Get Drink Endpoint
+
+The `/get-drink` endpoint accepts a POST request with the drink name:
+
+```yaml bar.yaml
+  /get-drink:
+    post:
+      summary: Get a drink recipe by name
+      operationId: getDrink
+      description: "Supply a drink name and get back its recipe."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DrinkNameRequest'
+```
+
+The endpoint returns a drink recipe:
+
+```yaml bar.yaml
+      responses:
+        200:
+          description: "Successfully retrieved the drink recipe"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkRecipeResponse'
+        400:
+          description: "Invalid request"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+        404:
+          description: "Drink not found"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+```
+
+### Component Schemas
+
+Let's define the schemas for our components:
+
+#### Ingredients Request
+
+```yaml bar.yaml
+components:
+  schemas:
+    IngredientsRequest:
+      type: object
+      description: "A request to create a new drink based on a list of ingredients."
+      required:
+        - ingredients_request
+      properties:
+        ingredients_request:
+          type: object
+          required:
+            - ingredients
+          properties:
+            ingredients:
+              type: array
+              items:
+                type: string
+              description: "A list of ingredients to include in the drink."
+```
+
+#### Drink Response
+
+```yaml bar.yaml
+    DrinkResponse:
+      type: object
+      description: "A response containing a new drink recipe."
+      required:
+        - name
+        - description
+        - recipe
+      properties:
+        name:
+          type: string
+          description: "The name of the drink."
+        description:
+          type: string
+          description: "A description of the drink."
+        recipe:
+          type: string
+          description: "Instructions on how to make the drink."
+        photo:
+          type: string
+          description: "A URL to a photo of the drink."
+```
+
+#### Drink Name Request
+
+```yaml bar.yaml
+    DrinkNameRequest:
+      type: object
+      description: "A request to get a drink recipe by name."
+      required:
+        - drink_name_request
+      properties:
+        drink_name_request:
+          type: object
+          required:
+            - name
+          properties:
+            name:
+              type: string
+              description: "The name of the drink."
+```
+
+#### Drink Recipe Response
+
+```yaml bar.yaml
+    DrinkRecipeResponse:
+      type: object
+      description: "A response containing a drink recipe."
+      required:
+        - ingredients
+        - recipe
+      properties:
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngredientQuantity'
+          description: "A list of ingredients with quantities."
+        recipe:
+          type: string
+          description: "Instructions on how to make the drink."
+        photo:
+          type: string
+          description: "A URL to a photo of the drink."
+```
+
+#### Ingredient Quantity
+
+```yaml bar.yaml
+    IngredientQuantity:
+      type: object
+      description: "An ingredient with a quantity."
+      required:
+        - name
+        - quantity
+      properties:
+        name:
+          type: string
+          description: "The name of the ingredient."
+        quantity:
+          type: string
+          description: "The quantity of the ingredient."
+```
+
+#### Error
+
+```yaml bar.yaml
+    error:
+      type: object
+      description: "An error response."
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: "The error code."
+        message:
+          type: string
+          description: "The error message."
+```
+
+## Setting Up the Development Environment
+
+Here, we'll take an opinionated approach to setting up a development environment. We'll use Docker and dev containers in VS Code to ensure that everyone has the same environment and avoid any issues with dependencies.
+
+We'll start by creating a `Dockerfile` in the `.devcontainer` directory. Our development container is based on `mcr.microsoft.com/devcontainers/go` from the Microsoft Dev Container Images repository:
+
+```docker Dockerfile
+FROM mcr.microsoft.com/devcontainers/go:1.22-bookworm
+
+RUN curl -o- https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | bash
+
+RUN go install github.com/google/gnostic@v0.7.0 && \
+    go install github.com/google/gnostic-grpc@latest && \
+    go install github.com/protocolbuffers/protobuf-go/cmd/protoc-gen-go@v1.32.0 && \
+    go install github.com/bufbuild/buf/cmd/buf@v1.30.0 && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0 && \
+    go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest && \
+    go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.18.0
+
+COPY . /app
+WORKDIR /app
+
+RUN go mod tidy
+
+EXPOSE 50051
+
+CMD ["go", "run", "main.go"]
+```
+
+In this Dockerfile:
+
+1. We install Speakeasy using the `install.sh` script from the Speakeasy repository
+2. We install all necessary tools:
+   - Gnostic
+   - Gnostic gRPC plugin
+   - Go protocol buffer compiler
+   - Buf
+   - gRPC Go plugin
+   - gRPCurl
+   - gRPC gateway plugin
+3. We copy our project files into the container and set the working directory to `/app`
+4. We run `go mod tidy` to ensure all dependencies are up to date
+5. We expose port 50051 for the gRPC server and set the command to run our server
+
+### Dev Container Configuration
+
+Next, we'll create a `devcontainer.json` file in our `.devcontainer` directory to configure our development container:
+
+```json .devcontainer/devcontainer.json
+!from ./assets/gnostic/devcontainer.json
+```
+
+For help with the `devcontainer.json` file, check out the [official documentation](https://containers.dev/implementors/json_reference/).
+
+### Docker Compose
+
+We'll also create a `docker-compose.yaml` file in our `.devcontainer` directory to define our development container:
+
+```yaml .devcontainer/docker-compose.yaml
+!from ./assets/gnostic/docker-compose.yaml
+```
+
+This Docker Compose file defines a service called `app` that uses the `Dockerfile` in the `.devcontainer` directory. It also mounts the current directory into the container at `/app` and overrides the default command to start the server.
+
+We use `/bin/sh -c "while sleep 1000; do :; done"` as the default command to keep the container running while we work on our server. This means we can start the server manually when we're ready.
+
+### Starting the Development Container
+
+For this step, you'll need to have [Docker](https://www.docker.com/get-started) and the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) for VS Code installed.
+
+Start the Docker engine and open the project in VS Code. Press F1 to open the command palette, then select `Dev Containers: Reopen in Container`. This will build the development container and open a new VS Code window inside it.
+
+This step might take a while the first time you run it, as it needs to download the base image and install all the dependencies.
+
+### Interacting With the Development Container
+
+Once the development container is running, you can interact with it using the terminal in VS Code. You can run commands as you would in a regular terminal, such as `go run main.go` to start the server later on.
+
+When we refer to running commands in the development container, we mean running them in the dev container terminal in VS Code.
+
+If you think something isn't working as expected, try restarting the development container by running `Dev Containers: Rebuild Container` from the command palette. You may also restart Docker to ensure everything is working as expected.
+
+## Dependencies for Generating a gRPC Server Using Gnostic
+
+To generate a gRPC server using Gnostic, we added the following dependencies to our development container:
+
+- [Gnostic](https://github.com/google/gnostic): A compiler for APIs described by the OpenAPI 3.0.0 specification.
+- [Gnostic gRPC plugin](https://github.com/google/gnostic-grpc): A plugin for Gnostic that generates gRPC service definitions.
+- [Go protocol buffer compiler](https://pkg.go.dev/github.com/golang/protobuf/protoc-gen-go): A plugin for the protocol buffer compiler that generates Go code.
+- [Buf](https://buf.build/): A tool for managing protocol buffer files.
+- [gRPC Go plugin](https://pkg.go.dev/google.golang.org/grpc/cmd/protoc-gen-go-grpc): A plugin for the protocol buffer compiler that generates Go gRPC code.
+- [gRPCurl](https://github.com/fullstorydev/grpcurl): A command-line tool for interacting with gRPC servers. We'll use this to test our gRPC server.
+- [gRPC gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway): A plugin for the protocol buffer compiler that generates a reverse proxy server to translate RESTful HTTP and JSON requests to gRPC.
+
+## Generating a gRPC Server Using Gnostic
+
+To generate a gRPC server using Gnostic, we need to follow these steps:
+
+1. Compile the API definition to a binary protocol buffer file using Gnostic.
+2. Create an API definition in a `.proto` file.
+3. Generate a gRPC service definition using the Gnostic gRPC plugin.
+4. Generate Go code using the Go protocol buffer compiler and the gRPC Go plugin.
+
+We've already completed step 1 by creating the `bar.yaml` file. Now we'll compile the API definition to a binary protocol buffer file using Gnostic.
+
+### Compiling the API Definition to a Binary Protocol Buffer File
+
+This step is necessary because we've found that the Go protocol buffer compiler and the gRPC Go plugin require a binary protocol buffer file as input. To compile the API definition to a binary protocol buffer file, we'll use the following command:
+
+```bash vscode@devcontainer
+gnostic --pb-out=. bar.yaml
+```
+
+This command compiles the API definition in `bar.yaml` to a binary protocol buffer file named `bar.pb`.
+
+### Creating an API Definition in a `.proto` File
+
+Next, we'll create an API definition in a `.proto` file. We'll use the `bar.pb` file generated in the previous step as input. To accomplish this, we'll use the following command:
+
+```bash vscode@devcontainer
+gnostic-grpc -input bar.pb -output .
+```
+
+This command generates a `.proto` file named `bar.proto` that contains the gRPC service definition:
+
+```cpp bar.proto
+!from ./assets/gnostic/bar.proto
+```
+
+### Generating Go Code Using Buf and the gRPC Go Plugin
+
+To set up Buf, we need to run the following command:
+
+```bash vscode@devcontainer
+buf mod init
+```
+
+This command initializes a new Buf module in the current directory.
+
+Update the `buf.yaml` file created in the project root with the following content:
+
+```yaml buf.yaml
+!from ./assets/gnostic/buf.yaml
+```
+
+We depend on `googleapis` because the gRPC Go plugin requires it.
+
+### Configuring Buf for Code Generation
+
+Next, create a `buf.gen.yaml` file in the project root with the following content:
+
+```yaml buf.gen.yaml
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    default: github.com/speakeasy-api/grpc-rest-service/bar
+    except:
+      - buf.build/googleapis/googleapis
+plugins:
+  - name: go
+    out: .
+    opt: paths=source_relative
+  - name: go-grpc
+    out: .
+    opt: paths=source_relative,require_unimplemented_servers=false
+  - name: grpc-gateway
+    out: .
+    opt: paths=source_relative
+```
+
+In this configuration:
+
+1. We enable managed mode, which helps Buf manage the generated code
+2. We set the `go_package_prefix` to `github.com/speakeasy-api/grpc-rest-service/bar`, which determines the package name in the generated Go code
+3. We configure three plugins:
+   - `go`: Generates Go code for the protocol buffers
+   - `go-grpc`: Generates Go code for the gRPC service
+   - `grpc-gateway`: Generates Go code for the gRPC gateway, which translates RESTful HTTP and JSON requests to gRPC
+
+Update Buf's dependencies using the following command:
+
+```bash vscode@devcontainer
+buf mod update
+```
+
+Now we can generate Go code using the following command:
+
+```bash vscode@devcontainer
+buf generate
+```
+
+This command generates Go code in the `bar` directory. The generated code includes the gRPC service definition and the gRPC gateway definition.
+
+## Implementing the gRPC Server
+
+To implement the gRPC server, we created one big `main.go` with our endpoint implementations and business logic all in one. This will make a lot of people very angry and is widely regarded as a bad move. ([🫡 Douglas Adams](https://www.goodreads.com/quotes/1-the-story-so-far-in-the-beginning-the-universe-was))
+
+To make things slightly more confusing, we're including OpenAI API calls alongside our focus on OpenAPI. The similarities in the names are purely coincidental.
+
+The `main.go` file is too large to include here, but you can find it in the root of the example project.
+
+## Optional: Adding Your OpenAI API Key
+
+If you want to use the OpenAI API to generate drink recipes, you'll need to add your OpenAI API key to the project. Without this key, the server will return placeholder data for the drink recipes.
+
+Copy the `.env.template` file to a new file named `.env`:
+
+```bash vscode@devcontainer
+cp .env.template .env
+```
+
+Open the `.env` file and add your OpenAI API key:
+
+```bash
+OPENAI_API_KEY=your-openai-api-key
+```
+
+This file is included in the `.gitignore` file, so it won't be checked into version control.
+
+## Rebuilding the Docker Image
+
+We've installed a bunch of new dependencies and generated a lot of new code. To make sure everything is working as expected, we need to rebuild our Docker image.
+
+This also runs `go mod tidy` to ensure all dependencies are up to date, which can take a while.
+
+In VS Code, press F1 to open the command palette, then select `Dev Containers: Rebuild Container`. This will rebuild the development container and install all the dependencies.
+
+## Running the gRPC Server
+
+To run the gRPC server, we need to start the development container and run the following command:
+
+```bash vscode@devcontainer
+go run main.go
+```
+
+This command starts the gRPC server on port `50051` and the gRPC gateway on port `8080`.
+
+## Testing the gRPC Server
+
+To test the gRPC server, we'll use the `grpcurl` command-line tool.
+
+First, open a new terminal in VS Code by pressing ⌃⇧`.
+
+This next step will use OpenAI credits, so make sure you have credits available before running the command.
+
+Now run the following command to send a request to the gRPC server:
+
+```bash vscode@devcontainer
+grpcurl -plaintext -d '{"drink_name_request": {"name": "Pan Galactic Gargle Blaster"}}' localhost:50051 bar.Bar/GetDrink
+```
+
+This command sends a request to the `GetDrink` endpoint with the `name` field set to `Pan Galactic Gargle Blaster`.
+
+The response should look something like this:
+
+```json
+{
+  "ingredients": [
+    {
+      "name": "Ol' Janx Spirit",
+      "quantity": "1 oz"
+    },
+    {
+      "name": "Water from the seas of Santraginus V",
+      "quantity": "0.5 oz"
+    },
+    {
+      "name": "Arcturan Mega-gin",
+      "quantity": "1 oz"
+    },
+    {
+      "name": "Fallian marsh gas",
+      "quantity": "A gentle bubble"
+    },
+    {
+      "name": "Quantum hyper-mint extract",
+      "quantity": "1 teaspoon"
+    },
+    {
+      "name": "Zap powder",
+      "quantity": "A pinch"
+    },
+    {
+      "name": "Algolian Suntiger tooth extract",
+      "quantity": "1 drop"
+    },
+    {
+      "name": "Galaxy-wide famous Olives",
+      "quantity": "1 olive"
+    }
+  ],
+  "recipe": "In a cosmic shaker, mix Ol' Janx Spirit, Arcturan Mega-gin, and water from Santraginus V. Gently add fallian marsh gas to create a mystery bubble. Stir in quantum hyper-mint extract and a pinch of zap powder with a molecular stirrer (mind the speed, or you'll end up in another dimension). Carefully add a single drop of Algolian Suntiger tooth extract, ensuring not to evaporate your mixing vessel. Serve in a glass forged from comets' ice, garnished with a galaxy-wide famous Olive. Be sure to have your propulsion system set to the nearest recovery planet because after one sip, you'll need it.",
+  "photo": "https://example.com/photo.jpg"
+}
+```
+
+The photo URL returned by OpenAI is only valid for an hour, so be sure to open it in a browser to view it.
+
+You may find that the terminal output escapes the JSON response, breaking the photo URL. You can use the following command to unescape the JSON response:
+
+```bash vscode@devcontainer
+grpcurl -plaintext -d '{"drink_name_request": {"name": "Pan Galactic Gargle Blaster"}}' localhost:50051 bar.Bar/GetDrink | sed 's/%3A/:/g; s/%2F/\//g; s/%3D/=/g; s/%3F/?/g; s/%26/\&/g' | jq
+```
+
+This command uses `sed` to unescape the JSON response and `jq` to format the JSON response.
+
+## Generating SDKs for the gRPC Gateway
+
+To generate a TypeScript SDK for the gRPC gateway, we run the following command:
+
+```bash vscode@devcontainer
+speakeasy quickstart
+```
+
+Follow the onscreen prompts to provide the necessary configuration details for your new SDK such as the name, schema location and output path. Enter `bar.yaml` when prompted for the OpenAPI document location and select TypeScript when prompted for which language you would like to generate.
+
+To generate a Python SDK for the gRPC gateway, we run the following command:
+
+```bash vscode@devcontainer
+speakeasy quickstart
+```
+
+Follow the onscreen prompts to provide the necessary configuration details for your new SDK such as the name, schema location and output path. Enter `bar.yaml` when prompted for the OpenAPI document location and select Python when prompted for which language you would like to generate.
+
+Now we have generated SDKs for the gRPC gateway in both TypeScript and Python.

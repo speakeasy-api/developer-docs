@@ -1,0 +1,196 @@
+---
+title: Custom MCP Server Extensions
+---
+# Adding custom MCP tools & resources
+
+
+
+A Speakeasy SDK developer can now augment their MCP server by adding extensions for additional custom tools, resources, and prompts.
+
+### Setting Up MCP Extensions
+
+To do so, a developer must create a new file under the `mcp-server` directory called `server.extensions.ts`. The file should expose the following function contract exactly.
+This function can be used to register custom tools, resources, and prompts on to generated MCP server.
+
+```typescript server.extensions.ts
+import { Register } from "./extensions.js";
+
+export function registerMCPExtensions(register: Register): void {
+  register.tool(...);
+  register.resource(...);
+  register.prompt(...);
+}
+```
+
+After adding this file and defining your custom tools and resources, make sure to execute `speakeasy run`.
+
+### Building and Registering Custom Tools
+
+Below is an example of a custom [MCP tool](https://modelcontextprotocol.io/docs/concepts/tools) that fetches files from public GitHub repositories.
+This custom tool is then registered in the `registerMCPExtensions` function.
+One can opt to define their custom /resources in separate files or define everything within the `server.extensions.ts` file.
+
+The most important thing is to ensure that the tool fits the `ToolDefinition` type exposed by Speakeasy.
+Notice this tool has `args` defined as a Zod schema, tools can also have no arguments defined.
+Every tool also defines a `tool` method for execution.
+
+Speakeasy exposes a `formatResult` utility function from `tools.ts` that can be used to ensure the result ends up in the proper MCP format when returned. Using this function is optional as long as the return matches the required type.
+
+```typescript custom/getGithubFileTool.ts
+import { z } from "zod";
+import { formatResult, ToolDefinition } from "../tools.js";
+
+type FetchGithubFileRequest = {
+  org: string;
+  repo: string;
+  filepath: string;
+};
+
+const FetchGithubFileRequest$inboundSchema: z.ZodType<
+  FetchGithubFileRequest,
+  z.ZodTypeDef,
+  unknown
+> = z.object({
+  org: z.string(),
+  repo: z.string(),
+  filepath: z.string()
+});
+
+const fetchGithubFileToolArg = {
+  request: FetchGithubFileRequest$inboundSchema
+};
+
+export const tool$fetchGithubFile: ToolDefinition<typeof fetchGithubFileToolArg> = {
+  name: "admin_get_git_file",
+  description: "Gets a file from a GitHub repository",
+  scopes: [],
+  args: fetchGithubFileToolArg,
+  tool: async (_client, args, _extra) => {
+    const { org, repo, filepath } = args.request;
+    const url = `https://raw.githubusercontent.com/${org}/${repo}/main/${filepath}`;
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.statusText}`);
+      }
+      const content = await response.text();
+      return formatResult(content, { response });
+    } catch (err) {
+      console.error(err);
+      return {
+        content: [{ type: "text", text: `Error: "${String(err)}"` }],
+        isError: true,
+      };
+    }
+  }
+};
+```
+
+```typescript server.extensions.ts
+import { tool$fetchGithubFile } from "./custom/getGithubFileTool.js";
+import { Register } from "./extensions.js";
+
+export function registerMCPExtensions(register: Register): void {
+    register.tool(tool$fetchGithubFile);
+}
+```
+
+### Building and Registering Custom Resources
+
+An [MCP Resource](https://modelcontextprotocol.io/docs/concepts/resources) represents any kind of data source that an MCP server can make available to clients. Each resource is identified by a unique URI and can contain either text or binary data.
+Resources can encompass a variety of things, including:
+
+- File contents (local or remote)
+- Database records
+- Screenshots and images
+- Static API responses
+- And more
+
+Below is an example of a custom MCP Resource that embeds a local PDF file as a resource into an MCP server.
+
+The custom resource must fit the `ResourceDefinition` or `ResourceTemplateDefinition` type exposed by Speakeasy.
+A resource must define a `read` function for reading data from the defined URI.
+
+Speakeasy exposes a `formatResult` utility function from `resources.ts` that can be used to ensure the result ends up in the proper MCP format when returned. Using this function is optional as long as the return matches the required type.
+
+```typescript custom/aboutSpeakeasyResource.ts
+import { formatResult, ResourceDefinition } from "../resources.js";
+import fs from 'node:fs/promises';
+
+export const resource$aboutSpeakeasy: ResourceDefinition = {
+    name: "About Speakeasy",
+    description: "Reads the about Speakeasy PDF",
+    resource: "file:///Users/ryanalbert/about_speakeasy.pdf",
+    scopes: [],
+    read: async (_client, uri, _extra) => {
+        try {
+            const pdfContent = await fs.readFile(uri, null);
+            return formatResult(pdfContent, uri, {
+                mimeType: "application/pdf"
+            });
+        } catch (err) {
+            console.error(err);
+            return {
+                contents: [{
+                    isError: true,
+                    uri: uri.toString(),
+                    mimeType: "application/json",
+                    text: `Failed to read PDF file: ${String(err)}`
+                }]
+            };
+        }
+    }
+}
+```
+
+```typescript server.extensions.ts
+import { resource$aboutSpeakeasy } from "./custom/aboutSpeakeasyResource.js";
+import { Register } from "./extensions.js";
+
+export function registerMCPExtensions(register: Register): void {
+    register.resource(resource$aboutSpeakeasy);
+}
+```
+
+### Building and Registering Custom Prompts
+
+An [MCP Prompt](https://modelcontextprotocol.io/docs/concepts/prompts) allows you to create reusable prompt templates and workflows for your MCP.
+
+```typescript custom/customPrompts.ts
+import { z } from "zod";
+import { formatResult, PromptDefinition } from "../prompts.js";
+
+const myNameArg = { first_name: z.string(), last_name: z.string() };
+
+export const prompt$aboutMyName: PromptDefinition<typeof myNameArg>  = {
+  name: "tell-me-about-my-name-prompt",
+  description: "tell me about the origins of my name",
+  args: myNameArg,
+  prompt: (_client, args, _extra) => ({
+    messages: [{
+      role: "user",
+      content: {
+        type: "text",
+        text: `Please tell me about the origin of my name first_name: ${args.first_name} last_name: ${args.last_name}`
+      }
+    }]
+  })
+}
+
+const prompt$aboutSpeakeasy: PromptDefinition<undefined> = {
+  name: "tell-me-about-speakeasy",
+  prompt: (_client, _extra) =>
+    formatResult("Please tell me about the company Speakeasy"),
+};
+```
+
+```typescript server.extensions.ts
+import { prompt$aboutMyName, prompt$aboutSpeakeasy } from "./custom/customPrompts.js";
+import { Register } from "./extensions.js";
+
+export function registerMCPExtensions(register: Register): void {
+    register.prompt(prompt$aboutMyName);
+    register.prompt(prompt$aboutSpeakeasy);
+}
+```

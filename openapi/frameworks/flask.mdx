@@ -1,0 +1,445 @@
+---
+title: Generate an OpenAPI/Swagger document with Flask
+description: "Generating an OpenAPI document with Flask and using it to create SDKs with Speakeasy."
+---
+
+import { Callout, Spotlight } from "@/mdx/components";
+
+# How to generate an OpenAPI document with Flask
+
+OpenAPI is a tool for defining and sharing REST APIs, and Flask can be paired with `flask-smorest` to build such APIs.
+
+This guide walks you through generating an OpenAPI document from a Flask project and using it to create SDKs with Speakeasy, covering the following steps:
+
+1. Setting up a simple REST API with Flask
+2. Integrating `flask-smorest`
+3. Creating the OpenAPI document to describe the API
+4. Customizing the OpenAPI schema
+5. Using the Speakeasy CLI to create an SDK based on the schema
+6. Integrating SDK creation into CI/CD workflows
+
+## Requirements
+
+To follow along, you will need:
+
+- Python version 3.8 or higher
+- An existing Flask project or a copy of the provided [example repository](https://github.com/speakeasy-api/flask-openapi-example)
+- A basic understanding of Flask project structure and how REST APIs work
+
+## Example Flask REST API repository
+
+<Callout title="Example repository" type="info">
+The source code for the completed example is available in the [**Speakeasy Flask example repository**](https://github.com/speakeasy-api/openapi-flask-example).
+</Callout>
+
+The repository already contains all the code covered throughout the guide. You can clone it and follow along with the tutorial, or use it as a reference to add to your own Flask project.
+
+To better understand the process of generating an OpenAPI document with Flask, let's start by inspecting some simple CRUD endpoints for an online library, along with a `Book` class and a serializer for our data.
+
+### Models and routes
+
+<Spotlight>
+
+#### !!steps Apps
+
+Open the `app.py` file, which serves as the main entry point of the program, and inspect the main function:
+
+```python ! app.py focus=1:55
+!from ./assets/flask/app.py.txt
+```
+
+#### !!steps Database
+
+Here, you will see a method call to create a SQLite database and a function to run the Flask app:
+
+```python ! app.py focus=52:55 mark=54,55
+!from ./assets/flask/app.py.txt
+```
+
+#### !!steps Models
+
+From the root of the repository, open the `models.py` file to see a `Book` model containing a few fields with validation:
+
+```python ! models.py focus=1:8
+!from ./assets/flask/models.py.txt
+```
+
+#### !!steps Schemas
+
+In the `schemas.py` file, the `BookSchema` class can be used to serialize and deserialize book data with the `marshmallow` package:
+
+```python ! schemas.py focus=1:10
+!from ./assets/flask/schemas.py.txt
+```
+
+#### !!steps Resources
+
+The `resources.py` file contains API endpoints set up to handle all the CRUD operations for the books:
+
+```python ! resources.py focus=1:94
+!from ./assets/flask/resources.py.txt
+```
+
+</Spotlight>
+
+
+This code defines a simple Flask REST API with CRUD operations for a `Book` model. The `BookList` class provides a way to retrieve all book data and create new books. The `BookDetail` class handles the retrieval of specific books, updating book data, and deleting books.
+
+## Generate the OpenAPI document using `flask-smorest`
+
+Flask does not support OpenAPI document generation out-of-the-box, so we'll use the `flask-smorest` package to generate the OpenAPI document.
+
+If you are following along with the example repository, you can create and activate a virtual environment to install the project dependencies:
+
+```bash Terminal
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+If you have not already, install `flask-smorest` with the following command:
+
+```bash Terminal
+pip install flask-smorest
+```
+
+
+<Spotlight>
+
+#### !!steps Configuration
+
+The most basic configuration for generating an OpenAPI document with `flask-smorest` is added in the `app.py` file:
+
+```python ! app.py focus=9:12
+!from ./assets/flask/app.py.txt
+```
+
+---
+
+#### !!steps SwaggerUI
+
+The new Swagger UI endpoint is also added in the `app.py` file:
+
+```python ! app.py focus=14 mark=14
+!from ./assets/flask/app.py.txt
+```
+
+---
+
+#### !!steps Server
+
+The `app.py` file contains additional configuration settings for the OpenAPI document. These add a development server:
+
+```python ! app.py focus=36:41
+!from ./assets/flask/app.py.txt
+```
+
+---
+
+#### !!steps Routes
+
+These additional configuration settings add a route to serve the OpenAPI document:
+
+```python ! app.py focus=44:50
+!from ./assets/flask/app.py.txt
+```
+
+</Spotlight>
+
+
+### Run server
+
+To inspect and interact with the OpenAPI document, you need to run the development server, which will create a database file if one does not already exist, and serve the API.
+
+Run the development server:
+
+```bash Terminal
+python app.py
+```
+
+You can now access the API and documentation:
+
+- Visit `http://127.0.0.1:5000/swagger-ui` to view the Swagger documentation and interact with the API.
+- Visit `http://127.0.0.1:5000/openapi.yaml` to download the OpenAPI document.
+
+### OpenAPI document generation
+
+Now that we understand our Flask REST API, we can run the following command to generate the OpenAPI document using `flask-smorest`:
+
+```bash Terminal
+flask openapi write --format=yaml openapi.yaml
+```
+
+This generates a new file, `openapi.yaml`, in the root of the project.
+
+
+
+<Spotlight>
+
+#### !!steps Document
+
+Here, you can see an example of the generated OpenAPI document:
+
+```yaml ! openapi.yaml focus=1:170
+!from ./assets/flask/openapi.yaml.txt
+```
+
+---
+
+#### !!steps Config
+
+Return to the `app.py` file to see how the app configuration influences the OpenAPI document generation:
+
+```python ! app.py focus=9:15
+!from ./assets/flask/app.py.txt
+```
+
+---
+
+#### !!steps Metadata
+
+Open the `openapi.yaml` file to see the titles and versions reflected in the generated OpenAPI document:
+
+```yaml ! openapi.yaml focus=64:67
+!from ./assets/flask/openapi.yaml.txt
+```
+
+---
+
+#### !!steps ServerInfo
+
+The server URL is also included in the OpenAPI document:
+
+```yaml ! openapi.yaml focus=155:157
+!from ./assets/flask/openapi.yaml.txt
+```
+
+---
+
+#### !!steps BookParams
+
+Open the `models.py` file to see the `Book` parameters:
+
+```python ! models.py focus=3:8
+!from ./assets/flask/models.py.txt
+```
+
+---
+
+#### !!steps SchemaRef
+
+Open the `openapi.yaml`file to check the same `Book` parameters are reflected in the OpenAPI document:
+
+```yaml ! openapi.yaml focus=15:30
+!from ./assets/flask/openapi.yaml.txt
+```
+
+</Spotlight>
+
+
+
+## OpenAPI document customization
+
+The OpenAPI document generated by `flask-smorest` may not fit all use cases. The document can be customized further to better serve information about your API endpoints. You can add descriptions, tags, examples, and more to make the documentation more informative and user-friendly.
+
+In the [customized](https://github.com/speakeasy-api/openapi-flask-example/tree/customized) branch of the example repository, you can find a customized OpenAPI document that demonstrates the options available for modifying your generated document.
+
+
+
+<Spotlight>
+
+#### !!steps Endpoints
+
+Open the `resources.py` file and inspect the configured endpoints:
+
+```python ! resources.py focus=1:94
+!from ./assets/flask/resources.py.txt
+```
+
+---
+
+#### !!steps Responses
+
+You can indicate the expected response codes and models using `@blp.response()`:
+
+```python ! resources.py focus=12
+!from ./assets/flask/resources.py.txt
+```
+
+---
+
+#### !!steps OpenAPIResponse
+
+This results in the following additions, for example, to the `/books/` `get` operation in the OpenAPI document:
+
+```yaml ! openapi.yaml focus=69:82
+!from ./assets/flask/openapi.yaml.txt
+```
+
+---
+
+#### !!steps Arguments
+
+Use the `@blp.arguments()` decorator to enforce a schema for arguments:
+
+```python ! resources.py focus=25
+!from ./assets/flask/resources.py.txt
+```
+
+---
+
+#### !!steps OpenAPIArguments
+
+An enforced arguments schema results in the following additions to the `post` operation:
+
+```yaml ! openapi.yaml focus=96:97
+!from ./assets/flask/openapi.yaml.txt
+```
+
+---
+
+#### !!steps Pagination
+
+Allow pagination with the `@blp.paginate()` decorator:
+
+```python ! resources.py focus=13
+!from ./assets/flask/resources.py.txt
+```
+
+---
+
+#### !!steps PaginationQuery
+
+Allowing paginations gives you access to the `page` and `page_size` properties, which you can use in your database query:
+
+```python ! resources.py focus=14:23
+!from ./assets/flask/resources.py.txt
+```
+
+---
+
+#### !!steps Docstrings
+
+You can add inline documentation using docstrings:
+
+```python ! resources.py focus=38:41
+!from ./assets/flask/resources.py.txt
+```
+
+---
+
+#### !!steps DocReflection
+
+Docstrings are reflected in the OpenAPI document as follows:
+
+```yaml ! openapi.yaml focus=124
+!from ./assets/flask/openapi.yaml.txt
+```
+
+---
+
+#### !!steps Comments
+
+Notice the internal comment that is omitted from the OpenAPI document:
+
+```python ! resources.py focus=40
+!from ./assets/flask/resources.py.txt
+```
+
+---
+
+#### !!steps Retries
+
+You can add global retries to the OpenAPI document by modifying the app config in the `app.py` file:
+
+```python ! app.py focus=17:28
+!from ./assets/flask/app.py.txt
+```
+
+---
+
+#### !!steps SDKRetries
+
+This enables retries when using the document to create an SDK with Speakeasy:
+
+```yaml ! openapi.yaml focus=161:170
+!from ./assets/flask/openapi.yaml.txt
+```
+
+</Spotlight>
+
+
+
+## Creating SDKs for a Flask REST API
+
+To create a Python SDK for the Flask REST API, run the following command:
+
+```bash Terminal
+speakeasy quickstart
+```
+
+Follow the onscreen prompts to provide the configuration details for your new SDK, such as the name, schema location, and output path. When prompted, enter `openapi.yaml` for the OpenAPI document location, select a language, and generate.
+
+## Add SDK generation to your GitHub Actions
+
+The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows for integrating the Speakeasy CLI into your CI/CD pipeline, so that your SDKs are recreated whenever your OpenAPI document changes.
+
+You can set up Speakeasy to automatically push a new branch to your SDK repositories for your engineers to review before merging the SDK changes.
+
+For an overview of how to set up automation for your SDKs, see the Speakeasy [SDK Generation Action and Workflows](/docs/speakeasy-reference/workflow-file) documentation.
+
+## SDK customization
+
+After creating your SDK with Speakeasy, you will find a new directory containing the generated SDK code, which we will now explore further.
+
+These examples assume a Python SDK named `books-python` was generated from the example Flask project above. Edit any paths to reflect your environment if you want to follow in your own project.
+
+
+<Spotlight>
+
+#### !!steps BookClass
+
+Navigate into the `books-python/src/books/models` directory and find the `book.py` file created by Speakeasy. Note how the OpenAPI document was used to create the `Book` class:
+
+```python ! book.py
+!from ./assets/flask/book.py.txt
+```
+
+---
+
+#### !!steps SDKMethods
+
+Open the `src/books/books_sdk.py` file to see the methods that call the web API from an application using the SDK:
+
+```python ! books_sdk.py focus=13:104 mark=13
+!from ./assets/flask/books_sdk.py.txt
+```
+
+---
+
+#### !!steps Requests
+
+Here, you can see how the request to the API endpoint is built:
+
+```python ! books_sdk.py focus=136:148
+!from ./assets/flask/books_sdk.py.txt
+```
+
+---
+
+#### !!steps RetriesConfig
+
+Finally, note the result of the global retries strategy that we set up in the `app.py` file:
+
+```python ! books_sdk.py focus=154:156
+!from ./assets/flask/books_sdk.py.txt
+```
+
+</Spotlight>
+
+
+## Summary
+
+In this guide, we showed you how to generate an OpenAPI document for a Flask API and use Speakeasy to create an SDK based on the OpenAPI document. The step-by-step instructions included adding relevant tools to the Flask project, generating an OpenAPI document, enhancing it for improved creation, using Speakeasy CLI to create the SDKs, and interpreting the basics of the generated SDK.
+
+We also explored automating SDK generation through CI/CD workflows and improving API operations.

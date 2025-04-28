@@ -1,0 +1,285 @@
+---
+description: "Learn how to simplify pagination in Speakeasy-managed SDKs by creating SDKs with built-in pagination rules."
+sidebar_label: "Add Pagination"
+slug: "/customize-sdks/pagination/"
+---
+
+# Adding Pagination to Your SDK
+
+Customize pagination rules for each API operation using the `x-speakeasy-pagination` extension.
+
+Adding pagination to an SDK enhances the developer experience by providing a structured way to handle paginated API responses.
+
+```python
+response = sdk.paginatedEndpoint(page=1)
+while response is not None:
+    # handle response
+
+    response = response.next()
+```
+
+The `next()` function returns `nil, nil` when there are no more pages to retrieve, indicating the end of pagination rather than an error
+
+## Configuring Pagination
+
+To configure pagination, add the `x-speakeasy-pagination` extension to your OpenAPI specification.
+
+```yaml
+/paginated/endpoint:
+  get:
+    parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+        required: true
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              title: res
+              type: object
+              properties:
+                resultArray:
+                  type: array
+                  items:
+                    type: integer
+              required:
+                - resultArray
+    x-speakeasy-pagination:
+      type: offsetLimit
+      inputs:
+        - name: page
+          in: parameters
+          type: page
+      outputs:
+        results: $.resultArray
+```
+
+The `x-speakeasy-pagination` configuration supports `offsetLimit`, `cursor`, and `url` implementations of pagination.
+
+### Offset and Limit Pagination
+
+For `type: offsetLimit pagination`, specify at least one of the following `inputs`: `offset` or `page`.
+
+```yaml
+x-speakeasy-pagination:
+  type: offsetLimit
+  inputs:
+    - name: page # This input refers to the value called `page`
+      in: parameters # In this case, page is an operation parameter (header, query, or path)
+      type: page # The page parameter will be used as the page-value for pagination, and will be incremented when `next()` is called
+    - name: limit # This input refers to the value called `limit`
+      in: parameters # In this case, limit is an operation parameter (header, query, or path)
+      type: limit # The limit parameter will be used as the limit-value for pagination
+  outputs:
+    results: $.data.resultArray # The data.resultArray value of the response will be used to infer whether there is another page
+```
+
+At least one response object must have the following structure:
+
+```json
+{
+  "data": {
+    "resultArray": []
+  }
+}
+```
+
+If `inputs.limit` is defined in the pagination configuration, `next()` will return `null` when `$.data.resultArray` has a length of less than the `inputs.limit` value. If `inputs.limit` is omitted, `next()` will return `null` when the length of `$.data.resultArray` is zero.
+
+When using the page input, `output.numPages` can be used instead of `output.results` to determine when the pages for the operation are exhausted.
+
+```yaml
+x-speakeasy-pagination:
+  type: offsetLimit
+  inputs:
+    - name: page # This input refers to the value called `page`
+      in: parameters # In this case, page is an operation parameter (header, query, or path)
+      type: page # The page parameter will be used as the page, and will be incremented when `next()` is called
+  outputs:
+    numPages: $.data.numPages # The data.numPages value of the response will be used to infer whether there is another page
+```
+
+If `output.numPages` is provided, `next()` returns `null` when the incremented page number is greater than the `numPages` value.
+
+At least one response object must have the following structure:
+
+```json
+{
+  "data": {
+    "numPages": 1
+  }
+}
+```
+
+For example, in the following `inputs.offset` configuration, `inputs.limit` has the same effect as in the `inputs.page` example.
+
+```yaml
+x-speakeasy-pagination:
+  type: offsetLimit
+  inputs:
+    - name: offset # This offset refers to the value called `offset`
+      in: parameters # In this case, offset is an operation parameter (header, query, or path)
+      type: offset # The offset parameter will be used as the offset, which will be incremented by the length of the `output.results` array
+  outputs:
+    results: $.data.resultArray # The length of data.resultArray value of the response will be added to the `offset` value to determine the new offset
+```
+
+
+
+### Cursor-Based Pagination
+
+For `type: cursor pagination`, configure the `nextCursor` output.
+
+The following is an example `inputs.cursor` configuration.
+
+```yaml
+x-speakeasy-pagination:
+  type: cursor
+  inputs:
+    - name: since
+      in: requestBody
+      type: cursor
+  outputs:
+    nextCursor: $.data.resultArray[(@length-1)].created_at
+```
+
+Because the input above is `in` the `requestBody`, this operation must take a request body with **at least** the following structure:
+
+```json
+{
+  "since": ""
+}
+```
+
+At least one response object must have the following structure:
+
+```json
+{
+  "data": {
+    "resultArray": [
+      {
+        "created_at": ""
+      }
+    ]
+  }
+}
+```
+
+The `[@length-1]` syntax in `outputs.nextCursor` indicates the last value in an array. Ensure the type of `requestBody.since` matches the type of `outputs.nextCursor`.
+
+### URL-Based Pagination
+
+When your API returns a URL for the next page, you can use the `url` type in `x-speakeasy-pagination`. Here's an example configuration:
+
+```yaml
+/paginated/endpoint:
+  get:
+    parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+        required: true
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              title: PaginatedResponse
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    type: object
+                next:
+                  type: string
+                  format: uri
+              required:
+                - results
+                - next
+    x-speakeasy-pagination:
+      type: url
+      outputs:
+        nextUrl: $.next
+```
+
+The `x-speakeasy-pagination` configuration specifies the type as `url` and uses a JSONPath expression to extract the `nextUrl` from the response.
+
+The response object for the URL-based pagination should have the following structure:
+
+```json
+{
+  "results": [{ "field": "value" }],
+  "next": "http://some_url?page=2"
+}
+```
+
+## Inputs
+
+**`name`**
+
+With `in: parameters`, this is the name of the parameter to use as the input value.
+
+With `in: requestBody`, this is the name of the request-body property to use as the input value.
+
+**`in`**
+
+Indicates whether the input should be passed into the operation as a path or query parameter (`in: parameters`) or in the request body (`in: requestBody`). Only simple objects are permitted as values in the request body.
+
+**`type`**
+
+import { Table } from "@/mdx/components";
+
+<Table
+  data={[
+    {
+      type: "<code>page</code>",
+      description: "The variable that will be incremented on calling `next()`."
+    },
+    {
+      type: "`offset`",
+      description: "The variable that will be incremented by the number of results returned by the previous execution. **Note:** Requires `outputs.Results`."
+    },
+    {
+      type: "`limit`",
+      description: "When provided, `next()` returns `null` (or equivalent) when the number of results returned by the previous execution is less than the value provided."
+    }
+  ]}
+  columns={[
+    { key: "type", header: "Type" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+## Outputs
+
+All the outputs are expected to be strings adhering to the [JSONPath](https://goessner.net/articles/JsonPath/) schema.
+
+<Table
+  data={[
+    {
+      key: "`numPages`",
+      description: "When provided, `next()` returns `null` if the `page` input value exceeds the value found at the provided JSON path. **Note:** Requires `page` input."
+    },
+    {
+      key: "`results`",
+      description: "When provided, `next()` returns `null` if the array found at the provided JSON path is empty. **Note:** Required by `offset` input."
+    },
+    {
+      key: "`nextCursor`",
+      description: "Populates `cursor` with the value found at the provided JSON path when calling `next()`. **Note:** Required by `type: cursor`."
+    }
+  ]}
+  columns={[
+    { key: "key", header: "Key" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+If the JSONPath value provided for an output does not match the response returned, `next()` returns `null` because pagination cannot be continued.

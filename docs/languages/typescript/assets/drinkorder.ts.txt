@@ -1,0 +1,72 @@
+import { z } from "zod";
+import { Decimal as Decimal$ } from "../../types";
+import { Customer, Customer$ } from "./customer";
+import { DrinkType, DrinkType$ } from "./drinktype";
+
+export type DrinkOrder = {
+  id: string;
+  type: DrinkType;
+  customer: Customer;
+  totalCost: Decimal$ | number;
+  createdAt: Date;
+};
+
+/** @internal */
+export namespace DrinkOrder$ {
+  export type Inbound = {
+    id: string;
+    type: DrinkType;
+    customer: Customer$.Inbound;
+    total_cost: string;
+    created_at: string;
+  };
+
+  export const inboundSchema: z.ZodType<DrinkOrder, z.ZodTypeDef, Inbound> = z
+    .object({
+      id: z.string(),
+      type: DrinkType$,
+      customer: Customer$.inboundSchema,
+      total_cost: z.string().transform((v) => new Decimal$(v)),
+      created_at: z
+        .string()
+        .datetime({ offset: true })
+        .transform((v) => new Date(v)),
+    })
+    .transform((v) => {
+      return {
+        id: v.id,
+        type: v.type,
+        customer: v.customer,
+        totalCost: v.total_cost,
+        createdAt: v.created_at,
+      };
+    });
+
+  export type Outbound = {
+    id: string;
+    type: DrinkType;
+    customer: Customer$.Outbound;
+    total_cost: string;
+    created_at: string;
+  };
+
+  export const outboundSchema: z.ZodType<Outbound, z.ZodTypeDef, DrinkOrder> = z
+    .object({
+      id: z.string(),
+      type: DrinkType$,
+      customer: Customer$.outboundSchema,
+      totalCost: z
+        .union([z.instanceof(Decimal$), z.number()])
+        .transform((v) => `${v}`),
+      createdAt: z.date().transform((v) => v.toISOString()),
+    })
+    .transform((v) => {
+      return {
+        id: v.id,
+        type: v.type,
+        customer: v.customer,
+        total_cost: v.totalCost,
+        created_at: v.createdAt,
+      };
+    });
+}

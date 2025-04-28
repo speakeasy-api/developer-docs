@@ -1,0 +1,182 @@
+syntax = "proto3";
+
+package speakeasy;
+
+import "google/protobuf/empty.proto";
+import "google/api/field_behavior.proto";
+import "google/api/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    version: "1.0",
+    title: "Speakeasy API",
+    description: "Speakeasy API description"
+  };
+  host: "127.0.0.1:8080";
+  external_docs: {
+    url: "https://github.com/speakeasy-api/speakeasy-grpc-gateway-example";
+    description: "Speakeasy API documentation";
+  };
+  schemes: HTTPS;
+  tags: {
+    name: "drinks";
+    description: "Drinks API";
+  };
+};
+
+message Drink {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+        title: "A drink",
+        description: "A drink served at the speakeasy"
+    }
+    example: "{\"name\": \"Gin and Tonic\",\"type\": \"DRINK_TYPE_COCKTAIL\",\"price\": 5.99,\"stock\": 10,\"productCode\": \"2438ac3c-37eb-4902-adef-ed16b4431030\"}";
+  };
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The name of the drink",
+    example: "\"Gin and Tonic\""
+    }
+  ];
+  enum DrinkType {
+    DRINK_TYPE_UNSPECIFIED = 0;
+    DRINK_TYPE_WINE = 1;
+    DRINK_TYPE_COCKTAIL = 2;
+    DRINK_TYPE_MOCKTAIL = 3;
+    DRINK_TYPE_SOFT = 4;
+    DRINK_TYPE_SPIRIT = 5;
+    DRINK_TYPE_OTHER = 6;
+    DRINK_TYPE_BEER = 7;
+  };
+  DrinkType type = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The type of drink",
+    example: "\"DRINK_TYPE_COCKTAIL\""
+    }
+  ];
+  double price = 3 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The price of the drink",
+    minimum: 0,
+    example: "5.99"
+    }
+  ];
+  int32 stock = 4 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    description: "The stock of the drink",
+    minimum: 0,
+    example: "10"
+    }
+  ];
+  string productCode = 5 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    pattern: "^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$",
+    description: "Unique drink identifier for server requests",
+    format: "uuid",
+    example: "\"2438ac3c-37eb-4902-adef-ed16b4431030\""
+  }];
+};
+
+message ListDrinksResponse { repeated Drink drinks = 1; }
+
+message ListDrinksRequest { google.protobuf.Empty empty = 1; }
+
+message GetDrinkResponse { Drink drink = 1; }
+
+message GetDrinkRequest { string product_code = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+    pattern: "^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$",
+    description: "Unique drink identifier",
+    format: "uuid",
+    example: "\"2438ac3c-37eb-4902-adef-ed16b4431030\""
+  }]; }
+
+service SpeakeasyService {
+  // List all drinks
+  rpc ListDrinks(ListDrinksRequest) returns (ListDrinksResponse) {
+    option (google.api.http) = {
+      get: "/v1/drinks"
+      response_body: "drinks"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get a list of drinks";
+      description: "Returns a list of all drinks available at the speakeasy";
+      operation_id: "listAllDrinks";
+      tags: "drinks";
+    };
+  };
+
+  // Get a drink by product code
+  rpc GetDrink(GetDrinkRequest) returns (GetDrinkResponse) {
+    option (google.api.http) = {
+      get: "/v1/drinks/{product_code}"
+      response_body: "drink"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Get a drink";
+      operation_id: "getDrink";
+      tags: "drinks";
+      extensions: {
+        key: "x-speakeasy-retries";
+        value: {
+          struct_value: {
+            fields {
+              key: "strategy";
+              value {
+                string_value: "backoff";
+              }
+            }
+            fields {
+              key: "backoff";
+              value {
+                struct_value: {
+                  fields {
+                    key: "initialInterval";
+                    value {
+                      number_value: 500;
+                    }
+                  }
+                  fields {
+                    key: "maxInterval";
+                    value {
+                      number_value: 60000;
+                    }
+                  }
+                  fields {
+                    key: "maxElapsedTime";
+                    value {
+                      number_value: 3600000;
+                    }
+                  }
+                  fields {
+                    key: "exponent";
+                    value {
+                      number_value: 1.5;
+                    }
+                  }
+                }
+              }
+            }
+            fields {
+              key: "statusCodes";
+              value {
+                list_value: {
+                  values {
+                    string_value: "5XX";
+                  }
+                }
+              }
+            }
+            fields {
+              key: "retryConnectionErrors";
+              value {
+                bool_value: true;
+              }
+            }
+          }
+        }
+      }
+    };
+  };
+};

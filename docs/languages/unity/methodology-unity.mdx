@@ -1,0 +1,176 @@
+---
+title: "Create Unity SDKs from OpenAPI / Swagger"
+description: "Generate a Unity client from your Swagger / OpenAPI spec in minutes."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Create Unity SDKs from OpenAPI / Swagger
+
+## Unity SDK Overview
+
+The Speakeasy Unity C# SDK supports Unity 2021.3 LTS and above and is designed to be strongly typed, light on external dependencies, easy to debug, and easy to use.
+
+Some of the core features of the SDK include:
+
+- Interfaces for core components allow for dependency injection and mocking.
+- Generated C# doc comments to enhance the SDK's IntelliSense compatibility and developer experience.
+- Async/await support for all API calls, which can easily be wrapped in coroutines if needed.
+- Optional pagination support for supported APIs.
+- Support for complex number types:
+  - `System.Numbers.BigInteger`
+  - `System.Decimal`
+- Support for both string- and integer-based enums.
+- Streaming downloads for files.
+
+The SDK includes minimal dependencies. The only external dependencies are:
+
+- `newtonsoft.json` for JSON serialization and deserialization.
+- The UnityEngine libraries.
+
+## Unity Package Structure
+
+```yaml lib-structure.yaml
+├── {SDK Class Name}             # The root namespace for the SDK where {SDK Class Name} is the provided name of the SDK
+|   ├── {SDK Class Name}.csproj  
+|   ├── {SDK Class Name}SDK.cs   # The main SDK class
+|   ├── ...                      # Other SDK classes
+|   ├── Models                   # The namespace for the SDK's models
+|   |   ├── Operations           # The namespace for the SDK's operations models which generally house the request/response models for each API
+|   |   |   ├── ... 
+|   |   └── Shared               # The namespace for the SDK's models generated from components in the OpenAPI document
+|   |       ├── ...
+|   └── Utils                    # The namespace for the SDK's utility classes
+├── docs                         # Markdown files for the SDK's documentation
+|   └── ...
+├── {SDK Class Name}.sln         # The SDK's solution file
+└── ...
+```
+
+## HTTP Client
+
+The Unity C# SDK provides an interface for the HTTP client used to make API calls. A custom HTTP client can be provided to the SDK as long as it conforms to the interface.
+
+```csharp
+public interface ISpeakeasyHttpClient
+{
+    void AddHeader(string key, string value);
+    void AddQueryParam(string key, string value);
+    Task<UnityWebRequest> SendAsync(UnityWebRequest message);
+}
+```
+
+By default, the SDK will instantiate its own client using `UnityWebRequest.SendWebRequest()` to send the request, but this can be overridden by providing a custom implementation of the `ISpeakeasyHttpClient` interface:
+
+```csharp
+var client = new CustomHttpClient();
+
+var sdkInstance = new SDK(client);
+```
+
+This is useful if you're using a custom HTTP client that supports `UnityWebRequests` and a proxy or other custom configuration, or to provide a client preconfigured with standard headers.
+
+## Data Types and Classes
+
+The C# SDK uses as many native types from the standard library as possible, for example:
+
+- `string`
+- `System.DateTime`
+- `int`
+- `long`
+- `System.Numberics.BigInteger`
+- `float`
+- `double`
+- `decimal`
+- `bool`
+
+
+The SDK will only fall back on custom types when the native types are not suitable, for example:
+
+- A custom `DateOnly` class for `date` types
+- Custom `enum` types for `string` and `integer` based enums
+
+Speakeasy will generate standard C# classes with public fields that use attributes to guide the serialization and deserialization processes.
+
+The classes are also `Serializable`, with `[SerializeField]` attributes on the fields allowing them to be used in the Unity Inspector.
+
+## Parameters
+
+If parameters are defined in the OpenAPI document, Speakeasy will generate methods with parameters.
+
+The number of parameters defined should not exceed the `maxMethodParams` value configured in the `gen.yaml` file. If they do or the `maxMethodParams` value is set to `0`, Speakeasy will generate a request object that allows for all parameters to be passed in a single object.
+
+## Async Support
+
+The Unity C# SDK is generated with async/await support for all API calls, which can easily be wrapped in coroutines if needed. For example:
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Collections;
+using System.IO;
+using System.Threading.Tasks;
+
+// Static methods that help using the SDK in Unity coroutines
+public static class CoroutineHelper
+{
+    public static IEnumerator Await(Task task)
+    {
+        while (!task.IsCompleted)
+        {
+            yield return null;
+        }
+        if (task.IsFaulted)
+        {
+            throw task.Exception;
+        }
+    }
+
+    public static IEnumerator Await(Func<Task> taskDelegate)
+    {
+        return Await(taskDelegate.Invoke());
+    }
+}
+```
+
+The example above can be used like so:
+
+```csharp
+yield return CoroutineHelper.Await(async () =>
+{
+    var sdk = new SDK();
+
+    using (
+        var res = await sdk.SomeMethod(...)
+    )
+    {
+        // Handle response
+    }
+});
+```
+
+Due to the nature of the underlying `UnityWebRequest`, the response is an `IDisposable` object that should be disposed of when finished with or used within a `using` statement as shown above.
+
+## Errors
+
+The Unity C# SDK will throw exceptions for network or invalid request errors.
+
+For unsuccessful responses, the SDK will return a response object containing the status code and response body, which can be checked for the status of the method call.
+
+<Callout title="Coming Soon" type="info">
+Support for throwing unsuccessful status codes as exceptions is coming soon.
+</Callout>
+
+
+## User Agent Strings
+
+The Unity SDK will include a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests that can be leveraged for tracking SDK usage amongst broader API usage. The format is as follows: 
+
+```stmpl
+speakeasy-sdk/unity {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{PackageName}}
+```
+Where
+- `SDKVersion` is the version of the SDK, defined in `gen.yaml` and released
+- `GenVersion` is the version of the Speakeasy generator
+- `DocVersion` is the version of the OpenAPI document
+- `PackageName` is the name of the package defined in `gen.yaml`

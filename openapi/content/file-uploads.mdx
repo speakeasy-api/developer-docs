@@ -1,0 +1,339 @@
+import { CodeWithTabs } from "@/mdx/components";
+
+# File uploads in OpenAPI
+
+File uploads are a critical part of powerful REST APIs, allowing files to be transmitted from clients to servers for storage, analysis, or processing.
+
+File uploads in a REST API can be handled in various ways, depending on file format, size, and complexity. OpenAPI provides a standardized way to define and describe file uploads, accommodating diverse use cases.
+
+OpenAPI facilitates file uploads through various media types, including `multipart/form-data`, `application/octet-stream` (binary), and JSON-embedded payloads. Each approach has advantages and challenges that should be evaluated based on the API's requirements.
+
+## Why file uploads can be tricky
+
+File uploads present several technical and operational challenges, such as:
+
+- **Content type complexity:** Servers need to process different content types differently.
+- **Validation and error handling:** Validating and handling file uploads can be complex, especially when dealing with large files or multiple file uploads.
+- **Security and privacy:** File uploads are susceptible to security and privacy risks, such as data exfiltration, resource abuse, file injection, and data breaches.
+- **Scalability and performance:** Handling large file uploads is resource-intensive and can impact server performance, so a good strategy for streaming and buffering is needed.
+
+These challenges can be mitigated with the right approach and tools, but also the correct specification, so the client and server can communicate effectively.
+
+These challenges can be mitigated by following best practices for efficient file handling and ensuring the specification allows the client and server to communicate effectively.
+
+## Defining file uploads in an OpenAPI document
+
+File uploads can be described in an OpenAPI document using `multipart/form-data`, `application/octet-stream` (binary), or JSON.
+
+### `multipart/form-data`
+
+Widely recognized as the standard for file uploads, `multipart/form-data` allows files and associated metadata to be transmitted in the same request.
+
+In an OpenAPI document, specifying `multipart/form-data` for the `/file/upload` endpoint might look like this:
+
+```yaml openapi.yaml
+paths:
+  /file/upload:
+    post:
+    summary: Upload a file
+      description: >
+        Allows uploading a file along with additional metadata.
+      operationId: uploadFile
+      tags:
+        - FileUpload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                caption:
+                  type: string
+      responses:
+        '200':
+          description: File uploaded successfully
+```
+
+The client can call the endpoint to upload a PDF file with a metadata description like this:
+
+<CodeWithTabs>
+
+  ```bash !!tabs curl
+  curl -X POST "https://api.example.com/file/upload" \
+      -H "Content-Type: multipart/form-data" \
+      -F "file=@content.pdf" \
+      -F "caption=Sample PDF file"
+  ```
+
+  ```python !!tabs Python
+  import requests
+
+  url = "https://api.example.com/file/upload"
+  file_path = "content.pdf"
+  caption = "Sample PDF file"
+
+  with open(file_path, 'rb') as file:
+      files = {
+          'file': (file_path, file, 'application/pdf'),
+          'caption': (None, caption)
+      }
+      response = requests.post(url, files=files)
+
+  if response.status_code == 200:
+      print("File uploaded successfully")
+  else:
+      print(f"Failed to upload file: {response.status_code}"
+  ```
+</CodeWithTabs>
+
+### `application/octet-stream` (binary)
+
+The `application/octet-stream` media type is used to transmit binary data, such as images, audio, or video files. It is commonly used for file uploads, but it can also be used for other types of binary data.
+
+In an OpenAPI document, specifying `application/octet-stream` for the `/file/upload` endpoint might look like this:
+
+```yaml openapi.yaml
+paths:
+  /file/upload:
+    post:
+      summary: Upload a file
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: File uploaded successfully
+```
+
+The client can call the endpoint to upload an image file as follows:
+
+<CodeWithTabs>
+
+```bash !!tabs curl
+curl -X POST "https://api.example.com/file/upload" \
+     -H "Content-Type: application/octet-stream" \
+     --data-binary "@image.jpg"
+```
+
+```python !!tabs Python
+import requests
+
+url = "https://api.example.com/file/upload"
+file_path = "image.jpg"
+
+with open(file_path, 'rb') as file:
+    files = {
+        'file': (file_path, file, 'image/jpeg')
+    }
+    response = requests.post(url, files=files)
+
+if response.status_code == 200:
+    print("File uploaded successfully")
+else:
+    print(f"Failed to upload file: {response.status_code}")
+```
+
+</CodeWithTabs>
+
+In curl, the `--data-binary` option sends raw file data in the HTTP request body, specified with `@` followed by the file path. Similarly, in Python, a file opened in binary mode (`rb`) is read and sent as a binary string.
+
+### JSON
+
+For specific use cases, the JSON format can be used to transmit a file to a server, such as when the file is small and requires little or no processing.
+The JSON format is not suitable for large files or files with complex structures, as it can lead to issues such as data loss or corruption.
+
+In an OpenAPI document, the specification for transmitting a JSON file on the `/file/upload` endpoint might look like this:
+
+```yaml openapi.yaml
+paths:
+  /file/upload:
+    post:
+      summary: Upload a file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: byte
+                caption:
+                  type: string
+      responses:
+        '200':
+          description: File uploaded successfully
+```
+
+The client can call the endpoint using curl or Python as follows:
+
+<CodeWithTabs>
+
+```bash !!tabs curl
+curl -X POST "https://api.example.com/file/upload" \
+     -H "Content-Type: application/json" \
+     -d '{"file": $(base64 image.jpg), "caption": "Sample JSON file"}'
+```
+
+```python !!tabs Python
+import requests
+import base64
+
+url = "https://api.example.com/file/upload"
+file_path = "image.jpg"
+
+with open(file_path, "rb") as file:
+    base64_file = base64.b64encode(file.read()).decode("utf-8")
+
+payload = {
+    "file": base64_file,
+    "filename": "image.jpg"
+}
+
+response = requests.post(url, json=payload)
+
+if response.status_code == 200:
+    print("File uploaded successfully")
+else:
+    print(f"Failed to upload file: {response.status_code}")
+```
+
+</CodeWithTabs>
+
+In this example, the file data is encoded in Base64 format and included in the JSON payload. The Python code reads the file data from a string variable and sends it as a JSON object in the request body.
+
+## Best practices for file uploads
+
+Here are some best practices for handling file uploads in an OpenAPI document.
+
+### Prioritize `multipart/form-data`
+
+The `multipart/form-data` format is preferred for most file uploads, as it allows additional metadata to be sent with the file. However, other formats like binary or JSON can be used for specific use cases, such as streaming large files (binary) or embedding files within JSON payloads for system integration.
+
+### Handling large files
+
+Uploading large files can significantly impact the performance of your API. To avoid server overload, consider using a streaming approach instead of sending or processing the whole file at once on the server. The `application/octet-stream` media type is ideal for this use case, as it allows the file to be divided into smaller binary chunks to be sent one by one.
+
+Chunked file uploads require some extra coding work as there is no formal specification for upload streams. However, this process can be implemented using a **session-based streaming** approach, which involves the following steps:
+
+1. **Initiate the session:** The client requests an upload session, and the server responds with a session ID to track the upload.
+
+2. **Upload chunks:** The client slices the file into smaller binary chunks and uploads them sequentially, using the session ID to associate them.
+
+3. **Finalize the upload:** The client signals the server to finalize the upload, and the server assembles the chunks into the complete file.
+
+In an OpenAPI document, the specification for this approach might look like this:
+
+```yaml openapi.yaml
+openapi: 3.1.0
+info:
+  title: File Upload API
+  version: 1.0.0
+
+paths:
+  /init:
+    post:
+      summary: Initiate an upload session
+      operationId: initiateSession
+      responses:
+        200:
+          description: Upload session initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    description: The unique ID for the upload session
+        400:
+          description: Bad request
+
+  /upload:
+    post:
+      summary: Upload a file chunk
+      operationId: uploadChunk
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+          description: The unique session ID for associating the chunk
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        200:
+          description: Chunk uploaded successfully
+        400:
+          description: Invalid or missing session ID
+
+  /finalize:
+    post:
+      summary: Finalize the upload session
+      operationId: finalizeUpload
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+          description: The unique session ID for finalizing the upload
+      responses:
+        200:
+          description: Upload finalized successfully
+        400:
+          description: Invalid or missing session ID
+```
+
+The client begins by sending a POST `/init` request to the server to initiate an upload session, receiving a `session_id` in the response.
+
+The file is then divided into smaller binary chunks, and each chunk is sent using a POST `/upload` request with the `X-Session-ID` header set to the `session_id`. The chunk is included in the request body as `application/octet-stream`.
+
+When all chunks are uploaded, the client sends a POST `/finalize` request including the `X-Session-ID` header to instruct the server to validate and assemble the chunks into the complete file, ensuring a reliable and efficient upload process.
+
+### Provide clear and informative feedback
+
+If an error occurs during the upload process, the client should receive clear and informative feedback from the server.
+
+For example, if the server data within the request body is invalid, the client should receive a `400 Bad Request` response with a clear error message. If the file is too large, the client should receive a `413 Request Entity Too Large` response.
+
+Here's how you can define these responses in your OpenAPI document:
+
+```yaml openapi.yaml
+responses:
+  400:
+    description: Bad Request - Validation error
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Invalid file format. Only JPEG and PNG are allowed."
+  413:
+    description: Payload Too Large - File size exceeds limit
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "File size exceeds the maximum allowed limit of 10MB."
+```

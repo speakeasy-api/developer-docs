@@ -1,0 +1,81 @@
+---
+title: "Migrate from the Python v1 SDK"
+description: "Migrate from Python v1 to v2."
+---
+
+# Upgrade to the Python v2 SDK with the Speakeasy CLI
+
+To upgrade your Python SDK to Python v2 using the Speakeasy CLI, follow these four steps:
+
+## Update the `gen.yaml` file
+
+- Add `templateVersion: v2` to the Python section of your `gen.yaml` file.
+- If you have an `additionalDependencies` section under `python`, it needs modification. If you haven't changed it previously, you can delete it and it will be recreated in the correct format. Otherwise, modify it from this:
+
+     ```yaml
+     additionalDependencies:
+       dependencies: {}
+       extraDependencies:
+         dev: {}
+     ```
+
+     To this:
+
+     ```yaml
+     additionalDependencies:
+       dev: {}
+       main: {}
+     ```
+
+  - Move any dependencies listed under the `dependencies` key to `main`.
+  - Move any dependencies under `extraDependencies.dev` to `dev`.
+  - Move any additional keys under `extraDependencies` to the top-level `additionalDependencies` next to the other keys.
+
+## Update the `author` key
+
+- Change the old `author` key, under `python`, to the new `authors` key, which is an array of authors.
+
+     ```yaml
+     python:
+       authors:
+         - Speakeasy
+       # other configurations...
+     ```
+
+## Generate the Python v2 SDK
+
+- Run the `speakeasy run` command to generate the Python SDK.
+
+## Adjust the imports for Python v2
+
+One of the main changes in Python v2 is how imported packages are handled. In version 1, `sdkClassName` specified the top-level module. In version 2, `packageName` is now used for imports, and matches the expected naming conventions for packages installed from PyPI. Some code imports may need to be adjusted for this change.
+
+For example, given the `sdkClassName` of `speakeasy` and the `packageName` of `speakeasy-sdk`, the code was previously generated in the `src/speakeasy` directory and imported as follows:
+
+```python
+from speakeasy import Speakeasy
+```
+
+In version 2, the code is generated in the `src/speakeasy_sdk` directory and imported as follows:
+
+```python
+from speakeasy_sdk import Speakeasy
+```
+
+- If you have custom hooks, move the custom hook files and the hook registration logic in `registration.py` from the old `sdkClassName`-based code-generation directory to the new `packageName`-based code-generation directory and update the imports accordingly:
+
+     ```python
+     # Old import
+     from speakeasy.hooks import CustomHook
+
+     # New import
+     from speakeasy_sdk.hooks import CustomHook
+     ```
+
+- If you do not have custom hooks, delete the old `src/speakeasy` folder:
+
+     ```sh
+     rm -rf src/speakeasy
+     ```
+
+Feel free to reach out if you encounter any issues or need further assistance!

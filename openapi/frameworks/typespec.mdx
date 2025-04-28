@@ -1,0 +1,985 @@
+---
+title: How To Generate an OpenAPI Spec With TypeSpec
+description: "How to create OpenAPI schemas and SDKs from TypeSpec"
+---
+
+# How to Create OpenAPI Schemas and SDKs With TypeSpec
+
+[TypeSpec](https://typespec.io/) is a brand-new domain-specific language (DSL) used to describe APIs. As the name implies you describe your API using a TypeScript-like type system, with language constructs such as `model` for the structure or schema of your API's data, or `op` for operations in your API. If you've used [OpenAPI](/openapi), these concepts likely sound familiar – this is because TypeSpec is also influenced by and generates OpenAPI.
+
+So something that is _like_ OpenAPI, and also generates OpenAPI specifications? You may be asking yourself, why does TypeSpec exist? Like many people, our initial reaction to TypeSpec was to reference the iconic XKCD strip:
+
+<div style={{textAlign: "center"}}>
+  <br />
+  <img src="https://imgs.xkcd.com/comics/standards_2x.png" width="70%" alt="Standards" />
+</div>
+
+However, after spending some time with it, we've come to understand the justification for a new DSL - we'll cover some of that shortly. We also ran into this young language's rough edges, and we'll cover those in detail, too.
+
+Our end goal with this article is to create a high-quality TypeScript SDK. However, before we create an SDK, we'll need to learn how to generate an OpenAPI document based on a TypeSpec specification. For that, we need to learn TypeSpec, and there is no better way to get started learning a new language than by asking _why_ it exists in the first place.
+
+## The Problem TypeSpec Solves
+
+Code generation is a force multiplier in API design and development. When an executive unironically asks, "How do we 10x API creation?", the unironic answer is, " API-first design + Code generation."
+
+API-first means specifying exactly what your application's programming interface will look like before anything gets built, code generation means using that definition to create documentation, server (stubs) and client libraries (SDKs).
+
+As mentioned previously,OpenAPI is widely used for exactly this reason – it provides a human-readable (as YAML) specification format for APIs, and comes with a thriving ecosystem of tools and code generators. So if OpenAPI exists, what can TypeSpec add?
+
+The fundamental problem TypeSpec aims to solve is that writing OpenAPI documents by hand is complex, tedious, and error-prone. The complexity often leads to teams to abandon an API-first approach and instead start by coding their API, and then extracting OpenAPI from the codebase when they get to the point where they need documentation and SDKs – a quasi-API-first approach.
+
+Ultimately, OpenAPI isn't for everyone. Neither is TypeSpec for that matter. But for those who are immersed in the TypeScript ecosystem, TypeSpec may be a more natural fit than OpenAPI. And the more tools we have to help businesses create great APIs, the better.
+
+## TypeSpec Development Status
+
+Before you trade in your OpenAPI YAML for TypeSpec, know that at the time of writing, TypeSpec is nowhere near as feature-rich and stable as OpenAPI. If you're designing a new API from scratch, taking the time to learn OpenAPI will benefit your team, even if TypeSpec one day becomes the most popular API specification language.
+
+## TypeSpec Libraries and Emitters
+
+Developers can extend the capabilities of TypeSpec by creating and using libraries. These libraries can provide additional functionality, such as decorators, types, and operations, that are not part of the core TypeSpec language.
+
+A special type of library in TypeSpec is an emitter. Emitters are used to generate output from a TypeSpec specification. For example, the `@typespec/openapi3` library provides an emitter that generates an OpenAPI document from a TypeSpec specification.
+
+When targeting a specific output format, such as OpenAPI, you can use the corresponding emitter library to generate the desired output. This allows you to write your API specification in TypeSpec and then generate the output in the desired format.
+
+## A Brief Introduction to TypeSpec Syntax
+
+This guide won't give a complete introduction or overview of TypeSpec, but we'll take a brief look at the language's structure and important concepts in the context of generating SDKs.
+
+### Modularity in TypeSpec
+
+The main entry point in TypeSpec is the `main.tsp` file. This file has the same role as the `index.ts` file in a TypeScript project.
+
+Just like in TypeScript, we can organize code into files, folders, and modules, then [import](https://typespec.io/docs/language-basics/imports) these using the `import` statement. This helps split large API specifications into smaller, more manageable parts. The difference between TypeScript and TypeSpec in this regard is that TypeSpec imports files, not code.
+
+Here's an example of how you can import files, folders, and modules in TypeSpec:
+
+```typescript main.tsp
+import "./books.tsp"; // Import a file
+import "./books"; // Import main.tsp in a folder
+import "/books"; // Import a TypeSpec module's main.tsp file
+```
+
+We can install modules using npm, and use the `import` statement to import them into our TypeSpec project.
+
+[Namespaces](https://typespec.io/docs/language-basics/namespaces), another TypeScript feature that TypeSpec borrows, allow you to group types and avoid naming conflicts. This is especially useful when importing multiple files that define types with the same name. Just like with TypeScript, namespaces may be nested and span multiple files.
+
+Namespaces are defined using the `namespace` keyword, followed by the namespace name and a block of type definitions. Here's an example:
+
+```typescript
+namespace MyNamespace {
+  model User {
+    id: string;
+    name: string;
+  }
+}
+```
+
+They may also be defined at the file level, using the `namespace` keyword followed by the namespace name and a block of type definitions. Here's an example:
+
+```typescript
+namespace MyNamespace;
+
+model User {
+    id: string;
+    name: string;
+}
+
+model Post {
+    id: string;
+    title: string;
+    content: string;
+}
+```
+
+### Models in TypeSpec
+
+[Models](https://typespec.io/docs/language-basics/models) in TypeSpec are similar to OpenAPI's `schema` objects. They define the structure of the data that will be sent and received by your API. We define models using the `model` keyword, followed by the model name and a block of properties. Here's an example:
+
+```typescript main.tsp
+model User {
+    id: string;
+    name: string;
+    email: string;
+}
+```
+
+Models are composable and extensible. You can reference other models within a model definition, extend a model with additional properties, and compose multiple models into a single model. Here's an example of model composition:
+
+```typescript main.tsp
+namespace WithComposition {
+    model User {
+        id: string;
+        name: string;
+        email: string;
+    }
+
+    model HasRole {
+        role: string;
+    }
+
+    model Admin is User { // Copies the properties and decorators from User
+        ...HasRole; // Extends the User model with the properties from the HasRole model
+        level: number; // Adds a new property to the Admin model
+    }
+}
+
+// The Admin model above will have the following properties:
+namespace WithoutComposition {
+    model Admin {
+        id: string;
+        name: string;
+        email: string;
+        role: string;
+        level: number;
+    }
+}
+```
+
+The equivalent OpenAPI specification for the `User` model above would look like this:
+
+```yaml openapi.yaml
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+```
+
+### Operations in TypeSpec
+
+[Operations](https://typespec.io/docs/language-basics/operations) in TypeSpec are similar to OpenAPI operations. They describe the methods that users can call in your API. We define operations using the `op` keyword, followed by the operation name. Here's an example:
+
+```typescript main.tsp
+op listUsers(): User[]; // Defaults to GET
+op getUser(id: string): User; // Defaults to GET
+op createUser(@body user: User): User; // Defaults to POST with a body parameter
+```
+
+### Interfaces in TypeSpec
+
+[Interfaces](https://typespec.io/docs/language-basics/interfaces) in TypeSpec group related operations together, similar to OpenAPI's `paths` object. We define interfaces using the `interface` keyword, followed by the interface name and a block of operations. Here's an example:
+
+```typescript main.tsp
+@route("/users")
+interface Users {
+    op listUsers(): User[]; // Defaults to GET /users
+    op getUser(id: string): User; // Defaults to GET /users/{id}
+    op createUser(@body user: User): User; // Defaults to POST /users
+}
+```
+
+The equivalent OpenAPI specification for the `Users` interface above would look like this:
+
+```yaml openapi.yaml
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/User"
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /users/{id}:
+    get:
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+```
+
+### Decorators in TypeSpec
+
+[Decorators](https://typespec.io/docs/language-basics/decorators) in TypeSpec add metadata to models, operations, and interfaces. They start with the `@` symbol followed by the decorator name. Here's an example of the `@doc` decorator:
+
+```typescript main.tsp mark=1,3,6,9
+@doc("A user in the system")
+model User {
+    @doc("The unique identifier of the user")
+    id: string;
+
+    @doc("The name of the user")
+    name: string;
+
+    @doc("The email address of the user")
+    email: string;
+}
+```
+
+Decorators allow you to add custom behavior to your TypeSpec definitions using JavaScript functions. You can [define your own decorators](https://typespec.io/docs/extending-typespec/create-decorators) or use built-in decorators provided by TypeSpec or third-party libraries.
+
+### Learn More About TypeSpec
+
+The language features above should be enough to help you find your way around a TypeSpec specification.
+
+If you're interested in learning more about the TypeSpec language, see the [official documentation](https://typespec.io/docs/language-basics/overview).
+
+We'll cover more detailed examples of TypeSpec syntax in our full example below.
+
+## Generating an OpenAPI Document from TypeSpec
+
+Now that we have a basic understanding of TypeSpec syntax, let's generate an OpenAPI document from a TypeSpec specification.
+
+The example below will guide you through the process of creating a TypeSpec project, writing a TypeSpec specification, and generating an OpenAPI document from it.
+
+For a speedrun, we've published the full example in a [GitHub repository](https://github.com/speakeasy-api/typespec-openapi-example).
+
+### Step 1: Install the TypeSpec Compiler CLI
+
+Install `tsp` globally using npm:
+
+```bash Terminal
+npm install -g @typespec/compiler
+```
+
+### Step 2: Create a TypeSpec Project
+
+Create a new directory for your TypeSpec project and navigate into it:
+
+```bash Terminal
+mkdir typespec-example-speakeasy
+cd typespec-example-speakeasy
+```
+
+Run the following command to initialize a new TypeSpec project:
+
+```bash Terminal
+tsp init
+```
+
+This will prompt you to select a template for your project. Choose the `Generic REST API` template and press enter. Press enter repeatedly to select the defaults until the project is initialized.
+
+### Step 3: Install the TypeSpec Dependencies
+
+Install the TypeSpec dependencies using `tsp`:
+
+```bash Terminal
+tsp install
+```
+
+We'll need to install the `@typespec/versioning` and `@typespec/openapi` modules to generate an OpenAPI document. Run the following commands to install these modules:
+
+```bash Terminal
+npm install @typespec/versioning @typespec/openapi
+```
+
+### Step 4: Write Your TypeSpec Specification
+
+Open the `main.tsp` file in your text editor and write your TypeSpec specification. Here's an example of a simple TypeSpec specification:
+
+### Example TypeSpec File
+
+Here's an example of a complete TypeSpec file for a Book Store API:
+
+```typescript
+import "@typespec/http";
+import "@typespec/openapi";
+import "@typespec/openapi3";
+import "@typespec/versioning";
+
+using TypeSpec.Http;
+using TypeSpec.OpenAPI;
+using TypeSpec.Versioning;
+
+@service({
+  title: "Book Store API",
+})
+@info({
+  termsOfService: "https://bookstore.example.com/terms",
+  contact: {
+    name: "API Support",
+    url: "https://bookstore.example.com/support",
+    email: "support@bookstore.example.com",
+  },
+  license: {
+    name: "Apache 2.0",
+    url: "https://www.apache.org/licenses/LICENSE-2.0.html",
+  },
+})
+@versioned(Versions)
+@server("http://127.0.0.1:4010", "Book Store API v1")
+@doc("API for managing a book store inventory and orders")
+namespace BookStore;
+
+enum Versions {
+  `1.0.0`,
+}
+
+enum PublicationType {
+  Book,
+  Magazine,
+}
+
+@doc("Base model for books and magazines")
+model PublicationBase {
+  @doc("Unique identifier")
+  @key
+  id: string;
+
+  @doc("Title of the publication")
+  title: string;
+
+  @doc("Publication date")
+  publishDate: utcDateTime;
+
+  @doc("Price in USD")
+  price: float32;
+
+  @doc("Type of publication")
+  type: PublicationType;
+}
+
+const BookExample1 = #{
+  id: "123",
+  title: "Book Title",
+  publishDate: utcDateTime.fromISO("2020-01-01T00:00:00Z"),
+  price: 19.99,
+  type: PublicationType.Book,
+  author: "Author Name",
+  isbn: "1234567890",
+};
+
+const BookExample2 = #{
+  id: "456",
+  title: "Another Book Title",
+  publishDate: utcDateTime.fromISO("2020-02-01T00:00:00Z"),
+  price: 24.99,
+  type: PublicationType.Book,
+  author: "Another Author",
+  isbn: "0987654321",
+};
+
+@example(BookExample1)
+@doc("Represents a book in the store")
+model Book extends PublicationBase {
+  type: PublicationType.Book;
+
+  @doc("Author of the book")
+  author: string;
+
+  @doc("ISBN of the book")
+  isbn: string;
+}
+
+const MagazineExample1 = #{
+  id: "789",
+  title: "Magazine Title",
+  publishDate: utcDateTime.fromISO("2020-03-01T00:00:00Z"),
+  price: 9.99,
+  type: PublicationType.Magazine,
+  issueNumber: 1,
+  publisher: "Publisher Name",
+};
+
+const MagazineExample2 = #{
+  id: "012",
+  title: "Another Magazine Title",
+  publishDate: utcDateTime.fromISO("2020-04-01T00:00:00Z"),
+  price: 7.99,
+  type: PublicationType.Magazine,
+  issueNumber: 2,
+  publisher: "Another Publisher",
+};
+
+@example(MagazineExample1)
+@doc("Represents a magazine in the store")
+model Magazine extends PublicationBase {
+  type: PublicationType.Magazine;
+
+  @doc("Issue number of the magazine")
+  issueNumber: int32;
+
+  @doc("Publisher of the magazine")
+  publisher: string;
+}
+
+const PublicationExample1 = BookExample1;
+
+const PublicationExample2 = MagazineExample1;
+
+@example(PublicationExample1)
+@discriminator("type")
+@oneOf
+union Publication {
+  book: Book,
+  magazine: Magazine,
+}
+
+@doc("Possible statuses for an order")
+enum OrderStatus {
+  Pending,
+  Shipped,
+  Delivered,
+  Cancelled,
+};
+
+const OrderExample1 = #{
+  id: "abc",
+  customerId: "123",
+  items: #[BookExample1, MagazineExample1],
+  totalPrice: 29.98,
+  status: OrderStatus.Pending,
+};
+
+@example(OrderExample1)
+@doc("Represents an order for publications")
+model Order {
+  @doc("Unique identifier for the order")
+  id: string;
+
+  @doc("Customer who placed the order")
+  customerId: string;
+
+  @doc("List of publications in the order")
+  items: Publication[];
+
+  @doc("Total price of the order")
+  totalPrice: float32;
+
+  @doc("Status of the order")
+  status: OrderStatus;
+}
+
+@doc("Operations for managing publications")
+@tag("publications")
+@route("/publications")
+interface Publications {
+  @opExample(#{ returnType: #[BookExample1, MagazineExample1] })
+  @doc("List all publications")
+  @operationId("listPublications")
+  list(): Publication[];
+
+  @opExample(#{ parameters: #{ id: "123" }, returnType: BookExample1 })
+  @doc("Get a specific publication by ID")
+  @operationId("getPublication")
+  get(@path id: string): Publication | Error;
+
+  @opExample(#{
+    parameters: #{ publication: BookExample1 },
+    returnType: BookExample1,
+  })
+  @doc("Create a new publication")
+  @operationId("createPublication")
+  create(@body publication: Publication): Publication | Error;
+}
+
+@doc("Operations for managing orders")
+@tag("orders")
+@route("/orders")
+interface Orders {
+  @opExample(#{
+    parameters: #{ order: OrderExample1 },
+    returnType: OrderExample1,
+  })
+  @doc("Place a new order")
+  @operationId("placeOrder")
+  placeOrder(@body order: Order): Order | Error;
+
+  @opExample(#{ parameters: #{ id: "123" }, returnType: OrderExample1 })
+  @doc("Get an order by ID")
+  @operationId("getOrder")
+  getOrder(@path id: string): Order | Error;
+
+  @opExample(#{
+    parameters: #{ id: "123", status: OrderStatus.Shipped },
+    returnType: OrderExample1,
+  })
+  @doc("Update the status of an order")
+  @operationId("updateOrderStatus")
+  updateStatus(@path id: string, @body status: OrderStatus): Order | Error;
+}
+
+@example(#{ code: 404, message: "Publication not found" })
+@error
+@doc("Error response")
+model Error {
+  @doc("Error code")
+  code: int32;
+
+  @doc("Error message")
+  message: string;
+}
+```
+
+Let's break down some of the key features of this TypeSpec file:
+
+#### Importing and Using Modules
+
+The file starts by importing necessary TypeSpec modules:
+
+```typescript
+import "@typespec/http";
+import "@typespec/openapi";
+import "@typespec/openapi3";
+import "@typespec/versioning";
+
+using TypeSpec.Http;
+using TypeSpec.OpenAPI;
+using TypeSpec.Versioning;
+```
+
+These modules extend TypeSpec's capabilities for HTTP APIs, OpenAPI generation, and API versioning.
+
+#### Namespace and Service Definition
+
+The `BookStore` namespace is decorated with several metadata decorators:
+
+```typescript
+@service({
+  title: "Book Store API",
+})
+@info({
+  termsOfService: "https://bookstore.example.com/terms",
+  contact: {
+    name: "API Support",
+    url: "https://bookstore.example.com/support",
+    email: "support@bookstore.example.com",
+  },
+  license: {
+    name: "Apache 2.0",
+    url: "https://www.apache.org/licenses/LICENSE-2.0.html",
+  },
+})
+@versioned(Versions)
+@server("http://127.0.0.1:4010", "Book Store API v1")
+@doc("API for managing a book store inventory and orders")
+namespace BookStore;
+```
+
+- `@service` marks this namespace as a service and provides its title
+- `@info` provides additional information for the OpenAPI document
+- `@versioned` specifies the API versions
+- `@server` defines the base URL for the API
+- `@doc` provides a description for the API
+
+#### Models and Inheritance
+
+TypeSpec supports model inheritance, which is used to create specific publication types:
+
+```typescript
+@doc("Base model for books and magazines")
+model PublicationBase {
+  // properties
+}
+
+@example(BookExample1)
+@doc("Represents a book in the store")
+model Book extends PublicationBase {
+  // additional properties specific to books
+}
+```
+
+#### Union Types
+
+Union types allow representing multiple possible types with a discriminator property:
+
+```typescript
+@example(PublicationExample1)
+@discriminator("type")
+@oneOf
+union Publication {
+  book: Book,
+  magazine: Magazine,
+}
+```
+
+#### Interfaces and Operations
+
+Interfaces in TypeSpec group related operations:
+
+```typescript
+@doc("Operations for managing publications")
+@tag("publications")
+@route("/publications")
+interface Publications {
+  // operations
+}
+```
+
+Operations can be defined with various parameters and return types:
+
+```typescript
+@opExample(#{ parameters: #{ id: "123" }, returnType: BookExample1 })
+@doc("Get a specific publication by ID")
+@operationId("getPublication")
+get(@path id: string): Publication | Error;
+```
+
+The `@path` decorator indicates a path parameter, while `@body` would indicate a request body parameter.
+
+### Step 5: Generate the OpenAPI Document
+
+Now that we've written our TypeSpec specification, we can generate an OpenAPI document from it using the `tsp` compiler.
+
+Run the following command to generate an OpenAPI document:
+
+```bash Terminal
+tsp compile main.tsp --emit @typespec/openapi3
+```
+
+The `tsp compile` command creates a new directory called `tsp-output`, then the `@typespec/openapi3` emitter creates the directories `@typespec/openapi3` within. If we were to use other emitters, such as protobuf, we would see `@typespec/protobuf` directories instead.
+
+Because we're using the versioning library, the OpenAPI document will be generated for the specified version of the API. In our case, the file generated by the OpenAPI 3 emitter will be named `openapi.yaml`.
+
+### Step 6: View the Generated OpenAPI Document
+
+Open the generated OpenAPI document in your text editor or a YAML viewer to see the API specification.
+
+### Generated OpenAPI Document Structure
+
+When the TypeSpec compiler processes our specification, it generates an OpenAPI document. Here's what the structure of the generated OpenAPI document looks like:
+
+#### OpenAPI Version
+
+The document starts with the OpenAPI version:
+
+```yaml
+openapi: 3.0.0
+```
+
+This is determined by the `@typespec/openapi3` emitter we used, which generates OpenAPI 3.0 documents.
+
+#### API Information
+
+The `info` section contains metadata from our `@service` and `@info` decorators:
+
+```yaml
+info:
+  title: Book Store API
+  description: API for managing a book store inventory and orders
+  termsOfService: https://bookstore.example.com/terms
+  contact:
+    name: API Support
+    url: https://bookstore.example.com/support
+    email: support@bookstore.example.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+```
+
+#### Server Information
+
+The server URL from our `@server` decorator:
+
+```yaml
+servers:
+  - url: http://127.0.0.1:4010
+    description: Book Store API v1
+```
+
+#### Paths and Operations
+
+The `/publications` and `/orders` paths come from our interface route decorators:
+
+```yaml
+paths:
+  /publications:
+    get:
+      tags:
+        - publications
+      operationId: listPublications
+      description: List all publications
+      responses:
+        "200":
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Publication"
+    # ... other operations
+```
+
+The `@body` parameters in TypeSpec translate to `requestBody` in OpenAPI:
+
+```yaml
+  /orders:
+    post:
+      tags:
+        - orders
+      operationId: placeOrder
+      description: Place a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Order"
+      # ... responses
+```
+
+#### Components and Schemas
+
+Our models become schemas in the `components` section:
+
+```yaml
+components:
+  schemas:
+    Book:
+      allOf:
+        - $ref: "#/components/schemas/PublicationBase"
+        - type: object
+          properties:
+            author:
+              description: Author of the book
+              type: string
+            isbn:
+              description: ISBN of the book
+              type: string
+          required:
+            - author
+            - isbn
+```
+
+Union types use the `oneOf` keyword:
+
+```yaml
+    Publication:
+      oneOf:
+        - $ref: "#/components/schemas/Book"
+        - $ref: "#/components/schemas/Magazine"
+      discriminator:
+        propertyName: type
+        mapping:
+          Book: "#/components/schemas/Book"
+          Magazine: "#/components/schemas/Magazine"
+```
+
+### Adding Retries with OpenAPI Extensions
+
+To add retry logic to the `listPublications` operation, we can add the Speakeasy `x-speakeasy-retries` extension to our TypeSpec specification:
+
+```typescript
+interface Publications {
+  @extension("x-speakeasy-retries", {
+    strategy: "backoff",
+    backoff: {
+      initialInterval: 500,
+      maxInterval: 60000,
+      maxElapsedTime: 3600000,
+      exponent: 1.5,
+    },
+    statusCodes: ["5XX"],
+    retryConnectionErrors: true
+  })
+  @opExample(#{ returnType: #[BookExample1, MagazineExample1] })
+  @doc("List all publications")
+  @operationId("listPublications")
+  list(): Publication[];
+  
+  // ... other operations
+}
+```
+
+This generates the following extension in the OpenAPI document:
+
+```yaml
+paths:
+  /publications:
+    get:
+      # ... other properties
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500
+          maxInterval: 60000
+          maxElapsedTime: 3600000
+          exponent: 1.5
+        statusCodes:
+          - 5XX
+        retryConnectionErrors: true
+```
+
+### Step 7: Generate an SDK from the OpenAPI Document
+
+Now that we have an OpenAPI document for our API, we can generate an SDK using Speakeasy.
+
+Make sure you have [Speakeasy installed](/docs/speakeasy-cli/getting-started):
+
+```bash Terminal
+speakeasy --version
+```
+
+Then, generate a TypeScript SDK using the following command:
+
+```bash Terminal
+speakeasy generate sdk \
+  --schema tsp-output/@typespec/openapi3/openapi.yaml \
+  --lang typescript \
+  --out ./sdks/bookstore-ts
+```
+
+This command generates a TypeScript SDK for the API defined in the OpenAPI document. The SDK will be placed in the `sdks/bookstore-ts` directory.
+
+### Step 8: Customize the SDK
+
+We'd like to add retry logic to the SDK's `listPublications` to handle network errors gracefully. We'll do this by using an OpenAPI extension that [Speakeasy provides](/docs/customize-sdks/retries), `x-speakeasy-retries`.
+
+Instead of modifying the OpenAPI document directly, we'll add this extension to the TypeSpec specification and regenerate the OpenAPI document and SDK.
+
+After generating our OpenAPI document, we can generate an SDK using the Speakeasy CLI. Here's the process:
+
+1. First, compile our TypeSpec code to generate the OpenAPI document:
+
+```bash
+tsp compile main.tsp --emit @typespec/openapi3
+```
+
+2. Then use Speakeasy to generate the SDK:
+
+```bash
+speakeasy generate sdk \
+  --schema tsp-output/@typespec/openapi3/openapi.yaml \
+  --lang typescript \
+  --out ./sdks/bookstore-ts
+```
+
+This will create a TypeScript SDK in the `./sdks/bookstore-ts` directory.
+
+Now that we've added the `x-speakeasy-retries` extension to the `listPublications` operation in the TypeSpec specification, we can use Speakeasy to recreate the SDK:
+
+```bash Terminal
+speakeasy generate sdk \
+  --schema tsp-output/@typespec/openapi3/openapi.yaml \
+  --lang typescript \
+  --out ./sdks/bookstore-ts
+```
+
+## Common TypeSpec Pitfalls and Possible Solutions
+
+While working with TypeSpec version 0.58.1, we encountered a few limitations and pitfalls that you should be aware of.
+
+### 1. Limited Support for Model and Operation Examples
+
+Examples only shipped as part of TypeSpec version 0.58.0, and the OpenAPI emitter is still in development. This means that the examples provided in the TypeSpec specification may not be included in the generated OpenAPI document.
+
+To work around this limitation, you can provide examples directly in the OpenAPI document, preferably by using an [OpenAPI Overlay](/docs/prep-openapi/overlays/create-overlays).
+
+Here's an overlay, saved as `bookstore-overlay.yaml`, that adds examples to the `Book` and `Magazine` models in the OpenAPI document:
+
+```yaml bookstore-overlay.yaml
+overlay: 1.0.0
+info:
+  title: Add Examples to Book and Magazine Models
+  version: 1.0.0
+actions:
+  - target: $.components.schemas.Book
+    update:
+      example:
+        id: "1"
+        title: "The Great Gatsby"
+        publishDate: "2022-01-01T00:00:00Z"
+        price: 19.99
+  - target: $.components.schemas.Magazine
+    update:
+      example:
+        id: "2"
+        title: "National Geographic"
+        publishDate: "2022-01-01T00:00:00Z"
+        price: 5.99
+```
+
+Validate the overlay using Speakeasy:
+
+```bash Terminal
+speakeasy overlay validate -o bookstore-overlay.yaml
+```
+
+Then apply the overlay to the OpenAPI document:
+
+```bash Terminal
+speakeasy overlay apply -s tsp-output/@typespec/openapi3/openapi.yaml -o bookstore-overlay.yaml > combined-openapi.yaml
+```
+
+If we look at the `combined-openapi.yaml` file, we should see the examples added to the `Book` and `Magazine` models, for example:
+
+```yaml combined-openapi.yaml
+example:
+  type: Magazine
+  issueNumber: 1
+  publisher: Publisher Name
+  id: "2"
+  title: "National Geographic"
+  publishDate: "2022-01-01T00:00:00Z"
+  price: 5.99
+```
+
+### 2. Only Single Examples Supported
+
+At the time of writing, the OpenAPI emitter only supports a single example for each operation or model. If you provide multiple examples using the `@opExample` decorator in the TypeSpec specification, only the last example will be included in the OpenAPI document.
+
+OpenAPI version 3.0.0 introduced support for multiple examples using the `examples` field, and since OpenAPI 3.1.0, the singular `example` field is marked as deprecated in favor of multiple `examples`.
+
+### 3. No Extensions at the Namespace Level
+
+We found that the `x-speakeasy-retries` extension could not be added at the namespace level in the TypeSpec specification, even though Speakeasy supports this extension at the operation level.
+
+The TypeSpec documentation on the [@extension](https://typespec.io/docs/libraries/openapi/reference/decorators#@TypeSpec.OpenAPI.extension) decorator does not mention any restrictions on where extensions can be applied, so this may be a bug or an undocumented limitation.
+
+To work around this limitation, you can add the `x-speakeasy-retries` extension directly to the OpenAPI document using an overlay, as shown in the previous example, or by adding it to each operation individually in the TypeSpec specification.
+
+### 4. No Support for Webhooks or Callbacks
+
+TypeSpec does not yet support webhooks or callbacks, which are common in modern APIs. This means you cannot define webhook operations or callback URLs in your TypeSpec specification and generate OpenAPI documents for them.
+
+To work around this limitation, you can define webhooks and callbacks directly in the OpenAPI document using an overlay, or by adding them to the OpenAPI document manually.
+
+### 5. OpenAPI 3.0.0 Only
+
+TypeSpec's OpenAPI emitter currently only supports OpenAPI version 3.0.0. We much prefer OpenAPI 3.1.0, which introduced several improvements over 3.0.0.
+
+## The TypeSpec Playground
+
+To help you experiment with TypeSpec and see how it translates to OpenAPI, the Microsoft team created a [TypeSpec Playground](https://typespec.io/playground).
+
+We added our [TypeSpec specification](https://typespec.io/playground?e=%40typespec%2Fopenapi3&options=%7B%7D&c=aW1wb3J0ICJAdHlwZXNwZWMvaHR0cCI7CtIZb3BlbmFwadwcM9UddmVyc2lvbmluZyI7Cgp1c2luZyBUeXBlU3BlYy5IdHRwO9AVT3BlbkFQSdEYVslKOwoKQHNlcnZpY2UoewogIHRpdGxlOiAiQm9vayBTdG9yZSBBUEkiLAp9KQpAaW5mb8YmZXJtc09mU8Y5OiAi5ADtczovL2Jvb2tzxDYuZXhhbXBsZS5jb20vxS8iLAogIGNvbnRhY3Q6IMRGICBuYW3EPkFQSSBTdXDkAPDFJiAgdXJs31ZtL3PNMmVtYWnENMcWQNU0xSx9xAVsaWNlbnNl8ACJcGFjaGUgMi4w9QCId3d3LmHFIy5vcmcvx0RzL0xJQ0VOU0UtMi4wLmh0bWzIZ%2BQBNOcBtWVkKOcBdXMp5gFyZXIoxVk6Ly8xMjcuMC4wLjE6NDAxMCIs8AF%2FIHYxIikKQGRvYyjlASxmb3IgbWFuYWfkAdVhIOQA6yDlAOwgaW52ZW50b3J5IGFuZCBvcmRlcnMiKQrkAN9zcGFjZSDEWcVYOwoKZW51bSDoAJblAQlgMeQAiGAsCn3HHlB1YmxpY2F0aW9u5AI9xSXEQ%2BQA4U1hZ2F6aW5lxS7mAJ1CYXNlIG1vZGVs5QCk5QGE5QCKbccs5ACNxiDLWsU2xFrGRVVuaXF1ZSBpZGVudGlmaWVyIinEHGtleQogIGlkOiBzdHLmArrIMlTkArUgb2YgdGhlIHDKWcU55wLS0TXrAIEgZGF0ZcUtxT1zaERhdGU6IHV0Y8QJVGlt5AEuyThyaWPkAWkgVVNExjTEETogZmxvYXQzMssq5QEyb2byAJJ5cGU68AFbO%2BQBRmNvbnN05QFhReYCtTEgPSAj5AEb5AD4IjEyM%2BUCW%2B0DpeUA%2FcUX%2BAC9LmZyb21JU08oIjIwMjAtMDEtMDFUMDA6xQNaIinFPOYAxTE5Ljk5xWP0AKQu6AH7YXV0aG9y5AMxxQkgTmFt5gCDaXNibuYAqTQ1Njc4OeQDSH078wDZMu0A2TQ1Nu0A2UFub3RoZXLFMf8A4fQA4TL6AOEyNP8A4fAA4ecAiuYA6ewA5DA5ODc2NTQzMjHnAORA5wRpKOwBwOgDt1JlcHJlc2VudHPoA7FpbuUCr%2BUDuOkDFsQ7IGV4dGVuZHP1AyP6ALfrAnnnAZbnAxHEbuUCeOgA1fEDC0lTQk7RLuYA58gs6QKd6AP29QKhNzg57QHIyC3%2FAcT0AcQz%2BgHE%2FgKkyHTEImlzc3VlTnVtYmVyOiAxy3%2FEEOYEAsQM6ALA6gKq7wDm7gKuMDEy9QKu%2FwDu%2FADuNPoA7jf%2FAO73AO4yy3%2FEEOkApukA9vACt%2FAB2vUCu%2BgFyfYCv8hD%2FwLD%2FADJ7AKX5ADQIG7lANHoAp%2FoAIDnAqPrAPFpbu4FfuoB3tQ76wEa8QLj6wCb6wLm7APW6QIo0ivkAivwAUrsAWbTXeQBaWlzY3JpbWluYXRvcigi5AEj5Afyb25lT2YKdW7kBqTLOeUBR%2BQDqTrpB43oAN069AeXUG9zc2libOQBrmF0dXNlc%2BUHnmFu5gghIinmB%2BxPxA1TxSLFYVBlbmRpbmfEXlNoaXBwZWTEC0RlbGl2ZXLGDUNhbmNlbGzEDeoDPMVI9QQfYWJj5goGdXN0b21lcknsBtVpdGVtczogI1vsAWks8QFMXcQsdG90YWzlB4k6IDI5Ljk4xBXmAN067ADILukAxO0C6u0AovQC5%2BcBGuUBJ%2BsHvuoIvsVC%2FAi0xTvkAnboAWP3CLtD5wELIHdobyBwbGFjZWTPN%2BwBLdE%2FTGlzdO8IY3PoA5vLeuYBW%2BsCQltdy0VU5AFO5gRv6AMsyjzsAWvyCOPnAi%2FRNvMBjOUDYcY2T3BlcucArO0Ky%2B8Ba0B0YWcoItAVcm91dGUoIi%2FPGGludGVyZuQK4%2BsA5%2BYCyUDlBI7kCuYoIngtc3BlYWtlYXN5LXJldHJpZXMiLMUm5AC1cmF0ZWd5OiAiYmFja29mZucMBscO6AwtICBpbml0aWFsScR0dmFsOiA1MDDGK%2BQDinjKGDYwMM0aRWxhcHNlZOQGAzogM8UeyR9leHBvbmVudDogMS41xhXlDKvoAU5Db2RlczogWyI1WFgi5QMHICDkAMN5Q29ubmVj5QRScnJvcnM6IHRydWXkDIPlCzlvcOcC6ygje8QxdXLlBXL%2FA2vkA2vHQeoCamFsbPABpcVh5wHPSWQoImxpc3TsAYLFI8QVKCn1AoLtAJ5wYXJhbWV0ZeQAxCN76gr1IH0s7QC67Qsi6wClR2V0IGEg5A8taWZpY%2BwAqyBieSBJ5guw7gCwZ2XsAK%2FFIWdldChAcGF0aOsDs%2B4AvSB8IOUBa%2FIAw%2BUBlu8Ax%2BsAh%2FAAu%2BkBxvUA28Qe6wDeQ3JlYXRlIGEgbmV3zFXzANZjxSvwANnGFihAYm9kecxB7QDc%2BADq%2FwO%2BZ%2BoObuYDuMoP6AOyyRLqA6zlBCDnA6b%2FAUfGYOcEU%2FwBQs0h7wFDUOQFYucBQuoEru4BPOUFhsVFxR3KD%2BcBOewAiCnHCPoCEf8C1PcAt%2FEC1egGkvsCx%2BoAs8gN9ALG%2FwCv9AF56g589Qdk5wgd%2FwGL8QGLVXDkD3bnCkXoBkbrCJTwAOJ1xTDLecUkxhbGEfEA7ywg5gGy8wC28gEK5ALg6AghI3sgY29kZTogNDA0LCBtZXNzYWfkC%2BrsAxlub3QgZm91bmQi5ADWQGXERucDIsVSIHJlc3BvbnPqCx7GF%2BoINcYQxGnmA57FcvAKx8Yl5wCDxSjHDOwKuQ%3D%3D) to the playground. You can view the generated OpenAPI document and SDK, or browse a generated Swagger UI for the API.
+
+## Further Reading
+
+This guide barely scratches the surface of what you can do with TypeSpec. This small language is evolving rapidly, and new features are being added all the time.
+
+Here are some resources to help you learn more about TypeSpec and how to use it effectively:
+
+- [TypeSpec Documentation](https://typespec.io/docs): The official TypeSpec documentation provides detailed information on the TypeSpec language, standard library, and emitters.
+- [TypeSpec Releases](https://github.com/microsoft/typespec/releases): Keep up with the latest TypeSpec releases and updates on GitHub.
+- [TypeSpec Playground](https://typespec.io/playground): Worth mentioning again: experiment with TypeSpec in the browser, generate OpenAPI documents, and view the resulting Swagger UI.
+- [Speakeasy Documentation](/docs): Speakeasy has extensive documentation on how to generate SDKs from OpenAPI documents, customize SDKs, and more.
+- [Speakeasy OpenAPI Reference](/openapi): For a detailed reference on the OpenAPI specification.

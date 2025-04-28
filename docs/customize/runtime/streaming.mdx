@@ -1,0 +1,166 @@
+---
+description: "Learn how to model streaming APIs built on top of file streaming."
+sidebar_label: "Enable streaming support"
+slug: "/customize-sdks/file-streaming/"
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+
+# Enabling file streaming operations
+
+Support for streaming is critical for applications that need to send or receive large amounts of data between client and server without first buffering the data into memory, potentially exhausting this system resource.
+
+## Streaming download
+
+If you create an endpoint with a top-level binary response body, you can treat that response as a streamable, and iterate over it without loading the entire response into memory.
+This is useful for large file downloads, long-running streaming responses, and more.
+
+In an OpenAPI document, this can be modeled as a binary stream. Here's an example of a `get` operation with content type as `application/octet-stream`.
+
+```yaml
+/streamable:
+  get:
+    operationId: streamable
+    responses:
+      "200":
+        description: OK
+        content:
+          application/octet-stream:
+            schema:
+              title: bytes
+              type: string
+              format: binary
+```
+
+<CodeWithTabs>
+
+
+```typescript !!tabs TypeScript
+// For response streaming in TypeScript SDKs, expose a `ReadableStream`, which is part of the [Streams API web standard](https://developer.mozilla.org/en-US/docs/Web/API/Streams_API/Using_readable_streams).
+
+import fs from "node:fs";
+import { Writable } from "node:stream";
+import { SDK } from "@speakeasy/super-sdk";
+
+async function run() {
+  const sdk = new SDK();
+
+  const result = await sdk.streamable("UR123");
+
+  const destination = Writable.toWeb(
+    fs.createWriteStream("./report.csv")
+  );
+
+  await result.data.pipeTo(destination);
+}
+
+run();
+```
+
+```go !!tabs Go
+// Use any [`io.Reader`](https://pkg.go.dev/io#Reader) implementation to read the data, such as calling [`io.Copy()`](https://pkg.go.dev/io#Copy) to a file.
+
+
+ctx := context.Background()
+s := sdk.New()
+
+file, err := os.Create("./report.csv")
+
+if err != nil {
+  // ... error handling ...
+}
+
+response, err := s.streamable(ctx)
+
+if err != nil {
+  // ... error handling ...
+}
+
+defer response.Data.Close()
+
+_, err = io.Copy(file, response.Data)
+```
+
+</CodeWithTabs>
+
+## Streaming uploads
+
+Streaming is useful when uploading large files.
+Certain SDK methods will be generated that accept files as part of a multipart request. It is possible (and recommended) to upload files as a stream rather than reading the entire contents into memory.
+This avoids excessive memory consumption and potentially crashing with out-of-memory errors when working with large files.
+
+In this example, a request to upload a file is managed as a `multipart/form-data` request.
+
+```yaml
+/file:
+  post:
+    summary: Upload file
+    operationId: upload
+    requestBody:
+      content:
+        multipart/form-data:
+          schema:
+            $ref: "#/components/schemas/UploadFileRequest"
+      required: true
+    responses:
+      "200":
+        description: ""
+        headers:
+          Action-Id:
+            required: true
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/File"
+```
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+// As an example, in Node.js v20, streaming a large file to a server using an SDK is only a handful of lines. On the browser,
+// users typically select files using `<input type="file">`, and the SDK call looks like the sample code below.
+
+import { openAsBlob } from "node:fs";
+
+import { SDK } from "@speakeasy/super-sdk";
+
+async function run() {
+  const sdk = new SDK();
+
+  const fileHandle = await openAsBlob("./src/sample.txt");
+
+  const result = await sdk.upload({ file: fileHandle });
+
+  console.log(result);
+}
+run();
+
+// Depending on your JavaScript runtime, convenient utilities can return a handle to a file without reading the entire contents into memory:
+
+// - **Node.js v20+:** Since version 20, Node.js comes with a native `openAsBlob` function in [`node:fs`](https://nodejs.org/docs/latest-v20.x/api/fs.html#fsopenasblobpath-options).
+// - **Bun:** The native [`Bun.file`](https://bun.sh/docs/api/file-io#reading-files-bun-file) function produces a file handle that can be used for streaming file uploads.
+// - **Browsers:** All supported browsers return an instance to a [`File`](https://developer.mozilla.org/en-US/docs/Web/API/File) when reading the value from an `<input type="file">` element.
+// - **Node.js v18:** A file stream can be created using the `fileFrom` helper from [`fetch-blob/from.js`](https://www.npmjs.com/package/fetch-blob).
+```
+
+
+```go !!tabs Go
+// Use any [`io.Reader`](https://pkg.go.dev/io#Reader) implementation, such as calling [`os.Open()`](https://pkg.go.dev/os#Open) on an existing file.
+
+
+ctx := context.Background()
+s := sdk.New()
+
+file, err := os.Open("./src/sample.txt")
+
+if err != nil {
+  // ... error handling ...
+}
+
+response, err := s.upload(ctx, file)
+```
+
+</CodeWithTabs>

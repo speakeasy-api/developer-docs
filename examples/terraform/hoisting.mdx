@@ -1,0 +1,344 @@
+---
+title: "Hoisting"
+description: "Hoisting enables flattening of an API request or API response body to make it more tightly align with the resource semantics."
+image: "/media/examples/generic.png"
+date: 2023-01-26
+authors:
+  - name: Ash Godfrey
+  - image_url: "/media/author-headshots/ash.jpg"
+tags:
+  - Terraform
+is_featured: true
+featured_image: "/media/examples/generic.png"
+---
+
+# What is hoisting?
+
+Hoisting is a technique used in API design to reorganize the structure of data in API requests and responses. Its main goal is to simplify the way data is presented by moving nested or deeply structured data to a higher level in the API's response or request body. This process makes the data easier to work with for developers by reducing complexity and aligning the structure more closely with how resources are conceptually understood.
+
+In essence, hoisting "flattens" data structures. For APIs, this means transforming responses or requests so that important information is more accessible and not buried within nested objects. This is particularly beneficial when dealing with APIs that serve complex data models, as it can make the data easier to parse and use without extensive traversal of nested objects.
+
+## When should you use hoisting?
+
+Hoisting is usually applied in specific scenarios to improve the design and usability of APIs:
+
+- **Complex Nested Structures**: Employ hoisting when your API deals with complex, deeply nested data. It streamlines access to important information, reducing the need for deep navigation.
+- **Frequent Data Access**: Use hoisting for elements that are often accessed or critical to operations, making them more directly accessible.
+- **Data Model Alignment**: Apply hoisting to better align the API's data structure with the conceptual model of the resources.
+
+## Initial Structure: Without Hoisting
+
+Initially, our data structure represents a hierarchical model with nested entities, depicted as a tree.
+
+`x-speakeasy-entity: 1` at the top, with entities 2 and 3 as direct descendants. Entity 2 further nests entities 4, which branches into 5 and 6.
+
+{/* prettier-ignore */}
+```bash
+ (1)
+ / \
+2   3
+ \
+  4
+ / \
+5   6
+```
+
+## Step 1: Selecting an entity for hoisting
+
+Entity (2) is marked with `x-speakeasy-entity` for hoisting.
+
+{/* prettier-ignore */}
+```bash
+    1
+   / \
+ (2)  3
+   \
+    4
+   / \
+  5   6
+```
+
+## Step 2
+
+After applying hoisting, the structure is reorganized to prioritize `x-speakeasy-entity: 2`, making its leaf nodes directly accessible and flattening the remaining structure.
+
+`x-speakeasy-entity: 2`
+
+{/* prettier-ignore */}
+```bash
+x-speakeasy-entity: 2
+
+ (2)
+ / \
+3   4
+   / \
+  5   6
+```
+
+## Real-World Application: Flattening a "data" property
+
+The JSON Schemas for `Drink`, `Drink`, and `{ drinkType: $DrinkType }` will be each considered the root of a Terraform Type Schema, and will be merged together to form the final Terraform Type Schema using Attribute Inference.
+
+However, this is not always desired. Consider this alternative response:
+
+
+## Original
+
+In the original API design, the request and response body are structured equivalently, without nested elements. This approach is straightforward but might not always suit complex data relationships or requirements.
+
+```yaml openapi.yaml
+# !focus(18:23)
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    parameters:
+      - name: type
+        in: query
+        description: The type of drink
+        required: false
+        deprecated: true
+        schema:
+          $ref: "#/components/schemas/DrinkType"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Drink"
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Drink"
+      "5XX":
+        $ref: "#/components/responses/APIError"
+      default:
+        $ref: "#/components/responses/UnknownError"
+```
+
+## Alternate
+
+The alternate approach introduces a nested `data` property in the API response, which can encapsulate the drink information more distinctly, albeit adding a layer of complexity in data access.
+
+```yaml openapi.yaml
+# !focus(18:26)
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    parameters:
+      - name: type
+        in: query
+        description: The type of drink
+        required: false
+        deprecated: true
+        schema:
+          $ref: "#/components/schemas/DrinkType"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Drink"
+  responses:
+    "200":
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "#/components/schemas/Drink"
+      "5XX":
+        $ref: "#/components/responses/APIError"
+      default:
+        $ref: "#/components/responses/UnknownError"
+```
+
+## Original Code
+
+Using the same request/response bodies, speakeasy would generate the following type schema
+
+```go drink_resource.go
+func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+  resp.Schema = schema.Schema{
+    MarkdownDescription: "Drink Resource",
+
+    Attributes: map[string]schema.Attribute{
+      "drink_type": schema.StringAttribute{
+        Optional:    true,
+        Computed:    true
+        Description: `The type of drink.`,
+        stringvalidator.OneOf(
+          "cocktail",
+          "non-alcoholic",
+          "beer",
+          "wine",
+          "spirit",
+          "other",
+        ),
+      },
+      "name": schema.Int64Attribute{
+        Required:    true,
+        Description: `The name of the drink.`,
+      },
+      "price": schema.StringAttribute{
+        Required:    true,
+        Description: `The price of one unit of the drink in US cents.`,
+      },
+    },
+  }
+}
+```
+
+## Alternative Code
+
+When generated, the provider schema would look like this: not understanding that `data` was a nested object, and instead treating it as a root of the schema.
+
+```go drink_resource.go
+// !focus(25:40)
+func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+  resp.Schema = schema.Schema{
+    MarkdownDescription: "Drink Resource",
+
+    Attributes: map[string]schema.Attribute{
+      "drink_type": schema.StringAttribute{
+        Optional:    true,
+        Description: `The type of drink.`,
+        stringvalidator.OneOf(
+          "cocktail",
+          "non-alcoholic",
+          "beer",
+          "wine",
+          "spirit",
+          "other",
+        ),
+      },
+      "name": schema.Int64Attribute{
+        Required:    true,
+        Description: `The name of the drink.`,
+      },
+      "price": schema.StringAttribute{
+        Required:    true,
+        Description: `The price of one unit of the drink in US cents.`,
+      },
+      "data": schema.SingleNestedAttribute{
+        Computed: true,
+        Attributes: map[string]schema.Attribute{
+          "drink_type": schema.StringAttribute{
+            Computed:    true
+            Description: `The type of drink.`,
+          },
+          "name": schema.Int64Attribute{
+            Computed:    true
+            Description: `The name of the drink.`,
+          },
+          "price": schema.StringAttribute{
+            Computed:    true,
+            Description: `The price of one unit of the drink in US cents.`,
+          },
+        },
+      },
+    },
+  }
+}
+```
+
+## The Fix: Implementing Hoisting
+
+By applying the [`x-speakeasy-entity` annotation](/docs/terraform/extensions#the-x-speakeasy-entity-annotation), we direct the schema generation process to consider the `Drink` schema as the root of the type schema, effectively flattening the response structure for easier access.
+
+```yaml openapi.yaml
+# !focus(34)
+  /drinks:
+    post:
+      x-speakeasy-entity-operation: Drink#create
+      parameters:
+        - name: type
+          in: query
+          description: The type of drink
+          required: false
+          deprecated: true
+          schema:
+            $ref: "#/components/schemas/DrinkType"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Drink"
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  $ref: "#/components/schemas/Drink"
+        "5XX":
+          $ref: "#/components/responses/APIError"
+        default:
+          $ref: "#/components/responses/UnknownError"
+  components:
+    schemas:
+      Drink:
+        x-speakeasy-entity: Drink
+        type: object
+        properties:
+          name:
+            description: The name of the drink.
+            type: string
+            examples:
+              - Old Fashioned
+              - Manhattan
+              - Negroni
+          type:
+            $ref: "#/components/schemas/DrinkType"
+          price:
+            description: The price of one unit of the drink in US cents.
+            type: number
+            examples:
+              - 1000 # $10.00
+              - 1200 # $12.00
+              - 1500 # $15.00
+        required:
+          - name
+          - price
+```
+
+## Finalized Schema: Simplified Access
+
+The final provider schema reflects a flattened structure, similar to the original API design but with the flexibility to include nested data when necessary.
+
+```go drink_resource.go
+func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+  resp.Schema = schema.Schema{
+    MarkdownDescription: "Drink Resource",
+
+    Attributes: map[string]schema.Attribute{
+      "drink_type": schema.StringAttribute{
+        Optional:    true,
+        Computed:    true
+        Description: `The type of drink.`,
+        stringvalidator.OneOf(
+          "cocktail",
+          "non-alcoholic",
+          "beer",
+          "wine",
+          "spirit",
+          "other",
+        ),
+      },
+      "name": schema.Int64Attribute{
+        Required:    true,
+        Description: `The name of the drink.`,
+      },
+      "price": schema.StringAttribute{
+        Required:    true,
+        Description: `The price of one unit of the drink in US cents.`,
+      },
+    },
+  }
+}
+```

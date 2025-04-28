@@ -1,0 +1,223 @@
+---
+title: What are MCP Resources?
+description: Learn how MCP Resources function as context objects in the MCP protocol and help LLMs understand the world without causing side effects.
+---
+
+# What are MCP Resources?
+
+MCP Resources are read-only, addressable content entities exposed by the server. They allow MCP clients to retrieve structured, contextual data (such as logs, configuration data, or external documents) that can be passed to models for reasoning. Because resources are strictly observational and not actionable, they must be deterministic, idempotent, and free of side effects.
+
+Resources can expose:
+
+- Log files
+- JSON config data
+- Real-time market stats
+- File contents
+- Structured blobs (for example, PDFs or images)
+
+Resources are accessed via URI schemes like `note://`, `config://`, or `stock://`, and read using the `resources/read` method.
+
+## Resource lifecycles and request and response formats
+
+Each resource lifecycle follows this pattern:
+
+1.  The server registers a static resource or URI template (for example, `stock://{symbol}/earnings`).
+2.  The client calls `resources/list` to discover available resources or templates.
+3.  The client sends a `resources/read` request with a specific resource URI.
+4.  The server loads the content for that resource.
+5.  The server returns the content as either `text` or `blob`.
+
+Here is an example of a resource read request:
+
+```json
+{
+  "method": "resources/read",
+  "params": {
+    "uri": "stock://AAPL/earnings"
+  },
+  "id": 8
+}
+```
+
+The server responds with a text resource:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": {
+    "contents": [
+      {
+        "uri": "stock://AAPL/earnings",
+        "mimeType": "application/json",
+        "text": "{ \"fiscalDateEnding\": \"2023-12-31\", \"reportedEPS\": \"3.17\" }"
+      }
+    ]
+  }
+}
+```
+
+Resources can also return `blob` values for binary content like base64-encoded PDFs or images.
+
+## Declaring a resource in Python
+
+Resources are defined via two handlers:
+
+- The `@list_resources()` handler defines URI templates or static paths.
+- The `@read_resource()` handler implements logic for resolving a resource by URI.
+
+Here's an example using the Alpha Vantage API to return earnings data:
+
+```python
+import asyncio
+from mcp.server import Server
+from mcp import types
+from mcp.server import stdio
+from mcp.server import InitializationOptions, NotificationOptions
+from pydantic import AnyUrl
+import requests
+
+app = Server("stock-earnings-server")
+
+@app.list_resources()
+async def list_resources() -> list[types.ResourceTemplate]:
+    return [
+        types.ResourceTemplate(
+            uriTemplate="stock://{symbol}/earnings",
+            name="Stock Earnings",
+            description="Quarterly and annual earnings for a given stock symbol",
+            mimeType="application/json"
+        )
+    ]
+
+@app.read_resource()
+async def read_resource(uri: AnyUrl) -> str:
+    parsed = str(uri)
+
+    if not parsed.startswith("stock://") or not parsed.endswith("/earnings"):
+        raise ValueError("Unsupported resource URI")
+
+    symbol = parsed.split("://")[1].split("/")[0].upper()
+
+    url = (
+        "https://www.alphavantage.co/query"
+        "?function=EARNINGS"
+        f"&symbol={symbol}"
+        "&apikey=demo"
+    )
+
+    response = requests.get(url)
+    return response.text
+```
+
+In the example above, we:
+
+- **Declare a resource template `stock://{symbol}/earnings`** that clients can use to request dynamic resources for any stock symbol.
+- **Use `@list_resources` to expose the template** to clients, which tells the agent how to construct valid URIs.
+- **Implement `@read_resource` to handle execution**, where we fetch real-time earnings from the Alpha Vantage API for the provided stock symbol.
+- **Return a valid JSON text response**, which is wrapped by MCP in a `TextContent` resource and can be used as context for prompts or decisions.
+
+## Best practices and pitfalls to avoid
+
+Here are some best practices for implementing MCP Resources:
+
+- Use clear, descriptive URI schemes like `note://`, `stock://`, or `config://`.
+- Keep resource data consistent and read-only.
+- Validate inputs or file paths to prevent injections or errors.
+- Set correct MIME types so clients can parse content properly.
+- Support dynamic resources with URI templates.
+
+Here are some pitfalls to avoid:
+
+- Treating resources as action triggers (use [tools](/mcp/tools) instead).
+- Returning extremely large payloads (use pagination instead).
+- Exposing sensitive data (unless scoped by [roots](/mcp/roots) or authenticated context).
+- Relying on global state (unless explicitly isolated per session).
+
+MCP Resources are intended for structured, factual, and often cached information. They are perfect for background context, factual grounding, or real-world reference material.
+
+## Resource annotations
+
+Resources can include optional annotations that provide additional metadata to guide clients on how to use them:
+
+```python
+from mcp.server import Server
+from mcp import types
+
+app = Server("annotated-resources-server")
+
+@app.list_resources()
+async def list_resources() -> list[types.Resource]:
+    return [
+        types.Resource(
+            uri="docs://company/earnings-2024.pdf",
+            name="2024 Earnings Report",
+            mimeType="application/pdf",
+            annotations={
+                # Specify intended audience (user, assistant, or both)
+                "audience": ["user", "assistant"],
+                # Importance ranking from 0 (least) to 1 (most)
+                "priority": 0.8
+            }
+        )
+    ]
+```
+
+Annotations help clients decide:
+
+- **Which audience** should see the resource  (the `user`, the `assistant`, or both).
+- **How important** the resource is (on a scale of `0.0` to `1.0`).
+
+Clients can use annotations to sort, filter, or highlight resources appropriately, but annotations are hints, not guarantees of behavior.
+
+## Pagination support
+
+When dealing with large sets of resources, MCP supports pagination using cursors:
+
+```python
+from mcp.server import Server
+from mcp import types
+
+app = Server("paginated-resources-server")
+
+@app.list_resources()
+async def list_resources(cursor: str = None) -> tuple[list[types.Resource], str]:
+    # Fetch resources from your backend, database, etc.
+    all_resources = fetch_all_resources()
+    
+    # Implementation of pagination
+    page_size = 10
+    start_index = 0
+    
+    if cursor:
+        # Parse cursor to get starting position
+        start_index = int(cursor)
+    
+    # Get the current page of resources
+    current_page = all_resources[start_index:start_index + page_size]
+    
+    # Calculate next cursor if there are more items
+    next_cursor = None
+    if start_index + page_size < len(all_resources):
+        next_cursor = str(start_index + page_size)
+    
+    return current_page, next_cursor
+```
+
+When implementing pagination:
+
+- Remember the `cursor` parameter can be any string, but typically encodes a position.
+- Return a tuple with both resources and the next cursor.
+- Return `None` for the cursor when there are no more pages.
+- Keep cursor values opaque to clients. They shouldn't assume structure.
+- Handle invalid cursors gracefully.
+
+Pagination helps manage memory usage for large resource collections and improves client responsiveness.
+
+## Resources vs Tools
+
+MCP Resources are **read-only** and addressable via URIs like `note://xyz` or `stock://AAPL/earnings`. They are designed to preload context into the agent's working memory or support summarization and analysis workflows.
+
+MCP Tools are **actionable** and invoked by the client with parameters to perform an action like writing a file, placing an order, or creating a task.
+
+To avoid decision paralysis, define resources according to **what the client should know** and tools according to **what the client can do**.

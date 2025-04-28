@@ -1,0 +1,106 @@
+---
+title: "Creating Internal and External SDKs"
+description: "Create two different versions of an SDK, one for internal use and one for external use, using JSONPath expressions in OpenAPI Overlays."
+image: "/assets/examples/generic.png"
+date: 2024-09-16
+authors:
+  - name: Logan Gingerich
+  - image_url: '/assets/author-headshots/logan.jpg'
+tags:
+  - SDK Generation
+is_featured: false
+featured_image: "/assets/examples/generic.png"
+---
+
+# Creating Internal and External SDKs
+
+To create two different versions of an SDK, one for internal use and one for external use, use JSONPath expressions in [OpenAPI Overlays](/openapi/overlays) (a standard extension for modifying existing OpenAPI documents without changing the original). This approach dynamically targets and hides internal operations and parameters from the public SDK. The [`workflow.yaml` file](/docs/workflow-file-reference) can be configured to include Overlays as part of the source definition.
+
+### Using the `x-internal` Extension
+
+First, add an `x-internal: true` extension to all the operations, parameters, and other elements in the OpenAPI spec that should only be available in the internal SDK.
+
+```yaml api.yaml
+info:
+  title: Sample API
+  version: 1.0.0
+  description: A sample API with internal paths and parameters.
+
+paths:
+  /public-resource:
+    get:
+      summary: Retrieve public data
+      responses:
+        '200':
+          description: Public data response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+
+  /internal-resource:
+    x-internal: true   # This path is internal and should not be exposed externally
+    get:
+      summary: Retrieve internal data
+      responses:
+        '200':
+          description: Internal data response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  internalInfo:
+                    type: string
+                    description: Internal information
+                    x-internal: true  # This field is internal
+        description: "This endpoint is restricted for internal staff management and not visible in public SDKs."
+```
+
+### Using JSONPath Expressions in an Overlay
+
+Next, use a JSONPath expression to remove all the internal paths and parameters from the SDK. This removal occurs specifically when generating the internal SDK.
+
+```yaml internal-overlay.yaml
+info:
+  title: Sample API Overlay
+  version: 1.0.0
+actions:
+  - target: $.paths.*.*[?(@["x-internal"] == true)]
+    remove: true
+  - target: $.paths.*.*[?(@.properties[?(@["x-internal"] == true)])]
+    remove: true
+```
+
+Define a workflow that generates both the internal and external SDKs.
+
+```yaml workflow.yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  external-api:
+    inputs:
+      - location: ./api.yaml
+    overlays:
+      - location: ./external-overlay.yaml
+  internal-api:
+    inputs:
+      - location: ./api.yaml
+    overlays:
+      - location: ./internal-overlay.yaml
+targets:
+  internal-sdk:
+    target: python
+    source: internal-api
+
+  external-sdk:
+    target: python
+    source: external-api
+```      

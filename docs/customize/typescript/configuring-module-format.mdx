@@ -1,0 +1,103 @@
+---
+title: Configuring module format
+---
+    
+import { Callout } from "@/mdx/components";
+
+# Configuring Module Format
+
+Modern SDKs need to balance compatibility with performance. The `moduleFormat` option in the SDK generator allows developers to control whether an SDK is built for CommonJS (CJS), ECMAScript Modules (ESM), or both. This choice impacts bundle size, tree-shaking performance, and compatibility with Node.js and modern bundlers.
+
+## How to Configure Module Format
+
+To configure the module format, update `gen.yaml` (which is often located in the SDK's `.speakeasy` directory) file under the `typescript` section:
+
+```yaml <sdk-root>/.speakeasy/gen.yaml
+typescript:
+  # add or modify `moduleFormat`
+  moduleFormat: "commonjs" # or "esm" or "dual"
+  # other Typescript configuration options...
+```
+
+### Supported Options
+
+- **`"commonjs"` (default)**: Builds SDK for CommonJS. Widely supported across Node.js environments but less optimized for modern bundlers and tree-shaking.
+- **`"esm"`**: Builds SDK for ECMAScript Modules, the modern standard for JavaScript modules. Provides optimal tree-shaking and significantly smaller bundles when used with bundlers like Webpack, Rollup, or Vite.
+- **`"dual"`**: Builds SDK for both CJS and ESM formats. Provides the best of both worlds - ESM's superior tree-shaking and bundle optimization while maintaining compatibility with older CommonJS environments. The slight build time increase is often worth the flexibility and performance benefits.
+
+## Module Format Overview
+
+`moduleFormat` determines the module system targeted during SDK build. It impacts:
+
+- Node.js project compatibility,
+- Bundler tree-shaking capabilities,
+- SDK bundle size, and
+- Build performance.
+
+### Example Outputs for Each Option
+
+#### CommonJS (Default)
+
+When configured with `commonjs`:
+
+```javascript example.js
+// CommonJS import in consumer code
+const { ApiError } = require("petstore/errors/apierror.js");
+
+// ESM import (interop code included)
+import { ApiError } from "petstore/errors/apierror.js";
+```
+
+#### ESM
+
+When configured with `esm`:
+
+```javascript example.js
+// Native ESM import in consumer code
+import { ApiError } from "petstore/errors/apierror.js";
+
+// ❌ Will not work in CommonJS-only environments
+```
+
+#### Dual
+
+When configured with `dual`:
+
+```javascript example.js
+// ESM import (no interop code)
+import { ApiError } from "petstore/errors/apierror.js";
+
+// CommonJS import (still works seamlessly)
+const { ApiError } = require("petstore/errors/apierror.js");
+```
+
+## How to Decide Which Format to Use
+
+**Use CommonJS (`commonjs`) if...**
+
+- The SDK is used primarily in Node.js environments or older projects.
+- Bundle size optimization is not a critical requirement.
+- You need maximum compatibility with legacy systems.
+
+**Use ESM (`esm`) if...**
+
+- SDK consumers use modern bundlers like Vite, Webpack, or Rollup.
+- Tree-shaking and bundle size optimization are top priorities.
+- Your project is already using ESM throughout.
+- You want to leverage the latest JavaScript features and tooling.
+
+**Use Dual Mode (`dual`) if...**
+
+- You need to support both modern and legacy environments.
+- You want ESM's superior tree-shaking while maintaining CommonJS compatibility.
+- Your SDK will be used in diverse environments with different module requirements.
+- You prioritize developer experience and want to provide maximum flexibility.
+
+<Callout title="Recommendation" type="info">
+For most modern projects, we recommend using `dual` format. This ensures your SDK works seamlessly in any environment while still providing the performance benefits of ESM when used with modern bundlers.
+</Callout>
+
+## Additional Reading
+
+- [Typescript Configuration Options](/docs/gen-reference/ts-config)
+- [Lean SDKs with Standalone Functions](/post/standalone-functions)

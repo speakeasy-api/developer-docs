@@ -1,0 +1,125 @@
+---
+title: Timeouts
+description: "Add request timeouts to specific operations in an SDK. Enable timeouts globally or per operation."
+slug: "/customize-sdks/timeouts/"
+---
+
+import { CodeWithTabs } from "@/mdx/components";
+
+# Timeouts
+
+With Speakeasy, you can configure request timeouts in an SDK using the `x-speakeasy-timeout` extension in your OpenAPI document. Timeouts can be enabled globally for all operations or on a per-operation basis. The SDK end user can override the default configuration by passing in a timeout option at runtime. 
+
+Timeout values are always provided in milliseconds.
+
+## Global timeouts
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Swagger Petstore - OpenAPI 3.0
+  version: 1.0.11
+servers:
+  - url: https://petstore3.swagger.io/api/v3
+x-speakeasy-timeout: 1000
+```
+
+Adding the `x-speakeasy-timeout` extension to the root of the OpenAPI document configures a global timeout for all requests made by the SDK.
+
+## Per-request timeouts
+
+Adding the `x-speakeasy-timeout` extension to any operation overrides the global timeout configuration for that operation or sets a timeout if no global configuration exists.
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Swagger Petstore - OpenAPI 3.0
+  version: 1.0.11
+servers:
+  - url: https://petstore3.swagger.io/api/v3
+paths:
+  /pet/findByStatus:
+    get:
+      operationId: findPetsByStatus
+      x-speakeasy-timeout: 2000
+      parameters:
+        - name: status
+          in: query
+          description: Status values that need to be considered for filter
+          required: false
+          explode: true
+          schema:
+            type: string
+            default: available
+            enum:
+              - available
+              - pending
+              - sold
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+        "400":
+          description: Invalid status value
+```
+
+## Overriding timeout configuration
+
+Users of the SDK can override the timeout configuration globally or at the request level.
+
+### Globally overriding timeout configuration
+
+To override the timeout configuration globally, initialize the SDK object with the appropriate options parameter. In all cases, if no override is provided, the timeout configuration provided in the OpenAPI document will be used.
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+const sdk = new SDK({timeoutMs: 100});
+```
+
+```python !!tabs Python
+s = SDK(timeout_ms=100)
+```
+
+```go !!tabs Go
+s := sdk.New(sdk.WithTimeout(100 * time.Millisecond))
+```
+
+</CodeWithTabs>
+
+### Overriding timeout configuration at the request level
+
+Users can override the timeout config on a per-operation basis.
+
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+const sdk = new SDK({});
+await sdk.findPetsByStatus(request, {
+  timeoutMs: 1000,
+});
+```
+
+```python !!tabs Python
+s = sdk()
+res = s.find_pets_by_status(request, timeout_ms = 100)
+```
+
+```go !!tabs Go
+s := sdk.New()
+s.FindPetsByStatus(&operations.FindPetsByStatusRequest{},
+  operations.WithOperationTimeout(100 * time.Millisecond),
+)
+```
+
+</CodeWithTabs>

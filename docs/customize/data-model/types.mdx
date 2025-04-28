@@ -1,0 +1,240 @@
+---
+title: Types
+---
+
+# Types
+
+## Type naming
+
+Speakeasy tries to name your types using the shortest name possible, which is achieved by deducing a name from its surrounding context.
+
+Types defined using components generally result in better type names. Where possible, Speakeasy uses the component's key name as the type name.
+
+For example, given the following schema:
+
+```yaml
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+```
+
+The type name for the `User` schema will be `User` where possible. If a conflict arises with another type in the same namespace, name resolution will kick in: The earliest encountered type will be named `User` and types encountered subsequently will have prefixes or suffixes added to the name based on context to avoid conflicts.
+
+If a component name is unavailable (for example, the type is defined inline in a schema, request, response, or parameter), Speakeasy will determine the type name based on context in the following order:
+
+- The `x-speakeasy-name-override` extension value in the schema
+- The `title` property in the schema
+- The `$anchor` property in the schema
+- Any other context of the schema
+
+Types that are named this way are `objects` that become classes, `integer` and `string` types that have `enum` values defined in the schema, or `oneOf` or `anyOf` schemas that become union types.
+
+Inline schemas are more likely to have name conflicts with other types, which can result in context-based prefixes or suffixes being added to type names until the conflict is resolved. For example:
+
+```yaml
+paths:
+  /users:
+    get:
+      operationId: getUsers
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: 
+                type: array
+                items:
+                  type: object # inline schema that will be named based on surrounding context
+                  title: User
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+  /user:
+    get:
+      operationId: getUser
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: 
+                type: object # inline scheme that will be named based on surrounding context
+                title: User
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+```
+
+Here, both inline schemas are candidates for the name `User`. As there will be a conflict (Speakeasy doesn't perform any inference to assess whether the schemas are the same type), the second schema will be given a name with a context-based prefix to avoid a conflict with the first schema.
+
+Some of the context prefixes and suffixes that can be added to type names are:
+
+- Reference type
+- Reference name
+- Property name
+- Operation name
+- Tag name
+- Request
+- Response
+- Position in `oneOf` or `anyOf` schema
+
+Should Speakeasy run out of context to use in naming the type, it will add numbers to type names as suffixes.
+
+To avoid unexpected type names and ensure you get the names you expect, use unique component names for your schemas wherever possible.
+
+## Input and output models
+
+Speakeasy will generate separate input and output models for schemas that are used in both request and response bodies and define `readOnly` and `writeOnly` flags in their properties.
+
+For example, given the following schema:
+
+```yaml
+paths:
+  /drinks/{id}:
+    post:
+      operationId: updateDrink
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Drink'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Drink'
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        stockUpdate:
+          type: integer
+          writeOnly: true
+        name:
+          type: string
+        category:
+          type: string
+        stock:
+          type: integer
+          readOnly: true
+```
+
+The `Drink` component is used both as a request body and response body schema, but it uses fields that can only be set when updating the drink and read when getting the returned drink.
+
+In this case, Speakeasy will generate two models `DrinkInput` and `DrinkOutput`.
+
+The `DrinkInput` model will have the following properties:
+  - stockUpdate
+  - name
+  - category
+
+The `DrinkOutput` model will have the following properties:
+  - id
+  - name
+  - category
+  - stock
+
+If a schema has only `readOnly` flags and no `writeOnly` flags or vice versa, Speakeasy will still generate two models if used in both request and response bodies, but the `Input` or `Output` schema will be added only to the relevant models based on the flags.
+
+The `Input` and `Output` suffixes can be reconfigured using the `inputModelSuffix` and `outputModelSuffix` options in the `gen.yaml` file. See the [gen.yaml reference](/docs/gen-reference) for more infomation.
+
+## Handling constants and defaults
+
+If a schema has a `const` or `default` value defined in it, Speakeasy will generate code to handle these wherever possible.
+
+### `const`
+
+Using `const` allows you to specify a value that must be transmitted to the server and is always expected to be received from the server.
+
+For example:
+
+```yaml
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        type:
+          type: string
+          const: 'drink'
+```
+
+The `type` property has a `const` value of `drink`, so the SDK will be generated with this field as non-configurable, as the value `drink` will always be transmitted. A `const` getter will be generated to access the value if required.
+
+### `default`
+
+Default values allow you to specify a value to be transmitted to the server if none is provided by the end user.
+
+For example:
+
+```yaml
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        category:
+          type: string
+          default: 'spirits'
+      required:
+        - category
+```
+
+The `category` property has a default of `spirits`. Although `category` is marked as `required`, the SDK will be generated with this field set to optional, and the value `spirits` will be transmitted if no other value is provided by the end user.
+
+
+## Examples
+
+If a type includes an `example` or `examples` field, Speakeasy will use the values (if valid for the defined schema) to populate usage snippets in the generated SDKs.
+
+If more than one example is provided in the `examples` field, a random example will be chosen.
+
+## Including unused schema components
+
+When working with OpenAPI documents, there may be cases when you want to include schema components in your generated SDKs, even if they aren't directly referenced by any API endpoints. This is particularly useful for:
+
+- Webhook payload types in OpenAPI Specification versions predating the official webhook support introduced in OpenAPI Specification 3.1
+- Types used in asynchronous operations or events
+- Shared types that may be used in future endpoints
+
+### Using `x-speakeasy-include`
+
+To include an unused schema component in your generated SDK, add the `x-speakeasy-include: true` extension to the schema component definition:
+
+```yaml
+components:
+  schemas:
+    WebhookPayload:
+      x-speakeasy-include: true  # This schema will be included in the SDK even if unused.
+      type: object
+      properties:
+        event_type:
+          type: string
+        data:
+          type: object
+```
+
+### Important notes
+
+- This extension only works in the main OpenAPI document. It is not supported in referenced documents (for example, it won't work for components in separate files).
+- The schema will be included in your SDK regardless of whether it's referenced by any endpoints.
+- This is particularly useful for webhook payloads in older versions of the OpenAPI Specification without the webhook support built into OpenAPI Specification 3.1+.

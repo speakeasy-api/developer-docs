@@ -1,0 +1,266 @@
+---
+title: "OpenAPI: Enums"
+description: "How to customize enums in your OpenAPI document to generate strongly typed enums in your SDKs."
+slug: "/customize-sdks/enums/"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Customize enums
+
+## Enum value naming
+
+### Basic conversion
+
+Enum values are named according to their values, with adjustments made to form valid identifiers:
+
+* Invalid characters are removed.
+* Values are converted to fit the case style of the target programming language.
+* Special characters (for example, `+`, `-`, and `.`) are converted to words (like `Plus`, `Minus`, and `Dot`).
+
+### Name conflicts
+
+If naming conflicts arise after sanitization, deduplication is attempted by modifying case styles or adding suffixes.
+
+For example, given the following schema:
+
+```yaml
+schema:
+  type: string
+  enum:
+    - foo
+    - Foo
+    - FOO
+```
+
+Resulting enum values will be `FOO_LOWER`, `FOO_MIXED`, and `FOO_UPPER`.
+
+If unique names cannot be resolved, a validation error will prompt you to resolve conflicts, potentially using the `x-speakeasy-enums` extension.
+
+
+```yaml
+schema:
+  type: integer
+  enum:
+    - 1
+    - 2
+    - 3
+  x-speakeasy-enums:
+    - NOT_STARTED
+    - IN_PROGRESS
+    - COMPLETE
+```
+
+Ensure the order in the enum array corresponds to the custom names in the `x-speakeasy-enums` array.
+
+## Enum class naming
+
+Use the `x-speakeasy-name-override` attribute to customize enum class names:
+
+```yaml
+  Enum:
+      x-speakeasy-name-override: example_override
+      type: string
+      enum:
+        - foo
+        - FOO
+```
+
+This schema will produce: 
+
+```python
+class ExampleOverride(str, Enum):
+    FOO_LOWER = 'foo'
+    FOO_UPPER = 'FOO'
+```
+
+### Name conflict considerations
+
+Some cases (like open enums) may pose unique name resolutions challenges, particularly when similar names occur in the schema. 
+
+In name conflict cases, the parent schema is given the original name, while the child schema's name is concatenated with the parent's name.
+
+For example, the following schema:
+
+```yaml
+enum_field:
+  oneOf:
+    - type: string
+    - type: string
+      enum:
+        - foo
+        - FOO
+      x-speakeasy-name-override: enum_field
+```
+
+Results in: 
+
+```python
+class EnumFieldEnumField(str, Enum):
+  FOO_LOWER = 'value'
+  FOO_UPPER = 'value'
+```
+
+To avoid naming conflicts, additional overrides may be necessary. For example:
+
+```yaml
+enum_field:
+  x-speakeasy-name-override: enum_field_parent
+          oneOf:
+            - type: string
+            - type: string
+              enum:
+                - foo
+                - Foo
+              x-speakeasy-name-override: enum_field
+```
+
+This will result in: 
+
+```python
+class EnumField(str, Enum):
+  FOO_LOWER = 'value'
+  FOO_UPPER = 'value'
+```
+
+## Open vs closed enums
+
+<Callout title="Note" type="info">
+This feature is currently supported in Go, Python, TypeScript, and Java SDKs.
+</Callout>
+
+By default, enums defined in OpenAPI are considered closed during code
+generation. This means that introducing a new member to an enum can become a
+breaking change for consumers of older versions of the SDK. Sometimes, this is
+desirable because particular enums can be rigidly defined and not changing in
+the foreseeable future (country codes might be a good example of this).
+
+However, in some cases, you might want to make room for future iteration and the
+introduction of new enum members. This is where open enums can help. Use the
+`x-speakeasy-unknown-values` extension to mark an enum as open:
+
+```yaml
+components:
+  schemas:
+    BackgroundColor:
+      type: string
+      x-speakeasy-unknown-values: allow
+      enum:
+        - red
+        - green
+        - blue
+```
+
+When an SDK is generated with this type, the API is able to send values beyond
+what is specified in the enum and these will be captured and returned to the user
+in a type-safe manner. 
+
+Here's an example of what this schema looks like in TypeScript:
+
+```typescript
+type BackgroundColor = 'red' | 'green' | 'blue' | Unrecognized<string>;
+```
+
+## Native enums vs union of strings
+
+Languages like Python and TypeScript support string or integer literal unions as
+well as native enum types. When generating SDKs for these targets, you can
+specify which style you prefer using the `enumFormat` option in the
+`.speakeasy/gen.yaml` config file where the SDK is generated.
+
+For example, in your `gen.yaml`:
+
+```yaml
+typescript:
+  enumFormat: union
+```
+
+This will cause all enums to be generated as a union of strings:
+
+```typescript
+type Color = "sky-blue" | "dark-gray" | "stone";
+```
+
+```typescript
+import { SDK } from "cool-sdk";
+
+const sdk = new SDK();
+
+const result = await sdk.themes.create({
+    name: "flashy",
+    background: "dark-gray",
+});
+```
+
+Whereas this:
+
+```yaml
+typescript:
+  enumFormat: enum
+```
+
+Will result in the following output:
+
+```typescript
+enum Color {
+  SkyBlue = 'sky-blue',
+  DarkGray = 'dark-gray',
+  Stone = 'stone',
+}
+```
+
+```typescript
+import { SDK } from "cool-sdk";
+import { Color } from "cool-sdk/models/color";
+
+const sdk = new SDK();
+
+const result = await sdk.themes.create({
+    name: "flashy",
+    background: Color.DarkGray,
+});
+```
+
+The main trade-offs to consider between the two styles are that literal unions
+do not require SDK users to import any additional types or values from the SDK
+package. The user starts typing a string or number and their IDE's autocompletion
+interface will suggest from the valid set of values. 
+
+Native enums need to be
+imported from within the SDK but benefit from having members with clear names
+and documentation on each. This is particularly useful when you define enums
+that do not map well to spoken language, such as `enum: ["+", "_", "*", "!"]`.
+Using the `x-speakeasy-enums` extension will allow you to customise the name of
+each native enum member.
+
+In TypeScript and Python, native enums are nominally typed, which means that
+users cannot pass in any string value they have or another native enum that
+overlaps with the desired one without triggering a type-checker error. In some
+of these instances, they may need to write some code to map values to native
+enum members.
+
+### Mixing enum formats
+
+While `enumFormat` is a global setting, it is possible to mix and match the enum
+format on a per-schema basis using the `x-speakeasy-enum-format` extension:
+
+```yaml
+# `enumFormat` is set to `union` in the gen.yaml
+components:
+  schemas:
+    BackgroundColor:
+      type: int
+      x-speakeasy-enum-format: enum
+      enum:
+        - 1
+        - 2
+        - 3
+      x-speakeasy-enums:
+        - Red
+        - Green
+        - Blue
+```
+
+In this case, the `BackgroundColor` enum will be generated as a native enum in
+the target language, while the rest of the enums will be generated as a union of
+values.

@@ -1,0 +1,84 @@
+---
+title: React hooks with TanStack Query
+---
+
+import { Callout } from "@/mdx/components";
+
+# React hooks with TanStack Query
+
+<Callout title="Availability" type="info">
+  React hooks are available for [Business and Enterprise users](/pricing). You
+  can trial this feature when you first sign up or [reach out](mailto:support@speakeasy.com) to us
+  to get access.
+</Callout>
+
+In addition to the core SDK, you can also generate React hooks that can help
+supercharge users building web applications with your APIs.
+
+To get started, update your `gen.yaml` file to enable this feature:
+
+```yaml <sdk-root>/.speakeasy/gen.yaml
+typescript:
+  enableReactQuery: true
+  # other Typescript configuration options...
+```
+
+## Customizing React hooks
+
+The default naming convention for React hooks follows that of standalone
+functions. For example, a standalone function called `productsGetById` will have
+a corresponding React hook called `useProductsGetById`.
+
+Sometimes, these names are not ideal for React hooks. In those instances, the
+`x-speakeasy-react-hook` OpenAPI extension can be used to override the name:
+
+```yaml openapi.yaml
+paths:
+  /products/{id}:
+    get:
+      operationId: getById
+      tags: [products] 
+      x-speakeasy-react-hook:
+        name: Product
+      # ...
+```
+
+With the example above, the React hook will be called `useProduct` and under the
+hood, it will use the `productsGetById` standalone function.
+
+### Queries and mutations
+
+By default, `GET` / `HEAD` / `QUERY` operations will result in React query hooks
+being generated while other operations will result in mutation hooks. This isn't
+always correct since certain operations may be "read" operations exposed under
+`POST` endpoint. A great example of this is complex search APIs that take a
+request body with filters and other arguments. You can override these OpenAPI
+operations to come out as query hooks using the `x-speakeasy-react-hook`
+extension: 
+
+```yaml openapi.yaml
+paths:
+  /search/products:
+    post:
+      operationId: productsSearch
+      x-speakeasy-react-hook:
+        name: Search
+        type: query
+      # ...
+```
+
+### Disabling React hooks for an operation
+
+React hooks may not be useful or relevant for all operations in your API. You
+can disable React hooks generation for an operation by setting the `disabled`
+flag under the `x-speakeasy-react-hook` extension:
+
+```yaml openapi.yaml
+paths:
+  /admin/reports:
+    post:
+      operationId: generateReport
+      x-speakeasy-react-hook:
+        disabled: true
+      # ...
+```
