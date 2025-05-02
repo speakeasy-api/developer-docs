@@ -1,14 +1,13 @@
 import { Table } from "@/mdx/components";
 
-# Tags in OpenAPI
+# OpenAPI Tags
 
-The document-level `tags` field contains a list of [tag](/openapi/tags#tag-object) definitions that may be used to categorize or group operations in the API. Tags can be referenced by [operations](/openapi/paths/operations) via the operations-level `tags` field.
+Tags are a way of grouping operations for various purposes, like creating more sensible navigation in API documentation, defining API lifecycle status with tags like "Beta" that can be filtered out later, or something else entirely.
 
-Tag definitions at the document level are optional, even if an undefined tag is referenced in an [operation](/openapi/paths/operations), but it is recommended that all tags used are defined here to provide useful documentation and intent for the tags.
+## Tags Object
 
-Tag names **_must_** be unique in the document.
-
-Example:
+The document-level `tags` field is an optional field, which is a list of objects describing each
+[tag](/openapi/tags#tag-object). Tags have at bare minimum a `name`, but can have a `description`, point to `externalDocs`, and potentially have some `x-*` extension properties.
 
 ```yaml
 tags:
@@ -18,9 +17,17 @@ tags:
     description: The authentication endpoints.
 ```
 
-## Tag Object in OpenAPI
+Tags can then referenced by [operations](/openapi/paths/operations), with an array allowing multiple tags to be referenced.
 
-A Tag Object defines a single tag that can be used to categorize or group operations in the API.
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      tags: [drinks]
+```
+
+Here is the full specification for the tag object for OpenAPI v3.0-v3.1.
 
 <Table
   data={[
@@ -37,16 +44,104 @@ A Tag Object defines a single tag that can be used to categorize or group operat
   ]}
 />
 
-## Multiple Namespaces in OpenAPI
+## Human-friendly or machine-friendly
 
-If you want to add a method to multiple namespaces, list multiple values in tags. It accepts an array of values:
+Whether a tag should be human readable (e.g. `Publishing Tokens`) or machine-friendly (e.g.: `publishingTokens`) has been a long source of discussion in the OpenAPI world, but consensus is forming around machine-friendly tags more like variable names, in whatever format is preferred: PascalCase, camelCase, snake_case.
+
+Then the human friendly name can be passed in one of two locations.
+
+1. For OpenAPI v3.0 and v3.1 users, the commonly used vendor extension `x-displayName` will work in most API documentation tools.
+2. The upcoming OpenAPI v3.2 introduces a new `tags.summary` to pass the human-friendly same name.
+
+Check to see which of these keywords are supported by documentation tools in the toolchain, and if neither perhaps go with a human-readable `name` until that tool supports `x-displayName` or the OpenAPI is upgraded to v3.2.
+
+## Grouping Tags
+
+Tags are used for grouping operations, but sometimes its necessary to group tags, especially in larger APIs with hundreds (or even thousands) of operations.
+
+```yaml
+tags:
+  - name: stores
+    x-displayName: Stores
+  - name: inventory
+    x-displayName: Inventory
+  - name: employees
+    x-displayName: Employees
+
+x-tagGroups:
+  - name: Store Management
+    tags:
+      - stores
+      - inventory
+  - name: Human Resources
+    tags:
+      - employees
+```
+
+Operations are then assigned to tags as normal. Tools which understand `x-tagGroups` like [Scalar](https://scalar.com) and [Redoc](https://redocly.com/) will use them to create the nested navigation structures, and tools which do not understand the keyword will build the flat list of operations.
 
 ```yaml
 paths:
-  /drinks:
+  "/stores":
     get:
-      operationId: listDrinks
+      operationId: get-stores
+      summary: Get Stores
       tags:
-        - drinks
-        - beverages
+      - stores
+
+  "/inventory":
+    get:
+      operationId: get-inventory
+      summary: Get Inventory
+      tags:
+      - inventory
+
+  "/employees":
+    get:
+      operationId: get-employees
+      summary: Get Employees
+      tags:
+      - employees
 ```
+
+In Scalar the above example would look like this.
+
+![Screenshot of Scalar interpreting tag groups](./assets/guide/scalar-x-tagGroups.png)
+
+In OpenAPI v3.2 there will be two new properties which can be used to handle tag grouping and nesting:
+
+- `tags.parent` - The `name` of a tag that this tag is nested under. The named tag MUST exist in the API description, and circular references between parent and child tags MUST NOT be used.
+- `tags.kind` - A machine-readable string to categorize what sort of tag it is. Any string value can be used; common uses are `nav` for Navigation, `badge` for visible badges, `audience` for APIs used by different groups. A [registry of the most commonly used values](https://spec.openapis.org/registry/tag-kind/) is available.
+
+It will look something like this.
+
+```yaml
+tags:
+  - name: account-updates
+    summary: Account Updates
+    description: Account update operations
+    kind: nav
+
+  - name: partner
+    summary: Partner
+    description: Operations available to the partners network
+    parent: external
+    kind: audience
+
+  - name: external
+    summary: External
+    description: Operations available to external consumers
+    kind: audience
+```
+
+This is not available yet, but will be coming in OpenAPI v3.2 which many tooling providers are excited to start supporting.
+
+## Best practices
+
+### Always define tags before referencing them
+
+It's allowed for operations to reference undefined tags (tags not defined in the document-level `tags`, but it is recommended that all tags used are defined here to provide useful documentation and intent for the tags.
+
+### Alphabetize tag definitions
+
+Some documentation tools will automatically alphabetize them, some will not, so to make sure they are alphabetized for all documentation tools put them in that order in the OpenAPI document.

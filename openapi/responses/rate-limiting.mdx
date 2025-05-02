@@ -1,0 +1,271 @@
+---
+title: Rate limiting
+---
+
+# Rate limiting in OpenAPI
+
+Rate limiting is the art of trying to protect the API by telling "overactive"
+API consumers to calm down a bit, telling clients to reduce the frequency of
+their requests, or take a break entirely and come back later to avoid
+overwhelming the API.
+
+**Learn more about rate limiting [over here](/api-design/rate-limiting).**
+
+## Rate limiting error response
+
+When a client exceeds the rate limit, the API should respond with a `429 Too Many Requests` status code.
+This status code indicates that the user has sent too many requests in a given amount of time, and the error message can explain
+that more clearly, especially when using [quality error responses](/api-design/errors).
+
+```yaml
+responses:
+  '429':
+    description: Too Many Requests
+    content:
+      application/problem+json:
+        schema:
+          type: object
+          properties:
+            type:
+              type: string
+              const: "https://example.com/probs/limit-exceeded"
+            title:
+              type: string
+              const: Rate limit exceeded
+            detail:
+              type: string
+              const: Too many requests in a given amount of time, please try again later.
+```
+
+This response describes an error that looks like this:
+
+```http
+HTTP/2 429 Too Many Requests
+Content-Type: application/json
+
+{
+  "type": "https://example.com/probs/limit-exceeded",
+  "title": "Rate limit exceeded",
+  "detail": "Too many requests in a given amount of time, please try again later."
+}
+```
+
+Describing the `429` response in OpenAPI is important for communicating to API
+consumers that there is rate limiting in place, if its been missed elsewhere or
+if its only available on some endpoints, this is a good chance to make it clear.
+
+## Retry-After header
+
+The `Retry-After` header is a standard HTTP header that can be included in the
+response to indicate how long the client should wait before making another
+request. This header can be included in the `429 Too Many Requests` response to
+inform the client about the time they should wait before retrying.
+
+```yaml
+# !focus(4:9)
+responses:
+  '429':
+    description: Too Many Requests
+    headers:
+      Retry-After:
+        description: The number of seconds to wait before making another request.
+        schema:
+          type: integer
+        example: 3600
+    content:
+      application/problem+json:
+        schema:
+          type: object
+          properties:
+            type:
+              type: string
+              const: "https://example.com/probs/limit-exceeded"
+            title:
+              type: string
+              const: Rate limit exceeded
+            detail:
+              type: string
+              const: Too many requests in a given amount of time, please try again in one hour.
+```
+
+With this header added and a more specific error detail added, the response looks more like this.
+
+```http
+HTTP/2 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 3600
+
+{
+  "type": "https://example.com/probs/limit-exceeded",
+  "title": "Rate limit exceeded",
+  "detail": "Too many requests in a given amount of time, please try again in one hour."
+}
+```
+
+## Rate limiting headers
+
+Rate limiting headers are HTTP headers that provide information about the rate
+limit status of the API. These headers can be included in the success response
+**unlike** `Retry-After` which goes on the error. They inform the client about
+their current rate limit status, including the number of requests remaining, the
+time until the rate limit resets, and the total number of requests allowed.
+
+The following headers are commonly used for rate limiting, even if they are
+non-standard, but they show how to implement them in OpenAPI:
+
+```yaml
+responses:
+  '200':
+    description: OK
+    headers:
+      X-RateLimit-Limit:
+        description: The maximum number of requests that the client is allowed to make in a given time period.
+        schema:
+          type: integer
+        example: 1000
+      X-RateLimit-Remaining:
+        description: The number of requests remaining in the current rate limit window.
+        schema:
+          type: integer
+        example: 500
+      X-RateLimit-Reset:
+        description: The number of seconds until the rate limit resets.
+        schema:
+          type: integer
+        example: 35
+```
+
+This response describes a successful request with rate limiting headers included.
+
+```http
+HTTP/2 200 OK
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 500
+X-RateLimit-Reset: 35
+Content-Type: application/json
+
+{
+  "data": {
+    "id": 1,
+    "name": "example"
+  }
+}
+```
+
+## Examples or constants
+
+When describing some of these headers it feels important to provide a bit of
+context about what the headers contain, either with an exact value, or if that's
+not possible then some examples of what values might appear.
+
+Here is an example of how to do that with the `Retry-After` header, using the Header Object `example` field:
+
+```yaml
+headers:
+  Retry-After:
+    description: The number of seconds to wait before making another request.
+    schema:
+      type: integer
+    example: 3600
+```
+
+Using an example here is important because the value of `Retry-After` can vary
+depending on the billing plan the user is on. For example, a free plan might
+have a `Retry-After` value of 60 seconds, while a paid plan might have a
+`Retry-After` value of 10 seconds.
+
+If the value of `Retry-After` is always the same, then using `const` inside the
+`schema` object is a good way to indicate that.
+
+```yaml
+headers:
+  Retry-After:
+    description: The number of seconds to wait before making another request.
+    schema:
+      type: integer
+      const: 3600
+```
+
+This indicates that the `Retry-After` value is always 3600 seconds, regardless of
+the billing plan the user is on.
+
+## Rate limiting headers draft RFC
+
+The `X-RateLimit-*` headers are not standard HTTP headers, and they are not
+defined in any RFC. A new [RateLimit header draft
+RFC](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/), is
+in the works, but is still a draft and not yet an official standard.
+
+This draft RFC outlines a new `RateLimit` header to replace all of the
+`X-RateLimit-*` headers, and with a single header it can provide information
+about the rate limit status of the API, including the number of requests
+remaining, the time until the rate limit resets, and the total number of
+requests allowed.
+
+The following example shows a `RateLimit` header with a policy named "default",
+which has another 50 requests allowed in the next 30 seconds.
+
+```
+RateLimit: "default";r=50;t=30
+```
+
+The `RateLimit` header focuses on the current state of the various quotes, but
+it doesn't provide information about the policy itself. The same draft RFC also
+outlines a `RateLimit-Policy` header which can be used to provide information
+about how the policy works.
+
+This example shows two policies, "default" and "daily". The "default" policy has
+a quota of 100 requests and a window of 30 seconds, while the "daily" policy has
+a quota of 1000 requests and a window of 86400 seconds (24 hours).
+
+```http
+RateLimit-Policy: "default";q=100;w=30,"daily";q=1000;w=86400
+```
+
+Trying to describe these headers in OpenAPI is a bit tricky, as the syntax moves beyond
+the simple `key: value` pairs that OpenAPI is used to. The following example shows
+how to describe the `RateLimit` header in OpenAPI, using a string with a
+`pattern` to validate the format of the header value.
+
+```yaml
+headers:
+  RateLimit:
+    description: The rate limit status of the API.
+    schema:
+      type: string
+      pattern: ^"[^"]+";r=\d+;t=\d+$
+    example: '"default";r=50;t=30'
+```
+
+This example uses a regular expression to validate the format of the `RateLimit`
+header value, which is a string that contains the policy name, the number of
+requests remaining, and the time until the rate limit resets. The `pattern`
+field is used to specify the regular expression that the header value must
+match. The `example` field is used to provide an example of the header value,
+which is a string that contains the policy name, the number of requests
+remaining, and the time until the rate limit resets.
+
+The `RateLimit-Policy` header can be described in a similar way, using a string
+with a `pattern` to validate the format of the header value.
+
+```yaml
+headers:
+  RateLimit-Policy:
+    description: The rate limit policy of the API.
+    schema:
+      type: string
+      pattern: ^"[^"]+";q=\d+;w=\d+$
+    example: '"default";q=100;w=30,"daily";q=1000;w=86400'
+```
+
+This example uses a regular expression to validate the format of the
+`RateLimit-Policy` header value, which is a string that contains the policy name,
+the quota of requests, and the window of time. The `pattern` field is used to
+specify the regular expression that the header value must match. The `example`
+field is used to provide an example of the header value, which is a string that
+contains the policy name, the quota of requests, and the window of time.
+
+If these headers are being used, it might be easiest to provide some simple
+examples in the operation definitions, and dedicate a more specific "Rate
+Limiting Guide" somewhere in the API documentation to explain it all more fully
+elsewhere.

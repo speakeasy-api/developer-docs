@@ -5,64 +5,176 @@ description: Best practices for describing string types and their formats in Ope
 
 # strings
 
-Of the primitive types (ignoring the **object** type) , the **string** type is the most flexible type available. In addition to being able to be used to represent other types (such as “true”, “100”, “\{“some”: ”object”\}”), it supports a number of formats that overlay constraints to the type of data represented. This is useful for mapping to types in various languages if you are using the OpenAPI spec for code generation.
+The **string** type is one of the most used and most flexible primitive types in OpenAPI. It supports a number of formats, patterns and other validations that overlay constraints to the type of data represented. This is not just helpful for documentation and validation, but it can help with mapping to types in various languages when using OpenAPI for code generation.
 
 ## Formats
 
-The string type via the OpenAPI Specification officially supports the below formats:
-
-| Type   | Format    | Explanation                                                                                 | Example                                                |
-| ------ | --------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| string | date      | An [RFC3339](https://www.rfc-editor.org/rfc/rfc3339#section-5.6) formatted date string      | “2022-01-30”                                           |
-| string | date-time | An [RFC3339](https://www.rfc-editor.org/rfc/rfc3339#section-5.6) formatted date-time string | “2019-10-12T07:20:50.52Z”                              |
-| string | password  | Provides a hint that the string may contain sensitive information.                          | “mySecretWord1234”                                     |
-| string | byte      | Base-64 encoded data.                                                                       | “U3BlYWtlYXN5IG1ha2VzIHdvcmtpbmcgd2l0aCBBUElzIGZ1biE=” |
-| string | binary    | Binary data, used to represent the contents of a file.                                      | “01010101110001”                                       |
-
-The **format** attribute can also be used to describe a number of other formats the string might represent but outside the official list above, those formats might not be supported by tooling that works with the OpenAPI Spec, meaning that they would be provided more as hints to end-users of the API:
-
-- email
-- uuid
-- uri
-- hostname
-- ipv4 & ipv6
-- and others
-
-Below are some examples of describing various string types:
+The string type can contain anything, from passwords, IP addresses, email addresses, long form text, binary data, pretty much anything. To help describe the data in the string more specifically, OpenAPI supports a `format` keyword:
 
 ```yaml
-# A basic string
 schema:
-    type: string
+  type: object
+  properties:
+    createdAt:
+      type: string
+      format: date-time
+```
 
-# A string that represents a RFC3339 formatted date-time string
-schema:
-    type: string
-    format: date-time
+Here are a few common formats that are likely to pop up.
 
-# A string that represents a enum with the specified values
-schema:
-    type: string
-    enum:
-      - "one"
-      - "two"
-      - "three"
+<Table 
+  title="Common String Formats"
+  data={[
+    {
+      type: "string",
+      format: "date",
+      explanation: "An [RFC3339](https://www.rfc-editor.org/rfc/rfc3339#section-5.6) formatted date string",
+      example: '"2022-01-30"'
+    },
+    {
+      type: "string",
+      format: "date-time",
+      explanation: "An [RFC3339](https://www.rfc-editor.org/rfc/rfc3339#section-5.6) formatted date-time string",
+      example: '"2019-10-12T07:20:50.52Z"'
+    },
+    {
+      type: "string",
+      format: "password",
+      explanation: "Provides a hint that the string may contain sensitive information.",
+      example: '"mySecretWord1234"'
+    },
+    {
+      type: "string",
+      format: "uuid",
+      explanation: "A Universally Unique IDentifier as defined in RFC4122.",
+      example: '"cde3dd4f-cb0e-47a1-8e2a-3595c0fa1cd1"'
+    },
+    {
+      type: "string",
+      format: "byte",
+      explanation: "Base-64 encoded data.",
+      example: '"U3BlYWtlYXN5IG1ha2VzIHdvcmtpbmcgd2l0aCBBUElzIGZ1biE="'
+    },
+    {
+      type: "string",
+      format: "binary",
+      explanation: "Binary data, used to represent the contents of a file.",
+      example: '"01010101110001"'
+    }
+  ]}
+  columns={[
+    { key: "type", header: "Type" },
+    { key: "format", header: "Format" },
+    { key: "explanation", header: "Explanation" },
+    { key: "example", header: "Example" }
+  ]}
+/>
 
-# A string that represents a file
+The format property has grown substantially over time, and a new [Format Registry](https://spec.openapis.org/registry/format/) has been defined which OpenAPI v3.1 and future versions defer to.
+
+- base64url
+- binary
+- byte
+- char
+- commonmark
+- date-time
+- date
+- decimal
+- decimal128
+- double
+- duration
+- email
+- float
+- hostname
+- html
+- http-date
+- idn-email
+- idn-hostname
+- int16
+- int32
+- int64
+- int8
+- ipv4
+- ipv6
+- iri-reference
+- iri
+- json-pointer
+- media-range
+- password
+- regex
+- relative-json-pointer
+- sf-binary
+- sf-boolean
+- sf-decimal
+- sf-integer
+- sf-string
+- sf-token
+- time
+- uint8
+- uri-reference
+- uri-template
+- uri
+- uuid
+
+This list is huge already and likely to grow over time. Not all tooling will understand every single one, but that's ok because format is an extensible property in OpenAPI: anyone could put any value in there, and if a tool knows what it means, it can do something with it.
+
+### Examples
+
+```yaml
 schema:
-    type: string
-    format: binary
+  properties:
+    # A unique id
+    uuid:
+      type: string
+      format: uuid
+
+    # A basic string
+    basicString:
+      type: string
+
+    # A string that represents a RFC3339 formatted date-time string
+    createdAt:
+      type: string
+      format: date-time
+
+    # A string that represents a enum with the specified values
+    status:
+      type: string
+      enum:
+        - "pending"
+        - "approved"
+        - "archived"
 ```
 
 ## Patterns
 
-The **string** type also has an associated **pattern** attribute that can be provided to define a regular expression that should be matched by any string represented by that type. **The format of the regular expression is based on** [**Javascript**](https://262.ecma-international.org/5.1/#sec-15.10.1) and therefore could describe regular expressions that might not be supported by various tools or target languages, so **make sure to check the compatibility with your intended targets**.
+The **string** type also has an associated `pattern` keyword which accepts a regular expression, which can help further define a string when no particular format is exactly appropriate.
+
+The regular expression syntax is the one defined in JavaScript ([ECMA 262](https://www.ecma-international.org/publications-and-standards/standards/ecma-262/) specifically) with Unicode support. The `pattern` keyword is part of the [JSON Schema](https://json-schema.org/) specification, which OpenAPI v3.1 extends for its `schema` keyword, so you can read more about [Regular Expressions](https://json-schema.org/understanding-json-schema/reference/regular_expressions) on the JSON Schema website.
+
+### Examples
 
 Example of a string defined with a regex pattern:
 
 ```yaml
-# A string that must match the specified pattern
 schema:
-  type: string
-  pattern: ^[a-zA-Z0-9_]*$
+  properties:
+
+    username:
+      type: string
+      pattern: ^[a-zA-Z0-9_]*$
+      examples:
+        - Fred
+        - some_user
+        - 123abc
+
+    phoneNumber:
+      type: string
+      pattern: ^(\\([0-9]{3}\\))?[0-9]{3}-[0-9]{4}$
 ```
+
+## When to use pattern or format
+
+Pattern is used primarily for validation, but format is sometimes only treated as an informative annotation.
+
+In some cases it might be a good idea to provide a pattern as well as a format, just to make sure validation is run as expected.
