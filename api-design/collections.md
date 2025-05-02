@@ -378,7 +378,7 @@ Returning resources and collections in a logical and consistent way is tough at
 first, but there are standards and best practices that can help avoid common
 mistakes.
 
-## Using a "Data Envelope"
+### Using a "Data Envelope"
 
 One common convention used by many popular APIs (like the Stripe example above)
 is to wrap data in some sort of "envelope", which is a common term for putting
@@ -455,7 +455,7 @@ some ways, but it's more performant, and any complexity can be deferred to
 standard libraries and packages which handle all of this for API consumers
 automatically.
 
-## Data Format Standards
+### Data Format Standards
 
 Instead of creating custom formats it may be easier for API developers and
 consumers alike to use an existing "data format" standard.
