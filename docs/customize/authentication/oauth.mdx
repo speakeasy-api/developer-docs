@@ -4,11 +4,11 @@ sidebar_label: OAuth Methods
 description: "Customize your security and authentication SDK settings for OAuth."
 ---
 
-import { CodeWithTabs, Table } from "@/mdx/components";
+import { CodeWithTabs, Table, Callout } from "@/mdx/components";
 
 # OAuth 2.0 authentication
 
-Speakeasy fully supports the OAuth 2.0 security implementation. This includes type generation for OAuth schemas and in many cases
+Speakeasy supports the OAuth 2.0 security implementation, including type generation for OAuth schemas and in many cases
 the complete management of the token refresh flow. End users of Speakeasy SDKs don't need to retrieve and manage access tokens manually.
 
 API builders also have the option to leverage Speakeasy's [custom security schemes](/docs/customize/authentication/custom-security-schemes) to implement custom OAuth flows that aren't part of
@@ -45,16 +45,42 @@ Other custom flows can be implemented using a combination of [hooks](/docs/custo
 
 ## Client credentials flow
 
-OAuth 2.0 defines several methods for building a request to the `tokenUrl` endpoint. Speakeasy supports the following authentication methods:
+The client credentials flow is used to obtain an access token for API requests by prompting users for a client ID and client secret when instantiating the SDK. OAuth 2.0 defines several methods for building a request to the `tokenUrl` endpoint. Speakeasy supports the following authentication methods:
 
 - [`client_secret_post`](#client_secret_post) (default method)
 - [`client_secret_basic`](#client_secret_basic)
 - [`authorization-code`](#authorization-code-flow) (with hooks)
 - [Custom flows](#custom-refresh-token-flow) (with hooks and [custom security schemes](/docs/customize/authentication/custom-security-schemes))
 
-Define `type: oauth2` and `flows: clientCredentials` to prompt users for a client ID and client secret when instantiating the SDK. The client credentials flow is used to obtain an access token for API requests.
+To enable the client credentials flow in the SDK:
+- define `type: oauth2` and `flows: clientCredentials` in your OpenAPI specification.
+- add the following to the `gen.yaml` file:
+
+```yaml
+configVersion: 2.0.0
+generation:
+  auth:
+    OAuth2ClientCredentialsEnabled: true
+```
 
 ### client_secret_post
+
+<Table 
+  data={[
+    { language: "TypeScript", support: "✅" },
+    { language: "Python", support: "✅" },
+    { language: "Go", support: "✅" },
+    { language: "C#", support: "✅" },
+    { language: "Java", support: "✅" },
+    { language: "PHP", support: "✅" },
+    { language: "Swift", support: "🏗️" },
+    { language: "Ruby", support: "🏗️" }
+  ]}
+  columns={[
+    { key: "language", header: "Language" },
+    { key: "support", header: "Support" }
+  ]}
+/>
 
 The `client_secret_post` method sends the client credentials in the request body as `application/x-www-form-urlencoded` form data. This is the default authentication method used by Speakeasy when no specific method is specified.
 
@@ -77,6 +103,23 @@ client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&grant_type=client_cred
 ```
 
 ### client_secret_basic
+
+<Table  
+  data={[
+    { language: "TypeScript", support: "✅" },
+    { language: "Python", support: "✅" },
+    { language: "Go", support: "🏗️" },
+    { language: "C#", support: "🏗️" },
+    { language: "Java", support: "✅" },
+    { language: "PHP", support: "🏗️" },
+    { language: "Swift", support: "🏗️" },
+    { language: "Ruby", support: "🏗️" }
+  ]}
+  columns={[
+    { key: "language", header: "Language" },
+    { key: "support", header: "Support" }
+  ]}
+/>
 
 The `client_secret_basic` method sends the client credentials in the `Authorization` header using the `Basic` authentication scheme. The client ID and client secret are combined with a colon separator, Base64-encoded, and sent in the header.
 
@@ -106,8 +149,8 @@ This method is preferred by some OAuth providers for security reasons, as it kee
 
 The `tokenUrl` property in OAuth 2.0 flows can be specified in two formats:
 
-1. An absolute URL (e.g., `https://api.example.com/auth/token`)
-2. A pathname (e.g., `/auth/token`)
+1. A pathname (e.g., `/auth/token`)
+2. An absolute URL (e.g., `https://api.example.com/auth/token`)
 
 When a pathname is provided instead of an absolute URL, Speakeasy resolves it relative to the user's configured server URL. This is particularly useful in environments where you have multiple server configurations and need the token endpoint to adapt accordingly.
 
@@ -145,6 +188,10 @@ components:
 
 This feature allows for more flexible authentication configurations across different environments without requiring changes to the OpenAPI specification.
 
+<Callout type="warning" title="Limited Support">
+  Currently, absolute URLs are only supported in Go and Python.
+</Callout>
+
 ### Example OpenAPI configuration
 
 Here's a complete example showing how to configure OAuth client credentials flow in your OpenAPI specification:
@@ -155,10 +202,23 @@ paths:
     get:
       operationId: listDrinks
       summary: Get a list of drinks.
-      description: Get a list of drinks, if authenticated this will include stock levels and product codes otherwise it will only include public information.
       security:
         - clientCredentials:
             - read:drinks
+      tags:
+        - drinks
+  /drink/{id}:
+    get:
+      operationId: viewDrink
+      summary: View drink details.
+      tags:
+        - drinks
+    put:
+      operationId: updateDrink
+      summary: Update drink details.
+      security:
+        - clientCredentials:
+          - write:drinks
       tags:
         - drinks
 components:
@@ -167,25 +227,22 @@ components:
       type: oauth2
       flows:
         clientCredentials:
-          tokenUrl: https://speakeasy.bar/oauth2/token/
+          tokenUrl: /oauth2/token/
           # Uncomment the following line to use client_secret_basic instead of the default client_secret_post
           # x-speakeasy-token-endpoint-authentication: client_secret_basic
-          scopes: {}
+          scopes:
+            read:basic: Basic read access
+            read:drinks: Allow listing available drinks
+            write:drinks: Allow updating drinks inventory
 security:
   - clientCredentials:
       - read:basic
 ```
 
-Global scopes defined for the OAuth 2.0 scheme are requested alongside any operation-specific scopes when making API requests.
-
-To enable client credentials flow in the SDK, add the following to the `gen.yaml` file:
-
-```yaml
-configVersion: 2.0.0
-generation:
-  auth:
-    OAuth2ClientCredentialsEnabled: true
-```
+<Callout type="warning" title="OAuth 2.0 scopes">
+When making a token Request to the `tokenUrl`, all operation-specific scopes used in the specification will be requested alongside globally required scopes. Please refer to the [OAuth 2.0 scopes](#oauth2.0-scopes) section for more details.
+</Callout>
+<br></br>
 
 <CodeWithTabs>
 
@@ -211,10 +268,9 @@ run();
 
 ```python !!tabs Python
 import speakeasy
-from speakeasy.models import components
-
+from speakeasy.models.components import Security
 s = speakeasy.SDK(
-    security=components.Security(
+    security=Security(
         client_id="<YOUR_CLIENT_ID_HERE>",
         client_secret="<YOUR_CLIENT_SECRET_HERE>",
     ),
@@ -261,23 +317,15 @@ func main() {
 package hello.world;
 
 import dev.speakeasyapi.speakeasy.SDK;
-import dev.speakeasyapi.speakeasy.models.components.*;
 import dev.speakeasyapi.speakeasy.models.components.Security;
-import dev.speakeasyapi.speakeasy.models.operations.*;
 import dev.speakeasyapi.speakeasy.models.operations.ListDrinksResponse;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.util.Optional;
-import static java.util.Map.entry;
 
 public class Application {
 
     public static void main(String[] args) {
-        try {
+          try {
             SDK sdk = SDK.builder()
-                .clientCredentials(ClientCredentials.builder()
+                .security(Security.builder()
                     .clientID("<YOUR_CLIENT_ID_HERE>")
                     .clientSecret("<YOUR_CLIENT_SECRET_HERE>")
                     .build())
@@ -326,11 +374,11 @@ catch (Exception ex)
 ```
 
 ```php !!tabs PHP
-use Speakeasy\Client\Credentials;
-use Speakeasy\Client\Credentials\Models\Components;
-use Speakeasy\Client\Credentials\Models\Operations;
+use Speakeasy;
+use Speakeasy\Models\Components;
+use Speakeasy\Models\Operations;
 
-$sdk = Credentials\SDK::builder()
+$sdk = Speakeasy\SDK::builder()
     ->setSecurity(
         new Components\Security(
             clientID: '<YOUR_CLIENT_ID_HERE>',
@@ -353,10 +401,27 @@ try {
 ## Resource Owner Password Credentials flow
 Also known informally as OAuth 2.0 Password flow.
 
-Resource Owner Password Credentials (ROPC) flow is designed for obtaining access tokens directly in exchange for a username and password. 
+<Table  
+  data={[
+    { language: "TypeScript", support: "✅" },
+    { language: "Python", support: "🏗️" },
+    { language: "Go", support: "✅" },
+    { language: "C#", support: "🏗️" },
+    { language: "Java", support: "✅" },
+    { language: "PHP", support: "🏗️" },
+    { language: "Swift", support: "🏗️" },
+    { language: "Ruby", support: "🏗️" }
+  ]}
+  columns={[
+    { key: "language", header: "Language" },
+    { key: "support", header: "Support" }
+  ]}
+/>
 
-Below is an example of how ROPC Flow is configured in `openapi.yaml`. You'll note that 
-`oauth2` security scheme is linked to the `listProducts` operation and that the scope `products:read` is 
+Resource Owner Password Credentials (ROPC) flow is designed for obtaining access tokens directly in exchange for a username and password.
+
+Below is an example of how ROPC Flow is configured in `openapi.yaml`. You'll note that
+`oauth2` security scheme is linked to the `listProducts` operation and that the scope `products:read` is
 required by the `listProducts` operation.
 
 ```yaml
@@ -372,8 +437,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Products"
-      security:
-        - oauth2: [products:read]
 
 components:
   securitySchemes:
@@ -387,6 +450,8 @@ components:
               products:create: Permission to create products
               products:delete: Permission to delete products
               admin: Full permission including managing product inventories
+security:
+- oauth2: [products:read]
 ```
 To enable OAuth 2.0 ROPC flow in the SDK, add the following to the `gen.yaml` file:
 ```yaml
@@ -411,7 +476,7 @@ When making a call using this flow, the SDK security is configured with these pa
   ]}
 />
 
-Below are usage examples in different languages:
+Below are usage examples in supported languages:
 
 <CodeWithTabs>
 
@@ -428,14 +493,29 @@ const sdk = new SDK({
 const result = await sdk.listProducts();
 ```
 
+```go !!tabs Go
+s := sdk.New(
+    sdk.WithSecurity(components.Oauth2Input{
+        Oauth2Credentials: &components.OAuth2Credentials{
+            Username: "testuser",
+            Password: sdk.String("testpassword"),
+            ClientID: "beezy",
+            ClientSecret: sdk.String("secret"),
+        },
+    }))
+)
+ctx := context.Background()
+s.Drinks.ListProducts(ctx)
+```
+
 ```java !!tabs Java
-SDK sdk = SDK.builder() 
-    .oauth2(Oauth2Input.of( 
+SDK sdk = SDK.builder()
+    .oauth2(Oauth2Input.of(
         Oauth2Credentials.builder()
-            .username("testuser") 
-            .password("testpassword") 
-            .clientID("beezy") 
-            .clientSecret("secret") 
+            .username("testuser")
+            .password("testpassword")
+            .clientID("beezy")
+            .clientSecret("secret")
             .build()))
     .build();
 ListProductsResponse res = sdk.listProducts().call();
@@ -479,7 +559,7 @@ To allow for any possible formatting Speakeasy offers support for Hooks, these h
 
 For this example we will be using the names `id` and `secret`, but you can use any names you like.
 
-First we will define a custom security schema, documention for that [can be found here](/docs/customize/authentication/custom-security-schemes)
+First we will define a custom security schema, documentation for that [can be found here](/docs/customize/authentication/custom-security-schemes)
 
 ```yaml
 tokenRequest:
@@ -910,9 +990,7 @@ var res = await sdk.Drinks.ListDrinksAsync();
 
 ### Global security with OAuth 2.0 scopes
 
-When defining global security settings for OAuth 2.0, the SDK automatically requests the necessary scopes for all operations. This setup is useful for APIs where most endpoints share the same level of access. Global scopes are defined in the OpenAPI specification and applied to all requests unless specifically overridden.
-
-The following OpenAPI definition applies global OAuth 2.0 scopes:
+The *available* scopes for the OAuth 2.0 scheme can be listed in the `scopes` property when defining the security component.
 
 ```yaml
 components:
@@ -921,51 +999,110 @@ components:
       type: oauth2
       flows:
         clientCredentials:
-          tokenUrl: https://speakeasy.bar/oauth2/token/
+          tokenUrl: /oauth2/token/          
           scopes:
             read: Grants read access
             write: Grants write access
+```
 
+The following OpenAPI definition then applies *global* OAuth 2.0 scopes:
+
+```yaml
 security:
   - oauth2:
       - read # Apply the read scope globally
       - write # Apply the write scope globally
 ```
 
-The SDK automatically generates tokens with both `read` and `write` scopes. When making a request, the SDK checks whether the token contains the required scopes for the operation. If the token lacks the necessary scopes or has expired, a new token is requested with the correct scopes.
+In this configuration the SDK automatically requests the `read` and `write` scopes for all operations. This is useful for APIs where most endpoints share the same level of access. When making a request, the SDK checks whether the token contains the required scopes for the operation. If the token lacks the necessary scopes or has expired, a new token is requested with the correct scopes.
 
+### Per-operation OAuth 2.0 scheme
 
-### Per-operation security with OAuth 2.0 scopes
-
-For more control over specific API operations, per-operation security settings can be used. This allows different scopes to be applied to individual operations, overriding the global settings.
-
-The following OpenAPI definition applies an operation-specific OAuth scope for the `listDrinks` operation:
+For more control over specific API operations, OAuth2 security schemes can be applied to specific operations only:
 
 ```yaml
 paths:
   /drinks:
     get:
-      operationId: listDrinks
+      operationId: listDrinks # uses API key authentication
       summary: Get a list of drinks.
-      description: Retrieves a list of drinks, requiring the `read` scope.
+  /order/{id}:
+    get:
+      operationId: viewOrder # uses OAuth2 client credentials flow
+      summary: Get order details.
       security:
-        - oauth2:
-            - read # Apply the read scope for this operation
+        - clientCredentials: [read]
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      name: Authorization
+      in: header
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth2/token/
+          scopes:
+            read: Grants read access
+security:
+  - apiKey: []
 ```
-
-In this case, the SDK requests a token with the `read` scope only when calling the `listDrinks` operation. If the token does not meet the required scope for the operation or has expired, the SDK regenerates the token with the correct scope.
-
-Here's how the SDK can be used with per-operation security:
 
 ```ts
 import { SDK } from "speakeasy";
 
 const sdk = new SDK();
 
-const result = await sdk.drinks.listDrinks({
+const result = await sdk.viewOrder({
   security: {
     clientID: "<YOUR_CLIENT_ID_HERE>",
     clientSecret: "<YOUR_CLIENT_SECRET_HERE>",
   },
 });
 ```
+
+### Per-operation OAuth 2.0 scopes
+
+In the following example:
+- the `read` scope is applied globally as it is defined in the root-level `security` section.
+- the `write` scope is required for the `updateOrder` operation.
+- the `admin` scope is available in the `scopes` property but not actually used by any operation.
+
+```yaml
+paths:
+  /order/{id}:
+    get:
+      operationId: viewOrder
+      summary: View order details.
+    put:
+      operationId: updateOrder
+      summary: Update order details.
+      security:
+        - clientCredentials: [write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Order"
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth2/token/
+          scopes:
+            read: Grants read access
+            write: Grants write access
+            admin: Grants admin access
+security:
+  - clientCredentials: [read]
+```
+
+<Callout type="warning" title="Per-operation scopes">
+When making a token Request to the `tokenUrl`, all operation-specific scopes used in the specification will be requested alongside globally required scopes.
+This means that in the example above, all API calls that use the `clientCredentials` security scheme will request both the `read` and `write` scopes.
+Please ensure that your authorization server can handle this behavior appropriately or contact us for further assistance.
+</Callout>

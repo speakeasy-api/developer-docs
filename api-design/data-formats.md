@@ -34,7 +34,7 @@ Example of complex JSON request:
 
 Any modern API will support JSON. Occasionally they will support XML as well.
 
-XML is relict of the early internet. It dominated web APIs in the 2000s with
+XML is a relic of the early internet. It dominated web APIs in the 2000s with
 standards like SOAP and XML-RPC, but was largely displaced by JSON in the 2010s
 due to JSON's simplicity and natural fit with JavaScript. Today, XML persists
 mainly in legacy systems, enterprise SOAP services, and specific domains like
@@ -103,7 +103,7 @@ place_id=1&message=This%20is%20a%20bunch%20of%20text.&with_friends[]=1&with_frie
 This is a bit of a mess, as the message needs to be "URL encoded" and the
 `with_friends` is an array with awkward syntax. On top of that it's not clear
 what the data types are. It is also a bit of a pain to work with on the
-server-side, as the data needs to be parsed and spit up properly, then converted
+server-side, as the data needs to be parsed and split up properly, then converted
 to the correct data types.
 
 For comparison, the same data in JSON is a lot easier to work with.
@@ -125,7 +125,6 @@ an integer, the `message` is a string, and `with_friends` is an array of
 integers.
 
 ## Multipart Form Data: An Occasionally Helpful Nightmare
-
 
 Multipart forms are a way to send data in multiple parts as a single HTTP request, often used in REST APIs for handling mixed types of data, such as JSON and binary files (e.g., images or documents). Unlike standard form submission, where data is encoded as application/x-www-form-urlencoded, multipart forms use the multipart/form-data encoding, which allows for the inclusion of both text and file content in the same request.
 
@@ -154,8 +153,7 @@ Content-Type: image/jpeg
 ```
 
 This is either confusing or brilliant depending on perspective, but it's
-generally a massive pain to work with. 
-
+generally a massive pain to work with.
 
 ## Best Practices
 
@@ -176,12 +174,12 @@ weigh it up against the cost of supporting it.
 ### 2. Avoid multipart forms
 
 There are a few reasons to avoid this. It's hard to document, weird to handle
-partial errors, and generally confuses beginners trying to work with an API. 
+partial errors, and generally confuses beginners trying to work with an API.
 
 An SDK can hide some of the complexity, but that won't solve the awkward race
 conditions that pop up creating something from the first "part", then the second
 or third part fails, rolling back database transactions after emails have
-already gone out. 
+already gone out.
 
 Designing an API for the least experienced user is not necessarily the goal, but
 making things unnecessarily complex isn't the plan either, so stick with "one

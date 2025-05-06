@@ -4,7 +4,7 @@ description: Learn how the Uniform Resource Locator works within a HTTP/REST API
 
 # Structuring URLs
 
-A **URL** (Uniform Resource Locator) is like an postal address on the internet. Just as a postal address tells the postal service where to deliver mail, a URL tells your browser where to go to find a specific website, page, or resource in a way that both humans and computers can understand.
+A **URL** (Uniform Resource Locator) is like a postal address on the internet. Just as a postal address tells the postal service where to deliver mail, a URL tells your browser where to go to find a specific website, page, or resource in a way that both humans and computers can understand.
 
 ```
 https://www.example.org/products/shoes?size=10&color=red
@@ -73,7 +73,7 @@ The URL is the full address your browser needs to complete these steps, making i
 
 ## URLs in REST APIs: A Gateway to Resources
 
-In the world of **REST APIs**, URLs are not just for webpages but also for identifying and interacting with specific resources across the API, across an organization, or across the entire Internet. APIs are used by systems and applications to communicate with each other, and URLs act as a unique identifier for that resources, as well as acting as an address with to find more information.
+In the world of **REST APIs**, URLs are not just for webpages but also for identifying and interacting with specific resources across the API, across an organization, or across the entire Internet. APIs are used by systems and applications to communicate with each other, and URLs act as a unique identifier for those resources, as well as acting as an address with to find more information.
 
 Here's an example of how URLs work in REST APIs:
 
