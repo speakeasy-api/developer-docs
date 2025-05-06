@@ -4,7 +4,7 @@ import { Table } from "@/mdx/components";
 
 Server variables are a map of variable names (string) to [Server Variable Objects](/openapi/servers/server-variables#server-variable-object) that can be used for variable substitution via Templating.
 
-## Server Variable Object in OpenAPI
+## Server Variable Object
 
 A Server Variable Object describes a single variable that is optionally part of the URL in a [Server Object](/openapi/servers). The value of a variable can be any arbitrary string value unless a list of allowed values is provided via the `enum` field.
 
@@ -23,7 +23,7 @@ A Server Variable Object describes a single variable that is optionally part of 
   ]}
 />
 
-Example:
+For example, the following OpenAPI document defines a server with a variable `organization` and `environment`:
 
 ```yaml
 servers:
@@ -32,7 +32,7 @@ servers:
     variables:
       organization:
         description: The organization name. Defaults to a generic organization.
-        default: api
+        default: demo
       environment:
         description: The environment name. Defaults to the production environment.
         default: prod
@@ -42,4 +42,51 @@ servers:
           - dev
 ```
 
+Another interesting example is a server with a variable `port`:
+
+```yaml
+servers:
+  - url: http://localhost:{port}
+    description: A local server
+    variables:
+      port:
+        description: The port number. Defaults to 8080.
+        default: 8080
+        enum:
+          - 8080
+          - 8081
+          - 8082
+```
+
+
+Some APIs might be deployed across multiple regions, such as the United States, Europe, and Asia. Instead of listing each server URL separately, use a server variable to represent the region.
+
+```yaml
+servers:
+  - url: "https://{region}.api.speakeasy.bar"
+    description: Edge Server
+    variables:
+      region:
+        default: us
+        description: Please select the appropriate server.
+        enum:
+          - us
+          - eu
+          - asia
+```
+
+## Templating syntax
+
 Any variable delimited by `{}` in the `url` field declares a part of the URL that **_must_** be replaced with a value and references a variable that **_must_** be defined in the `variables` map. It is the API consumer's responsibility to replace these variables (including the delimiters) with values to create a valid URL before making a request to the API. The defined `default` should be used if no other value is provided.
+
+## Best practices
+
+### Avoid using server variables for multiple API versions
+
+Some people try to use server variables for handling API Versions (v1, v2, v3) in a single OpenAPI document. This is a poor fit for server variables, because far more than the server URL will change between major versions. Server variables help when just the server is changing, but the other operations and components are the same.
+
+If the operations and components are the same, there was probably no need to create a new version of the API. If the operations and components are different, then you should create a new OpenAPI document for each version of the API. This is a much cleaner approach and will make it easier for consumers to understand the differences between versions.
+
+### Beware enums
+
+When using enums, be careful to ensure that the values are valid and meaningful. Also make sure they are not too restrictive. For example, if you have a server variable for `region`, and you only allow `us`, `eu`, and `asia`, then it cana be difficult to add new regions in the future if there is old code validating against those values. Consider using a more generic approach, with valid regions explained in the description. This makes it easier to add new regions in the future without breaking existing code.

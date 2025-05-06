@@ -1,0 +1,54 @@
+name: Sync Public → Private
+
+on:
+    push:
+        paths:
+            - "api-design/**"
+            - "docs/**"
+            - "guides/**"
+            - "mcp/**"
+            - "openapi/**"
+
+env:
+    SYNC_REPO: ${{ secrets.SYNC_REPO }}
+    BRANCH: main
+
+jobs:
+    sync:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout public repo
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Generate GitHub App token
+              id: generate_token
+              uses: tibdex/github-app-token@v2
+              with:
+                  app_id: ${{ secrets.SYNC_APP_ID }}
+                  private_key: ${{ secrets.SYNC_APP_KEY }}
+
+            - name: Clone private repo
+              env:
+                  TOKEN: ${{ steps.generate_token.outputs.token }}
+              run: |
+                  git clone https://x-access-token:${TOKEN}@github.com/${SYNC_REPO}.git private-repo
+
+            - name: Sync public folders into private repo content paths
+              run: |
+                  rsync -a --delete api-design/ private-repo/src/content/api-design/
+                  rsync -a --delete docs/ private-repo/src/content/docs/
+                  rsync -a --delete guides/ private-repo/src/content/guides/
+                  rsync -a --delete mcp/ private-repo/src/content/mcp/
+                  rsync -a --delete openapi/ private-repo/src/content/openapi/
+
+            - name: Commit and push changes to private repo
+              run: |
+                  cd private-repo
+                  git config user.name "Beezy the bot"
+                  git config user.email "marketing@speakeasy.com"
+                  git add .
+                  git diff --cached --quiet || git commit -m "Sync open source content 🐝"
+                  git push origin ${BRANCH}

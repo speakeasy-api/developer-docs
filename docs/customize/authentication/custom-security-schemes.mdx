@@ -84,12 +84,11 @@ Once the SDK is regenerated, the custom security scheme can be configured global
 import { SDK } from "openapi";
 
 const sdk = new SDK({
-security: {
-appId: "app-speakeasy-123",
-secret: "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI",
-},
+  security: {
+    appId: "app-speakeasy-123",
+    secret: "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI",
+  },
 });
-
 ```
 
 ```python !!tabs Python
@@ -115,17 +114,25 @@ import (
 )
 
 s := openapi.New(
-openapi.WithSecurity(components.Security{
-AppID: "app-speakeasy-123",
-Secret: "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI",
-}),
+  openapi.WithSecurity(components.Security{
+    AppID: "app-speakeasy-123",
+    Secret: "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI",
+  }),
 )
+```
 
+```csharp !!tabs C#
+using Openapi;
+using Openapi.Models.Components;
+var sdk = new SDK(securitySource: () => new Security() {
+    AppId = "app-speakeasy-123",
+    Secret = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI"
+});
 ```
 
 ```java !!tabs Java
 import org.openapis.openapi.SDK;
-import org.openapis.openapi.models.shared.Security;
+import org.openapis.openapi.models.components.Security;
 
 SDK sdk = SDK.builder()
         .security(Security.builder()
@@ -133,6 +140,29 @@ SDK sdk = SDK.builder()
             .secret("MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI")
             .build())
         .build();
+```
+
+```php !!tabs PHP
+use Openapi;
+use Openapi\Models\Components;
+$sdk = Openapi\SDK::builder()
+    ->setSecurity(
+        new Components\Security(
+            appId: 'app-speakeasy-123',
+            secret: 'MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI',
+        )
+    )->build();
+```
+
+```ruby !!tabs Ruby
+require 'openapi'
+$sdk = Openapi\SDK::builder()
+    ->setSecurity(
+        new Components\Security(
+            appId: 'app-speakeasy-123',
+            secret: 'MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI',
+        )
+    )->build();
 ```
 </CodeWithTabs>
 
@@ -177,18 +207,14 @@ from typing import Union
 from .types import BeforeRequestContext, BeforeRequestHook
 
 class CustomSecurityHook(BeforeRequestHook):
-def before_request(self, hook_ctx: BeforeRequestContext, request: requests.PreparedRequest) -> Union[requests.PreparedRequest, Exception]:
-security = hook_ctx.security_source
-
-    if not security.app_id or not security.secret:
-        raise ValueError("Missing security credentials")
-
-    # Add security headers to the request
-    request.headers["X-Security-App-Id"] = security.app_id
-    request.headers["X-Security-Secret"] = security.secret
-
-    return request
-
+    def before_request(self, hook_ctx: BeforeRequestContext, request: requests.PreparedRequest) -> Union[requests.PreparedRequest, Exception]:
+        security = hook_ctx.security_source
+        if not security.app_id or not security.secret:
+            raise ValueError("Missing security credentials")
+        # Add security headers to the request
+        request.headers["X-Security-App-Id"] = security.app_id
+        request.headers["X-Security-Secret"] = security.secret
+        return request
 ```
 
 ```go !!tabs Go
@@ -222,8 +248,39 @@ func (h *CustomSecurityHook) BeforeRequest(hookCtx BeforeRequestContext, req *ht
 
 	return req, nil
 }
-
 ```
+
+```csharp !!tabs C#
+namespace Openapi.Hooks
+{
+    using System;
+    using System.Net.Http;
+    using System.Net.Http.Headers;
+    using System.Threading.Tasks;
+    using Openapi.Models.Shared;
+    public class CustomSecurityHook : IBeforeRequestHook
+    {
+        public async Task<HttpRequestMessage> BeforeRequestAsync(BeforeRequestContext hookCtx, HttpRequestMessage request)
+        {
+            await Task.CompletedTask;
+            if (hookCtx.SecuritySource == null)
+            {
+                throw new Exception("Security source is null");
+            }
+            Security? security = hookCtx.SecuritySource() as Security;
+            if (security == null)
+            {
+                throw new Exception("Unexpected security type");
+            }
+            // Add security values to the request headers
+            request.Headers.Add("X-Security-App-Id", security.AppId);
+            request.Headers.Add("X-Security-Secret", security.Secret);
+            return request;
+        }
+    }
+}
+```
+
 
 ```java !!tabs Java
 import java.net.http.HttpRequest;
@@ -250,6 +307,58 @@ public class CustomSecurityHook implements BeforeRequest {
                 .build();
     }
 }
+```
+
+```php !!tabs PHP
+namespace OpenAPI\OpenAPI\Hooks;
+use OpenAPI\OpenAPI\Models\Shared\Security;
+use Psr\Http\Message\RequestInterface;
+class CustomSecurityHook implements BeforeRequestHook
+{
+    public function beforeRequest(BeforeRequestContext $context, RequestInterface $request): RequestInterface
+    {
+        if ($context->securitySource === null) {
+            throw new \InvalidArgumentException('Security source is null');
+        }
+        $security = $context->securitySource->call($context);
+        if (! $security instanceof Security) {
+            throw new \InvalidArgumentException('Unexpected security type');
+        }
+        $request = $request->withHeader('Idempotency-Key', 'some-key');
+        // Add security values to the request headers
+        $request = $request->withAddedHeader('X-Security-App-Id', $security->appId);
+        $request = $request->withAddedHeader('X-Security-Secret', $security->secret);
+        return $request;
+    }
+}
+```
+
+```ruby !!tabs Ruby
+require_relative './types'
+require 'sorbet-runtime'
+module OpenApiSDK
+  module SDKHooks
+    class CustomSecurityHook
+      extend T::Sig
+      include AbstractBeforeRequestHook
+      sig do
+        override.params(
+          hook_ctx: BeforeRequestHookContext,
+          request: Faraday::Request
+        ).returns(Faraday::Request)
+      end
+      def before_request(hook_ctx:, request:)
+        raise ArgumentError, 'Security source is null' if hook_ctx.security_source.nil?
+        security = hook_ctx.security_source.call
+        raise ArgumentError, 'Unexpected security type' unless security.is_a?(Models::Shared::Security)
+        # Add security values to the request headers
+        request.headers['X-Security-App-Id'] = security.app_id
+        request.headers['X-Security-Secret'] = security.secret
+        request
+      end
+    end
+  end
+end
 ```
 
 </CodeWithTabs>

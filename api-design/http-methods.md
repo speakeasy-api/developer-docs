@@ -8,7 +8,7 @@ GET /places?lat=40.759211&lon=-73.984638 HTTP/1.1
 Host: api.example.org
 ```
 
-Sometimes people will suggest HTTP methods are optional, or they they're just noise, and everything would be better off done as purely a `GET` or `POST`. This is a bit of a misunderstanding of how HTTP works, and how the web works, and leads to all sorts of trouble down the line.
+Sometimes people will suggest HTTP methods are optional, or that they're just noise, and everything would be better off done as purely a `GET` or `POST`. This is a bit of a misunderstanding of how HTTP works, and how the web works, and leads to all sorts of trouble down the line.
 
 Conventions may seem arbitrary, but they are important to follow because **your API does not exist in a vacuum**. Conventions allow disparate tools that do not have direct knowledge of each other to work together seamlessly. If you start breaking these conventions, you're going to need to build all of your own tools, and that's a lot of work.
 
@@ -21,7 +21,7 @@ default method for most browsers, as it is used for fetching web pages, images,
 stylesheets, and scripts. It is also used for fetching data from APIs.
 
 `GET` is "idempotent", meaning that if you made the same get call over and over
-again, You can expect the same outcome every time. If you `GET` the resource, but the request fails or times out, and you `GET` it again, the end result is that you got it. Nothing was deleted, or removed, or changed in any lasting way, so if this thing is got a bunch of times it is the same as being got once.
+again, you can expect the same outcome every time. If you `GET` the resource, but the request fails or times out, and you `GET` it again, the end result is that you got it. Nothing was deleted, or removed, or changed in any lasting way, so if this thing is got a bunch of times it is the same as being got once.
 
 ```curl
 GET /places?lat=40.759211&lon=-73.984638 HTTP/1.1
@@ -31,7 +31,7 @@ Host: api.example.org
 ### Best Practices for `GET` requests
 
 - Idempotent: Identical requests get identical outputs.
-- No request body: `GET` requests can *technically* have a body, but a lot of frameworks and tooling will start acting a bit wonky, so just avoid it. There's almost always a better way to do what you're trying to do.
+- No request body: `GET` requests can _technically_ have a body, but a lot of frameworks and tooling will start acting a bit wonky, so just avoid it. There's almost always a better way to do what you're trying to do.
 - Caching: You can and should enable caching for the response of `GET` requests, but you need to be careful about how you do it. If the data changes frequently, you might want to set a short cache time, or use a cache-busting technique.
 - Safe: `GET` requests should not change the state of the server. They should only be used to retrieve data.
 
