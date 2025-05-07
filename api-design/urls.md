@@ -1,5 +1,6 @@
 ---
-description: Learn how the Uniform Resource Locator works within a HTTP/REST API.
+title: "Urls Best Practices in REST API Design"
+description: "Design clean, intuitive URL structures for your API that follow RESTful principles and make your resources easy to discover and understand."
 ---
 
 # Structuring URLs

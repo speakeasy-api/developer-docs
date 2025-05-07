@@ -1,3 +1,8 @@
+---
+title: "HTTP methods Best Practices in REST API Design"
+description: "Design intuitive, validated request bodies that make your API easy to use while preventing errors and security vulnerabilities."
+---
+
 # Using HTTP methods
 
 We learned about URLs in _[What is a URL?](/api-design/urls)_ which is how an
