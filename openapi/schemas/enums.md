@@ -1,5 +1,5 @@
 ---
-title: Enums in OpenAPI best practices
+title: Enums
 description: Best practices for describing enums in OpenAPI
 ---
 # Enums in OpenAPI

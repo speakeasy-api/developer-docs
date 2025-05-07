@@ -1,5 +1,5 @@
 ---
-title: Arrays in OpenAPI best practices
+title: Arrays
 description: Best practices for describing array types in OpenAPI
 ---
 

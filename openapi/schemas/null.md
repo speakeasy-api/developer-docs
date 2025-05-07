@@ -1,5 +1,5 @@
 ---
-title: Null in OpenAPI best practices
+title: Null
 description: Describing null values in OpenAPI schemas in OpenAPI 3.0.X and 3.1.X.
 ---
 # null in OpenAPI

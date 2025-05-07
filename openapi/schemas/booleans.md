@@ -1,5 +1,5 @@
 ---
-title: Booleans in OpenAPI best practices
+title: Booleans
 description: Best practices for describing boolean types in OpenAPI
 ---
 # booleans

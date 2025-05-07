@@ -1,8 +1,3 @@
----
-title: "Request Parameters Best Practices in REST API Design"
-description: "Design intuitive, validated request parameters that make your API easy to use while preventing errors and security vulnerabilities."
----
-
 # Sending request parameters
 
 There are all sorts of options that can be sent to an API endpoint and figuring out where to put things can be tricky at first.
@@ -15,7 +10,7 @@ Given the URL `/collections/shoes/products?sort=date&size=10&color=red` the
 "path" is the `/collections/shoes/products`, and slashes separate bits of a URL,
 some of which are static and some are variables. In this example `shoes` is a
 variable that could be swapped for another collection on the e-commerce store,
-e.g: `hats`.
+e.g: `hats`. 
 
 There is no concept of a "path parameter" in HTTP RFCs, this is purely a
 convention, but it's common as API design terminology.
@@ -24,9 +19,9 @@ convention, but it's common as API design terminology.
 
 That same URL example has "query parameters" defined in the query string:
 `/collections/shoes/products?sort=date&size=10&color=red`, which starts at, and
-includes, the `?`: `?sort=date&size=10&color=red`.
+includes, the `?`: `?sort=date&size=10&color=red`. 
 
-This string can be parsed into `[sort: 'date', size: '10', color: 'red']`.
+This string can be parsed into `[sort: 'date', size: '10', color: 'red']`. 
 
 These options generally cover filtering, sorting, and pagination.
 

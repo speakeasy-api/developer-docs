@@ -1,8 +1,3 @@
----
-title: "Status codes Best Practices in REST API Design"
-description: "Using the correct status codes to make your API easy to use while preventing errors and security vulnerabilities."
----
-
 # Using HTTP status codes
 
 Arguments between developers will continue for the rest of time over the
@@ -132,7 +127,7 @@ IANA](https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
 or swing by [http.cats](http://http.cat/) and see what the cats have to say
 about it.
 
-## Best practices
+## Best practices 
 
 ### Ambiguity in error code?
 

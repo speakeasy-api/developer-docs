@@ -1,6 +1,5 @@
 ---
-title: "Security Best Practices in REST API Design"
-description: "Implement robust security measures in your API to protect sensitive data, prevent unauthorized access, and comply with regulatory requirements."
+description: Designing for API security from the ground up.
 ---
 
 # Designing for API security
