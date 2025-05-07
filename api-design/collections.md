@@ -1,5 +1,6 @@
 ---
-description: Learn how to use resources and collections for a REST API, getting stuck into some real world examples, using links to get between them all, and some pitfalls to avoid.
+title: "Collections Best Practices in REST API Design"
+description: "Best practices for organizing and returning resources and collections in your REST API with practical examples and implementation patterns."
 ---
 
 # Returning resources & collections of data

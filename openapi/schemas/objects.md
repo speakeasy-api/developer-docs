@@ -1,5 +1,5 @@
 ---
-title: Objects
+title: Objects in OpenAPI best practices
 asIndexPage: true
 description: Best practices for describing objects in OpenAPI schemas in OpenAPI 3.0.X and 3.1.X.
 ---

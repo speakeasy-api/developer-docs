@@ -1,3 +1,8 @@
+---
+title: "Data Formatting Best Practices in REST API Design"
+description: "Use data formats in your API with best practices for security, performance, and reliability across different client platforms."
+---
+
 # Formatting API data
 
 A request body (and a response body) will have a `Content-Type`, and that

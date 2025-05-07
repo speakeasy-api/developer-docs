@@ -1,5 +1,6 @@
 ---
-title: Custom Security Schemes
+title: Custom Security Schemes in OpenAPI best practices
+description: "Implement custom API authentication using Security Schemes in your OpenAPI specification for better security, developer experience, and seamless integration."
 ---
 # Custom Authentication Schemes in OpenAPI
 
