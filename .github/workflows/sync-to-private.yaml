@@ -2,6 +2,8 @@ name: Sync Public → Private
 
 on:
     push:
+        branches:
+            - main
         paths:
             - "api-design/**"
             - "docs/**"
@@ -12,6 +14,7 @@ on:
 env:
     SYNC_REPO: ${{ secrets.SYNC_REPO }}
     BRANCH: main
+    SYNC_DIRS: "api-design docs guides mcp openapi"
 
 jobs:
     sync:
@@ -31,17 +34,64 @@ jobs:
 
             - name: Sync public folders into private repo content paths
               run: |
-                  rsync -a --delete api-design/ private-repo/src/content/api-design/
-                  rsync -a --delete docs/ private-repo/src/content/docs/
-                  rsync -a --delete guides/ private-repo/src/content/guides/
-                  rsync -a --delete mcp/ private-repo/src/content/mcp/
-                  rsync -a --delete openapi/ private-repo/src/content/openapi/
+                  set -euo pipefail
+
+                  for dir in $SYNC_DIRS; do
+                    src_dir="$dir"
+                    dest_dir="private-repo/src/content/$dir"
+
+                    if [ -d "$src_dir" ]; then
+                      echo "Syncing $src_dir → $dest_dir"
+                      rsync -a --delete "$src_dir/" "$dest_dir/"
+                    else
+                      echo "Warning: $src_dir does not exist, skipping..."
+                    fi
+                  done
 
             - name: Commit and push changes to private repo
               run: |
+                  set -euo pipefail
                   cd private-repo
+
                   git config user.name "Beezy the bot"
                   git config user.email "marketing@speakeasy.com"
+
+                  # Rebase against latest main to avoid conflicts
+                  git pull origin ${BRANCH} --rebase
+
                   git add .
-                  git diff --cached --quiet || git commit -m "Sync open source content 🐝"
-                  git push origin ${BRANCH}
+
+                  if git diff --cached --quiet; then
+                    echo "No changes to sync"
+                    echo "Nothing synced." >> $GITHUB_STEP_SUMMARY
+                    exit 0
+                  fi
+
+                  git commit -m "Sync open source content 🐝 (from $GITHUB_SHA)"
+
+                  if ! git push origin ${BRANCH}; then
+                    echo "❌ Push to private repo failed!" >> $GITHUB_STEP_SUMMARY
+                    echo "Please check for conflicts or access issues." >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi
+
+                  COMMIT_SHA=$(git rev-parse HEAD)
+
+                  echo "### ✅ Synced content to private repo at \`$(date)\`" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Commit SHA:** \`${COMMIT_SHA}\`" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Grouped file changes:**" >> $GITHUB_STEP_SUMMARY
+
+                  git diff --cached --name-status | awk '
+                    {
+                      split($2, parts, "/");
+                      folder = parts[1];
+                      if (current != folder) {
+                        if (current != "") print "" >> ENVIRON["GITHUB_STEP_SUMMARY"];
+                        print "#### `" folder "/`" >> ENVIRON["GITHUB_STEP_SUMMARY"];
+                        current = folder;
+                      }
+                      print $0 >> ENVIRON["GITHUB_STEP_SUMMARY"];
+                    }
+                  '
