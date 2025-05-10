@@ -1,0 +1,193 @@
+---
+title: Retries
+description: Communicate to API consumers when they should retry requests, and how
+  long to wait before retrying. This can help reduce the number of requests being made to an API 
+  when its having a rough time, and can also help consumers avoid tripping over on rate limits.
+---
+
+Retries are a common pattern in API design, especially when dealing with
+transient errors or rate limits, or connection issues that could have just been
+a bit getting flipped somewhere in the ether, but a second attempt would likely
+work.
+
+API consumers may or may not automatically retry failed requests, and if they do, they
+may not know how long to wait before retrying. This is especially true for rate
+limits, where the API may be able to handle a burst of requests, but then
+throttle the consumer for a period of time to avoid overwhelming the system.
+
+To avoid confusing consumers who just want to work with an API, it's a good idea
+to communicate to them how retries should be used in the API, with that
+information clearly explained in API documentation and automatically handled by
+SDKs.
+
+# Retries in OpenAPI
+
+Whilst OpenAPI does not having any dedicated functionality describing retries,
+it does not need to, as HTTP itself has retries covered.
+
+The `Retry-After` header is defined in RFC 9110 as the standard way to
+communicate that a client or server failure has happened, but that a retry is
+possible after a certain amount of time. 
+
+```yaml
+responses:
+  "429":
+    description: Too Many Requests
+    headers:
+      Retry-After:
+        description: The number of seconds to wait before retrying the request.
+        schema:
+          type: integer
+          example: 120
+```
+
+The most common usage of Retry-After is using the number of seconds to wait
+before trying again, but it can also be used to communicate a date and time when
+the request can be retried. 
+
+```yaml
+responses:
+  "429":
+    description: Too Many Requests
+    headers:
+      Retry-After:
+        description: The number of seconds to wait before retrying the request.
+        schema:
+          type: string
+          format: date-time
+          example: 2025-07-01T12:00:00Z
+```
+
+This header is used in a number of different scenarios, including:
+
+- 404 Not Found - The server MAY send a Retry-After header field to indicate that the resource is temporarily unavailable, or could exist in the near future.
+- 408 Request Timeout - The server MAY send a Retry-After header field to indicate that it is temporary and after what time the client MAY try again.
+- 409 Conflict - The server MAY send a Retry-After header field to indicate that the conflict could be temporary and suggest a time where it may have been resolved.
+- 413 Content Too Large - If the condition is temporary, the server could send a Retry-After header field to indicate that it is temporary and the client could try again.
+- 429 Too Many Requests - The client has sent too many requests in a given amount of time, and the server is asking the client to wait before sending more requests.
+- 503 Service Unavailable - A service may be unavailable temporarily, so a Retry-After header field could suggest an appropriate amount of time for the client to wait before checking if the service is back.
+
+Some other 5XX errors could well be retryable, such as 504 Gateway Timeout, and
+a 507 Insufficient Storage might resolve itself, but it's possible to go too
+far. For example, 501 Not Implemented could be seen as temporary because it
+could be implemented soon, but nobody wants API consumers retrying to API
+forever waiting for a feature to be deployed which is never going to be
+deployed.
+
+Describing every single instance of anything that could ever happen in OpenAPI
+is not the goal of any API documentation because that is impossible. Focusing on
+key areas where retries are likely to be needed is a good balance, and from
+there, API consumers can use their own judgement on whether to retry or not.
+
+## Examples or constants
+
+When describing some of these headers it feels important to provide a bit of
+context about what the headers contain, either with an exact value, or if that's
+not possible then some examples of what values might appear.
+
+Here is an example of how to do that with the `Retry-After` header, using the
+Header Object `example` field:
+
+```yaml
+headers:
+  Retry-After:
+    description: The number of seconds to wait before making another request.
+    schema:
+      type: integer
+    example: 3600
+```
+
+Using an example here is important because the value of `Retry-After` can vary
+depending on the billing plan the user is on. For example, a free plan might
+have a `Retry-After` value of 60 seconds, while a paid plan might have a
+`Retry-After` value of 10 seconds.
+
+If the value of `Retry-After` is always the same, then using `const` inside the
+`schema` object is a good way to indicate that (available from OpenAPI v3.1).
+
+```yaml
+headers:
+  Retry-After:
+    description: The number of seconds to wait before making another request.
+    schema:
+      type: integer
+      const: 3600
+```
+
+This indicates that the `Retry-After` value is always 3600 seconds, regardless of
+the billing plan the user is on.
+
+## x-speakeasy-retries
+
+Another ways to communicate how retries should work, is using the Speakeasy
+vendor extension `x-speakeasy-retries`. Using this extension, OpenAPI can
+communicate retry for a particular operation, or the API as a whole, to API
+consumers. 
+
+This extension can be used to specify the number of retries, the delay between
+retries, and the maximum delay.
+
+```yaml
+/webhooks/subscribe:
+  post:
+    operationId: subscribeToWebhooks
+    servers:
+      - url: https://speakeasy.bar
+    x-speakeasy-usage-example:
+      tags:
+        - server
+        - retries
+    x-speakeasy-retries:
+      strategy: backoff
+      backoff:
+        initialInterval: 10
+        maxInterval: 200
+        maxElapsedTime: 1000
+        exponent: 1.15
+```
+
+This example shows how to use the `x-speakeasy-retries` extension to specify a
+"backoff" strategy for retries, which is a common pattern for retrying failed
+requests with longer waits between retries. The `initialInterval` is the time to
+wait before the first retry, and the `maxInterval` is the maximum time to wait
+between retries. The `maxElapsedTime` is the maximum time to wait before giving
+up on retries, and the `exponent` is the exponent to use for the backoff
+calculation.
+
+This approach could be used as well as, or instead of, the `Retry-After` header.
+It would be a good way to add automatic retries to SDKs which means the client
+will be automatically retrying things without needing to learn everything about
+which status codes are retryable, and how long to wait before retrying.
+
+## Rate Limits
+
+Rate limits are a common use case for retries, and the `Retry-After` header is a
+great way to communicate to API consumers when they should retry requests, and
+how long to wait before retrying.
+
+Learn more about [rate limiting with OpenAPI](/openapi/rate-limiting).
+
+## Best practices
+
+### Examples over constants
+
+When describing the `Retry-After` header, it's a good idea to use examples instead of
+constants to allow for flexibility in the API. Some APIs will push up the
+`Retry-After` value during times of high load, and some APIs will have different
+`Retry-After` values depending on the billing plan the user is on. Using
+examples allows for this flexibility, whilst still letting API consumers know
+what sort of values they can expect (e.g: integer vs date-time).
+
+### Expand Retry-After in periods of high load
+
+When the API is under heavy load, it's a good idea to expand the `Retry-After`
+header to allow for longer wait times between retries. This can help reduce the
+number of requests being made to the API, and can also help consumers avoid
+tripping over on rate limits.
+
+### Use exponential backoff
+
+When retrying requests, it's a good idea to suggest an exponential backoff
+approach, as a server which is struggling to keep up with requests does not need
+to be hammered with even more requests. Sometimes it needs a moment to recover,
+and clients giving larger gaps between retries can help with that.
