@@ -1,0 +1,317 @@
+---
+title: Pagination
+description: Learn how to implement pagination in OpenAPI specifications, including query parameters, headers, and response formats.
+---
+
+# Pagination in OpenAPI
+
+Describing a collection of resources in an API may be simple at first, but
+certain features like pagination can make it more complex. Pagination is a
+common requirement for APIs that return large sets of data, which allows for a
+subsection of a collection to be returned (maybe only 20-100 resources) to avoid
+overwhelming the server, the client, and all the network components in between.
+
+This is usually implemented as a query parameter, such as `?page=1` or
+`?cursor=abc123`, so that a client can request a specific page of results. The
+API can then return a subset of the data, and depending on the specific
+pagination strategy used there could also be metadata about the total number of
+items and the total number of pages. That metadata allows a client to display
+pagination controls in the interface such as "Page 1", "Page 2", or simply
+"Next" and "Previous" buttons.
+
+You can learn more about various approaches to pagination in the API design guide
+[here](https://www.moesif.com/blog/api-design-guide/pagination/).
+
+This guide will show you how to implement pagination in OpenAPI, regardless of
+which strategy the API has chosen.
+
+## Pagination with query parameters
+
+Query parameters are a common way to implement pagination in APIs. The most
+common query parameters for pagination are `page` and `limit`, which specify the
+page number and the number of items per page, respectively.
+This is a common approach for paginating through large sets of data, and is
+often used in REST APIs.
+
+```yaml
+paths:
+  /stations:
+    get:
+      summary: Get a list of train stations
+      description: Returns a paginated and searchable list of all train stations.
+      operationId: get-stations
+      parameters:
+        - name: page
+          in: query
+          description: The page number to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          description: The number of items to return per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          example: 10
+```
+
+Adding the `page` and `limit` query parameters advertises to the API consumers
+that the API supports pagination. Pagination is mentioned in the description
+too, increasing the chance of it being noticed by any API client developers.
+
+The `page` parameter specifies the page number the API should return, and the
+optional `limit` parameter specifies the number of items to return for that
+page. This is helpful for mobile apps that want to return a grid of data to the
+user. For example a 3x3 grid of items, which would require 9 items to be
+returned, instead of the default 10 giving the user a blank space in the grid.
+
+## Describing pagination metadata
+
+When implementing pagination, a common practice is to include metadata in the
+response to provide information about the total number of items, the current
+page, and the total number of pages. This metadata can be included in the
+response body, or sometimes is done with custom HTTP headers (which is frowned
+upon but done anyway).
+
+Using a `meta` object in an array would not work, so APIs often wrap the
+collection with an "envelope" which might be something like `data`.
+
+```json
+{
+  "data": [
+    ...
+  ],
+  "meta": {
+    "page": 2,
+    "size": 10,
+    "total_pages": 100
+  }
+```
+
+If the API is doing this, the response can be described with the following OpenAPI:
+
+```yaml
+responses:
+  '200':
+    description: A paginated list of train stations.
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Station'
+            meta:
+              type: object
+              properties:
+                page:
+                  type: integer
+                  example: 2
+                size:
+                  type: integer
+                  example: 10
+                total_pages:
+                  type: integer
+                  example: 100
+```
+
+This meta object can be defined in `components` and referenced to avoid repeating it 
+in every endpoint.
+
+Learn more about components [here](/openapi/components).
+
+## Describing pagination with response links
+
+Adding a query parameter to the API is a good start, but asking API clients to
+construct URLs from little bits of data is always confusing and a recipe for
+disaster. REST APIs offer the ability to send links which can be used to
+crawl the API following links like a browser would. 
+
+If the API supports pagination links they
+need to be described so clients can use them. The most common way to do this is to
+include a `links` object in the response.
+
+```json
+{
+  "data": [
+    ...
+  ],
+  "links": {
+    "self": "https://api.example.com/stations?page=2",
+    "next": "https://api.example.com/stations?page=3",
+    "prev": "https://api.example.com/stations?page=1"
+  }
+}
+```
+
+That links object can be described in OpenAPI like using the following approach:
+
+```yaml
+responses:
+  '200':
+    description: OK
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/components/schemas/Wrapper-Collection'
+            - properties:
+                data:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Station'
+            - properties:
+                links:
+                  allOf:
+                    - $ref: '#/components/schemas/Links-Self'
+                    - $ref: '#/components/schemas/Links-Pagination'
+
+components:
+  Station:
+      description: A train station.
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the station.
+          examples:
+            - efdbb9d1-02c2-4bc3-afb7-6788d8782b1e
+            - b2e783e1-c824-4d63-b37a-d8d698862f1d
+        # ... snip ...
+  Links-Self:
+    description: The link to the current resource.
+    type: object
+    properties:
+      self:
+        type: string
+        format: uri
+  Links-Pagination:
+    description: Links to the next and previous pages of a paginated response.
+    type: object
+    properties:
+      next:
+        type: string
+        format: uri
+      prev:
+        type: string
+        format: uri
+  Wrapper-Collection:
+    type: object
+    properties:
+      data:
+        description: The wrapper for a collection is an array of objects.
+        type: array
+        items:
+          type: object
+      links:
+        description: A set of hypermedia links which serve as controls for the client.
+        type: object
+        readOnly: true
+```
+
+In this example, the `links` object contains three links: `self`, `next`, and
+`prev`. The `self` link points to the current page of results, while the `next`
+and `prev` links point to the next and previous pages of results, respectively.
+The `links` object is described in the OpenAPI specification using the `links`
+object, which is a common way to describe hypermedia links in OpenAPI.
+
+## Describing pagination with HTTP headers
+
+Some APIs use custom HTTP headers to provide pagination information instead of trying to wedge the information into the response body and using `data` and `meta`. This has the benefit of keeping the JSON clean and tidy, but can be confusing as there is no standard for pagination headers. The `Link` header is a standard HTTP header that can be used to provide links for general HATEOAS purposes but also for pagination specifically, but it does not have anywhere to pass pagination metadata about numbers of pages.
+
+For example, an API might use something like `X-Total-Count` header to indicate the total number of items in
+the collection, and the `X-Page` and `X-Per-Page` headers to indicate the
+current page and the number of items per page, then next and previous links in the `Link` header.
+
+```yaml
+paths:
+  /stations:
+    get:
+      summary: Get a list of train stations
+      description: Returns a paginated and searchable list of all train stations.
+      operationId: get-stations
+      responses:
+        '200':
+          description: A paginated list of train stations.
+          headers:
+            X-Total-Count:
+              description: The total number of items in the collection.
+              schema:
+                type: integer
+                example: 1000
+            X-Page:
+              description: The current page number.
+              schema:
+                type: integer
+                example: 2
+            X-Per-Page:
+              description: The number of items per page.
+              schema:
+                type: integer
+                example: 10
+            Links:
+              description: A set of hypermedia links which serve as controls for the client.
+              type: string
+              example: |
+                <https://api.example.com/stations?page=2>; rel="self",
+                <https://api.example.com/stations?page=3>; rel="next",
+                <https://api.example.com/stations?page=1>; rel="prev"
+              
+```
+
+However the API is doing pagination, OpenAPI can describe it. The most
+important thing is to be consistent and clear about how pagination works in the
+API reference documentation, and if possible write a custom guide for explaining pagination in an API more specifically so that API consumers can get it right. 
+
+## Speakeasy SDK pagination
+Speakeasy SDKs support pagination out of the box, and can be configured to
+automatically handle pagination for any API, allowing clients to focus on working with data instead of learning about specific pagination strategies.
+
+To configure pagination, add the `x-speakeasy-pagination` extension to the OpenAPI description:
+
+```yaml
+/stations:
+  get:
+    parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+        required: true
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    type: integer
+              required:
+                - data
+    x-speakeasy-pagination:
+      type: offsetLimit
+      inputs:
+        - name: page
+          in: parameters
+          type: page
+      outputs:
+        results: $.data
+```
+
+The `x-speakeasy-pagination` configuration supports `offsetLimit`, `cursor`, and `url` implementations of pagination, and allows the generated SDKs to extract the proper response data from the API instead of having to split up data and metadata manually. 
+
+Learn more about pagination with Speakeasy SDKs [here](/docs/customize/runtime/pagination).
