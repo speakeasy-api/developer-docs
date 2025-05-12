@@ -1,33 +1,121 @@
 ---
 title: "Components in OpenAPI best practices"
-description: "Master the Components Object in OpenAPI to efficiently reuse schema definitions, parameters, responses, and more across your API specification."
+description: "Master the Components Object in OpenAPI to efficiently reuse schema definitions, parameters, responses, and more across API descriptions."
 ---
 
 # Components in OpenAPI
 
 import { Table } from "@/mdx/components";
 
-The Components object in OpenAPI are reusable bits of OpenAPI description, which can then be [referenced](/openapi/references). Reusing components can mean smaller file sizes, reduces conflicts, and improves consistency across the API. Components can even be shared them across multiple documents, allowing for improved reuse between multiple APIs.
-
-## Components Object
-
-The Components Object is a container for various types of reusable objects. It is a map of component names to component definitions. The Components Object can contain the following fields:
+The Components object in OpenAPI are reusable bits of OpenAPI description, which
+can then be [referenced](/openapi/references). Reusing components allows for
+smaller file-sizes, reduces conflicts, and improves consistency across the API.
+Components can even be shared them across multiple documents, allowing for
+improved reuse between multiple APIs.
 
 ```yaml
 components:
   schemas:
-    MySchema:
+    User:
       type: object
       properties:
+        id:
+          type: integer
         name:
           type: string
+        email:
+          type: string
+          format: email
+  parameters:
+    userId:
+      name: uuid
+      in: path
+      description: Unique UUIDv4 of the user
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    NotFound:
+      description: User not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  requestBodies:
+    User:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/User'
   securitySchemes:
-    MySecurityScheme:
+    bearerAuth:
       type: http
-      scheme: basic
+      scheme: bearer
+      bearerFormat: JWT
 ```
 
-Here are the supported types of components as in OpenAPI v3.0 and v3.1:
+Components can be referenced in other parts of the OpenAPI document using the
+`$ref` keyword. The `$ref` keyword is a JSON Pointer to the component, which
+is a string that starts with `#/components/` and then the component type
+and name. For example, to reference the `User` schema defined in the
+Components Object, you would use the following `$ref`:
+
+```yaml
+responses:
+  '200':
+    description: User found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/User'
+```
+
+To put it all together, here is an example of how to reference all the various components in that previous example:
+
+```yaml
+paths:
+  /users/{userId}:
+    get:
+      summary: Get a user by UUID
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+        - bearerAuth: []
+```
+
+## Components Object
+
+The Components Object is a map of reusable components broken down by type. 
+
+```yaml
+components:
+  <componentType>:
+    <componentName>:
+      <componentDefinition>
+```
+
+The component name can be any valid string, but it is recommended to use a
+consistent naming convention across the API. A common naming convention is `PascalCase` or `camelCase`.
+
+```yaml
+components:
+  schemas:
+    Train:
+    Station:
+    BookingPayments:
+```
+
+Here are the supported component types as of OpenAPI v3.1:
 
 <Table
   data={[
