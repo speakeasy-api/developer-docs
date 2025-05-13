@@ -21,11 +21,11 @@ Without MCP, each Large Language Model (LLM) host or agent (such as ChatGPT, Cla
 
 Every connector re-implements:
 
-* Authentication and token refresh
-* Data-format mapping
-* Error handling and retries
-* Rate-limiting quirks
-* Security hardening
+- Authentication and token refresh
+- Data-format mapping
+- Error handling and retries
+- Rate-limiting quirks
+- Security hardening
 
 The cost grows quadratically. We imagine teams will end up prioritizing a handful of integrations and calling the rest "backlog".
 
@@ -43,18 +43,50 @@ If you already speak LSP or JSON-RPC, you'll feel at home. If not, here's the 30
 
 <Table
   data={[
-    { word: "**Host**", oneLiner: "App that holds the LLM and user UI", examples: "[Claude desktop](https://claude.ai/download), [Cursor](https://www.cursor.com/), [Cline](https://cline.bot/), Windsurf", importance: "Generates tool calls, mediates approvals" },
-    { word: "**MCP Client**", oneLiner: "Library embedded in the host", examples: "[The MCP SDK](https://modelcontextprotocol.io/introduction)", importance: "Maintains a _stateful_ session per MCP Server" },
-    { word: "**MCP Server**", oneLiner: "Lightweight wrapper in front of a tool", examples: "[Sentry MCP](https://github.com/getsentry/sentry-mcp), [GitHub MCP Server](https://github.com/github/github-mcp-server)", importance: "Exposes tools and resources uniformly" },
-    { word: "**Tool**", oneLiner: "A callable function", examples: "`list_organizations`, `create_issue`", importance: "Discoverable by the client at runtime; typed JSON args" },
-    { word: "**Resource**", oneLiner: "Text or blob-like thing exposed by the MCP Server", examples: "PDF file, log file, query syntax description, documentation", importance: "Information the LLM or user can access" },
-    { word: "**Transport**", oneLiner: "How bytes flow between the client and server", examples: "`stdio` or `SSE`", importance: "Local or cloud; always JSON-RPC 2.0" }
+    {
+      word: "**Host**",
+      oneLiner: "App that holds the LLM and user UI",
+      examples:
+        "[Claude desktop](https://claude.ai/download), [Cursor](https://www.cursor.com/), [Cline](https://cline.bot/), Windsurf",
+      importance: "Generates tool calls, mediates approvals",
+    },
+    {
+      word: "**MCP Client**",
+      oneLiner: "Library embedded in the host",
+      examples: "[The MCP SDK](https://modelcontextprotocol.io/introduction)",
+      importance: "Maintains a _stateful_ session per MCP Server",
+    },
+    {
+      word: "**MCP Server**",
+      oneLiner: "Lightweight wrapper in front of a tool",
+      examples:
+        "[Sentry MCP](https://github.com/getsentry/sentry-mcp), [GitHub MCP Server](https://github.com/github/github-mcp-server)",
+      importance: "Exposes tools and resources uniformly",
+    },
+    {
+      word: "**Tool**",
+      oneLiner: "A callable function",
+      examples: "`list_organizations`, `create_issue`",
+      importance: "Discoverable by the client at runtime; typed JSON args",
+    },
+    {
+      word: "**Resource**",
+      oneLiner: "Text or blob-like thing exposed by the MCP Server",
+      examples: "PDF file, log file, query syntax description, documentation",
+      importance: "Information the LLM or user can access",
+    },
+    {
+      word: "**Transport**",
+      oneLiner: "How bytes flow between the client and server",
+      examples: "`stdio` or `SSE`",
+      importance: "Local or cloud; always JSON-RPC 2.0",
+    },
   ]}
   columns={[
     { key: "word", header: "Word" },
     { key: "oneLiner", header: "One-liner" },
     { key: "examples", header: "Examples" },
-    { key: "importance", header: "Why it matters" }
+    { key: "importance", header: "Why it matters" },
   ]}
 />
 
@@ -69,12 +101,12 @@ MCP insists on a persistent channel, which is usually **HTTP + Server-Sent Event
 3. The host injects that JSON into the model's context.
 4. When the user's prompt demands an action, the model emits a **structured call**:
 
-    ```json
-    {
-      "name": "create_issue",
-      "arguments": { "title": "...", "body": "..." }
-    }
-    ```
+   ```json
+   {
+     "name": "create_issue",
+     "arguments": { "title": "...", "body": "..." }
+   }
+   ```
 
 5. The MCP Client executes it using the transport and streams back result chunks. The conversation then resumes.
 
@@ -94,14 +126,26 @@ We want a realistic but snack-sized scenario:
 
 <Table
   data={[
-    { component: "**Cloudflare Worker (`bug-demo`)**", role: "Emits a `TypeError` on every request and reports it to Sentry via the Sentry SDK." },
-    { component: "**Sentry MCP (hosted)**", role: "Tools: `list_issues` hosted by Sentry, SSE transport with OAuth" },
-    { component: "**GitHub MCP (local)**", role: "Tools: `list_issues`, `create_issue`, `add_issue_comment`, `create_pull_request` (run with Docker), stdio transport with API key" },
-    { component: "**Cline (VS Code)**", role: "MCP host, agent, code editor, and human-approval gate that connects to both MCP Servers." }
+    {
+      component: "**Cloudflare Worker (`bug-demo`)**",
+      role: "Emits a `TypeError` on every request and reports it to Sentry via the Sentry SDK.",
+    },
+    {
+      component: "**Sentry MCP (hosted)**",
+      role: "Tools: `list_issues` hosted by Sentry, SSE transport with OAuth",
+    },
+    {
+      component: "**GitHub MCP (local)**",
+      role: "Tools: `list_issues`, `create_issue`, `add_issue_comment`, `create_pull_request` (run with Docker), stdio transport with API key",
+    },
+    {
+      component: "**Cline (VS Code)**",
+      role: "MCP host, agent, code editor, and human-approval gate that connects to both MCP Servers.",
+    },
   ]}
   columns={[
     { key: "component", header: "Component" },
-    { key: "role", header: "Role" }
+    { key: "role", header: "Role" },
   ]}
 />
 
@@ -132,18 +176,47 @@ You'll need the following:
 
 <Table
   data={[
-    { requirement: "[Node](https://nodejs.org/en/download)", version: "≥ 18", purpose: "To build the Worker and run npx helpers" },
-    { requirement: "[Docker](https://docs.docker.com/get-started/get-docker/)", version: "Latest desktop", purpose: "To run the GitHub MCP Server locally" },
-    { requirement: "[VS Code](https://code.visualstudio.com/)", version: "Latest desktop", purpose: "Code editor" },
-    { requirement: "[Cline](https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev)", version: "Latest release", purpose: "MCP host/agent" },
-    { requirement: "[Sentry account](https://sentry.io/)", version: "Free plan is fine", purpose: "To catch our crash" },
-    { requirement: "[GitHub account](https://github.com/)", version: "Any tier", purpose: "Access token for MCP Server" },
-    { requirement: "[Cloudflare account](https://www.cloudflare.com/)", version: "Free plan is fine", purpose: "To host our buggy code" }
+    {
+      requirement: "[Node](https://nodejs.org/en/download)",
+      version: "≥ 18",
+      purpose: "To build the Worker and run npx helpers",
+    },
+    {
+      requirement: "[Docker](https://docs.docker.com/get-started/get-docker/)",
+      version: "Latest desktop",
+      purpose: "To run the GitHub MCP Server locally",
+    },
+    {
+      requirement: "[VS Code](https://code.visualstudio.com/)",
+      version: "Latest desktop",
+      purpose: "Code editor",
+    },
+    {
+      requirement:
+        "[Cline](https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev)",
+      version: "Latest release",
+      purpose: "MCP host/agent",
+    },
+    {
+      requirement: "[Sentry account](https://sentry.io/)",
+      version: "Free plan is fine",
+      purpose: "To catch our crash",
+    },
+    {
+      requirement: "[GitHub account](https://github.com/)",
+      version: "Any tier",
+      purpose: "Access token for MCP Server",
+    },
+    {
+      requirement: "[Cloudflare account](https://www.cloudflare.com/)",
+      version: "Free plan is fine",
+      purpose: "To host our buggy code",
+    },
   ]}
   columns={[
     { key: "requirement", header: "Requirement" },
     { key: "version", header: "Version/Details" },
-    { key: "purpose", header: "Purpose" }
+    { key: "purpose", header: "Purpose" },
   ]}
 />
 
@@ -253,15 +326,15 @@ Edit `src/index.ts`:
 import * as Sentry from "@sentry/cloudflare";
 
 export default Sentry.withSentry(
-  env => ({
+  (env) => ({
     dsn: "https://[SENTRY_KEY]@[SENTRY_HOSTNAME].ingest.us.sentry.io/[SENTRY_PROJECT_ID]",
     tracesSampleRate: 1.0,
   }),
   {
     async fetch(request, env, ctx) {
       // ❌ intentional bug
-      (undefined).call();
-      return new Response('Hello World!');
+      undefined.call();
+      return new Response("Hello World!");
     },
   } satisfies ExportedHandler<Env>,
 );
@@ -300,20 +373,16 @@ In VS Code, with Cline installed, follow the steps below:
 4. Click **Configure MCP Servers**.
 5. Paste the Sentry MCP Server config JSON that runs `npx mcp remote https://mcp.sentry.dev/sse` in the window, then press `Cmd + s` to save.
 
-    ```json cline_mcp_settings.json
-    {
-      "mcpServers": {
-        "sentry": {
-          "command": "npx",
-          "args": [
-            "-y",
-            "mcp-remote",
-            "https://mcp.sentry.dev/sse"
-          ]
-        }
-      }
-    }
-    ```
+   ```json cline_mcp_settings.json
+   {
+     "mcpServers": {
+       "sentry": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote", "https://mcp.sentry.dev/sse"]
+       }
+     }
+   }
+   ```
 
 6. Click **Done** in the top-right corner of the panel.
 
@@ -336,10 +405,10 @@ Generate a GitHub personal access token:
 7. Enter any name for your token, and select **All repositories**.
 8. Select the following permissions:
 
-   * Administration: Read and Write
-   * Contents: Read and Write
-   * Issues: Read and Write
-   * Pull requests: Read and Write
+   - Administration: Read and Write
+   - Contents: Read and Write
+   - Issues: Read and Write
+   - Pull requests: Read and Write
 
 9. Click **Generate token** and save your token for the next step.
 
@@ -353,29 +422,30 @@ Now that we have a GitHub token, let's add the GitHub MCP Server.
 4. Press **Configure MCP Servers**.
 5. Paste the GitHub MCP Server config JSON that runs `docker run -it --rm -e GITHUB_PERSONAL_ACCESS_TOKEN=$GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server` in the window, then press `Cmd + s` to save.
 
-    ```json cline_mcp_settings.json
-    {
-      "mcpServers": {
-        "sentry": {...},
-        "github": {
-          "command": "docker",
-          "args": [
-            "run",
-            "-i",
-            "--rm",
-            "-e",
-            "GITHUB_PERSONAL_ACCESS_TOKEN",
-            "ghcr.io/github/github-mcp-server"
-          ],
-          "env": {
-            "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-          }
-        }
-      }
-    }
-    ```
+   ```json cline_mcp_settings.json
+   {
+     "mcpServers": {
+       "sentry": {...},
+       "github": {
+         "command": "docker",
+         "args": [
+           "run",
+           "-i",
+           "--rm",
+           "-e",
+           "GITHUB_PERSONAL_ACCESS_TOKEN",
+           "ghcr.io/github/github-mcp-server"
+         ],
+         "env": {
+           "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+         }
+       }
+     }
+   }
+   ```
 
 6. Click **Done**.
+
 </Steps>
 
 Let's take it for a spin.
@@ -469,9 +539,9 @@ sequenceDiagram
 }
 ```
 
-* The message is sent over the already-open `stdio` pipe as a single UTF-8 line, typically terminated by `\n`, so the server can parse it line by line.
-* The `id` is an opaque request identifier chosen by Cline; the server will echo it in its response to let the client match replies to calls.
-* All MCP tool invocations follow the same structure - only the method and parameters change.
+- The message is sent over the already-open `stdio` pipe as a single UTF-8 line, typically terminated by `\n`, so the server can parse it line by line.
+- The `id` is an opaque request identifier chosen by Cline; the server will echo it in its response to let the client match replies to calls.
+- All MCP tool invocations follow the same structure - only the method and parameters change.
 
 {<h3>GitHub MCP Server processes the request</h3>}
 
@@ -520,10 +590,10 @@ sequenceDiagram
 }
 ```
 
-* The response contains the `id` of the request and the result of the tool call.
-* The result is a JSON object that contains the details of the newly created repository.
-* Cline receives the response and displays it in the UI.
-* The response is also passed to the LLM for further processing and is now available in the context for the next prompt.
+- The response contains the `id` of the request and the result of the tool call.
+- The result is a JSON object that contains the details of the newly created repository.
+- Cline receives the response and displays it in the UI.
+- The response is also passed to the LLM for further processing and is now available in the context for the next prompt.
 
 {<h3>Cline displays the result</h3>}
 
@@ -866,10 +936,7 @@ The LLM generates a fix for the bug, which is then sent to Cline:
 <replace_in_file>
 <path>src/index.ts</path>
 <diff>
-​<<<<<<< SEARCH
-​   (undefined).call();
-​=​=​=​=​=​=​=
-​>>>>>>> REPLACE
+   (undefined).call();
 </diff>
 </replace_in_file>
 ```
@@ -1006,11 +1073,11 @@ Consider our modest demo setup with just three components (the Cline host, Sentr
 <Table
   data={[
     { approach: "Direct APIs (M × N)", count: "3 × 2 = 6 integrations" },
-    { approach: "MCP (M + N)", count: "3 + 2 = 5 components" }
+    { approach: "MCP (M + N)", count: "3 + 2 = 5 components" },
   ]}
   columns={[
     { key: "approach", header: "Integration approach" },
-    { key: "count", header: "Number of integrations needed" }
+    { key: "count", header: "Number of integrations needed" },
   ]}
 />
 
