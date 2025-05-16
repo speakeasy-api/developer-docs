@@ -9,7 +9,7 @@ import { CodeWithTabs } from "@/mdx/components";
 
 Understanding how to properly structure and handle request data is crucial for building robust APIs. This guide covers best practices and common patterns for working with API request data.
 
-## URL Structure
+## URL structure
 
 Every API request starts with a URL that identifies the resource and any query parameters:
 
@@ -24,12 +24,14 @@ Key components:
 - Query parameters: Filter, sort, or modify the request.
 - API version: Often included in the path.
 
-## Request Bodies
+## HTTP request bodies
 
-Requests can also have a ' request body', which is a payload of data being sent
-the API for processing. It is very frowned upon for `GET` but expected for
-`POST`, `PUT`, and `PATCH`. The request body can be in a variety of formats, but
-the most common are JSON, XML, and form data.
+Requests can also have a "request body", which is a payload of data being sent
+the API for processing. It is very frowned upon to use a request body for the
+HTTP method `GET`, but expected for `POST`, `PUT`, `PATCH`, and `QUERY. 
+
+The request body can be in a variety of formats, but the most common are JSON,
+XML, and form data.
 
 ```http
 POST /places HTTP/1.1
@@ -56,7 +58,6 @@ when receiving it.
 
 Most of you will interact with APIs using a programming language, and the code
 to send a request will look something like this:
-
 
 <CodeWithTabs>
     ```typescript !!tabs main.js
@@ -140,20 +141,41 @@ Content-Type: application/json
 }
 ```
 
-This area is yours to do with as you want. There's a lot of freedom in how you
+An example of a PATCH request following the [RFC 7386: JSON Merge
+Patch](https://datatracker.ietf.org/doc/html/rfc7386) format, which accepts just
+the fields the user wants to change:
+
+```http
+PATCH /places/123 HTTP/1.1
+Host: api.example.org
+Content-Type: application/merge-patch+json
+
+{
+  "name": "Highwood"
+}
+```
+
+This request body is yours to do with as you want. There's a lot of freedom in how you
 structure your data, but there are some best practices to follow which you can
 learn more about in the [API Collections & Resources](/api-design
 api-collections) guide.
 
-### Request Body
+## Data formats
 
-The request is body is where the majority of "domain specific" data (things
-specifically about your organization or API) will go. To understand more about
-request bodies, we need to learn about data formats.
+This is generally where all of the domain-specific modelling will happen for
+data and workflows the API is meant to handle, but generally its not just
+spitting raw data around. The understand more about structuring request bodies,
+its important to understand [data formats](/api-design/data-formats.md).
+
+## File uploads
+
+Instead of sending JSON data, files can be sent in the request body.
+
+Learn more about file uploads in the [File Uploads](/api-design/file-uploads) guide.
 
 ## Best Practices
 
-### 1. Keep Request & Response Data Consistent
+### 1. Keep request & response data consistent
 
 Maintain the same structure for data going in and out of your API. You want to
 strive for predictability and consistency in your API design. When a user sends
@@ -180,3 +202,69 @@ response should return the new state of the updated resource.
 ```
 
 More on this in the [API Responses](/api-design/responses) guide.
+
+### 2. Do not use request bodies for DELETE requests
+
+Some API designers use a request body for a DELETE request to capture more
+information about the deletion of a resource. 
+
+Doing so is recommended against in both [RFC9110: HTTP
+Semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-delete) which states
+the semantics are undefined, and is warned against further in the OpenAPI
+specification. Some tooling will support it some wont. 
+
+
+```http
+DELETE /drinks/1 HTTP/1.1
+Host: api.example.org
+Content-Type: application/json
+
+{
+  "reason": "Weird combination of ingredients that proved unpopular with... everyone."
+}
+```
+
+Instead it would be more appropriate to create a new resource called `POST
+/drinks/1/cancellation` and essentially create a DrinkCancellation resource.
+This resource can then be used to track the reason for the cancellation, and any
+other information that might be useful, as well as avoiding the need for a
+request body on the DELETE request.
+
+### 3. Use the correct content type
+
+The `Content-Type` header is used to indicate the media type of the resource
+being sent in the request body. The most common content types are:
+
+- `application/json`: JSON data
+- `application/xml`: XML data
+- `application/x-www-form-urlencoded`: Form data
+- `multipart/form-data`: File uploads
+
+Make sure to remind the user to set the `Content-Type` header in their request
+to the correct value, and if they send the wrong thing then return a `415
+Unsupported Media Type` response.
+
+### 4. Avoid optional request bodies
+
+When designing your API, avoid making request bodies optional. It's a little
+confusing, and harder for the user to understand what they need to send, harder
+to document, harder to validate, harder to generate code for, and harder to
+test.
+
+For example, if you have a `POST /loans/{id}/renewal` endpoint with an optional renewal date, instead of making the whole request body optional make it required and make the renewal date property optional.
+
+```http
+POST /loans/123/renewal HTTP/1.1
+Host: api.example.org
+Content-Type: application/json
+
+{
+  "renewal_date": "2024-10-24"
+}
+```
+
+This way, the user always knows what to expect in the request body, and you can
+validate the request body more easily. If the user doesn't send a renewal date,
+you can just use the current date as the default value. This is a lot easier to
+understand and work with than having to check if the request body is present or
+not, and then check if the renewal date is present or not. 
