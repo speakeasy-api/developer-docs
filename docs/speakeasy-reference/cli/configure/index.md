@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # configure  
 `speakeasy configure`  
 

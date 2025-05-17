@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # lint  
 `speakeasy lint`  
 

@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # tag  
 `speakeasy tag`  
 

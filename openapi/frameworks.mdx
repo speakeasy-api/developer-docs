@@ -10,15 +10,18 @@ Here, you'll find a comprehensive collection of step-by-step guides for generati
 
 import { CardGrid } from "@/components/card-grid";
 import {
-  TypescriptFrameworkGuidesData,
-  PythonFrameworkGuidesData,
   GoFrameworkGuidesData,
+  GRPCFrameworkGuidesData,
   JavaFrameworkGuidesData,
   PHPFrameworkGuidesData,
-  GRPCFrameworkGuidesData
+  PythonFrameworkGuidesData,
+  TypescriptFrameworkGuidesData,
 } from "@/lib/data/openapi/framework-guides";
 
-<CardGrid cards={TypescriptFrameworkGuidesData} heading="TypeScript Frameworks" />
+<CardGrid
+  cards={TypescriptFrameworkGuidesData}
+  heading="TypeScript Frameworks"
+/>
 
 <CardGrid cards={PythonFrameworkGuidesData} heading="Python Frameworks" />
 
@@ -29,7 +32,6 @@ import {
 <CardGrid cards={PHPFrameworkGuidesData} heading="PHP Frameworks" />
 
 <CardGrid cards={GRPCFrameworkGuidesData} heading="gRPC Tools" />
-
 
 # How to generate an OpenAPI schema from your code
 
@@ -157,48 +159,52 @@ The tool used here is [go-swagger3](https://github.com/parvez3019/go-swagger3).
 
 - In any folder on your computer, create a folder called `src`.
 - Create a file in `src` called `main.go` and add the content below to it.
+
   ```go
   package main
 
   import (
-	  "encoding/json"
-	  "fmt"
-	  "log"
-	  "net/http"
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
   )
 
   type RequestBody struct {
-	  Name string `json:"name"`
+    Name string `json:"name"`
   }
 
   func main() {
-	  mux := http.NewServeMux()
-	  mux.HandleFunc("/hello", helloHandler)
+    mux := http.NewServeMux()
+    mux.HandleFunc("/hello", helloHandler)
 
-	  log.Println("Server started on port 8080")
-	  log.Fatal(http.ListenAndServe(":8080", mux))
+    log.Println("Server started on port 8080")
+    log.Fatal(http.ListenAndServe(":8080", mux))
   }
 
   func helloHandler(w http.ResponseWriter, r *http.Request) {
-	  if r.Method != http.MethodPost {
-		  http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		  return
-	  }
+    if r.Method != http.MethodPost {
+  	  http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+  	  return
+    }
 
-	  var requestBody RequestBody
-	  err := json.NewDecoder(r.Body).Decode(&requestBody)
-	  if err != nil {
-		  http.Error(w, "Bad request", http.StatusBadRequest)
-		  return
-	  }
+    var requestBody RequestBody
+    err := json.NewDecoder(r.Body).Decode(&requestBody)
+    if err != nil {
+  	  http.Error(w, "Bad request", http.StatusBadRequest)
+  	  return
+    }
 
-	  response := fmt.Sprintf("Hello %s", requestBody.Name)
-	  w.Header().Set("Content-Type", "text/plain")
-	  w.Write([]byte(response))
+    response := fmt.Sprintf("Hello %s", requestBody.Name)
+    w.Header().Set("Content-Type", "text/plain")
+    w.Write([]byte(response))
   }
   ```
-	This minimal web service has a single POST endpoint, `/hello` that says hello to the name sent as a string parameter called `name`.
+
+  This minimal web service has a single POST endpoint, `/hello` that says hello to the name sent as a string parameter called `name`.
+
 - Build and run the service with the commands below to see that it works. You don't need to install Go on your machine, but you do need Docker. Docker will run Go in a container in a security sandbox so it has no access to the rest of your files. You then call the service in the terminal with curl.
+
   ```sh
   docker run --rm  -v $(pwd)/src:/app -w /app golang:1.23-alpine3.19 /bin/sh -c   "go mod init helloworld && go mod vendor && go build"
 
@@ -236,12 +242,12 @@ To generate a schema from this file, you can either install go-swagger3 in the s
 
 Run one of the two commands below.
 
-  ```sh
-  docker run --rm -v $(pwd)/src:/app -w /app golang:1.23-alpine3.19 /bin/sh -c "go install github.com/parvez3019/go-swagger3@latest && /go/bin/go-swagger3 --main-file-path /app/main.go --module-path . --output oas.json --schema-without-pkg --generate-yaml true"
+```sh
+docker run --rm -v $(pwd)/src:/app -w /app golang:1.23-alpine3.19 /bin/sh -c "go install github.com/parvez3019/go-swagger3@latest && /go/bin/go-swagger3 --main-file-path /app/main.go --module-path . --output oas.json --schema-without-pkg --generate-yaml true"
 
-  # OR use dedicated docker image
-  docker run -t --rm -v $(pwd)/src:/app -w /app parvez3019/go-swagger3:latest --main-file-path /app/main.go --module-path . --output oas.json --schema-without-pkg --generate-yaml true
-  ```
+# OR use dedicated docker image
+docker run -t --rm -v $(pwd)/src:/app -w /app parvez3019/go-swagger3:latest --main-file-path /app/main.go --module-path . --output oas.json --schema-without-pkg --generate-yaml true
+```
 
 In your `src` folder, you'll now have a schema called `oas.yml`:
 
@@ -293,16 +299,16 @@ If you'd like to follow along, use the existing `main.go` file from the previous
 
 First, install Huma:
 
-  ```sh
-  docker run --rm -v $(pwd)/src:/app -w /app golang:1.23-alpine3.19    go get github.com/danielgtaylor/huma/v2 github.com/danielgtaylor/huma/v2/adapters/humago
-  ```
+```sh
+docker run --rm -v $(pwd)/src:/app -w /app golang:1.23-alpine3.19    go get github.com/danielgtaylor/huma/v2 github.com/danielgtaylor/huma/v2/adapters/humago
+```
 
 Update `main.go` to use Huma with the changes below.
 
-  ```go
-  package main
+```go
+package main
 
-  import (
+import (
 	  // "encoding/json"
 	  "fmt"
 	  "log"
@@ -311,59 +317,59 @@ Update `main.go` to use Huma with the changes below.
 	  "context"
 	  "github.com/danielgtaylor/huma/v2" // NEW
 	  "github.com/danielgtaylor/huma/v2/adapters/humago"
-  )
+)
 
-  type RequestBody struct {
+type RequestBody struct {
 	  // Name string `json:"name"`
 	  Body struct {
 		Name string `json:"name" maxLength:"30" example:"world" doc:"Name to greet"`
 	}
-  }
+}
 
-  //NEW
-  type ResponseBody struct {
+//NEW
+type ResponseBody struct {
 	Body struct {
 		Message string `json:"message"`
 	}
-  }
+}
 
-  func main() {
+func main() {
 	  mux := http.NewServeMux()
 	  api := humago.New(mux, huma.DefaultConfig("Hello API", "1.0.0")) // NEW
 	huma.Post(api, "/hello", helloHandler) // NEW
 
 	  log.Println("Server started on port 8080")
 	  log.Fatal(http.ListenAndServe(":8080", mux))
-  }
+}
 
-   // NEW
-  func helloHandler(ctx context.Context, input *RequestBody) (*ResponseBody, error) {
+ // NEW
+func helloHandler(ctx context.Context, input *RequestBody) (*ResponseBody, error) {
 	response := &ResponseBody {
 		Body: struct { Message string `json:"message"`}{
 			Message: fmt.Sprintf("Hello %s", input.Body.Name),
 		},
 	}
 	  return response, nil
-  }
-  ```
+}
+```
 
 Note that the code above has changed the request and response types to have a `Body` section. Huma returns a schema object in the response at the same level as `Body`. The `main` function no longer uses the router in the same way, but now uses Huma to declare routes.
 
 Now run the server.
 
-  ```sh
-  docker run --rm  -p 65000:8080 -v $(pwd)/src:/app -w /app golang:1.23-alpine3.19 /bin/sh -c   "go build && ./helloworld"
+```sh
+docker run --rm  -p 65000:8080 -v $(pwd)/src:/app -w /app golang:1.23-alpine3.19 /bin/sh -c   "go build && ./helloworld"
 
-  # In a new terminal:
-  curl -X POST -H "Content-Type: application/json" -d '{"name":"John"}' http://localhost:65000/hello
+# In a new terminal:
+curl -X POST -H "Content-Type: application/json" -d '{"name":"John"}' http://localhost:65000/hello
 
-  # Output
-  # {"$schema":"http://localhost:65000/schemas/ResponseBodyBody.json","message":"Hello John"}
-  ```
+# Output
+# {"$schema":"http://localhost:65000/schemas/ResponseBodyBody.json","message":"Hello John"}
+```
 
 Browse to http://localhost:65000/docs#/operations/post-hello to see the generated schema in a Swagger-like viewer.
 
-  ![Huma OpenAPI documentation](./assets/guide/huma.png)
+![Huma OpenAPI documentation](./assets/guide/huma.png)
 
 ## Using an OpenAPI meta-framework
 
@@ -420,7 +426,7 @@ The `AspNetCore.OpenApi` package allows you to add attributes to your code. NSwa
 
 [Fuego](https://go-fuego.github.io/fuego/docs/guides/openapi) is an OpenAPI-aware web framework. The [`swaggest/rest`](https://github.com/swaggest/rest) package, based on the Chi web framework, and [GoAPI](https://github.com/hvuhsg/goapi) offer similar functionality.
 
-[Goa](https://goa.design/learn/getting-started) is a meta-framework that allows you to write an API design in Go code, which it then compiles into web server code and an OpenAPI schema.
+[Goa](https://goa.design/docs/2-getting-started/) is a meta-framework that allows you to write an API design in Go code, which it then compiles into web server code and an OpenAPI schema.
 
 [ogen](https://ogen.dev/docs/intro) generates data types and server and client code from an OpenAPI schema, but not an OpenAPI schema.
 
@@ -481,7 +487,6 @@ If you're working in Scala, you can use the tools described in the Java section 
 ### Kotlin
 
 [Fabrikt](https://github.com/cjbooms/fabrikt) is a schema-first tool that generates data classes and interfaces for server and client code.
-
 
 ## The schema-first workflow
 
