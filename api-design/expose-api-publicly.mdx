@@ -1,0 +1,221 @@
+# A practical guide to exposing your API publicly
+
+Exposing an API seems straightforward: Configure endpoints, add logging, and ensure your server handles traffic. In reality, the process is far more complex.
+
+Consider a SaaS API for payment processing. You could expose it and consider it done, but have you provided SDKs to help developers integrate it with their merchant platforms? Is your documentation clear on how to handle failed payments and retries? Have you planned for scalability during peak shopping periods? What developer support channels are available to troubleshoot payment issues? Are you compliant with industry regulations?
+
+There's no one-size-fits-all approach to exposing your API publicly as many of the decisions you make will be influenced by who your users are and which industry your API serves. The OpenWeatherMap API, for example, prioritizes open access while the Stripe API is gated with access controls.
+
+This guide outlines the core principles to consider before exposing your API publicly and provides a checklist to ensure your SDK is secure, scalable, and developer-friendly. We'll cover the essentials, like logging, scalability, monitoring, and SDKs, as well as the less-glamorous details that can make or break your API's success, like legal and compliance requirements and developer support.
+
+## Exposing your API publicly: A checklist
+
+Here are the things you want to make sure you've taken care of before exposing your API publicly:
+
+- What is the URL structure of your API?
+- Is your API documented?
+- Have you provided SDKs for your API?
+- How will you maintain and scale your API?
+- Have you planned deployment strategies?
+- Do you have a versioning strategy in place?
+- Do you have an API gateway in place?
+- How will you monitor and improve your API's performance?
+- Does your API have the necessary observability in place?
+- How do you plan to communicate with and support your users?
+- Have you complied with all legal and regulatory requirements?
+- Do you have clear terms of service and acceptable use policies defined?
+- Does your API comply with data protection and privacy laws?
+
+## Dedicated subdomain vs path-based APIs: Which is best for your API?
+
+The URL structure of your API affects its long-term scalability, security, and maintainability. Because this choice impacts deployment, security, and future growth, it's best to decide on a URL structure early in the development process.
+
+A dedicated subdomain (like, `api.example.com`) allows for a cleaner separation between your API and the frontend and makes it easy to configure independent caching, security policies, and DNS parameters.
+
+While a path-based URL structure (like, `example.com/api`) is simpler to deploy alongside your frontend, this approach requires more configuration and maintenance. Unless you're specifically trying to avoid CORS headaches or keep security and deployment straightforward, using a dedicated subdomain is the better choice.
+
+## Document your API
+
+OpenAPI tools like Swagger and Redocly make API documentation easy to generate, but great documentation goes beyond automation. Companies like [Stripe](https://docs.stripe.com/api) set the standard with clear, developer-friendly API documentation – a factor that contributes to Stripe's success as a leading payment API.
+
+You don't need to have Stripe-level API documentation from day one, though. Start with clear, well-structured docs and improve over time. Here are our tips for valuable documentation:
+
+- **Use a good documentation standard:** OpenAPI is a common standard that helps structure your documentation with clear endpoint URLs, detailed schemas, and descriptive explanations to support developers integrating your API. Tools like FastAPI can further enhance your documentation by automatically generating interactive [Swagger UI or Redoc](https://fastapi.tiangolo.com/features/#automatic-docs) pages from your OpenAPI document.
+- **Make your API docs testable:** Allowing your developers to test some requests directly from the documentation saves them time. With Swagger UI, users can test a request with the **Try it out** button, like in this [Swagger Petstore API demo for the user login endpoint](https://petstore.swagger.io/#/user/loginUser).
+
+![Testing user login](./assets/expose-api-publicly/testing-swagger.png)
+
+- **Describe schemas clearly:** Document property types well and provide examples of requests and responses, especially for complex endpoints.
+- **Provide sample apps or boilerplate code:** Help developers understand your API with real-world examples and provide working code they can copy or modify for easier integration.
+
+## Provide SDKs for your API
+
+Software development kits (SDKs) enhance developer experience by simplifying API integration and abstracting raw HTTP requests across multiple programming languages. SDKs let developers focus on building their applications instead of dealing with API complexities.
+
+Two key aspects to focus on when building an SDK are:
+
+- **Language support:** Identify your target audience's most popular languages and prioritize SDKs for them. The most common languages to offer SDKs for are Python, JavaScript, and PHP.
+- **Documentation:** Include detailed guides and examples in your SDKs to help developers understand how to use them effectively. Once your API is public, optimize developer experience by identifying frequently used or complex endpoints and providing detailed SDK guides for them.
+
+Design your SDKs with easy updates and maintenance in mind. Minor updates and patches refine your API over time and your SDKs should be updated to reflect this and ensure compatibility with the latest programming language versions. Consider using [Semantic Versioning](https://semver.org/) for major, minor, or patch changes and keep a public, up-to-date `CHANGELOG.md` document. Open source your SDKs to allow for contributions from the developer community.
+
+## Make your API maintainable and scalable
+
+For long-term success, your API must remain reliable and efficient as usage grows. It should maintain good response times under peak loads, allow for updates with zero downtime, and evolve without disrupting your users.
+
+Load testing simulates real-world traffic patterns to identify performance bottlenecks and ensure your API is scalable.
+
+> Short fact: The [Shopify team begins testing APIs many months before Black Friday](https://shopify.engineering/scale-performance-testing#) to ensure the platform is ready to handle over 2 billion database queries and 20 million webhooks per minute at peak traffic. Shopify's latest Black Friday report is available on its [interactive microsite](https://bfcm.shopify.com/).
+
+Key elements of successful load testing include:
+
+- **Selecting the right testing tools:** Open-source load-testing tool [JMeter](https://jmeter.apache.org/) supports a range of protocols, while [Locust](https://locust.io/) allows you to create custom load tests with complex user journeys and API interactions. If you already use an observability or monitoring tool, check whether it includes load-testing capabilities or offers recommendations. For example, if you're using Grafana, [k6](https://k6.io/) is easy to integrate.
+- **Planning a testing strategy:** Design test scenarios that simulate extreme conditions, such as a Black Friday peak when the system may need to handle billions of API requests in a single day.
+- **Collecting key metrics:** Monitoring response time, error rates, and resource usage helps identify system weaknesses and optimize performance.
+
+## Plan deployment strategies
+
+Deploying API updates requires meticulous planning. Downtime during updates frustrates users, erodes trust, and damages your reputation. The right deployment strategy enables smooth transitions while maintaining availability. Some common deployment strategies to consider are:
+
+- **Blue-green deployment:** Maintain at least two environments, one live and one for staging. Deploy updates to staging, test thoroughly, and then switch traffic to the updated environment. Offering a sandbox environment can further help users test changes before they go live.
+- **Rolling updates:** Gradually replace old instances with new ones to reduce the impact of potential issues.
+- **Canary releases:** Deploy the updates to a small subset of users first, then monitor performance and usage before a full rollout.
+
+Regardless of the deployment strategy you opt for, be sure to communicate upcoming API changes to your users in advance and schedule maintenance for low-traffic hours.
+
+## Implement a versioning strategy
+
+As your API evolves, updates should not disrupt existing integrations. Implement a robust versioning strategy to maintain backward compatibility while allowing for future improvements.
+
+The two main API versioning methods are:
+
+- **URL-based versioning:** The API's URL includes the version number by default, for example, `/api/v1/resource`.
+- **Header-based versioning:** Headers can be used to specify the API version without altering URLs, for example, `x-api-version`.
+
+API versioning best practices to keep in mind include:
+
+- Precisely document the changes in each version.
+- Communicate deprecation timelines to help developers prepare for transitions.
+- Maintain older versions for a defined period to allow users a smooth migration path.
+
+## Use an API gateway
+
+Managing authentication, traffic control, and security is straightforward for a small API, but as adoption grows, these concerns can become operational bottlenecks. More clients increase the load and risk of abuse, new endpoints increase the security management overhead, and additional integrations introduce complexity, latency, and greater attack surfaces.
+
+An API gateway provides a centralized system for security, routing, and monitoring, making it essential for scaling an API. API gateways like Kong, AWS API Gateway, or Apigee enable functionality like:
+
+- **Rate limiting and throttling:** Protecting your API from abuse and DDoS attacks.
+- **Logging and monitoring:** Tracking request patterns, latency, and failures.
+- **Security filtering:** Blocking malicious traffic and enforcing access policies.
+
+[Kong](https://konghq.com/) stands out among API gateways for its performance, flexibility, and extensibility. It handles high traffic loads, works across multi-cloud environments, and offers a plugin system for custom needs – all without vendor lock-in.
+
+## Develop a monitoring plan to optimize performance
+
+Once your API is exposed publicly, ongoing monitoring is critical to ensure reliability, detect issues early, and optimize performance. A solid monitoring plan prevents high latency, downtime, and security breaches.
+
+Key metrics to monitor include:
+
+- **Uptime:** Ensure your API is operational and accessible to users.
+- **Latency:** Measure response times to identify bottlenecks.
+- **Error rates:** Track HTTP response codes (like 4xx and 5xx errors) to identify failing endpoints.
+- **Traffic trends:** Monitor request volumes to detect anomalies like DDoS attacks or crawlers and help you prepare for scaling needs.
+- **Crashes:** Find and fix API failures quickly. Set up an alert system to respond to problems quickly.
+- **Token leaks:** Use uniquely prefixed API keys (for example, `ACMEAPITOK-AB12345-123123132-12313123`) to allow for automated token scanning across repositories (like [GitHub secret scanning](https://docs.github.com/en/code-security/secret-scanning/secret-scanning-partnership-program/secret-scanning-partner-program)) to detect leaks and warn users before potential abuse occurs.
+
+To monitor these metrics effectively, you can use self-hosted or third-party solutions, depending on your setup and resources:
+
+- **Self-hosted monitoring tools:** For full control over data, tools like [Prometheus](https://prometheus.io/) and [Grafana](https://grafana.com/) collect metrics and display them on a dashboard.
+- **Managed monitoring services:** If setting up and maintaining your own monitoring system isn't feasible, tools like [Sentry](https://sentry.io/welcome/), [Datadog](https://www.datadoghq.com/), and [Bugsnag](https://www.bugsnag.com/) require little setup and offer SDKs for various languages and frameworks.
+
+## Develop an observability plan to enable a self-healing system
+
+Observability helps you understand not just what is broken but why and where issues occur. While monitoring detects problems like high latency on an endpoint, observability allows you to trace the root cause, such as a slow database query.
+
+Effective observability focuses on three key data types:
+
+- **Logs:** Like a diary for your system, logs record every event (for example, "Your user tried to access endpoint X and got an error").
+- \*_Metrics:_ Numerical data points that show how your system performs over time.
+- **Traces:** Step-by-step representations of the journey of a request through your system that give insight into where delays or errors occur (for example, "This API request spent 90% of its time waiting for a database response").
+
+Observability enables self-healing systems by detecting failures in real time and triggering automated responses. For example, observability tools can identify failing services and automatically [reroute traffic](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker) to prevent cascading failures.
+
+Tools like Datadog and [OpenTelemetry](https://opentelemetry.io/) provide observability features that help you monitor and analyze your system.
+
+## Establish channels for communication and developer support
+
+Clear and consistent communication is essential for API management. Developers rely on timely updates about bugs, breaking changes, and support. Poor communication can lead to frustration, reduced adoption, and churn. Keep users informed to build trust and maintain engagement.
+
+It’s important to keep developers informed of changes to your API so they can adapt smoothly. Follow these practices so updates are communicated clearly and early:
+
+- **Announce significant changes early** so developers have time to prepare.
+- **Offer a sandbox environment** so that developers can test your API safely.
+- **Keep your documentation up-to-date and build a self-help community.**
+
+Ensure developers have reliable ways to reach you by following these steps to build strong support channels:
+
+- **Provide multiple communication channels:** Your developers should be able to contact you via email from your website, using tools like [Chatwoot](https://www.chatwoot.com/), or by phone. Initially, some API developers prefer to use community solutions such as Slack or Discord.
+- **Cultivate developer forums:** Participating in platforms like Stack Overflow or Slack helps address issues in real time and builds trust.
+- **Maintain a public status page:** A real-time status page helps developers stay informed about the availability and health of your API. It should include:
+  - Real-time monitoring of uptime, latency, and error rates.
+  - Advance notification of scheduled maintenance.
+  - Incident reports providing timelines and resolutions.
+  - Historical uptime data for transparency.
+
+If you're building a status page for your API, take inspiration from [Revolut's public system status page](https://www.revolut.com/system-status/), which helps users monitor the platform's operational status and stay informed about any disruptions or technical issues affecting services.
+
+![Revolut Status Page](./assets/expose-api-publicly/revolut-status-page.png)
+
+Alternatively, [Gatus](https://github.com/TwiN/gatus) is a free and open-source status page solution, while [Statuspage](https://www.atlassian.com/software/statuspage) and [Uptime](https://betterstack.com/uptime) from BetterStack offer free subscription tiers and require minimal setup.
+
+## Ensure legal and regulatory compliance
+
+Addressing legal and compliance requirements serves two primary purposes: Protecting the API provider and protecting the API users.
+
+As the API provider, ensure you're protected by:
+
+- Establishing clear boundaries regarding API usage and liability.
+- Preventing unauthorized usage, abuse, and potential legal action.
+- Ensuring eligibility for enterprise-level deals that require compliance certifications.
+
+Protect your users by:
+
+- Safeguarding personal and sensitive data in compliance with privacy laws.
+- Being transparent about how you use and store data.
+- Ensuring fair and secure API access for all users.
+
+### Define clear terms of service and acceptable use policies
+
+Your API's terms of service form a legally binding agreement defining how users can and cannot use your API to protect your business from misuse and legal liabilities. Terms of service should include:
+
+- **API usage rules:** Defining rate limits, usage restrictions, and fair use policies.
+- **Liability disclaimer:** Protecting you if the API fails or causes harm to a user's application.
+- **Termination rights:** Outlining the conditions under which API access can be revoked due to policy violations.
+- **Data handling:** Clarifying how user data is collected, processed, and stored.
+
+While you can generate terms of service documents using tools like Termly, it's wise to have a legal expert review your document to ensure compliance with local laws.
+
+Without solid terms of service, users can misuse your API, overload your systems, or even take legal action if the API doesn't work as expected.
+
+### Define a compliance plan for data protection and privacy laws
+
+If your API processes sensitive data, compliance with privacy regulations is critical. Protection laws dictating how data is collected processed and stored vary by region and industry, so thorough research is needed to ensure you're compliant.
+
+Most data protection regulations – like [GDPR](https://gdpr.eu/what-is-gdpr/), [CCPA](https://oag.ca.gov/privacy/ccpa), and [HIPAA](https://www.hhs.gov/hipaa/index.html) – focus on the same core principles: Securing and encrypting user data, informing users about how their data is collected and processed, and ensuring users' privacy rights are respected. However, compliance requirements vary depending on where your users are located:
+
+- In the U.S:
+  - CCPA: Governs how businesses collect and share data on Californian residents.
+  - HIPAA: Applies to healthcare data, ensuring its security and confidentiality.
+- In the EU:
+  - GDPR: Requires strict data protection, transparency, and user consent.
+
+Key differences in these policies include how consent is obtained and region-specific compliance requirements. To remain compliant, you need to implement strong data encryption and anonymization practices, provide clear privacy policies, and obtain explicit user consent when necessary.
+
+Compliance certifications are often required to prove your API's security and reliability if you plan to work with large businesses or regulated industries. These certifications validate your data protection practices and operational processes. Some of the most widely recognized frameworks for API security and data protection include:
+
+- [SOC 2](https://www.imperva.com/learn/data-security/soc-2-compliance/): Confirms that your API meets security, availability, and confidentiality standards.
+- [ISO 27001](https://www.iso.org/standard/27001): An international standard for managing information security.
+- [PCI-DSS](https://www.pcisecuritystandards.org/): Required if your API handles payment card transactions.
+- [FedRAMP](https://www.fedramp.gov/): Necessary for providing services to U.S. government agencies.
+
+To ensure compliance, perform security assessments, collaborate with auditors, and highlight certifications in your API documentation to build trust with clients.

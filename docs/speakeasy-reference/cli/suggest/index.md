@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # suggest  
 `speakeasy suggest`  
 

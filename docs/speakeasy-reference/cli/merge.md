@@ -1,13 +1,15 @@
-# merge  
+# merge
 `speakeasy merge`  
 
-
-Merge multiple OpenAPI documents into a single document  
+Merge multiple OpenAPI documents into a single document.
 
 ## Details
 
-Merge multiple OpenAPI documents into a single document, useful for merging multiple OpenAPI documents into a single document for generating a client SDK.
-Note: That any duplicate operations, components, etc. will be overwritten by the next document in the list.
+Merging multiple OpenAPI documents together allows for multiple teams or departments to control their own API endpoints, and merge the end result later. Or one document for API endpoints, and another document for webhooks, with the end goal being getting it into one OpenAPI document to make it more portable. 
+
+This is a bit different to "bundling" or "dereferencing", which is about pulling external references into the main document. 
+
+**Note:** Any duplicate operations, components, etc. will be overwritten by the next document in the list.
 
 ## Usage
 
@@ -20,6 +22,7 @@ speakeasy merge [flags]
 ```
   -h, --help                           help for merge
   -o, --out string                     path to the output file
+      --resolve                        resolve local references in the first schema file
   -s, --schemas path/to/schema1.json   a list of paths to OpenAPI documents to merge, specify -s path/to/schema1.json -s `path/to/schema2.json` etc
 ```
 

@@ -6,7 +6,36 @@ import { Table } from "@/mdx/components";
 
 # Request Body Object in OpenAPI
 
-The request body is used to describe the body of the request for operations that support a request body.
+The request body is used to describe the HTTP body of the request for
+operations. Not all operations require a request body, but when they do, the
+request body is defined in the `requestBody` field of the operation object.
+
+```yaml
+paths:
+  /drinks:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the drink.
+                ingredients:
+                  type: array
+                  items:
+                    type: string
+                  description: The ingredients of the drink.
+                instructions:
+                  type: string
+                  description: Instructions to prepare the drink.
+```
+
+## Request Body Object
+
+Here's how the `requestBody` object is structured:
 
 <Table
   title="Request Body Object Fields"
@@ -55,6 +84,113 @@ The request body is used to describe the body of the request for operations that
     }
   ]}
 />
+
+## Required vs optional
+
+Request bodies are optional by default in OpenAPI, so adding the `requestBody`
+property does not mean it expects the HTTP request to actually be present. It
+means it _can_ be present. 
+
+This can be changed by setting the `required` property to `true`, but it is
+often forgotten and lots of tooling will remind you to add a required property,
+even if its set to `required: false`, just to make sure there is nothing spooky
+or unexpected happening.
+
+```yaml
+paths:
+  /drinks:
+    post:
+      requestBody:
+        description: The drink to create.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the drink.
+                ingredients:
+                  type: array
+                  items:
+                    type: string
+                  description: The ingredients of the drink.
+                instructions:
+                  type: string
+                  description: Instructions to prepare the drink.
+```
+
+Getting this right is not just important for API documentation, but for
+generated SDKs that should know whether or not to throw errors, and data
+validations libraries/middlewares which should know whether or not to reject an
+invalid request.
+
+When should a request body be optional? 
+
+Not all that often, but it can be useful for things like `PATCH` requests
+where no changes are happening but you want to "touch" the resource to update the `updatedAt` timestamp. 
+
+```http
+PATCH /drinks/1 HTTP/1.1
+Host: api.example.org
+```
+
+To support this use case, the `requestBody` can be set to be optional.
+
+```yaml
+paths:
+  /drinks/{id}:
+    patch:
+      requestBody:
+        description: The drink to update.
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the drink.
+                ingredients:
+                  type: array
+                  items:
+                    type: string
+                  description: The ingredients of the drink.
+                instructions:
+                  type: string
+                  description: Instructions to prepare the drink.
+```
+
+Sometimes an API will set a request body for a DELETE request, but this is less
+common and recommended against in both [RFC9110: HTTP
+Semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-delete) and the
+OpenAPI specification. 
+
+Still, OpenAPI begrudgingly allows `DELETE` to describe a `requestBody` knowing
+that some legacy APIs will have done this, and some tooling will even support it.
+
+```yaml
+paths:
+  /drinks/{id}:
+    delete:
+      requestBody:
+        description: The drink to delete.
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: The reason for deleting the drink.
+```
+
+It's important to describe the API correctly, regardless of which best practices
+it has gone against, but whenever possible channel the feedback to the
+developers and see if those mistakes can be avoided in the future.
 
 ## Encoding Object
 
@@ -118,7 +254,9 @@ Only applicable to `requestBody` where the media type is `multipart` or `applica
 paths:
   /drinks:
     post:
-      requestbody:
+      requestBody:
+        description: The drink to create.
+        required: true
         content:
           multipart/form-data:
             schema:
@@ -141,3 +279,22 @@ paths:
                 # style: form - not applicable to strings
                 # explode: false - not applicable to strings
 ```
+
+## anyOf and oneOf
+
+Sometimes a request body could contain multiple different data structures:
+
+```yaml
+requestBody:
+  description: A JSON object containing pet information
+  content:
+    application/json:
+      schema:
+        oneOf:
+          - $ref: "#/components/schemas/DebitCard"
+          - $ref: "#/components/schemas/CreditCard"
+          - $ref: "#/components/schemas/BankTransfer"
+          - $ref: "#/components/schemas/IDEAL"
+```
+
+Learn more about this concept in the [schema composition](/openapi/schemas/composition) guide.

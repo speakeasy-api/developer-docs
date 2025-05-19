@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # transform  
 `speakeasy openapi transform`  
 
