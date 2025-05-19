@@ -59,49 +59,15 @@ jobs:
                   git commit -m "🔍 Preview sync from developer-docs PR #${{ github.event.pull_request.number }}"
                   git push origin $BRANCH_NAME --force
 
-    deploy-to-vercel:
-        needs: preview-sync
-        runs-on: ubuntu-latest
-        outputs:
-            deployment-id: ${{ steps.vercel.outputs.deployment-id }}
-
-        steps:
-            - name: Clone synced preview branch
-              env:
-                  TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
-              run: |
-                  git clone https://x-access-token:${TOKEN}@github.com/${{ secrets.SYNC_REPO }}.git private-repo
-                  cd private-repo
-                  git checkout $BRANCH_NAME
-
-            - name: Init minimal Git history (for Vercel CLI)
-              run: |
-                  cd private-repo
-                  git init
-                  git config user.name "VercelBot"
-                  git config user.email "vercel@bot.com"
-                  git add .
-                  git diff --cached --quiet || git commit -m "CI preview deploy commit"
-
-            - name: Deploy to Vercel
-              id: vercel
-              uses: amondnet/vercel-action@v25
-              with:
-                  vercel-token: ${{ secrets.SERVICE_BOT_VERCEL }}
-                  vercel-org-id: ${{ secrets.VERCEL_TEAM_ID }}
-                  vercel-project-id: ${{ secrets.MARKETING_SITE_VERCEL_ID }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  working-directory: private-repo
-                  scope: ${{ secrets.VERCEL_TEAM_ID }}
-                  vercel-args: "--prebuilt"
-
     wait-and-comment:
         needs: preview-sync
         runs-on: ubuntu-latest
 
         steps:
-            - name: Install Vercel CLI
-              run: npm install -g vercel
+            - name: Install dependencies
+              run: |
+                  sudo apt-get update && sudo apt-get install -y jq
+                  npm install -g vercel
 
             - name: Post "Building..." Sticky Comment
               uses: marocchino/sticky-pull-request-comment@v2
@@ -125,12 +91,12 @@ jobs:
               env:
                   VERCEL_TOKEN: ${{ secrets.SERVICE_BOT_VERCEL }}
               run: |
-                  DEPLOY_OUTPUT=$(vercel --prebuilt --yes --token $VERCEL_TOKEN --scope ${{ secrets.VERCEL_TEAM_ID }} --confirm)
-                  echo "$DEPLOY_OUTPUT"
-                  DEPLOYMENT_URL=$(echo "$DEPLOY_OUTPUT" | grep -o 'https://[^ ]*\.vercel\.app' | tail -n1)
-                  DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -o 'deploymentId":"[^"]*' | cut -d'"' -f3)
-                  echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
-                  echo "deployment-id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+                  output=$(vercel --prebuilt --yes --token $VERCEL_TOKEN --scope ${{ secrets.VERCEL_TEAM_ID }} --confirm)
+                  echo "$output"
+                  deployment_url=$(echo "$output" | grep -o 'https://[^ ]*\.vercel\.app' | tail -n1)
+                  deployment_id=$(echo "$output" | grep -o '"deploymentId":"[^"]*"' | cut -d'"' -f4)
+                  echo "deployment-url=$deployment_url" >> $GITHUB_OUTPUT
+                  echo "deployment-id=$deployment_id" >> $GITHUB_OUTPUT
 
             - name: Wait for Vercel Deployment
               id: wait
