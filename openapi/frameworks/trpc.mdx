@@ -18,7 +18,7 @@ Here's what we'll cover:
 5.  Using the Speakeasy OpenAPI extensions to improve created SDKs.
 6.  Automating this process as part of a CI/CD pipeline.
 
-<Callout title="Tip" >
+<Callout title="Tip">
   If you want to follow along, you can use the [**tRPC Speakeasy Bar example
   repository**](https://github.com/speakeasy-api/speakeasy-trpc-example).
 </Callout>
@@ -90,7 +90,7 @@ export const appRouter = t.router({
     .query(async ({ input }) => {
       const drink = {
         name: "Old Fashioned",
-      }
+      };
       return { drink: drink };
     }),
 });
@@ -100,13 +100,12 @@ Add a new script to generate an OpenAPI document based on the tRPC router:
 
 ```typescript openapi.ts
 import { generateOpenApiDocument } from "trpc-openapi";
-
 import { appRouter } from "./router";
 
 export const openApiDocument = generateOpenApiDocument(appRouter, {
-  title: 'tRPC OpenAPI',
-  version: '1.0.0',
-  baseUrl: 'http://localhost:3000',
+  title: "tRPC OpenAPI",
+  version: "1.0.0",
+  baseUrl: "http://localhost:3000",
 });
 ```
 
@@ -148,13 +147,13 @@ The `GenerateOpenApiDocumentOptions` type from `trpc-openapi` allows us to add t
 
 ```typescript node_modules/trpc-openapi/dist/generator/index.d.ts
 export type GenerateOpenApiDocumentOptions = {
-    title: string;
-    description?: string;
-    version: string;
-    baseUrl: string;
-    docsUrl?: string;
-    tags?: string[];
-    securitySchemes?: OpenAPIV3.ComponentsObject['securitySchemes'];
+  title: string;
+  description?: string;
+  version: string;
+  baseUrl: string;
+  docsUrl?: string;
+  tags?: string[];
+  securitySchemes?: OpenAPIV3.ComponentsObject["securitySchemes"];
 };
 ```
 
@@ -163,7 +162,6 @@ We can add this information to our `generateOpenApiDocument` call:
 ```typescript openapi.ts
 // !focus(6:11)
 import { generateOpenApiDocument } from "trpc-openapi";
-
 import { appRouter } from "./router";
 
 export const openApiDocument = generateOpenApiDocument(appRouter, {
@@ -216,25 +214,21 @@ Create a new file called `models.ts` and specify a `Drink` model using Zod:
 ```typescript models.ts
 import { z } from "zod";
 
-const DrinkType = z.enum([
-    "NON_ALCOHOLIC",
-    "BEER",
-    "WINE",
-    "SPIRIT",
-    "OTHER",
-]).describe('The type of drink');
+const DrinkType = z
+  .enum(["NON_ALCOHOLIC", "BEER", "WINE", "SPIRIT", "OTHER"])
+  .describe("The type of drink");
 type DrinkType = z.infer<typeof DrinkType>;
 
-export const ProductCode = z.string().describe('The product code of the drink');
+export const ProductCode = z.string().describe("The product code of the drink");
 export type ProductCode = z.infer<typeof ProductCode>;
 
 export const DrinkSchema = z.object({
-    name: z.string().describe('The name of the drink'),
-    type: DrinkType,
-    price: z.number().describe('The price of the drink'),
-    stock: z.number().describe('The number of drinks in stock'),
-    productCode: ProductCode,
-    description: z.string().nullable().describe('A description of the drink'),
+  name: z.string().describe("The name of the drink"),
+  type: DrinkType,
+  price: z.number().describe("The price of the drink"),
+  stock: z.number().describe("The number of drinks in stock"),
+  productCode: ProductCode,
+  description: z.string().nullable().describe("A description of the drink"),
 });
 
 export type Drink = z.infer<typeof DrinkSchema>;
@@ -248,9 +242,8 @@ Back in the `router.ts` file, import these models and update the procedure's inp
 import { initTRPC } from "@trpc/server";
 import { OpenApiMeta } from "trpc-openapi";
 import { z } from "zod";
-
-import { ProductCode, DrinkSchema } from "./models";
-import { db } from "./db";  // Mock database
+import { db } from "./db"; // Mock database
+import { DrinkSchema, ProductCode } from "./models";
 
 const t = initTRPC.meta<OpenApiMeta>().create();
 
@@ -376,7 +369,7 @@ Speakeasy will use the descriptions in these fields to create documentation for 
 
 At Speakeasy, we recommend using OpenAPI model schemas so that schemas are reusable across multiple procedures. This simplifies SDK code creation, makes it easier to maintain your OpenAPI document, and provides a better developer experience for your users.
 
-At the time of writing, there is an [open issue on the tRPC repository](https://github.com/jlalmes/trpc-openapi/issues/157) to add support for OpenAPI model schemas. Until this is implemented, we'll need to be content with the duplication of schemas across procedures.
+At the time of writing, there is an [open issue on the tRPC repository](https://github.com/trpc/trpc-openapi/issues/157) to add support for OpenAPI model schemas. Until this is implemented, we'll need to be content with the duplication of schemas across procedures.
 
 Under the hood, `trpc-openapi` uses the [Zod to Json Schema](https://www.npmjs.com/package/zod-to-json-schema) package, which supports custom strategies for generating references to schemas, but this functionality is not yet exposed in `trpc-openapi`.
 
@@ -393,9 +386,8 @@ The `example` field is also used to add examples to the input schema.
 import { initTRPC } from "@trpc/server";
 import { OpenApiMeta } from "trpc-openapi";
 import { z } from "zod";
-
-import { ProductCode, DrinkSchema } from "./models";
 import { db } from "./db";
+import { DrinkSchema, ProductCode } from "./models";
 
 const t = initTRPC.meta<OpenApiMeta>().create();
 
@@ -446,7 +438,6 @@ Let's add a description to the `drinks` tag:
 
 ```typescript openapi.ts
 import { generateOpenApiDocument } from "trpc-openapi";
-
 import { appRouter } from "./router";
 
 const openApiDocument = generateOpenApiDocument(appRouter, {
@@ -495,16 +486,17 @@ Let's add an `x-speakeasy-name-override` extension to the `findByProductCode` pr
 First, we extend the `OpenAPIV3.OperationObject` and `OpenAPIV3.Document` types to add the `x-speakeasy-name-override` and other extensions:
 
 ```typescript extended-types.ts
-import { OpenAPIV3 } from 'openapi-types';
+import { OpenAPIV3 } from "openapi-types";
 
 export type IExtensionName = `x-${string}`;
 export type IExtensionType = any;
 export type ISpecificationExtension = {
-    [extensionName: IExtensionName]: IExtensionType;
+  [extensionName: IExtensionName]: IExtensionType;
 };
 
 export type ExtendedDocument = OpenAPIV3.Document & ISpecificationExtension;
-export type ExtendedOperationObject = OpenAPIV3.OperationObject<ISpecificationExtension>;
+export type ExtendedOperationObject =
+  OpenAPIV3.OperationObject<ISpecificationExtension>;
 ```
 
 Then we import our extended operation type and add the `x-speakeasy-name-override` extension to the `findByProductCode` procedure:
@@ -512,7 +504,6 @@ Then we import our extended operation type and add the `x-speakeasy-name-overrid
 ```typescript openapi.ts
 // !focus(3,23:31)
 import { generateOpenApiDocument } from "trpc-openapi";
-
 import { ExtendedOperationObject } from "./extended-types";
 import { appRouter } from "./router";
 
@@ -561,7 +552,6 @@ Let's add a global retry strategy to our OpenAPI document and override it for ou
 // !focus(23:33)
 // !focus(43:55)
 import { generateOpenApiDocument } from "trpc-openapi";
-
 import { ExtendedDocument, ExtendedOperationObject } from "./extended-types";
 import { appRouter } from "./router";
 
