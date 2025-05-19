@@ -12,12 +12,15 @@ env:
     BRANCH_NAME: docs-preview/pr-${{ github.event.pull_request.number }}
 
 jobs:
-    preview-sync:
+    preview-sync-and-deploy:
         runs-on: ubuntu-latest
-        outputs:
-            preview-branch: ${{ env.BRANCH_NAME }}
 
         steps:
+            - name: Install dependencies
+              run: |
+                  sudo apt-get update && sudo apt-get install -y jq
+                  npm install -g vercel
+
             - name: Checkout developer-docs PR
               uses: actions/checkout@v4
               with:
@@ -27,7 +30,7 @@ jobs:
               env:
                   TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
               run: |
-                  git clone https://x-access-token:${TOKEN}@github.com/${SYNC_REPO}.git private-repo
+                  git clone https://x-access-token:${TOKEN}@github.com/${{ secrets.SYNC_REPO }}.git private-repo
                   cd private-repo
                   git checkout -B $BRANCH_NAME
 
@@ -59,68 +62,23 @@ jobs:
                   git commit -m "🔍 Preview sync from developer-docs PR #${{ github.event.pull_request.number }}"
                   git push origin $BRANCH_NAME --force
 
-    wait-and-comment:
-        needs: preview-sync
-        runs-on: ubuntu-latest
-
-        steps:
-            - name: Install dependencies
-              run: |
-                  sudo apt-get update && sudo apt-get install -y jq
-                  npm install -g vercel
-
-            - name: Post "Building..." Sticky Comment
-              uses: marocchino/sticky-pull-request-comment@v2
-              with:
-                  number: ${{ github.event.pull_request.number }}
-                  header: VercelPreview
-                  message: |
-                      🟡 **Vercel preview is building...**
-
-            - name: Clone marketing-site preview branch
-              env:
-                  TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
-              run: |
-                  git clone https://x-access-token:${TOKEN}@github.com/${{ secrets.SYNC_REPO }}.git private-repo
-                  cd private-repo
-                  git checkout $BRANCH_NAME
-
             - name: Deploy to Vercel via CLI
               id: deploy
               working-directory: private-repo
               env:
                   VERCEL_TOKEN: ${{ secrets.SERVICE_BOT_VERCEL }}
               run: |
-                  output=$(vercel --prebuilt --yes --token $VERCEL_TOKEN --scope ${{ secrets.VERCEL_TEAM_ID }} --confirm)
+                  output=$(vercel --yes --token $VERCEL_TOKEN --scope ${{ secrets.VERCEL_TEAM_ID }})
                   echo "$output"
                   deployment_url=$(echo "$output" | grep -o 'https://[^ ]*\.vercel\.app' | tail -n1)
-                  deployment_id=$(echo "$output" | grep -o '"deploymentId":"[^"]*"' | cut -d'"' -f4)
                   echo "deployment-url=$deployment_url" >> $GITHUB_OUTPUT
-                  echo "deployment-id=$deployment_id" >> $GITHUB_OUTPUT
 
-            - name: Wait for Vercel Deployment
-              id: wait
-              uses: tj-actions/vercel-wait@v1
-              with:
-                  project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-                  token: ${{ secrets.SERVICE_BOT_VERCEL }}
-                  sha: ${{ github.event.pull_request.head.sha }}
-
-            - name: Update Sticky Comment with Success
-              if: ${{ steps.wait.outputs.ready-state == 'READY' }}
+            - name: Comment with Preview Link
               uses: marocchino/sticky-pull-request-comment@v2
               with:
                   number: ${{ github.event.pull_request.number }}
                   header: VercelPreview
                   message: |
-                      ✅ **Vercel preview is ready!**
-                      🔗 [View deployment](${{ steps.deploy.outputs.deployment-url }})
-
-            - name: Update Sticky Comment with Failure
-              if: ${{ steps.wait.outputs.ready-state != 'READY' }}
-              uses: marocchino/sticky-pull-request-comment@v2
-              with:
-                  number: ${{ github.event.pull_request.number }}
-                  header: VercelPreview
-                  message: |
-                      ❌ **Vercel deployment failed.**
+                      🔗 **Preview your changes**:  
+                      [View on Vercel](${{ steps.deploy.outputs.deployment-url }})  
+                      _(deployment may still be building)_
