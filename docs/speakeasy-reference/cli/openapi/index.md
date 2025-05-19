@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # openapi  
 `speakeasy openapi`  
 
