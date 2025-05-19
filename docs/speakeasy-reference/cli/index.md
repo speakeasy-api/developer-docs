@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # speakeasy  
 `speakeasy`  
 

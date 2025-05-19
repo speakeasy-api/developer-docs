@@ -7,9 +7,15 @@ import { Table } from "@/mdx/components";
 
 # Server Variables in OpenAPI
 
-Server variables are a map of variable names (string) to [Server Variable Objects](/openapi/servers/server-variables#server-variable-object) that can be used for variable substitution via Templating.
+Most of the time an API uses a single server URL, like `https://api.speakeasy.bar`, and OpenAPI allows you to define this URL in the `servers` section. Even when an API is deployed to multiple production servers, they'll all be behind a load balancer which is using the same ingress URL so there's no need to get technical about individual servers. 
+
+Sometimes things get a bit more complicated. For example, an API might be multi-tenant and deployed to multiple organizations based on custom data which is unknowable in the OpenAPI description, or deployed to multiple regions (United States, Europe, Asia). In these cases, where the server implementation is identical but it is not possible or necessary to define each one as its own server, a single server URL can be defined with Server Variables.
+
+These variables can even be replaced with the appropriate values for each organization in the API documentation, so that the documentation is more useful to consumers. For example, if an API is deployed to multiple organizations, the documentation can show the URL for each organization, making it easier for consumers to use the API.
 
 ## Server Variable Object
+
+Server variables are a map of variable names (string) to [Server Variable Objects](/openapi/servers/server-variables#server-variable-object) that can be used for variable substitution via Templating.
 
 A Server Variable Object describes a single variable that is optionally part of the URL in a [Server Object](/openapi/servers). The value of a variable can be any arbitrary string value unless a list of allowed values is provided via the `enum` field.
 
@@ -63,7 +69,6 @@ servers:
           - 8082
 ```
 
-
 Some APIs might be deployed across multiple regions, such as the United States, Europe, and Asia. Instead of listing each server URL separately, use a server variable to represent the region.
 
 ```yaml
@@ -86,6 +91,10 @@ Any variable delimited by `{}` in the `url` field declares a part of the URL tha
 
 ## Best practices
 
+### Use meaningful names
+
+When naming server variables, use meaningful names that describe the purpose of the variable. Avoid using generic names like `var1`, `var2`, instead use meaningful names like `organization` and `region`. This will make it easier for consumers to understand the purpose of the variable and how to use it.
+
 ### Avoid using server variables for multiple API versions
 
 Some people try to use server variables for handling API Versions (v1, v2, v3) in a single OpenAPI document. This is a poor fit for server variables, because far more than the server URL will change between major versions. Server variables help when just the server is changing, but the other operations and components are the same.
@@ -94,4 +103,12 @@ If the operations and components are the same, there was probably no need to cre
 
 ### Beware enums
 
-When using enums, be careful to ensure that the values are valid and meaningful. Also make sure they are not too restrictive. For example, if you have a server variable for `region`, and you only allow `us`, `eu`, and `asia`, then it cana be difficult to add new regions in the future if there is old code validating against those values. Consider using a more generic approach, with valid regions explained in the description. This makes it easier to add new regions in the future without breaking existing code.
+When using enums, be careful to ensure that the values are valid and meaningful. Also make sure they are not too restrictive. 
+
+For example, if you have a server variable for `region`, and you only allow `us`, `eu`, and `asia`, then it can be difficult to add new regions in the future. Old code would continue to validate against the predefined values, meaning any new regions would be rejected as invalid. 
+
+Consider using a more generic approach, with valid regions explained in the description. This makes it easier to add new regions in the future without breaking existing code.
+
+### Use default values
+
+When defining server variables, always provide a default value. This will make it easier for consumers to use the API without having to specify a value for every variable. The default value should be a reasonable value that is likely to be used by most consumers.

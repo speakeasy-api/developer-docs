@@ -5,6 +5,13 @@ description: "How to optimize your OpenAPI document for MCP server generation."
 
 import { Callout } from "@/mdx/components";
 
+<Callout title="Gram AI by Speakeasy">
+  Unlock AI engineering by turning your API platform into an AI platform with
+  [Gram](https://app.getgram.ai). Generate agent tools for internal services and
+  connect to popular third party APIs from one platform. [Join the
+  waitlist](https://app.getgram.ai) today.
+</Callout>
+
 # Optimizing your OpenAPI document for MCP servers
 
 If you're building an AI-driven application, you're probably exploring ways to connect it to your APIs.
@@ -28,7 +35,9 @@ Since MCP is built around APIs, Speakeasy can generate a fully functional MCP se
 ### How does Speakeasy generate an MCP server using OpenAPI?
 
 <Callout title="Note" variant="info">
-At the time of writing, MCP server generation is only available in TypeScript SDKs. If you're using a different language, you can create a new TypeScript SDK target and then generate the MCP server from there.
+  At the time of writing, MCP server generation is only available in TypeScript
+  SDKs. If you're using a different language, you can create a new TypeScript
+  SDK target and then generate the MCP server from there.
 </Callout>
 
 Speakeasy extracts every detail from your OpenAPI document: endpoints, methods, parameters, responses, and descriptions. It then generates a set of MCP tools that represent each API operation, complete with type-safe arguments and return values.
@@ -96,11 +105,9 @@ export const tool$lapsCreateLap: ToolDefinition<typeof args> = {
 Create a new lap record for a specific driver`,
   args,
   tool: async (client, args, ctx) => {
-    const [result, apiCall] = await lapsCreateLap(
-      client,
-      args.request,
-      { fetchOptions: { signal: ctx.signal } },
-    ).$inspect();
+    const [result, apiCall] = await lapsCreateLap(client, args.request, {
+      fetchOptions: { signal: ctx.signal },
+    }).$inspect();
 
     if (!result.ok) {
       return {
@@ -178,7 +185,7 @@ import * as operations from "../../models/operations/index.js";
 import { formatResult, ToolDefinition } from "../tools.js";
 
 const args = {
-  request: operations.GetLapRequest$inboundSchema,
+request: operations.GetLapRequest$inboundSchema,
 };
 
 export const tool$lapsGetLap: ToolDefinition<typeof args> = {
@@ -202,10 +209,11 @@ export const tool$lapsGetLap: ToolDefinition<typeof args> = {
     const value = result.value;
 
     return formatResult(value, apiCall);
-  },
+
+},
 };
 
-```
+````
   </div>
 </div>
 
@@ -269,7 +277,7 @@ Here's how to use this extension:
       name: "driver_fastest_lap_tool"
       description: "Find the fastest lap time a driver has ever recorded at any track"
       scope: [read, performance-stats]
-```
+````
 
 #### Customize tool names and descriptions
 
@@ -355,11 +363,16 @@ If you're using the Claude desktop app, you can also specify scopes in the confi
     "RacingLapCounter": {
       "command": "npx",
       "args": [
-        "-y", "--package", "racing-lap-counter",
+        "-y",
+        "--package",
+        "racing-lap-counter",
         "--",
-        "mcp", "start",
-        "--scope", "read",
-        "--scope", "write"
+        "mcp",
+        "start",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ]
     }
   }
@@ -405,7 +418,7 @@ When using MCP, it's essential to provide clear descriptions for each operation.
 "/drivers/{driver_id}":
   get:
     tags:
-    - Drivers
+      - Drivers
     summary: Get a specific driver
     description: |
       Retrieves complete profile information for a racing driver,
@@ -445,28 +458,28 @@ To make it easier for AI models to understand your MCP tools, provide detailed d
 ```yaml openapi.yaml
 #!focus(20:24)
 parameters:
-- name: driver_id
-  in: path
-  required: true
-  schema:
-    type: string
-    description: |
-      The UUID of the driver to retrieve. Must be a valid UUID v4 format.
-    format: uuid
-    examples:
-      hamiltonExample:
-        summary: Lewis Hamilton's ID
-        value: f1a52136-5717-4562-b3fc-2c963f66afa6
-      verstappenExample:
-        summary: Max Verstappen's ID
-        value: c4d85b23-9fe2-4219-8a30-72ef172e327b
-    title: Driver Id
-  description: The UUID of the driver to retrieve
-  x-speakeasy-mcp:
-    description: |
-      The unique identifier for the driver. You can find the IDs of current F1 drivers
-      by first using the listDrivers tool. Common drivers include Lewis Hamilton,
-      Max Verstappen, and Charles Leclerc.
+  - name: driver_id
+    in: path
+    required: true
+    schema:
+      type: string
+      description: |
+        The UUID of the driver to retrieve. Must be a valid UUID v4 format.
+      format: uuid
+      examples:
+        hamiltonExample:
+          summary: Lewis Hamilton's ID
+          value: f1a52136-5717-4562-b3fc-2c963f66afa6
+        verstappenExample:
+          summary: Max Verstappen's ID
+          value: c4d85b23-9fe2-4219-8a30-72ef172e327b
+      title: Driver Id
+    description: The UUID of the driver to retrieve
+    x-speakeasy-mcp:
+      description: |
+        The unique identifier for the driver. You can find the IDs of current F1 drivers
+        by first using the listDrivers tool. Common drivers include Lewis Hamilton,
+        Max Verstappen, and Charles Leclerc.
 ```
 
 ### Add examples to responses
@@ -475,41 +488,41 @@ To improve the LLM's understanding of your API's responses, provide detailed des
 
 ```yaml openapi.yaml
 #!focus(27:35)
-  responses:
-    '200':
+responses:
+  "200":
+    description: |
+      Lap records retrieved successfully, sorted from fastest to slowest lap time.
+      Returns an empty array if the driver exists but has no recorded laps.
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Lap"
+          title: DriverLapsResponse
+        examples:
+          multipleLaps:
+            summary: Multiple lap records
+            value:
+              - id: "3fa85f64-5717-4562-b3fc-2c963f66afa7"
+                lap_time: 85.4
+                track: "Silverstone"
+              - id: "3fa85f64-5717-4562-b3fc-2c963f66afa8"
+                lap_time: 86.2
+                track: "Monza"
+          emptyLaps:
+            summary: No lap records
+            value: []
+    x-speakeasy-mcp:
+      name: "get_driver_lap_records"
       description: |
-        Lap records retrieved successfully, sorted from fastest to slowest lap time.
-        Returns an empty array if the driver exists but has no recorded laps.
-      content:
-        application/json:
-          schema:
-            type: array
-            items:
-              "$ref": "#/components/schemas/Lap"
-            title: DriverLapsResponse
-          examples:
-            multipleLaps:
-              summary: Multiple lap records
-              value:
-                - id: "3fa85f64-5717-4562-b3fc-2c963f66afa7"
-                  lap_time: 85.4
-                  track: "Silverstone"
-                - id: "3fa85f64-5717-4562-b3fc-2c963f66afa8"
-                  lap_time: 86.2
-                  track: "Monza"
-            emptyLaps:
-              summary: No lap records
-              value: []
-      x-speakeasy-mcp:
-        name: "get_driver_lap_records"
-        description: |
-          Returns an array of lap records for the requested driver. Each record contains:
-          - id: A unique identifier for the lap record
-          - lap_time: Time in seconds (lower is better)
-          - track: Name of the circuit where the lap was recorded
+        Returns an array of lap records for the requested driver. Each record contains:
+        - id: A unique identifier for the lap record
+        - lap_time: Time in seconds (lower is better)
+        - track: Name of the circuit where the lap was recorded
 
-          The records are sorted from fastest to slowest lap time. If the driver exists
-          but hasn't completed any laps, this will return an empty array.
+        The records are sorted from fastest to slowest lap time. If the driver exists
+        but hasn't completed any laps, this will return an empty array.
 ```
 
 ## Final thoughts

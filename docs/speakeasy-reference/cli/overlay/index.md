@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # overlay  
 `speakeasy overlay`  
 

@@ -22,6 +22,7 @@ speakeasy merge [flags]
 ```
   -h, --help                           help for merge
   -o, --out string                     path to the output file
+      --resolve                        resolve local references in the first schema file
   -s, --schemas path/to/schema1.json   a list of paths to OpenAPI documents to merge, specify -s path/to/schema1.json -s `path/to/schema2.json` etc
 ```
 

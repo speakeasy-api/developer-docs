@@ -1,3 +1,7 @@
+---
+asIndexPage: true
+---
+
 # billing  
 `speakeasy billing`  
 
