@@ -63,77 +63,61 @@ jobs:
                   git commit -m "🔍 Preview sync from developer-docs PR #${{ github.event.pull_request.number }}"
                   git push origin $BRANCH_NAME --force
 
-    comment-vercel-preview:
+    deploy-to-vercel:
         needs: preview-sync
+        runs-on: ubuntu-latest
+        outputs:
+            deployment-id: ${{ steps.vercel.outputs.deployment-id }}
+
+        steps:
+            - name: Deploy to Vercel
+              id: vercel
+              uses: amondnet/vercel-action@v25
+              with:
+                  vercel-token: ${{ secrets.SERVICE_BOT_VERCEL }}
+                  vercel-org-id: ${{ secrets.VERCEL_TEAM_ID }}
+                  vercel-project-id: ${{ secrets.MARKETING_SITE_VERCEL_ID }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  working-directory: private-repo
+                  scope: ${{ secrets.VERCEL_TEAM_ID }}
+                  vercel-args: "--prebuilt"
+
+    wait-and-comment:
+        needs: deploy-to-vercel
         runs-on: ubuntu-latest
 
         steps:
-            - name: Install jq
-              run: sudo apt-get update && sudo apt-get install -y jq
-
-            - name: Wait for Vercel Deployment
-              id: wait-for-vercel
-              env:
-                  VERCEL_TOKEN: ${{ secrets.SERVICE_BOT_VERCEL }}
-                  VERCEL_PROJECT_ID: ${{ secrets.MARKETING_SITE_VERCEL_ID }}
-                  VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
-              run: |
-                  echo "Waiting 4.5 minutes before polling Vercel..."
-                  sleep 270  # 4.5 min
-
-                  polls=0
-                  max_polls=20
-                  branch="$BRANCH_NAME"
-
-                  while [ $polls -lt $max_polls ]; do
-                    echo "⏳ Poll #$((polls + 1)) — checking Vercel deployment status..."
-
-                    response=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-                      "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&target=preview&teamId=$VERCEL_TEAM_ID&limit=5")
-
-                    deployment_info=$(echo "$response" | jq -r --arg branch "$branch" '
-                      .deployments[] | select(.meta.githubBranch == $branch) |
-                      {id: .id, url: .url, status: .readyState}
-                    ' | jq -s '.[0]')
-
-                    if [ "$deployment_info" != "null" ]; then
-                      deploy_id=$(echo "$deployment_info" | jq -r '.id')
-                      deploy_url=$(echo "$deployment_info" | jq -r '.url')
-                      deploy_status=$(echo "$deployment_info" | jq -r '.status')
-
-                      echo "Status: $deploy_status"
-
-                      if [ "$deploy_status" = "READY" ]; then
-                        echo "✅ Deployment is ready at https://$deploy_url"
-                        echo "url=https://$deploy_url" >> $GITHUB_OUTPUT
-                        echo "comment=✅ **Vercel preview is ready**: [View deployment](https://$deploy_url)" >> $GITHUB_OUTPUT
-                        exit 0
-                      elif [ "$deploy_status" = "ERROR" ]; then
-                        echo "❌ Deployment failed"
-                        echo "comment=❌ **Vercel deployment failed.** Check the [Vercel dashboard](https://vercel.com) for more info." >> $GITHUB_OUTPUT
-                        exit 0
-                      else
-                        echo "🟡 Deployment in progress..."
-                      fi
-                    else
-                      echo "⚠️ No deployment found yet for branch $branch"
-                    fi
-
-                    polls=$((polls + 1))
-
-                    # First 10 polls use 10s, rest use 30s
-                    if [ $polls -lt 10 ]; then
-                      sleep 10
-                    else
-                      sleep 30
-                    fi
-                  done
-
-                  echo "❌ Timed out after $max_polls polls waiting for Vercel deployment."
-                  echo "comment=❌ **Timed out** waiting for Vercel preview deployment after $(($max_polls < 10 ? 270 + $max_polls * 10 : 270 + 10 * 10 + ($max_polls - 10) * 30)) seconds." >> $GITHUB_OUTPUT
-                  exit 0
-
-            - name: Comment with Vercel Preview
+            - name: Post "Building..." Comment Immediately
               uses: marocchino/sticky-pull-request-comment@v2
               with:
-                  message: ${{ steps.wait-for-vercel.outputs.comment }}
+                  number: ${{ github.event.pull_request.number }}
+                  header: VercelPreview
+                  message: |
+                      🟡 **Vercel preview is building...**
+
+            - name: Wait for Vercel Deployment
+              id: wait
+              uses: vercel/wait-for-deployment@v1
+              with:
+                  token: ${{ secrets.SERVICE_BOT_VERCEL }}
+                  deployment-id: ${{ needs.deploy-to-vercel.outputs.deployment-id }}
+                  timeout: 900
+
+            - name: Update Sticky Comment with Success
+              if: ${{ steps.wait.outputs.ready-state == 'READY' }}
+              uses: marocchino/sticky-pull-request-comment@v2
+              with:
+                  number: ${{ github.event.pull_request.number }}
+                  header: VercelPreview
+                  message: |
+                      ✅ **Vercel preview is ready!**
+                      🔗 [View deployment](${{ steps.wait.outputs.deployment-url }})
+
+            - name: Update Sticky Comment with Failure
+              if: ${{ steps.wait.outputs.ready-state != 'READY' }}
+              uses: marocchino/sticky-pull-request-comment@v2
+              with:
+                  number: ${{ github.event.pull_request.number }}
+                  header: VercelPreview
+                  message: |
+                      ❌ **Vercel deployment failed.**
