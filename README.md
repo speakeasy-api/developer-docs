@@ -10,6 +10,7 @@ Our open source documentation is under construction. Refer to our [website](http
 - Ensure all tests pass and the build succeeds
 
 ---
+
 ## **Speakeasy style sheet**
 
 A short document covering what we know to date about the style choices you should make for Speakeasy documentation and blog posts. Very much a work in progress.
@@ -31,8 +32,8 @@ Speakeasy uses sentence case for titles and section headings globally.
 - In body text, place all references to code in backticks, including class names and `description` values.
 - Don’t use backticks in titles, headings, or subheadings because they don’t render well.
 - Don’t put language names in backticks unless it’s part of a code snippet:
-    - ❌ In `go`, all types from all operations are collected into a global `AcceptHeaderEnum` type.
-    - ✅ In Go, all types from all operations are collected into a global `AcceptHeaderEnum` type.
+  - ❌ In `go`, all types from all operations are collected into a global `AcceptHeaderEnum` type.
+  - ✅ In Go, all types from all operations are collected into a global `AcceptHeaderEnum` type.
 
 #### **Code blocks**
 
@@ -71,26 +72,26 @@ Place all UI element labels like button text, menu items, tab names, section nam
 
 - **American English**: Use American spellings and grammar conventions.
 - **Avoid Pronouns**: Do not use "you/your" or "we/were." Focus on the task or action itself.
-    
+
     **Example:**
-    
-    - Incorrect: "If you want to configure the server, you should..."
-    - Correct: "To configure the server, follow these steps..."
+
+  - Incorrect: "If you want to configure the server, you should..."
+  - Correct: "To configure the server, follow these steps..."
 - **Active Voice**: Use active voice for clarity and directness.
-    
+
     **Example:**
-    
-    - Passive: "The file is uploaded by the user."
-    - Active: "Upload the file."
+
+  - Passive: "The file is uploaded by the user."
+  - Active: "Upload the file."
 
 ### Structure and Content
 
 - **Brevity**: Keep explanations concise. Use short sentences and paragraphs to improve readability.
-    
+
     **Example:**
-    
-    - Lengthy: "In order to ensure the system is functioning properly, you will need to check the logs frequently to identify any potential errors that may occur."
-    - Concise: "Check logs regularly to identify errors."
+
+  - Lengthy: "In order to ensure the system is functioning properly, you will need to check the logs frequently to identify any potential errors that may occur."
+  - Concise: "Check logs regularly to identify errors."
 - **Text Before Images**: Place relevant explanatory text above any images or diagrams. Use images as support, not a replacement, for information.
 
 ### Images and Screenshots
@@ -104,8 +105,8 @@ Place all UI element labels like button text, menu items, tab names, section nam
 - **Lists**: When listing steps or points, use ordered or unordered lists to improve readability.
 - **Code Blocks**: Use code blocks for technical commands and scripts, and ensure proper syntax highlighting.
 - **Links**: Links should be relative URLs like so: `[link](/docs/create-client-sdks)`
-    - Avoid absolute paths `~~[link](https://www.speakeasy.com/docs/create-client-sdks)~~`
-    - Avoid linking to the mdx file `~~[link](./create-clients.mdx)~~`
+  - Avoid absolute paths `~~[link](https://www.speakeasy.com/docs/create-client-sdks)~~`
+  - Avoid linking to the mdx file `~~[link](./create-clients.mdx)~~`
 
 ---
 
@@ -143,7 +144,7 @@ Avoid using a possessive apostrophe with brand names and inanimate things:
 
 - ❌ Speakeasy's SDK Generator.
 - ✅ The Speakeasy SDK Generator.
-- ❌ The applications's administrator.
+- ❌ The application's administrator.
 - ✅ The administrator of the application.
 
 ### Backticks
@@ -199,11 +200,11 @@ Use a serial comma in lists:
 Use a comma to separate introductory words, phrases, or clauses from the main clause of a sentence. These include:
 
 - Transitional phrases and words
-    - ✅ However, to ensure data security, it's crucial that you now set up appropriate user permissions.
+  - ✅ However, to ensure data security, it's crucial that you now set up appropriate user permissions.
 - Adverbial phrases and clauses
-    - ✅ In reality, you'll want to create a random user at the beginning of each login test.
+  - ✅ In reality, you'll want to create a random user at the beginning of each login test.
 - Conditional phrases and clauses
-    - ✅ Before you can write any tests, you need a test user profile to log in with.
+  - ✅ Before you can write any tests, you need a test user profile to log in with.
 
 Avoid comma splices:
 
