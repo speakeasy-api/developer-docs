@@ -14,6 +14,8 @@ env:
 jobs:
     preview-sync:
         runs-on: ubuntu-latest
+        outputs:
+            preview-branch: ${{ env.BRANCH_NAME }}
 
         steps:
             - name: Checkout developer-docs PR
@@ -32,11 +34,9 @@ jobs:
             - name: Sync content folders to preview branch
               run: |
                   set -euo pipefail
-
                   for dir in $SYNC_DIRS; do
                     src_dir="$dir"
                     dest_dir="private-repo/src/content/$dir"
-
                     if [ -d "$src_dir" ]; then
                       echo "Syncing $src_dir → $dest_dir"
                       rsync -a --delete "$src_dir/" "$dest_dir/"
@@ -49,17 +49,13 @@ jobs:
               run: |
                   set -euo pipefail
                   cd private-repo
-
                   git config user.name "Beezy the bot"
                   git config user.email "marketing@speakeasy.com"
-
                   git add .
-
                   if git diff --cached --quiet; then
                     echo "No changes to sync for preview"
                     exit 0
                   fi
-
                   git commit -m "🔍 Preview sync from developer-docs PR #${{ github.event.pull_request.number }}"
                   git push origin $BRANCH_NAME --force
 
@@ -70,6 +66,23 @@ jobs:
             deployment-id: ${{ steps.vercel.outputs.deployment-id }}
 
         steps:
+            - name: Clone synced preview branch
+              env:
+                  TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
+              run: |
+                  git clone https://x-access-token:${TOKEN}@github.com/${{ secrets.SYNC_REPO }}.git private-repo
+                  cd private-repo
+                  git checkout $BRANCH_NAME
+
+            - name: Init minimal Git history (for Vercel CLI)
+              run: |
+                  cd private-repo
+                  git init
+                  git config user.name "VercelBot"
+                  git config user.email "vercel@bot.com"
+                  git add .
+                  git commit -m "CI preview deploy commit"
+
             - name: Deploy to Vercel
               id: vercel
               uses: amondnet/vercel-action@v25
