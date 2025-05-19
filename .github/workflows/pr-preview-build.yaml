@@ -96,11 +96,14 @@ jobs:
                   vercel-args: "--prebuilt"
 
     wait-and-comment:
-        needs: deploy-to-vercel
+        needs: preview-sync
         runs-on: ubuntu-latest
 
         steps:
-            - name: Post "Building..." Comment Immediately
+            - name: Install Vercel CLI
+              run: npm install -g vercel
+
+            - name: Post "Building..." Sticky Comment
               uses: marocchino/sticky-pull-request-comment@v2
               with:
                   number: ${{ github.event.pull_request.number }}
@@ -108,12 +111,33 @@ jobs:
                   message: |
                       🟡 **Vercel preview is building...**
 
+            - name: Clone marketing-site preview branch
+              env:
+                  TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
+              run: |
+                  git clone https://x-access-token:${TOKEN}@github.com/${{ secrets.SYNC_REPO }}.git private-repo
+                  cd private-repo
+                  git checkout $BRANCH_NAME
+
+            - name: Deploy to Vercel via CLI
+              id: deploy
+              working-directory: private-repo
+              env:
+                  VERCEL_TOKEN: ${{ secrets.SERVICE_BOT_VERCEL }}
+              run: |
+                  DEPLOY_OUTPUT=$(vercel --prebuilt --yes --token $VERCEL_TOKEN --scope ${{ secrets.VERCEL_TEAM_ID }} --confirm)
+                  echo "$DEPLOY_OUTPUT"
+                  DEPLOYMENT_URL=$(echo "$DEPLOY_OUTPUT" | grep -o 'https://[^ ]*\.vercel\.app' | tail -n1)
+                  DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -o 'deploymentId":"[^"]*' | cut -d'"' -f3)
+                  echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+                  echo "deployment-id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+
             - name: Wait for Vercel Deployment
               id: wait
               uses: vercel/wait-for-deployment@v1
               with:
                   token: ${{ secrets.SERVICE_BOT_VERCEL }}
-                  deployment-id: ${{ needs.deploy-to-vercel.outputs.deployment-id }}
+                  deployment-id: ${{ steps.deploy.outputs.deployment-id }}
                   timeout: 900
 
             - name: Update Sticky Comment with Success
@@ -124,7 +148,7 @@ jobs:
                   header: VercelPreview
                   message: |
                       ✅ **Vercel preview is ready!**
-                      🔗 [View deployment](${{ steps.wait.outputs.deployment-url }})
+                      🔗 [View deployment](${{ steps.deploy.outputs.deployment-url }})
 
             - name: Update Sticky Comment with Failure
               if: ${{ steps.wait.outputs.ready-state != 'READY' }}
