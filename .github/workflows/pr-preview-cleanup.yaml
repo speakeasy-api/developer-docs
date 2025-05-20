@@ -1,0 +1,41 @@
+name: Clean up Preview Branch
+
+on:
+    pull_request:
+        types:
+            - closed
+        branches:
+            - main
+
+jobs:
+    delete-preview-branch:
+        runs-on: ubuntu-latest
+        env:
+            SYNC_REPO: ${{ secrets.SYNC_REPO }}
+            BRANCH: docs-preview/pr-${{ github.event.pull_request.number }}
+
+        steps:
+            - name: Delete preview branch in marketing-site
+              env:
+                  TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
+              run: |
+                  echo "Deleting preview branch $BRANCH from $SYNC_REPO"
+
+                  curl -X DELETE \
+                    -H "Authorization: token ${TOKEN}" \
+                    -H "Accept: application/vnd.github+json" \
+                    https://api.github.com/repos/${SYNC_REPO}/git/refs/heads/${BRANCH} \
+                    -w "%{http_code}" -o response.log -s
+
+                  STATUS=$(cat response.log)
+                  if [[ "$STATUS" == "204" ]]; then
+                    echo "✅ Branch $BRANCH deleted"
+                    echo "✅ Preview branch \`$BRANCH\` has been deleted from \`$SYNC_REPO\`" >> $GITHUB_STEP_SUMMARY
+                  elif [[ "$STATUS" == "404" ]]; then
+                    echo "⚠️ Branch $BRANCH not found — maybe already deleted?"
+                    echo "⚠️ Preview branch \`$BRANCH\` was not found in \`$SYNC_REPO\`. Likely already deleted." >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "❌ Failed to delete branch. Response code: $STATUS"
+                    echo "❌ Could not delete preview branch \`$BRANCH\` (HTTP $STATUS)" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  fi

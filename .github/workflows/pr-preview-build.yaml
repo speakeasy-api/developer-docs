@@ -1,0 +1,73 @@
+name: Site build preview
+
+on:
+    pull_request:
+        types: [opened, synchronize]
+        branches:
+            - main
+
+env:
+    SYNC_REPO: ${{ secrets.SYNC_REPO }}
+    SYNC_DIRS: "api-design docs guides mcp openapi"
+    BRANCH_NAME: docs-preview/pr-${{ github.event.pull_request.number }}
+
+jobs:
+    preview-sync:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout developer-docs PR
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Clone marketing-site preview branch
+              env:
+                  TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
+              run: |
+                  git clone https://x-access-token:${TOKEN}@github.com/${SYNC_REPO}.git private-repo
+                  cd private-repo
+                  git checkout -B $BRANCH_NAME
+
+            - name: Sync content folders to preview branch
+              run: |
+                  set -euo pipefail
+                  for dir in $SYNC_DIRS; do
+                    src_dir="$dir"
+                    dest_dir="private-repo/src/content/$dir"
+                    if [ -d "$src_dir" ]; then
+                      echo "Syncing $src_dir → $dest_dir"
+                      rsync -a --delete "$src_dir/" "$dest_dir/"
+                    else
+                      echo "Warning: $src_dir does not exist, skipping..."
+                    fi
+                  done
+
+            - name: Commit and push preview branch
+              run: |
+                  set -euo pipefail
+                  cd private-repo
+                  git config user.name "Beezy the bot"
+                  git config user.email "marketing@speakeasy.com"
+                  git add .
+                  if git diff --cached --quiet; then
+                    echo "No changes to sync for preview"
+                    exit 0
+                  fi
+                  git commit -m "🔍 Preview sync from developer-docs PR #${{ github.event.pull_request.number }}"
+                  git push origin $BRANCH_NAME --force
+
+    comment-vercel-preview:
+        needs: preview-sync
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Comment with Predicted Vercel URL
+              uses: marocchino/sticky-pull-request-comment@v2
+              with:
+                  number: ${{ github.event.pull_request.number }}
+                  header: VercelPreview
+                  message: |
+                      🔗 **Preview your changes**  
+                      [https://speakeasycom-git-docs-preview-pr-${{ github.event.pull_request.number }}-speakeasyapi.vercel.app](https://speakeasycom-git-docs-preview-pr-${{ github.event.pull_request.number }}-speakeasyapi.vercel.app)  
+                      _(The preview may still be building. Check back at this link in a few minutes.)_
