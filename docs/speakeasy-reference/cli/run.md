@@ -30,7 +30,8 @@ speakeasy run [flags]
 
 ```
   -d, --debug                     enable writing debug files with broken code
-      --github                    kick off a generation run in GitHub
+      --github                    kick off a generation run in GitHub for the repository pertaining to your current directory
+      --github-repos string       GLOBAL: run SDK generation across your entire Speakeasy workspace/account, independent of your current directory. Use 'all' for all connected repos or a comma-separated list of GitHub repo URLs
   -h, --help                      help for run
   -i, --installationURL string    the language specific installation URL for installation instructions if the SDK is not published to a package manager
       --installationURLs string   a map from target ID to installation URL for installation instructions if the SDK is not published to a package manager (default "null")
