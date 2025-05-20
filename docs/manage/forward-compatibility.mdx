@@ -1,0 +1,312 @@
+---
+title: Forward compatibility
+description: >
+  Learn how Speakeasy-generated SDKs handle forward compatibility
+  with new fields, enum values, and unexpected data.
+---
+
+import { Callout, CodeWithTabs, Table } from "@/mdx/components";
+
+# Forward compatibility
+
+This guide explains how Speakeasy-generated SDKs maintain forward compatibility when APIs evolve. Forward compatibility ensures older SDK versions continue to work correctly when the API adds new fields, enum values, or other data.
+
+## Forward compatibility at a glance
+
+<Callout type="info">
+  Forward compatibility ensures older SDK versions continue to work when APIs
+  evolve. The table below shows which changes are safe and which require special
+  handling.
+</Callout>
+
+<Table
+  data={[
+    {
+      change: "New Field Added",
+      status: "✅",
+      impact:
+        "**Safe change.** Older SDKs automatically ignore unknown fields in API responses, allowing seamless evolution.",
+    },
+    {
+      change: "New Enum Value in Open Enum",
+      status: "✅",
+      impact:
+        "**Safe change.** With `x-speakeasy-unknown-values: allow`, SDKs handle new enum values gracefully through language-specific mechanisms.",
+    },
+    {
+      change: "New Enum Value in Closed Enum",
+      status: "❌",
+      impact:
+        "**Breaking change.** Older SDKs will reject responses with unknown enum values. Convert to open enums using `x-speakeasy-unknown-values: allow`.",
+    },
+    {
+      change: "Type Change",
+      status: "❌",
+      impact:
+        "**Breaking change.** Changing a field's type (e.g., string to integer) will cause deserialization errors in older SDKs.",
+    },
+    {
+      change: "Required request field → Optional",
+      status: "✅",
+      impact:
+        "**Safe change.** Older SDKs will continue to send the field, while newer SDKs can omit it when not needed.",
+    },
+    {
+      change: "Optional request field → Required",
+      status: "⚠️",
+      impact:
+        "**Depends on client implementation.** If clients were already sending the optional field, they'll continue working. If they weren't, requests will fail with validation errors.",
+    },
+    {
+      change: "Required response field → Optional",
+      status: "❌",
+      impact:
+        "**Breaking change.** Older SDKs expect this field to always be present and may throw errors when it's missing.",
+    },
+    {
+      change: "Required response field → Optional with Default",
+      status: "✅",
+      impact:
+        "**Safe with proper default value.** When the field is omitted, the API returns a default value, preventing errors in older SDKs.",
+    },
+  ]}
+  columns={[
+    { key: "change", header: "API Change" },
+    { key: "status", header: "Status" },
+    { key: "impact", header: "Impact & Handling" },
+  ]}
+/>
+
+## Common forward compatibility scenarios
+
+This section covers the most frequent scenarios encountered when evolving APIs and how Speakeasy handles them to maintain forward compatibility.
+
+### Handling new fields
+
+Adding new fields to API responses is safe because older SDK versions ignore these fields. When an API response includes fields not defined in the SDK's model, these fields are simply not deserialized.
+
+<CodeWithTabs>
+
+```yaml !!tabs Original Schema
+type: object
+properties:
+  name:
+    type: string
+  created_at:
+    type: string
+    format: date-time
+```
+
+```yaml !!tabs Updated Schema
+type: object
+properties:
+  name:
+    type: string
+  created_at:
+    type: string
+    format: date-time
+  updated_at: # New field
+    type: string
+    format: date-time
+```
+
+</CodeWithTabs>
+
+Older SDK versions will continue to work without errors, ignoring the `updated_at` field. This allows APIs to evolve by adding new data without breaking existing integrations.
+
+### Handling new enum values
+
+APIs often need to add new enum values over time. Speakeasy provides the `x-speakeasy-unknown-values` extension to handle this gracefully.
+
+```yaml
+status:
+  type: string
+  x-speakeasy-unknown-values: allow
+  enum:
+    - active
+    - inactive
+    - pending
+```
+
+When the API adds a new enum value (e.g., `suspended`), older SDK versions handle it according to the language:
+
+- **TypeScript**
+- **Python**
+- **Go**
+- **Java**
+
+This prevents runtime errors when new enum values are encountered, allowing APIs to add new states without breaking existing clients.
+
+### Handling unexpected data
+
+Speakeasy-generated SDKs include built-in mechanisms to handle unexpected data:
+
+1. **Validation errors**: SDKs provide detailed validation errors when unexpected data is received, making debugging easier
+
+2. **OneOf schemas**: When using `oneOf` schemas, SDKs can handle evolving data structures by attempting to match against known variants
+
+3. **Optional fields**: Fields marked as optional in the OpenAPI spec won't cause validation errors if missing
+
+### Handling unexpected response codes
+
+APIs evolve over time and may introduce new response codes. Speakeasy-generated SDKs are designed to handle unexpected response codes gracefully:
+
+```yaml
+responses:
+  "2xx":
+    description: Success response
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/SuccessResponse"
+  "4xx":
+    description: Error response
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/ErrorResponse"
+```
+
+#### Benefits of status code ranges
+
+1. **Flexible status codes**: Using `2xx` and `4xx` patterns allows APIs to add new specific status codes (like `201` or `429`) without breaking existing SDKs
+
+2. **Consistent error handling**: All error responses follow the same structure, making it easier to handle new error types
+
+3. **Graceful degradation**: Even when encountering unexpected status codes, SDKs can still extract useful information from the response
+
+When an API returns a status code that wasn't explicitly defined in the original specification, Speakeasy SDKs:
+
+- Match it to the appropriate range (`2xx`, `4xx`, `5xx`)
+- Parse the response using the defined schema for that range
+- Provide access to both the status code and response body
+
+## Advanced forward compatibility techniques
+
+These advanced techniques help maintain forward compatibility in more complex scenarios.
+
+### Deprecating fields
+
+When evolving APIs, deprecating fields is a common necessity. Speakeasy provides extensions to handle field deprecation gracefully while maintaining forward compatibility:
+
+```yaml
+properties:
+  name:
+    type: string
+  sku:
+    type: string
+    deprecated: true
+    x-speakeasy-deprecation-message: We no longer support the SKU property.
+```
+
+#### Benefits of proper deprecation
+
+1. Fields remain accessible to older SDK versions
+2. New SDK versions mark these fields with proper deprecation annotations
+3. Generated documentation includes deprecation notices
+4. Developers receive clear guidance on migration
+
+#### Field removal process
+
+When planning to remove a field entirely:
+
+1. Mark the field as optional first
+2. Add deprecation notices with the `deprecated` keyword and `x-speakeasy-deprecation-message`
+3. Allow sufficient time for users to update implementations
+4. Remove the field only after a suitable deprecation period
+
+### Forward-compatible unions
+
+To create forward-compatible unions that can handle new data types added in the future, use the oneOf pattern with a string fallback:
+
+```yaml
+oneOf:
+  - { type: "dog" }
+  - { type: "cat" }
+  - { type: string }
+```
+
+#### Benefits of string fallback
+
+1. Provides strongly typed handling for known variants (`dog` and `cat` types)
+2. Gracefully captures any future variants as string values
+3. Prevents runtime errors when new variants are introduced
+4. Allows SDK users to handle unknown variants safely
+
+<Callout type="info" title="Language-specific union handling">
+  Each language handles these unions differently: - **TypeScript**: Uses native
+  union types with string fallback - **Python**: Leverages `typing.Union` with
+  string fallback - **Go**: Generates helper methods for both known and unknown
+  types - **Java**: Provides type discrimination with generic string handling
+</Callout>
+
+## Guard-rails for breaking changes
+
+Speakeasy provides several tools to detect and prevent breaking changes:
+
+### Version your API
+
+Create a versioning strategy for your API to manage breaking changes:
+
+- Use path-based versioning (e.g., `/v1/resource`, `/v2/resource`)
+- Include version in request headers (`Api-Version: 2023-01-01`)
+- Maintain multiple API versions simultaneously during migration periods
+
+### Add defaults for optional fields
+
+When making required fields optional:
+
+- Always include default values to maintain backward compatibility
+- Document the default behavior clearly
+- Use the `default` property in your OpenAPI specification:
+  ```yaml
+  properties:
+    status:
+      type: string
+      default: "active"
+  ```
+
+### Open your enums
+
+Convert closed enums to open enums using the Speakeasy extension:
+
+```yaml
+status:
+  type: string
+  x-speakeasy-unknown-values: allow
+  enum:
+    - active
+    - inactive
+    - pending
+```
+
+### Use the OpenAPI diff tool
+
+The [OpenAPI diff tool](/docs/speakeasy-reference/cli/openapi/diff) identifies potential breaking changes between API specification versions:
+
+```bash
+speakeasy openapi diff --base v1.yaml --revision v2.yaml
+```
+
+This highlights changes that might break backward compatibility, such as:
+
+- Removing required fields
+- Changing field types
+- Modifying oneOf schemas
+
+### SDK version management
+
+Speakeasy automatically manages SDK versioning based on the nature of changes:
+
+- Patch version for non-breaking changes
+- Minor version for backward-compatible additions
+- Major version for breaking changes
+
+### Breaking change notifications
+
+When generating SDKs, Speakeasy detects breaking changes and provides clear notifications about what changed and how to handle the transition.
+
+<Callout type="info" title="Related resources">
+  For more information about handling breaking changes, see the [breaking
+  changes guide](./breaking-changes).
+</Callout>
