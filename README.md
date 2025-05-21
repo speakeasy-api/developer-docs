@@ -30,7 +30,7 @@ For example:
 ### 2. Make Your Changes
 
 - Use MDX (`.mdx`) when you need React components, or Markdown (`.md`) for simple content
-- Follow our [content style guide](https://www.notion.so/speakeasyapi/Blog-Docs-Style-Guide-161726c497cc80b09a04ea9493d6d65d)
+- Follow our quick style guide below
 - Include proper meta descriptions for SEO
 - Optimize images using Next.js Image component
 
