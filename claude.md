@@ -2,9 +2,9 @@
 
 ### **Markdown language**
 
-Speakeasy documentation and blog posts are written in [MDX](https://mdxjs.com/) (`.mdx` files). You may encounter some Markdown (`.md`) files.
+Speakeasy documentation and blog posts are written in [MDX](https://mdxjs.com/) (`.mdx` files). You may encounter some Markdown (`.md`) files.
 
-MDX (Markdown with JSX) uses the same formatting syntax for basic text elements as standard Markdown. This [guide to basic Markdown syntax](https://www.markdownguide.org/basic-syntax/) shows you how to format elements like headers, bold text, italic text, lists, and links.
+MDX (Markdown with JSX) uses the same formatting syntax for basic text elements as standard Markdown. This [guide to basic Markdown syntax](https://www.markdownguide.org/basic-syntax/) shows you how to format elements like headers, bold text, italic text, lists, and links.
 
 ### **Style specifics**
 
@@ -14,23 +14,23 @@ Speakeasy uses sentence case for titles and section headings globally.
 
 #### **Backticks**
 
-- In body text, place all references to code in backticks, including class names and `description` values.
+- In body text, place all references to code in backticks, including class names and `description` values.
 - Don’t use backticks in titles, headings, or subheadings because they don’t render well.
 - Don’t put language names in backticks unless it’s part of a code snippet:
-  - ❌ In `go`, all types from all operations are collected into a global `AcceptHeaderEnum` type.
-  - ✅ In Go, all types from all operations are collected into a global `AcceptHeaderEnum` type.
+  - ❌ In `go`, all types from all operations are collected into a global `AcceptHeaderEnum` type.
+  - ✅ In Go, all types from all operations are collected into a global `AcceptHeaderEnum` type.
 
 #### **Code blocks**
 
-Speakeasy documentation uses [Code Hike](https://codehike.org/) for code blocks.
+Speakeasy documentation uses [Code Hike](https://codehike.org/) for code blocks.
 
 - Prefer code blocks to inline code for code snippets.
 - Prefer YAML to JSON for code snippets where possible to improve readability. For example, use YAML for all OpenAPI document examples.
 - Try to add a language to all code blocks. This helps with syntax highlighting.
-- Use the `bash` language for shell commands.
-- Terminal output can be highlighted by copying the output with control sequences (copy using iTerm2), then pasting the output to a code block and selecting the `ansi` language. This will render the output with the correct colors and formatting.
-- The `ansi` language isn’t rendered as a Code Hike component. If you need to use the `ansi` language, use a standard code block.
-- The `mermaid` language is used for diagrams. This language is excluded from Code Hike rendering.
+- Use the `bash` language for shell commands.
+- Terminal output can be highlighted by copying the output with control sequences (copy using iTerm2), then pasting the output to a code block and selecting the `ansi` language. This will render the output with the correct colors and formatting.
+- The `ansi` language isn’t rendered as a Code Hike component. If you need to use the `ansi` language, use a standard code block.
+- The `mermaid` language is used for diagrams. This language is excluded from Code Hike rendering.
 
 #### **UI element labels**
 
@@ -141,13 +141,13 @@ Place inline code between backticks.
 
 Use backticks to reference bits of code you're narrating, but not for labels or button text.
 
-- ❌ Enter the filename and click `OK`.
-- ✅ Import the built-in node `http` package.
+- ❌ Enter the filename and click `OK`.
+- ✅ Import the built-in node `http` package.
 
 Avoid starting headings or sentences with backticks or code:
 
-- ❌ `request.args` is an ImmutableMultiDict.
-- ✅ The `request.args` attribute is an ImmutableMultiDict.
+- ❌ `request.args` is an ImmutableMultiDict.
+- ✅ The `request.args` attribute is an ImmutableMultiDict.
 
 ### Capitalization
 
@@ -155,7 +155,7 @@ Avoid starting headings or sentences with backticks or code:
 
 Capitalize titles and headings according to the customer's style guide if they have one or match capitalization to their existing documentation.
 
-At Speakeasy, we default to **sentence case** for titles and headings.
+At Speakeasy, we default to **sentence case** for titles and headings.
 
 - ✅ Using multiplayer with anonymous users
 
@@ -208,7 +208,7 @@ Correct comma splices by rewriting the independent clauses as complete sentences
 
 Alternatively, add a conjunction:
 
-- ✅ Download the files you need **and** unzip them on your computer.
+- ✅ Download the files you need **and** unzip them on your computer.
 
 Comma splices can be corrected by replacing the comma with a semicolon, but this approach is not recommended for our content:
 
@@ -237,17 +237,17 @@ Use decimal points when a number is not easily written out as a fraction: 1.273.
 
 ### Login, log in, log in to
 
-**login** (noun)
+**login** (noun)
 
 Your access credentials:
 
 - ✅ Keep your login details handy.
 
-**log in** (phrasal verb)
+**log in** (phrasal verb)
 
 - ✅ To make these changes, you'll need to log in.
 
-**log in to** The term "log in" is a phrasal verb, so we add the preposition after a space:
+**log in to** The term "log in" is a phrasal verb, so we add the preposition after a space:
 
 - ✅ Log in to GitHub.
 
@@ -299,18 +299,18 @@ Use double quotation marks to identify labels or button text:
 
 ### Setup vs set up
 
-We use **setup** as a noun or adjective:
+We use **setup** as a noun or adjective:
 
 - ✅ A microservices setup.
 - ✅ Follow the setup instructions.
 
-We use **set up** as a verb:
+We use **set up** as a verb:
 
 - ✅ How to set up your account.
 
 ### URLs and websites
 
-Avoid spelling out URLs, but when you need to, leave off `http://www.`.
+Avoid spelling out URLs, but when you need to, leave off `http://www.`.
 
 ### Word list
 
