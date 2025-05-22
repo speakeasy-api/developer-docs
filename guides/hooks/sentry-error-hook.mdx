@@ -5,7 +5,7 @@ image: "/assets/examples/sentry-hook-example.png"
 date: 2024-07-10
 authors:
   - name: Luke Hagar
-  - image_url: '/assets/author-headshots/luke.jpeg'
+  - image_url: "/assets/author-headshots/luke.jpeg"
 tags:
   - Hooks
 is_featured: true
@@ -15,7 +15,9 @@ featured_image: "/assets/examples/sentry-hook-example.png"
 # Capture errors with SDK hooks and Sentry
 
 ## Prerequisites
+
 You will need:
+
 - A Sentry account [(If you don't have one, you can sign up [here](https://sentry.io/signup))]
 - A Sentry project
 
@@ -54,30 +56,25 @@ With the Sentry SDK included in your project, you can start adding SDK hooks.
 2. Import hook types and Sentry SDK: In this file, import the necessary hook types and initialize the Sentry SDK with your project's DSN.
 
 ```typescript
-import {
-    AfterErrorContext,
-    AfterErrorHook,
-} from "./types";
-
 import * as Sentry from "@sentry/node";
+import { AfterErrorContext, AfterErrorHook } from "./types";
 
 Sentry.init({
-    dsn: process.env.SENTRY_DSN, // <- This is your Sentry DSN, you can find this in your Sentry project settings.
+  dsn: process.env.SENTRY_DSN, // <- This is your Sentry DSN, you can find this in your Sentry project settings.
 });
 ```
 
 Next create an `ErrorHooks` class to hold your hooks.
 
 ```typescript
-export class ErrorHooks
-    implements AfterErrorHook {
-    afterError(
-        hookCtx: AfterErrorContext,
-        response: Response | null,
-        error: unknown
-    ): { response: Response | null; error: unknown } {
-        return { response, error };
-    }
+export class ErrorHooks implements AfterErrorHook {
+  afterError(
+    hookCtx: AfterErrorContext,
+    response: Response | null,
+    error: unknown,
+  ): { response: Response | null; error: unknown } {
+    return { response, error };
+  }
 }
 ```
 
@@ -94,28 +91,26 @@ Specific notes for using Sentry here:
 - Add a breadcrumb to Sentry to capture additional details regarding the error.
 - capturing the error in Sentry using `Sentry.captureException(error)`.
 
-
 ```typescript
-export class ErrorHooks
-    implements AfterErrorHook {
-    afterError(
-        hookCtx: AfterErrorContext,
-        response: Response | null,
-        error: unknown
-    ): { response: Response | null; error: unknown } {
-        Sentry.addBreadcrumb({
-            category: "sdk error",
-            message: "An error occurred in the SDK",
-            level: "error",
-            data:{
-                hookCtx,
-                response,
-                error
-            }
-          });
-        Sentry.captureException(error);
-        return { response, error };
-    }
+export class ErrorHooks implements AfterErrorHook {
+  afterError(
+    hookCtx: AfterErrorContext,
+    response: Response | null,
+    error: unknown,
+  ): { response: Response | null; error: unknown } {
+    Sentry.addBreadcrumb({
+      category: "sdk error",
+      message: "An error occurred in the SDK",
+      level: "error",
+      data: {
+        hookCtx,
+        response,
+        error,
+      },
+    });
+    Sentry.captureException(error);
+    return { response, error };
+  }
 }
 ```
 
@@ -124,9 +119,8 @@ Once this hook is implemented, you can now use the `ErrorHooks` class in your SD
 In the `src/hooks/registration.ts` file import and register the class from the file you created the hooks in:
 
 ```typescript
-import { Hooks } from "./types";
-
 import { ErrorHooks } from "./error_hooks";
+import { Hooks } from "./types";
 
 /*
  * This file is only ever generated once on the first generation and then is free to be modified.
@@ -135,15 +129,14 @@ import { ErrorHooks } from "./error_hooks";
  */
 
 export function initHooks(hooks: Hooks) {
-    // Add hooks by calling hooks.register{ClientInit/BeforeCreateRequest/BeforeRequest/AfterSuccess/AfterError}Hook
-    // with an instance of a hook that implements that specific Hook interface
-    // Hooks are registered per SDK instance, and are valid for the lifetime of the SDK instance
-    hooks.registerAfterErrorHook(new ErrorHooks());
+  // Add hooks by calling hooks.register{ClientInit/BeforeCreateRequest/BeforeRequest/AfterSuccess/AfterError}Hook
+  // with an instance of a hook that implements that specific Hook interface
+  // Hooks are registered per SDK instance, and are valid for the lifetime of the SDK instance
+  hooks.registerAfterErrorHook(new ErrorHooks());
 }
-
 ```
 
-You can now regenerate your SDK and use the new hooks. 
+You can now regenerate your SDK and use the new hooks.
 
 Running API calls with this SDK will send error events to your Sentry project, where you can review all the details for each error.
 
