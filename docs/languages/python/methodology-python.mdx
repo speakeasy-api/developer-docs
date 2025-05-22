@@ -188,3 +188,35 @@ Where
 - `GenVersion` is the version of the Speakeasy generator
 - `DocVersion` is the version of the OpenAPI document
 - `PackageName` is the name of the package defined in `gen.yaml`
+
+## SDK Memory footprint and Load time
+
+Speakeasy-generated Python SDKs employ a lazy loading mechanism for their functional components (e.g., groups of operations like `orders`, `users`, etc.) and their associated models. This means these components are not loaded into memory when you initially import the SDK or create an SDK instance. Instead, a specific component is loaded only the first time you access it.
+
+**Example:**
+
+```python
+import sdk
+
+# Initial SDK instantiation:
+# Only the core SDK logic is loaded.
+# Modules for specific API features like 'orders' are NOT yet loaded.
+s = sdk.SDK()
+
+# First access to a component:
+# When s.orders is accessed here for the first time,
+# the 'orders' module is dynamically imported and initialized.
+# This is the point where the code for 'orders' functionality is loaded.
+orders_list = s.orders.list_orders()
+
+# Subsequent accesses:
+# The 'orders' component is now loaded and cached.
+# Further operations on s.orders use the already-loaded component directly.
+order_details = s.orders.get_details(id="some_id")
+```
+
+This design provides two key benefits:
+-   **Reduced Memory Footprint:** Your application only loads the parts of the SDK it actually uses, conserving memory.
+-   **Faster Startup Times:** The initial `import` of the SDK and its instantiation are quicker, as it avoids pre-emptively loading all possible components.
+
+Collectively, these improvements contribute to a smoother and more efficient developer experience.
