@@ -40,9 +40,7 @@ For example:
 2. Commit with a descriptive message following [Conventional Commits](https://www.conventionalcommits.org/)
    - Example: `chore: update authentication guide`
 3. Create a pull request
-4. Wait for the build to complete
-5. Check the preview build visually
-6. Once approved, your changes will be merged
+4. Once approved, your changes will be merged
 
 ## 📝 Quick Style Guide
 
