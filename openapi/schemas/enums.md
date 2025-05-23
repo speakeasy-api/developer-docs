@@ -78,7 +78,7 @@ paths:
 
 If you use `default`, remember to omit `required: true` from the field.
 
-## Enums With Names and Values
+## Enums with names and values
 
 A common requirement using enums is to specify a human-readable name for the enum label and an integer for the enum value. For example, in C#:
 
@@ -196,9 +196,9 @@ components:
       description: Small Medium Large
 ```
 
-## Constants for Single Value Enums
+## Constants for single value enums
 
-Before JSON Schema 2019 was included in OpenAPI 3.1, using an enum with a single value was the only way to specify a constant. If you are still using OpenAPI 3.0, the example below shows how to specify that a constant string is returned in a response:
+Before JSON Schema 2019 was included in OpenAPI v3.1, using an enum with a single value was the only way to specify a constant. If you are still using OpenAPI v3.0, the example below shows how to specify that a constant string is returned in a response:
 
 ```yaml
 openapi: 3.0.0
@@ -219,7 +219,7 @@ paths:
                   - Here is your beverage
 ```
 
-When using OpenAPI 3.1, you can use the `const` keyword whose name more clearly matches its intention than `enum` does:
+When using OpenAPI v3.1, you can use the `const` keyword whose name more clearly matches its intention than `enum` does:
 
 ```yaml
 openapi: 3.1.0
@@ -239,11 +239,11 @@ paths:
                 const: Here is your beverage
 ```
 
-## Nullable Enums
+## Nullable enums
 
-### OpenAPI 3.0
+### OpenAPI v3.0
 
-In OpenAPI 3.0 you can use the `nullable` keyword to specify `null` as an accepted value in an enum. In the example below, a client can order a drink with one of three cup sizes or no cup size specified at all:
+In OpenAPI v3.0 you can use the `nullable` keyword to specify `null` as an accepted value in an enum. In the example below, a client can order a drink with one of three cup sizes or no cup size specified at all:
 
 ```yaml
 # !focus(6)
@@ -259,9 +259,9 @@ components:
         - LARGE
 ```
 
-### OpenAPI 3.1
+### OpenAPI v3.1
 
-OpenAPI 3.1 more closely aligns with the JSON Schema standard. As a result, the way to specify nullable types differs from OpenAPI 3.0. Instead of using the `nullable` attribute, OpenAPI 3.1 uses the JSON Schema approach with an array of types - including the `null` type. Here's the same example adapted for OpenAPI 3.1:
+OpenAPI v3.1 more closely aligns with the JSON Schema standard. As a result, the way to specify nullable types differs from OpenAPI 3.0. Instead of using the `nullable` attribute, OpenAPI v3.1 uses the JSON Schema approach with an array of types - including the `null` type. Here's the same example adapted for OpenAPI v3.1:
 
 ```yaml
 # !focus(5,10)
@@ -277,7 +277,7 @@ components:
         - null
 ```
 
-## Open Enums
+## Open enums
 
 Traditionally enums are closed, meaning that only the values listed in the enum are allowed. In contrast, open enums allow additional values beyond those explicitly defined in the spec. Open Enums are useful when your API is evolving to support new use cases. In that scenario, you can let clients send values that aren't defined yet because their usage is on the edge of your API's capabilities.
 
@@ -349,7 +349,7 @@ components:
 
 Date objects are not directly supported. Export your dates to ISO strings before using them in an API.
 
-## Best Practices
+## Best practices
 
 Enums are simple, so there are only a few things to consider when using them in your schema:
 
