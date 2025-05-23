@@ -23,7 +23,7 @@ This can be done for a single value:
 
 ```yaml
 properties:
-	created_at:
+  created_at:
     oneOf:
     - type: string
       format: date-time
