@@ -13,19 +13,51 @@ The following table summarizes the main differences between SSE and WebSockets.
 
 <Table
   data={[
-    { feature: "Connection", sse: "Persistent, maintained by the client", websockets: "Persistent, maintained by both client and server" },
-    { feature: "Direction", sse: "One-way: Server to Client", websockets: "Two-way: Bidirectional communication" },
-    { feature: "Initiator", sse: "Client initiates the connection", websockets: "Client initiates a WebSocket handshake" },
-    { feature: "Use case", sse: "Real-time updates (for example, stock prices)", websockets: "Interactive applications (e.g., chat, gaming)" },
-    { feature: "Data push mechanism", sse: "Server streams events continuously", websockets: "Both server and client can push messages" },
-    { feature: "Protocol", sse: "Single HTTP connection (`text/event-stream`)", websockets: "WebSocket protocol (`ws://` or `wss://`)" },
-    { feature: "Client role", sse: "Opens and maintains the connection", websockets: "Maintains and interacts with the connection" },
-    { feature: "Reconnection", sse: "Handled by the browser or client-side code using the `EventSource` API", websockets: "Managed by custom reconnection logic in the application" }
+    {
+      feature: "Connection",
+      sse: "Persistent, maintained by the client",
+      websockets: "Persistent, maintained by both client and server",
+    },
+    {
+      feature: "Direction",
+      sse: "One-way: Server to Client",
+      websockets: "Two-way: Bidirectional communication",
+    },
+    {
+      feature: "Initiator",
+      sse: "Client initiates the connection",
+      websockets: "Client initiates a WebSocket handshake",
+    },
+    {
+      feature: "Use case",
+      sse: "Real-time updates (for example, stock prices)",
+      websockets: "Interactive applications (e.g., chat, gaming)",
+    },
+    {
+      feature: "Data push mechanism",
+      sse: "Server streams events continuously",
+      websockets: "Both server and client can push messages",
+    },
+    {
+      feature: "Protocol",
+      sse: "Single HTTP connection (`text/event-stream`)",
+      websockets: "WebSocket protocol (`ws://` or `wss://`)",
+    },
+    {
+      feature: "Client role",
+      sse: "Opens and maintains the connection",
+      websockets: "Maintains and interacts with the connection",
+    },
+    {
+      feature: "Reconnection",
+      sse: "Handled by the browser or client-side code using the `EventSource` API",
+      websockets: "Managed by custom reconnection logic in the application",
+    },
   ]}
   columns={[
     { key: "feature", header: "Feature" },
     { key: "sse", header: "Server-sent events (SSE)" },
-    { key: "websockets", header: "WebSockets" }
+    { key: "websockets", header: "WebSockets" },
   ]}
 />
 
@@ -54,18 +86,18 @@ paths:
         - ServerSentEvents
       summary: Subscribe to real-time stock market updates
       description: >
-       This endpoint streams real-time stock updates to the client using server-sent events (SSE).
-       The client must establish a persistent HTTP connection to receive updates.
+        This endpoint streams real-time stock updates to the client using server-sent events (SSE).
+        The client must establish a persistent HTTP connection to receive updates.
       responses:
-        '200':
+        "200":
           description: Stream of real-time stock updates
           content:
             text/event-stream:
               schema:
-                $ref: '#/components/schemas/StockStream'
-        '400':
+                $ref: "#/components/schemas/StockStream"
+        "400":
           description: Invalid request
-        '500':
+        "500":
           description: Internal server error
 components:
   schemas:
@@ -82,7 +114,7 @@ components:
           const: stock_update
           description: Event type
         data:
-          $ref: '#/components/schemas/StockUpdate'
+          $ref: "#/components/schemas/StockUpdate"
 
     StockUpdate:
       type: object
@@ -99,17 +131,19 @@ components:
 A JavaScript client can subscribe to the endpoint using the `EventSource` API:
 
 ```javascript
-const eventSource = new EventSource('https:://api.example.com/stock-updates');
+const eventSource = new EventSource("https:://api.example.com/stock-updates");
 
-eventSource.onmessage = function(event) {
+eventSource.onmessage = function (event) {
   // The event has the following format as example:
   // {"id":"1","event":"stock_update","data":{"symbol":"AAPL","price":"100.25"}}
   const stockUpdate = JSON.parse(event).data;
-  console.log(`Stock Update: ${stockUpdate.symbol} is now ${stockUpdate.price}`);
+  console.log(
+    `Stock Update: ${stockUpdate.symbol} is now ${stockUpdate.price}`,
+  );
 };
 
-eventSource.onerror = function(error) {
-  console.error('Error occurred:', error);
+eventSource.onerror = function (error) {
+  console.error("Error occurred:", error);
 };
 ```
 
@@ -128,13 +162,13 @@ components:
   schemas:
     StockStream:
       oneOf:
-        - $ref: '#/components/schemas/HeartbeatEvent'
-        - $ref: '#/components/schemas/StockUpdateEvent'
+        - $ref: "#/components/schemas/HeartbeatEvent"
+        - $ref: "#/components/schemas/StockUpdateEvent"
       discriminator:
         propertyName: event
         mapping:
-          ping: '#/components/schemas/HeartbeatEvent'
-          stock_update: '#/components/schemas/StockUpdateEvent'
+          ping: "#/components/schemas/HeartbeatEvent"
+          stock_update: "#/components/schemas/StockUpdateEvent"
 
     HeartbeatEvent:
       description: A server-sent event indicating that the server is still processing the request
@@ -162,7 +196,6 @@ components:
           const: stock_update
 ```
 
-
 ### Include event identification in the event payload
 
 Include an `id` or `sequence` property in the event payload to ensure that the client receives events in the correct order and avoid missing or out-of-order updates.
@@ -177,7 +210,6 @@ Sending a sentinel event can be helpful to indicate that the connection is close
 
 The following example schema for a sentinel event demonstrates how a client can terminate a connection when it receives the `CLOSED` sentinel event:
 
-
 ```yaml openapi.yaml
 paths:
   /stock-updates:
@@ -187,15 +219,14 @@ paths:
       tags:
         - ServerSentEvents
       responses:
-        '200':
+        "200":
           description: Stream of real-time stock updates
           content:
             text/event-stream:
-              x-sse-sentinel: 'CLOSED'
+              x-speakeasy-sse-sentinel: "CLOSED" # Speakeasy extension for sentinel events
               schema:
-                $ref: '#/components/schemas/StockUpdateEvent'
+                $ref: "#/components/schemas/StockUpdateEvent"
 ```
-
 
 For each event received, the client can check the `X-SSE-Sentinel` header to determine whether the connection has closed or if no more data needs to be received.
 
