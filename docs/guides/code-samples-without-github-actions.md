@@ -71,8 +71,6 @@ For Scalar integration:
 4. Paste the combined spec URL from Speakeasy
 5. Click **Import**
 
-For detailed instructions on integrating with these and other docs providers, refer to the [integration guides](/integrations/) in the Speakeasy documentation.
-
 ## Automating the process
 
 For a fully automated workflow without GitHub Actions:
