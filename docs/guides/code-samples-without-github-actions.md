@@ -63,7 +63,6 @@ Once you have the public URL, you can integrate it with various documentation pr
 - [Mintlify](/docs/integrations/mintlify) - Developer documentation with an interactive playground
 - [Bump.sh](/docs/integrations/bump) - Hosted API documentation and catalogs
 
-
 ## Automating the process
 
 For a fully automated workflow without GitHub Actions:
