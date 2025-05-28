@@ -1,0 +1,704 @@
+---
+title: Deploying remote MCP servers
+description: Learn how to deploy and harden remote MCP servers.
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+<Callout title="Gram AI by Speakeasy">
+  Unlock AI engineering by turning your API platform into an AI platform with
+  [Gram](https://app.getgram.ai). Generate agent tools for internal services and
+  connect to popular third party APIs from one platform. [Join the
+  waitlist](https://app.getgram.ai) today.
+</Callout>
+
+# Deploying remote MCP servers
+
+It is still early days for the Model Context Protocol (MCP), and even though it is already widely implemented, the MCP Specification is [changing rapidly](https://modelcontextprotocol.io/development/roadmap). For example, in the [March 2025 update](https://modelcontextprotocol.io/specification/2025-03-26/changelog), a new transport, ["streamable HTTP"](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) was added to the specification, along with an optional [authorization framework](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization), based on OAuth 2.1.
+
+Keeping up with these changes feels a bit like treading water, but the water is alphabet soup, and someone keeps dumping more letters in.
+
+In this guide, we'll focus on one specific topic: hosting remote MCP servers safely. As part of this, we'll cover the new streamable HTTP transport and the authorization framework.
+
+## Remote MCP transports
+
+Most of the early MCP servers began as small programs running on a developer's laptop, connected to MCP clients through local `stdio`. Indeed, as of writing this, the very first example on the MCP website still shows all servers running on "your computer". The specification, however, always included server-sent events (SSE) as a transport mechanism, allowing MCP clients to connect to remote servers via HTTP, and allowing servers to stream responses back to clients.
+
+Besides the risk of prompt injection, the HTTP+SSE transport part of the specification seems the most contentious in the recent online discourse around MCP. This intensified after the release of the March 2025 update, with many commenters concluding that "streamable HTTP" is essentially HTTP+SSE with more steps and speculating that it will one day converge on something akin to WebSocket.
+
+We're not throwing a hat in the ring with this debate today, but we'll say this: The specification in its current state is useful without immediate changes to the transport mechanism.
+
+Relying on SSE and the normal HTTP pipeline avoids the complexities of upgrading connections from HTTP to WebSocket. With the addition of session IDs passed via headers in HTTP+SSE, maintaining stickiness in serverless or proxied servers is trivial.
+
+Waiting for all the details to be ironed out feels like debating tabs vs spaces at this point.
+
+With that out of the way, let's use the protocol we have, even if not everyone agrees about the current direction.
+
+## Reasons to host MCP servers remotely
+
+Remote MCP servers allow teams to connect to a common server that is always available, which avoids server-version disparity among team members and prevents secrets (such as organization-level API keys) from being shared with users.
+
+If your users are less technical, you can also provide a simple web interface to the server, allowing them to run servers and use tools without needing to know how to use the command line or Docker.
+
+Let's look at the options available for hosting remote MCP servers.
+
+## Choosing your hosting model
+
+<Table
+  data={[
+    {
+      hostingModel: "Cloudflare Workers",
+      bestFor: "Need zero-ops edge scale, instant HTTPS, built-in OAuth",
+      painPoints:
+        "Limited CPU / 50 ms wall-clock per event; can't spawn native binaries",
+    },
+    {
+      hostingModel: "Cloud VM",
+      bestFor:
+        "Want full OS control, can hand-roll networking, cheap burst workloads",
+      painPoints:
+        "You patch and monitor; long-lived SSE needs extra Nginx tuning",
+    },
+    {
+      hostingModel: "Docker / Kubernetes",
+      bestFor:
+        "Require strict isolation, multi-instance scaling, CI/CD pipelines",
+      painPoints: "Learning curve; cluster maintenance",
+    },
+    {
+      hostingModel: "On-prem (public-facing)",
+      bestFor: "Must access internal data or comply with corporate firewalls",
+      painPoints:
+        "Outbound-only tunnels, complex identity-provider integration",
+    },
+  ]}
+  columns={[
+    { key: "hostingModel", header: "Hosting model" },
+    { key: "bestFor", header: "Best for" },
+    { key: "painPoints", header: "Pain points" },
+  ]}
+/>
+
+The protocol is identical across models: An HTTPS endpoint accepts JSON-RPC 2.0 over an HTTP `POST` (optionally upgrading to SSE) and streams the response. Only the infrastructure changes.
+
+## Deploying Cloudflare Workers
+
+The Cloudflare blog post, [Build and deploy Remote Model Context Protocol (MCP) servers to Cloudflare](https://blog.cloudflare.com/remote-model-context-protocol-servers-mcp/), walks readers through all the tools and steps needed to deploy a remote MCP server to Cloudflare Workers.
+
+Let's summarize the steps here by modifying the [Sentry MCP](https://github.com/getsentry/sentry-mcp) server and deploying it to Cloudflare Workers.
+
+### Requirements
+
+You'll need a [Cloudflare](https://www.cloudflare.com/) account (free is fine), and [Node.js](https://nodejs.org/en/download) with [pnpm](https://pnpm.io/installation) installed locally. Our example uses the Sentry MCP server, so you'll also need a Sentry account.
+
+### Starting with a template
+
+If you're building your own server, you can start with one of the many [Cloudflare demos](https://github.com/cloudflare/ai/tree/main/demos). But to get something useful up and running in this guide, we decided to use the [Sentry MCP server](https://github.com/getsentry/sentry-mcp) (itself based on the [mcp-github-oauth](https://github.com/cloudflare/ai/tree/main/demos/remote-mcp-github-oauth) demo) as an example.
+
+Clone the Sentry MCP server:
+
+```bash
+git clone https://github.com/getsentry/sentry-mcp
+cd sentry-mcp
+```
+
+### Installing dependencies
+
+Install the dependencies using pnpm:
+
+```bash
+pnpm install
+```
+
+### Authenticating Wrangler with Cloudflare
+
+Wrangler is Cloudflare's CLI for deploying and managing Workers. We'll use `npx` to run it without installing globally.
+
+Check that you can run `npx wrangler`:
+
+```bash
+npx wrangler --version
+```
+
+This should print the version of Wrangler. If you get an error, you may need to install Node.js or add it to your PATH.
+
+Next, you'll need to authenticate Wrangler with your Cloudflare account. This is a one-time step:
+
+```bash
+npx wrangler login
+```
+
+This opens a browser window and asks you to log in to your Cloudflare account. Once you've logged in, you'll be redirected to a page that says, **You have granted authorization to Wrangler!** You can close this page.
+
+### Creating a Cloudflare KV namespace
+
+The Sentry MCP server uses a Cloudflare KV namespace to store OAuth tokens. You can create a new KV namespace using the Wrangler CLI:
+
+```bash
+npx wrangler kv namespace create "OAUTH_KV"
+```
+
+This creates a new KV namespace and prints the ID. Copy this ID, as you'll need it in the next step.
+
+### Configuring the project
+
+Now that you have your KV namespace set up, you can configure the project. The `packages/mcp-cloudflare/wrangler.jsonc` file contains all the configuration for your Cloudflare Worker.
+
+Update the `kv_namespaces` section with the ID of the KV namespace you created earlier:
+
+```jsonc !packages/mcp-cloudflare/wrangler.jsonc focus=39
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sentry-mcp",
+  "main": "./src/server/index.ts",
+  "compatibility_date": "2025-03-21",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env",
+  ],
+  // we ask people to configure environment variables in prod
+  "keep_vars": true,
+  "migrations": [
+    {
+      "new_sqlite_classes": ["SentryMCP"],
+      "tag": "v1",
+    },
+  ],
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+  },
+  "vars": {},
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "SentryMCP",
+        "name": "MCP_OBJECT",
+      },
+    ],
+  },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "8dd5e9bafe1945298e2d5ca3b408a553",
+    },
+  ],
+  "ai": {
+    "binding": "AI",
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+  "tail_consumers": [
+    // super noisy - disable until it can be improved
+    // { "service": "sentry-mcp-tail" }
+  ],
+  "dev": {
+    "port": 8788,
+  },
+}
+```
+
+### Creating a Sentry API application
+
+Next, you'll need to create a Sentry API application. This is a one-time step that allows the MCP server to authenticate with Sentry.
+
+1. Log in to your Sentry account.
+2. Click on your profile picture in the top-left corner to open the menu.
+3. Click on **User settings**.
+4. Under **API**, click on **Applications**.
+5. Click on **Create New Application**.
+
+Take note of the **Client ID** and **Client Secret**. You'll need these in the next step.
+
+### Configuring the environment variables
+
+The Sentry MCP server uses environment variables to configure the OAuth flow. You can set these using Cloudflare Wrangler:
+
+Change the working directory to `packages/mcp-cloudflare`, where the `wrangler.jsonc` file is located:
+
+```bash
+cd packages/mcp-cloudflare
+```
+
+Now, set the environment variables in Cloudflare using the following commands:
+
+```bash
+# Copy the values from your Sentry API application
+
+npx wrangler secret put SENTRY_CLIENT_ID
+# Paste the Client ID from Sentry
+
+npx wrangler secret put SENTRY_CLIENT_SECRET
+# Paste the Client Secret from Sentry
+
+# Generate a random string and copy it
+# (you can also use a password manager to generate this)
+openssl rand -base64 32
+
+npx wrangler secret put COOKIE_SECRET
+# Paste the random string you generated
+```
+
+When prompted, enter the values you copied from the Sentry API application and the random string you generated. This stores the secrets in your Cloudflare account.
+
+### Building the project
+
+Now that you have everything set up, you can build the project. Run the following command in the `packages/mcp-cloudflare` directory:
+
+```bash
+pnpm build
+```
+
+### Deploying the server
+
+Next, you can deploy the server to Cloudflare Workers. Run the following command in the `packages/mcp-cloudflare` directory:
+
+```bash
+npx wrangler deploy
+```
+
+Cloudflare will build the project and deploy it to your account. This may take a few minutes.
+Once the deployment is complete, you should see a message like this:
+
+```text
+Uploaded sentry-mcp (12.94 sec)
+Deployed sentry-mcp triggers (1.33 sec)
+  https://sentry-mcp.<your-cloudflare-hostname>.workers.dev
+Current Version ID: <version-id>
+```
+
+### Testing the server
+
+The Sentry MCP repository includes a documentation page that explains how to use the server. Click the link Cloudflare Workers provides to open the docs page in your browser.
+
+![Screenshot of the Sentry MCP web interface with a dark-themed background. The header displays the Sentry MCP logo, version 0.7.1, and a GitHub button in the top right. The main content introduces Sentry MCP as a Model Context Provider for interacting with the Sentry API. A highlighted quote from David Cramer reads: MCP is pretty sweet. Cloudflare's support of MCP is pretty sweet. Sentry is pretty sweet. So we made an MCP for Sentry on top of Cloudflare. Below, a section titled What is a Model Context Provider explains it as a way to plug the Sentry API into an LLM, enabling users to ask questions about their data in context. A simple diagram illustrates the flow between User, MCP, Sentry, and Cursor, with speech bubbles showing how the system helps fix issues. The overall tone is professional and informative, designed to welcome developers and provide clear guidance.](./assets/remote-servers/mcp-server-browser.png)
+
+Now let's test the MCP server. Open a terminal and run the following command:
+
+```bash
+pnpx @modelcontextprotocol/inspector@0.11.0
+```
+
+This starts the MCP Inspector, which allows you to interact with the MCP server in your browser.
+
+![The MCP Inspector interface shows a browser-based tool for testing MCP connections. The dark-themed interface displays multiple panels: a left sidebar with connection options showing SSE transport selected and a server URL field, a main content area showing connection status as Pending, and a right panel with request/response details. The inspector appears ready to establish a connection to test a remote MCP server, with status indicators and connection controls prominently displayed.](./assets/remote-servers/mcp-inspector.png)
+
+### Setting the redirect URL in Sentry
+
+Before you can connect the MCP Inspector to the Sentry MCP server, you need to set the redirect URL in Sentry. This is the URL that Sentry redirects to after the OAuth flow is complete.
+
+1. In a new browser tab, go back to the Sentry API application you created earlier.
+2. Click on the application name to open the details.
+3. Under **Redirect URIs**, add the OAuth callback URL:
+
+   ```text
+   https://sentry-mcp.<your-cloudflare-hostname>.workers.dev/oauth/callback
+   ```
+
+There is no save button. Unfocus the field, and Sentry should display a toast message indicating that the redirect URL was updated successfully. You can close this tab.
+
+### Connecting the MCP Inspector to the Sentry MCP server
+
+Now that you have the redirect URL set up, you can connect the MCP Inspector to the Sentry MCP server.
+
+In the inspector window:
+
+1. Select the SSE transport.
+2. Enter the URL of your MCP server (for example, `https://sentry-mcp.<your-cloudflare-hostname>.workers.dev/sse`).
+3. Click **Connect**.
+
+This establishes a connection to the MCP server, which kicks off the OAuth flow. You should see a message in the inspector window indicating that the MCP Inspector is requesting authorization:
+
+![The Sentry MCP OAuth authorization dialog is open in a browser window. It displays the Sentry MCP logo and title at the top, followed by a box stating MCP Inspector is requesting access. Inside the box, details are shown: Name MCP Inspector, Website https://github.com/modelcontextprotocol/inspector, Redirect URIs http://127.0.0.1:6274/oauth/callback. Below, a message explains that the MCP Client is requesting authorization to Sentry MCP and that approval will redirect to complete authentication. Two buttons are at the bottom: Cancel and Approve, with Approve highlighted in light purple.](./assets/remote-servers/mcp-sentry-auth.png)
+
+If you look at the URL in the address bar, you'll notice that the redirect URL is set to your local MCP Inspector URL. This is expected, as the MCP Inspector is running locally and will handle the OAuth client flow. Also of note is that the OAuth page you're looking at is hosted on the Sentry MCP server, not on Sentry itself.
+
+This is because the Sentry MCP server is acting as a proxy for the OAuth flow. The MCP Inspector is requesting authorization to access your Sentry account, and the Sentry MCP server is handling the redirect. The MCP Specification recommends this approach, as it allows the MCP server to act as a trusted intermediary between the client and the OAuth provider.
+
+There are, in effect, _two_ OAuth flows happening here:
+
+1. The MCP Inspector is requesting authorization to access your Sentry MCP server.
+2. The Sentry MCP server is requesting authorization to access your Sentry account on behalf of the MCP Inspector.
+
+Click **Approve**. The MCP Inspector will then redirect to the Sentry OAuth page for your app.
+
+![A screenshot shows the Sentry OAuth authorization dialog for Useful Goshawk, a Sentry API application, requesting access to a Sentry account linked to ritza@example.com. The dialog lists permissions, including reading and writing access to organization details, teams, projects, and events. Two buttons labelled Approve and Deny are at the bottom. The interface has a clean, modern design with a purple sidebar and a light background featuring faint Sentry-themed icons.](./assets/remote-servers/mcp-sentry-approve.png)
+
+In the screenshot above, "Useful Goshawk" is the name of the Sentry API application we created earlier. The permissions listed are the scopes that the MCP Inspector is requesting access to. You can review these permissions and decide whether to approve or deny the request.
+
+Click **Approve** to grant the MCP Inspector access to your Sentry account. This will redirect you back to the MCP server, which will redirect you back to the MCP Inspector.
+
+![A screenshot shows the MCP Inspector web interface focused on the Tools tab. The main panel displays a list of available tools, including list_organizations and list_teams, with descriptions explaining their functions. The right panel shows details for the list_organizations tool and a prominent Run Tool button. The interface uses a clean, modern design with a light background and clear section headers. Text in the image includes: Tools, List Tools, Clear, list_organizations, List all organizations that the user has access to in Sentry. Use this tool when you need to: View all organizations in Sentry, Find an organization's slug to aid other tool requests, list_teams, and Run Tool.](./assets/remote-servers/mcp-sentry-list-tools.png)
+
+Click on **Tools** in the top navigation bar, then on **List Tools**. This will show you a list of available tools on the MCP server. You can click on any tool to see its details and run it.
+
+We clicked on **list_organizations** to see a list of all organizations that the user has access to in Sentry. This is a good way to verify that the OAuth flow is working correctly and that the MCP server can access your Sentry account.
+
+Now click the **Run Tool** button to execute the tool. This will send a request to the MCP server, which will then forward it to Sentry and return the response.
+
+![MCP Inspector web interface showing the Tool Result panel after running the list organizations tool. The right panel displays a white background with a green Success status and a code block containing: Organizations, the organization name, Web URL https://url.sentry.io, Region URL https://us.sentry.io, and guidance that the organization name is used as an identifier and regionUrl should be passed if supported. The interface is clean and modern with a light background, presenting information in a professional and informative manner to help users confirm MCP server access to Sentry organizations.](./assets/remote-servers/mcp-list-organizations.png)
+
+The response shows a list of organizations that you have access to in Sentry. This confirms that the MCP server can access your Sentry account and that the OAuth flow is working correctly.
+
+Now everyone on your team can use the Sentry MCP server with their IDEs, LLMs, or any other MCP client. Of course, if you don't need to change the server code, you could just as well use the [hosted Sentry MCP server](https://mcp.sentry.dev/).
+
+## On-premises deployment with Cloudflare tunnels
+
+While Cloudflare Workers provides an easy way to deploy remote MCP servers, you may have reasons to run servers on your own infrastructure instead. When your organization has strict data handling requirements or MCP servers need access to services on your network, you can host your servers on-premises or in a private cloud.
+
+The [Polar.sh MCP server](https://docs.polar.sh/integrate/mcp) is a great example of a server that you might want to run on-premises. It allows AI assistants to interact with your Polar data, including subscriptions, posts, and other content. You may want to run this server on your own infrastructure for security, compliance, or performance reasons.
+
+In this example, we'll deploy the Polar MCP server on-premises and make it securely accessible from anywhere using a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) combined with [Zero Trust access](https://developers.cloudflare.com/cloudflare-one/policies/access/) controls.
+
+### Reasons to use Cloudflare Tunnel with Zero Trust
+
+When hosting an MCP server on-premises, you have several options for making it remotely accessible:
+
+1. Open a port on your firewall (not recommended for security reasons).
+2. Set up a VPN (adds client complexity and management overhead).
+3. Use a reverse proxy with authentication (requires careful configuration).
+4. **Use Cloudflare Tunnel with Zero Trust** (our recommended approach).
+
+Cloudflare Tunnel creates an encrypted tunnel between your local server and Cloudflare's edge, with no inbound ports required. Combined with Cloudflare Zero Trust, you can restrict access to specific authenticated users without exposing your server to the public internet.
+
+### Requirements
+
+You'll need:
+
+- A machine to host the Polar MCP server (Linux recommended)
+- [Docker](https://docs.docker.com/get-docker/) installed
+- A [Cloudflare](https://www.cloudflare.com/) account with:
+  - A domain added to Cloudflare
+  - Zero Trust enabled (free tier works for basic setups)
+
+### Generating a Polar access token
+
+To allow the on-premises MCP server to authenticate with the Polar API, you need to generate an organization access token from the Polar dashboard. The steps below describe this process, referencing the user interface elements shown in the screenshot that follows.
+
+Log in to your Polar organization on [sandbox.polar.sh](https://sandbox.polar.sh) for testing. For production environments, you would typically use [polar.sh](https://polar.sh).
+
+1. In the left-hand navigation sidebar, click **Settings**.
+2. On the Settings page, locate the **Developers** section. Click **New Token** to open the **Create Organization Access Token** dialog.
+3. In the **Name** field, enter a descriptive name for your token, such as `polar-mcp`.
+4. Select an **Expiration** period for the token from the dropdown menu, for example, `7 days`.
+5. Under **Scopes**, ensure all permissions are selected by checking each corresponding box. This grants the MCP server the necessary access to interact with your Polar data.
+6. Scroll down and click **Create**.
+7. Polar displays the generated access token only once upon creation. Copy this token and store it. You will need this value for the `POLAR_ACCESS_TOKEN` environment variable when you configure your Docker container in a later step.
+
+![A screenshot of the Polar web interface shows the Create Organization Access Token dialog, which contains fields for Name, Expiration, and Scopes. The Name field is filled with polar-mcp. Expiration is set to 7 days. The Scopes section lists multiple permissions, each with a checkbox, including openid, profile, email, user:read, organizations:read, organizations:write, custom_fields:read, custom_fields:write, discounts:read, discounts:write, checkout_links:read, checkout_links:write, checkouts:read, checkouts:write, and products:read. All checkboxes are selected. The wider interface shows a sidebar with navigation options such as Home, Products, Benefits, Customers, Sales, Analytics, Finance, and Settings, with Settings highlighted.](./assets/remote-servers/polar-token.png)
+
+### Setting up the Polar MCP server
+
+First, let's get the Polar MCP server running locally.
+
+Create a new directory for your Polar MCP deployment:
+
+```bash
+mkdir polar-mcp
+cd polar-mcp
+```
+
+Create a `docker-compose.yml` file with the following content:
+
+```yaml !docker-compose.yml
+services:
+  polar-mcp:
+    image: node:24
+    container_name: polar-mcp
+    restart: unless-stopped
+    command: >
+      npx -y --package @polar-sh/sdk -- mcp start --access-token your_polar_api_key --port 3000 --transport sse
+    ports:
+      - "127.0.0.1:3000:3000" # Only bind to localhost
+```
+
+Replace `your_polar_api_key` with the actual Polar API key you generated in the previous step.
+
+Start the Polar MCP server:
+
+```bash
+docker compose up -d
+```
+
+Verify that the server is running correctly:
+
+```bash
+curl http://localhost:3000/sse
+```
+
+If everything is working, you should see a response with a session ID and `/message` endpoint.
+
+```text
+event: endpoint
+data: /message?sessionId=6f884816-1c0b-4543-8465-025cd55c7227
+```
+
+### Setting up Cloudflare Zero Trust
+
+Now let's configure Cloudflare Zero Trust to secure access to your MCP server.
+
+1. Log in to your Cloudflare account.
+2. Navigate to the **Zero Trust** dashboard.
+3. If this is your first time using Cloudflare Zero Trust, you'll need to create a Zero Trust organization.
+4. In the Zero Trust dashboard, go to **Access** > **Applications**.
+5. Click **Add an application**.
+6. Select **Self-hosted** as the application type.
+
+7. Configure the application.
+
+   - **Application name**: Enter the name `Polar MCP`.
+   - **Session duration**: Choose how long users stay authenticated (for example, 24 hours).
+   - **Application domain**: Choose **+ Add public hostname** and add a subdomain where your MCP server will be available (for example, `polar-mcp.yourdomain.com`).
+   - Leave other settings at default values for now.
+
+8. Create an access policy:
+
+   - Click **Add a policy**.
+   - **Policy name**: Enter the name `Polar MCP Access`.
+   - **Action**: Allow.
+   - **Configure rules**: Select who should have access to your MCP server.
+     - For testing, you can use **Emails** and add your email address.
+     - For a team, you might use **Emails ending in** with your company domain.
+   - Click **Save**
+
+9. Click **Next** on the application. You can leave the default selected values for the optional settings.
+10. Finish by clicking **Save** to create the application.
+11. Make sure that the policy you created is linked to the application's policies on the application's **Policies** tab.
+
+### Installing and configuring Cloudflare Tunnel
+
+Next, we'll set up a tunnel to securely connect your local MCP server to Cloudflare.
+
+1. In the Cloudflare Zero Trust dashboard, navigate to **Networks** > **Tunnels**.
+2. Click **Create a tunnel**.
+3. Select **Cloudflared** as the tunnel type.
+4. Give your tunnel a name (for example, `polar-mcp-tunnel`).
+5. Click **Save tunnel**.
+
+Select **Docker** as the installation method. Instead of running the command in the terminal, copy only the tunnel token from the command.
+
+Now update your `docker-compose.yml` file to include the Cloudflare Tunnel configuration:
+
+```yaml !docker-compose.yml
+cloudflared:
+  image: cloudflare/cloudflared:latest
+  container_name: polar-cloudflared
+  restart: unless-stopped
+  command: tunnel --no-autoupdate run
+  environment:
+    - TUNNEL_TOKEN=your_tunnel_token
+  ports:
+    - "127.0.0.1:3001:3000"
+```
+
+Replace `your_tunnel_token` with the token you copied earlier.
+
+Now, your `docker-compose.yml` file should look like this:
+
+```yaml !docker-compose.yml
+services:
+  polar-mcp:
+    image: node:24
+    container_name: polar-mcp
+    restart: unless-stopped
+    command: >
+      npx -y --package @polar-sh/sdk -- mcp start --access-token your_access_token --port 3000 --transport sse
+    ports:
+      - "127.0.0.1:3000:3000" # Only bind to localhost
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: polar-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=your_tunnel_token
+    ports:
+      - "127.0.0.1:3001:3000"
+```
+
+Restart the Docker containers:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+In Cloudflare, your tunnel should now show up as a connector.
+
+Click **Next**.
+
+### Configuring the tunnel
+
+On the **Route Traffic** page, configure the tunnel using the details below.
+
+1. **Hostname**: Enter the subdomain you chose earlier (for example, `polar-mcp.yourdomain.com`).
+2. **Service**: Enter the URL of your MCP server (for example, `http://polar-mcp:3000`).
+3. Click **Save tunnel**.
+
+### Testing your secure MCP setup
+
+Now it's time to test whether everything is working correctly. Open a browser and navigate to:
+
+```
+https://polar-mcp.yourdomain.com/sse
+```
+
+You should be prompted to authenticate through Cloudflare Access.
+
+![A screenshot shows the Cloudflare Access login screen with a header showing the Cloudflare Access logo. The main panel displays a form titled "Get a login code emailed to you" with an email input field and a blue "Send me a code" button. Below the form is the hostname "cloudflareaccess.com" and "Polar MCP" text. At the bottom of the screen, there's a Cloudflare Zero Trust logo.](./assets/remote-servers/cloudflare-access-auth.png)
+
+After logging in, you should see a response similar to the one you got when testing the local server.
+
+### Using Cloudflare Warp to connect to the MCP server
+
+In Cloudflare Zero Trust:
+
+1. Navigate to **Gateway**.
+2. Click on **Add a device**.
+3. Follow the instructions to install Cloudflare Warp on your machine.
+
+Open the Cloudflare Warp app and navigate to the **Preferences** > **Account** tab.
+
+![A screenshot of Cloudflare WARP preferences window shows the Account tab selected. The interface displays a license key, a section labeled Devices using your license key showing macOS (This device) Mac15,12, and a Login to Cloudflare Zero Trust button at the bottom.](./assets/remote-servers/cloudflare-warp.png)
+
+Click the **Login to Cloudflare Zero Trust** button. This will show a modal with a text field, where you enter your team name.
+
+Your team name is the customizable portion of your team domain. You can view your team name in Zero Trust under **Settings** > **Custom Pages**.
+
+Enter your team name and click **Continue**. This will open a browser window to authenticate with Cloudflare Zero Trust.
+
+Once authenticated, you should see a message indicating that your device is connected to Cloudflare Zero Trust.
+
+<Callout title="Note" type="info">
+  If you encounter connection issues, you may need to disable Warp's DNS
+  features. To do so, navigate to your Cloudflare Zero Trust dashboard and go to
+  **Settings** > **Warp Client** > **Profile settings**. Select **Configure**
+  from the three-dot menu option for your profile, and under **Service mode**,
+  select **Secure Web Gateway without DNS Filtering**.
+</Callout>
+
+Once Warp is connected, restart your `polar-mcp` and `cloudflared` Docker containers so that the `cloudflared` routes tunnel correctly.
+
+### Adding Warp access to the MCP server
+
+1. In the Cloudflare Zero Trust dashboard, navigate to **Settings** > **Warp Client**.
+2. Under **Device enrollment permissions**, click **Manage**.
+3. Click **Login methods**.
+4. Activate **WARP authentication identity**.
+5. Activate **Apply to all Access applications**.
+6. Click **Save**.
+
+### Testing the MCP connection
+
+To test the MCP connection, you can use the MCP Inspector we used earlier:
+
+```bash
+pnpx @modelcontextprotocol/inspector@0.11.0
+```
+
+In the MCP Inspector:
+
+1. Select the SSE transport.
+2. Enter your MCP server URL, `https://polar-mcp.yourdomain.com/sse`.
+3. Click **Connect**.
+
+You'll be redirected to the Cloudflare Access login page. After authentication, the MCP Inspector should connect to your Polar MCP server securely.
+
+![The MCP Inspector interface shows a successful connection to the Polar MCP server. The main panel displays a Connected status with a green indicator. The server URL is https://polar-mcp.redirectmap.com/sse. The right panel shows server metadata, including the name Polar MCP, version 0.1.0, and capabilities like tools, resources, prompts, and sampling support.](./assets/remote-servers/polar-mcp-connected.png)
+
+With this in place, you can enroll your team members in Cloudflare Zero Trust and provide them with access to the MCP server. They can use any MCP client to connect to the server, and all traffic will be encrypted and authenticated through Cloudflare.
+
+## Comparing deployment models
+
+<Table
+  data={[
+    {
+      feature: "Setup complexity",
+      cloudflareWorkers: "Low",
+      onPremCFTunnel: "Medium",
+    },
+    {
+      feature: "Maintenance overhead",
+      cloudflareWorkers: "Very low (serverless)",
+      onPremCFTunnel: "Medium (server management)",
+    },
+    {
+      feature: "Access to local data",
+      cloudflareWorkers: "Limited",
+      onPremCFTunnel: "Full",
+    },
+    {
+      feature: "Customization",
+      cloudflareWorkers: "Limited by Workers runtime",
+      onPremCFTunnel: "Full OS-level control",
+    },
+    {
+      feature: "Cost model",
+      cloudflareWorkers: "Pay-per-request",
+      onPremCFTunnel: "Fixed infrastructure costs",
+    },
+    {
+      feature: "Cold start latency",
+      cloudflareWorkers: "Yes, but minimal",
+      onPremCFTunnel: "None (always running)",
+    },
+    {
+      feature: "Resource constraints",
+      cloudflareWorkers: "CPU/memory limits",
+      onPremCFTunnel: "Based on your hardware",
+    },
+    {
+      feature: "Authentication",
+      cloudflareWorkers: "OAuth providers",
+      onPremCFTunnel: "Cloudflare Access (flexible)",
+    },
+  ]}
+  columns={[
+    { key: "feature", header: "Feature" },
+    { key: "cloudflareWorkers", header: "Cloudflare Workers" },
+    { key: "onPremCFTunnel", header: "On-prem with CF Tunnel" },
+  ]}
+/>
+
+Both deployment models follow the MCP Specification, allowing you to choose the approach that best fits your needs without changing client-side integrations.
+
+## Other deployment models
+
+We experimented with several other deployment models, including:
+
+### AWS Lambda
+
+AWS Lambda is similar to Cloudflare Workers, but managing the AWS environment and IAM roles is more complex. We used the [Run Model Context Protocol (MCP) servers with AWS Lambda](https://github.com/awslabs/run-model-context-protocol-servers-with-aws-lambda) example as a starting point, but ran into a dead end when it came to the SSE transport.
+
+AWS open-sourced a [server adapter](https://github.com/awslabs/run-model-context-protocol-servers-with-aws-lambda/blob/main/src/typescript/src/server-adapter/index.ts) for the MCP servers, which simplifies running `stdio` MCP servers as Lambda functions. However, the adapter depends on a custom transport that no clients currently support.
+
+AWS notes that with upcoming changes to the MCP Specification, this may change. For now, we recommend using Cloudflare Workers or an on-premises deployment.
+
+### Container-based deployment with Docker and Kubernetes
+
+This was our initial approach, but we found it more complex than necessary for most use cases. While Docker and Kubernetes provide great flexibility and scalability, they also introduce additional overhead in terms of setup and maintenance.
+
+We recommend using Docker for local development and testing, but Kubernetes is often overkill for production deployments unless you have a specific need for it.
+
+A Kubernetes deployment may suit your needs if you provide MCP servers as a service to multiple teams or customers. In that case, you can use Kubernetes to manage scaling, resource allocation, and isolation between different MCP servers.
+
+## In summary
+
+When deploying remote MCP servers, start with the server's transport mechanism and hosting requirements. If it needs to be publicly accessible, Cloudflare Workers is a great option. If you need to access internal data or have specific hosting requirements, consider using Cloudflare Tunnel with Zero Trust (or a VPN) to expose your server securely.
+
+Then make sure you understand the security implications of your deployment model. For example, if you're using Cloudflare Workers, ensure that your server is properly configured to handle authentication and authorization. If you're using Cloudflare Tunnel, you have to ensure that your server is properly secured and that only authorized users can access it.
+
+Finally, consider the trade-offs between different deployment models. Cloudflare Workers is a great option for quick deployments with minimal maintenance overhead, while on-premises deployments give you more control over the environment but require more management.
+
+As MCP continues to evolve, these deployment patterns will adapt, but the core principles of secure, accessible MCP servers will remain relevant regardless of the transport mechanisms chosen by the specification.
+
+If you have any questions or feedback about this guide, or want to share your own experiences with deploying remote MCP servers, [please join us on Slack](https://join.slack.com/t/speakeasy-dev/shared_invite/zt-1cwb3flxz-lS5SyZxAsF_3NOq5xc8Cjw).
+
+To find out how we can help you generate your own MCP servers, [get in touch](https://www.speakeasy.com/contact) on our website.

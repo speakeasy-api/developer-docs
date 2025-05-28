@@ -8,15 +8,16 @@ import { Callout } from "@/mdx/components";
 # Generate Python SDKs from OpenAPI / Swagger
 
 <Callout title="OSS Comparison" type="info">
-For a comparison between the Speakeasy Python SDK and some popular open-source generators, see [**this page**](/post/speakeasy-oss-python-generator).
+  For a comparison between the Speakeasy Python SDK and some popular open-source
+  generators, see [**this page**](/post/speakeasy-oss-python-generator).
 </Callout>
-
 
 ## SDK Overview
 
 Speakeasy-generated Python SDKs are designed to be best in class, providing a seamless developer experience and full type safety, alongside asynchronous support.
 
 The core Python SDK features include:
+
 - Fully type-annotated classes and methods with full Pydantic models and associated TypedDicts.
 - Async and Sync methods for all endpoints.
 - Support for streaming uploads and downloads.
@@ -28,7 +29,6 @@ The core Python SDK features include:
 - Date and date/time types using RFC3339 date formats.
 - Custom type enums using strings and integers (including Open Enums).
 - Union types and combined types.
-
 
 ### Python Package Structure
 
@@ -50,8 +50,7 @@ The core Python SDK features include:
 
 Python dependencies and packaging for publishing are handled using `poetry`.
 
-
-##  Python Type Safety
+## Python Type Safety
 
 Modern Python uses type hints to improve code readability and so do Speakeasy-generated Python SDKs! Speakeasy-generated Python SDKs expose type annotations for developers to perform type checks at runtime and increase type safety, we also employ Pydantic models to ensure that the data passed to and from the SDK is valid at runtime.
 
@@ -60,6 +59,7 @@ Modern Python uses type hints to improve code readability and so do Speakeasy-ge
 Speakeasy uses `pydantic` for all generated models to correctly serialize and deserialize objects; whether the objects are passed as query parameters, path parameters, or request bodies. Metadata based on the definitions provided by the OpenAPI document are appended to fields.
 
 For example, this is the generated class for the [Drink](https://github.com/speakeasy-sdks/template-sdk/blob/main/openapi.yaml#L312) component from our [SpeakeasyBar template repository](https://github.com/speakeasy-sdks/template-sdk):
+
 ```python
 class Drink(BaseModel):
     name: str
@@ -102,7 +102,7 @@ res = s.orders.create_order(drinks=[
 ])
 ```
 
-or 
+or
 
 ```python
 res = s.orders.create_order(drinks=[
@@ -119,6 +119,7 @@ res = s.orders.create_order(drinks=[
 Speakeasy-generated Python SDKs provide both synchronous and asynchronous methods for all endpoints. The SDK uses the `httpx` library for making HTTP requests, which supports both synchronous and asynchronous requests.
 
 Synchronous:
+
 ```python
 res = s.orders.create_order(drinks=[
     Drink(
@@ -130,6 +131,7 @@ res = s.orders.create_order(drinks=[
 ```
 
 Asynchronous:
+
 ```python
 res = await s.orders.create_order_async(drinks=[
     Drink(
@@ -149,7 +151,6 @@ To make API calls, the Python SDK instantiates its own HTTP client using the `Cl
 If configured, Speakeasy will generate methods with parameters for each parameter defined in the OpenAPI document, as long as the number of parameters is less than or equal to the configured `maxMethodParams` value in the `gen.yaml` file.
 
 If the number of parameters exceeds the configured `maxMethodParams` value or is set to `0`, a request object will be generated for the method to pass in all parameters as a single object.
-
 
 ## Errors
 
@@ -175,16 +176,50 @@ if res is not None:
     pass
 ```
 
-
 ## User Agent Strings
 
-The Python SDK includes a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests. This can be leveraged to track SDK usage amongst broader API usage. The format is as follows: 
+The Python SDK includes a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests. This can be leveraged to track SDK usage amongst broader API usage. The format is as follows:
 
 ```stmpl
 speakeasy-sdk/python {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{PackageName}}
 ```
+
 Where
+
 - `SDKVersion` is the version of the SDK, defined in `gen.yaml` and released
 - `GenVersion` is the version of the Speakeasy generator
 - `DocVersion` is the version of the OpenAPI document
 - `PackageName` is the name of the package defined in `gen.yaml`
+
+## SDK Memory footprint and Load time
+
+Speakeasy-generated Python SDKs employ a lazy loading mechanism for their functional components (e.g., groups of operations like `orders`, `users`, etc.) and their associated models. This means these components are not loaded into memory when you initially import the SDK or create an SDK instance. Instead, a specific component is loaded only the first time you access it.
+
+**Example:**
+
+```python
+import sdk
+
+# Initial SDK instantiation:
+# Only the core SDK logic is loaded.
+# Modules for specific API features like 'orders' are NOT yet loaded.
+s = sdk.SDK()
+
+# First access to a component:
+# When s.orders is accessed here for the first time,
+# the 'orders' module is dynamically imported and initialized.
+# This is the point where the code for 'orders' functionality is loaded.
+orders_list = s.orders.list_orders()
+
+# Subsequent accesses:
+# The 'orders' component is now loaded and cached.
+# Further operations on s.orders use the already-loaded component directly.
+order_details = s.orders.get_details(id="some_id")
+```
+
+This design provides two key benefits:
+
+- **Reduced Memory Footprint:** Your application only loads the parts of the SDK it actually uses, conserving memory.
+- **Faster Startup Times:** The initial `import` of the SDK and its instantiation are quicker, as it avoids pre-emptively loading all possible components.
+
+Collectively, these improvements contribute to a smoother and more efficient developer experience.
