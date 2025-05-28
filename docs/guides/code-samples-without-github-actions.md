@@ -91,12 +91,6 @@ While GitHub Actions provides a convenient way to automate code sample generatio
 - **Private repositories**: Work with code that isn't hosted on GitHub or is in private repositories with restricted access
 - **Enterprise environments**: Support for organizations with specific security or compliance requirements that prevent using GitHub Actions
 
-## Important notes
-
-- The `main` tag is essential - it tells Speakeasy that these code samples are "official" and should be included in the public URL
-- Once set up, the public URL never changes - it will always serve the latest version of your combined spec
-- Currently, retrieving the public URL requires manual access to the Speakeasy dashboard
-
 ## Example workflow script
 
 Here's a simple bash script example that could be used in a custom CI pipeline:
