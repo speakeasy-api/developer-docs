@@ -1,0 +1,177 @@
+---
+title: MCP release notes
+description: A comparative guide to the major changes in the Model Context Protocol (MCP) across versions.
+---
+
+import { Callout } from "@/mdx/components";
+
+# MCP release notes
+
+Each release of the Model Context Protocol (MCP) introduces changes to how LLM applications integrate external tools and context. These updates can improve developer experience, interoperability, and safety, but they may also introduce breaking changes or require adjustments in your implementation.
+
+<Callout title="Note" type="info">
+  This page is not an official MCP release notes page. It exists to help
+  developers understand what changed, why it matters, and how to adopt the
+  latest MCP revisions. For the full changelog, refer to the official{" "}
+  <a
+    href="https://github.com/modelcontextprotocol/modelcontextprotocol/tags"
+    target="_blank"
+    rel="noreferrer"
+  >
+    GitHub tags
+  </a>
+  .
+</Callout>
+
+## MCP version history
+
+This section summarizes the significant differences between the **2025-03-26** release and the previous **2024-11-05** specification. The following table summarizes major changes between MCP versions.
+
+| **Version**                                                                                            | **Release date** | **Changes**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | **Breaking changes** |
+| ------------------------------------------------------------------------------------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| **[2025-03-26](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2025-03-26)** | Mar 26, 2025     | - Adds structured [OAuth 2.1-style authorization](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization)<br/>- Replaces SSE with [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)<br/>- Adds [JSON-RPC batching](https://www.jsonrpc.org/specification#batch)<br/>- Introduces tool annotations (for example, `read-only`, `destructive`)<br/>- Adds support for audio content, progress messages, and completions capability | Yes                  |
+| **[2024-11-05](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2024-11-05)** | Jan 17, 2025     | - Initial schema stabilization<br/>- Defines core architecture and message format<br/>- Introduces tool, resource, and prompt concepts<br/>- Adds `ProgressNotification` and sampling features<br/>- Uses HTTP with SSE for streaming transport                                                                                                                                                                                                                                                                  | —                    |
+
+## 2025-03-26 vs 2024-11-05
+
+The **2025-03-26** release of the Model Context Protocol introduces a more mature and standardized approach to authorization, transport, and tool metadata. It brings significant improvements in security, flexibility, and client compatibility, but it also includes breaking changes that may require updates in existing implementations if you are moving from the **2024-11-05** version.
+
+Key highlights include:
+
+- **Structured OAuth-style authorization:** Authorization is now defined explicitly using a consistent schema, making supporting various auth models and token types easier.
+- **Streamable HTTP transport:** The previous HTTP with SSE model has been replaced with a more robust, proxy-friendly HTTP streaming format.
+- **JSON-RPC batching:** Developers can now bundle multiple requests in a single call, improving efficiency in complex workflows.
+- **Tool annotations:** Tools can now describe their behavior (for example, `read-only`, `destructive`), allowing for safer and more user-aware execution.
+
+You may choose to remain on the **2024-11-05** version if you need:
+
+- **SSE-based transport compatibility:** If you're invested in SSE infrastructure and can't yet support chunked HTTP streaming.
+- **Minimal tooling overhead:** The earlier version uses simpler schemas and fewer requirements, which may suit prototypes or early integrations.
+
+## What's new in 2025-03-26?
+
+MCP **2025-03-26** introduces the following changes: Authorization framework inspired by OAuth 2.1. and Streamable HTTP replacing HTTP with SSE.
+
+### Authorization
+
+The **2024-11-05** version of MCP doesn't include a standardized authorization model. As a result, developers must implement their own authorization schemes, which leads to inconsistent behaviors and security risks, as tokens are passed directly in the input parameters.
+
+The new model supports role-based access control, dynamic client registration, and standard PKCE-based flows. It also allows for better error handling and smoother integration with existing identity providers.
+
+For example, you might define a tool to make bank transfers as follows:
+
+```python
+from mcp.server import Server
+from mcp.auth import TokenValidator
+
+from apis import banking_api
+
+app = Server("bank-transfer")
+token_validator = TokenValidator()
+
+@app.tool("initiateTransfer", description="Send money to another account", args={"amount": int, "recipient": str})
+async def initiate_transfer(amount: int, recipient: str, context):
+    # Require authentication
+    token = context.auth.token
+    if not token:
+        raise PermissionError("Authentication required")
+
+    # Check if user has permission to transfer funds
+    user_roles = token_validator.get_roles(token)
+    if "finance-admin" not in user_roles:
+        raise PermissionError("Only finance admins can initiate transfers")
+
+    # Proceed with the transfer
+    result = await banking_api.transfer_funds(amount, recipient)
+    return {"status": result.status, "recipient": recipient, "amount": amount}
+```
+
+Learn more about MCP authorization in the [MCP authorization documentation](/mcp/authorization).
+
+### Streamable HTTP transport
+
+In MCP **2024-11-05**, long-lived connections are handled using server-sent events (SSE). SSE supports server-to-client streaming, but client-to-server communication relies on HTTP POST requests. This means managing two different layers of communication, leading to avoidable complexity in coding and implementation.
+
+With version **2025-03-26**, MCP introduces a new transport layer that uses chunked HTTP streaming, replacing SSE. Let's compare the implementation of a streamable HTTP server to the previous SSE-based server.
+
+Here is an example of a simple server using SSE:
+
+```python
+from mcp.server import Server
+from mcp.server.sse import SseServerTransport
+from starlette.applications import Starlette
+from starlette.routing import Route
+
+app = Server("bank-transfer")
+sse = SseServerTransport("/messages")
+
+@app.tool("initiateTransfer", args={"amount": int, "recipient": str})
+async def initiate_transfer(amount: int, recipient: str, context):
+    return {
+        "status": "transferred",
+        "recipient": recipient,
+        "amount": amount
+    }
+
+# SSE handler: for persistent GET connection
+async def sse_handler(scope, receive, send):
+    async with sse.connect_sse(scope, receive, send) as streams:
+        await app.run(streams[0], streams[1], app.create_initialization_options())
+
+# POST handler: for sending requests
+async def post_handler(scope, receive, send):
+    await sse.handle_post_message(scope, receive, send)
+
+starlette_app = Starlette(routes=[
+    Route("/sse", sse_handler),
+    Route("/messages", post_handler, methods=["POST"])
+])
+```
+
+Here is the equivalent server using Streamable HTTP:
+
+```python
+from mcp.server import Server
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from starlette.applications import Starlette
+from starlette.routing import Mount
+from starlette.types import Scope, Receive, Send
+
+app = Server("bank-transfer")
+session_manager = StreamableHTTPSessionManager(app=app)
+
+@app.tool("initiateTransfer", args={"amount": int, "recipient": str})
+async def initiate_transfer(amount: int, recipient: str, context):
+    return {
+        "status": "transferred",
+        "recipient": recipient,
+        "amount": amount
+    }
+
+# Streamable HTTP handler
+async def handle_streamable_http(scope: Scope, receive: Receive, send: Send):
+    await session_manager.handle_request(scope, receive, send)
+
+starlette_app = Starlette(
+    routes=[
+        Mount("/mcp", app=handle_streamable_http)
+    ]
+  )
+```
+
+Here are some reasons you should consider switching to Streamable HTTP:
+
+- **Proxy and load balancer compatibility:** SSE often breaks under proxies due to connection timeouts and buffering limits. For example, AWS ALB and Cloudflare frequently terminate SSE connections, while Streamable HTTP uses standard chunked encoding and works reliably.
+- **Full-duplex communication:** SSE only supports server-to-client messages, requiring separate POSTs for client input. Streamable HTTP enables bidirectional streaming over one connection, simplifying cases like real-time tool execution or chat interfaces.
+
+### Other notable changes
+
+Apart from the improvements to authorization and HTTP streaming transport, MCP **2025-03-26** introduces these changes:
+
+- **Tool calls can now be batched:** Clients may send multiple tool invocations in a single JSON-RPC request. Servers that assume one call per request must handle arrays and concurrent execution.
+- **Tool behavior must now be declared explicitly:** Tools can define attributes like `readOnly` or `destructive`, which clients are expected to respect. This may impact how tools are displayed or gated in UIs.
+- **Progress updates are now more descriptive:** The `ProgressNotification` object includes an optional `message` field. Clients that display progress may want to surface these descriptions to users.
+- **Audio is a supported content type:** Servers and clients must now handle `audio` in addition to `text` and `image`.
+- **Tools can advertise completion support:** Servers can declare that a tool supports input autocompletion. You may need to update your UI to initiate and render completion suggestions accordingly.
+
+Learn more about changes to the protocol on the [MCP 2025-03-26 changelog page](https://modelcontextprotocol.io/specification/2025-03-26/changelog).
