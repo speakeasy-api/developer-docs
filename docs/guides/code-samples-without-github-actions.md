@@ -46,7 +46,7 @@ The critical step for enabling automated code samples is to tag your generated c
 speakeasy tag promote -c my-target-name -t main
 ```
 
-This command marks your code samples as "official" so they can be incorporated into the public URL. Replace `my-target-name` with the name of your target as defined in your workflow configuration.
+This command marks your code samples as "official" so they can be incorporated into the public URL. Similar to how the `main` branch in GitHub represents the production-ready version of your code, the `main` tag in Speakeasy indicates these are the production-ready code samples that should be publicly available. Replace `my-target-name` with the name of your target as defined in your workflow configuration.
 
 ### 4. Access the public URL
 
