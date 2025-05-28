@@ -52,7 +52,7 @@ This command marks your code samples as "official" so they can be incorporated i
 
 Once you've tagged your code samples with `main`, Speakeasy will automatically start building a combined spec in the background. The combined spec will be available at a public URL that you can use with documentation platforms like Scalar.
 
-To find this URL, you'll need to visit the Speakeasy dashboard and navigate to the **Docs** tab. Currently, there's no CLI command to retrieve this URL programmatically.
+To find this URL, you'll need to visit the Speakeasy dashboard and navigate to the **Docs** tab. Click on **Integrate with Docs Provider** to see the URL to the OpenAPI with code samples combined. Currently, there's no CLI command to retrieve this URL programmatically.
 
 ### 5. Integrate with Scalar
 
