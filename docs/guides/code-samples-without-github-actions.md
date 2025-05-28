@@ -54,15 +54,24 @@ Once you've tagged your code samples with `main`, Speakeasy will automatically s
 
 To find this URL, you'll need to visit the Speakeasy dashboard and navigate to the **Docs** tab. Click on **Integrate with Docs Provider** to see the URL to the OpenAPI with code samples combined. Currently, there's no CLI command to retrieve this URL programmatically.
 
-### 5. Integrate with Scalar
+### 5. Integrate with docs providers
 
-Once you have the public URL, you can integrate it with Scalar:
+Once you have the public URL, you can integrate it with various documentation providers. Speakeasy offers detailed integration guides for several popular docs platforms:
+
+- [Scalar](/scalar/) - A modern API documentation platform
+- [ReadMe](/readme/) - Interactive API explorer and documentation
+- [Mintlify](/mintlify/) - Developer documentation with an interactive playground
+- [Bump.sh](/bump/) - Hosted API documentation and catalogs
+
+For Scalar integration:
 
 1. Open a Scalar project
 2. Go to the **Reference** tab
 3. Click **Import URL**
 4. Paste the combined spec URL from Speakeasy
 5. Click **Import**
+
+For detailed instructions on integrating with these and other docs providers, refer to the [integration guides](/integrations/) in the Speakeasy documentation.
 
 ## Automating the process
 
