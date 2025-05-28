@@ -58,8 +58,8 @@ To find this URL, you'll need to visit the Speakeasy dashboard and navigate to t
 
 Once you have the public URL, you can integrate it with various documentation providers. Speakeasy offers detailed integration guides for several popular docs platforms:
 
-- [Scalar](/docs/integrations/scalar/) - A modern API documentation platform
-- [ReadMe](/docs/integrations/readme/) - Interactive API explorer and documentation
+- [Scalar](/docs/integrations/scalar) - A modern API documentation platform
+- [ReadMe](/docs/integrations/readme) - Interactive API explorer and documentation
 - [Mintlify](/docs/integrations/mintlify) - Developer documentation with an interactive playground
 - [Bump.sh](/docs/integrations/bump) - Hosted API documentation and catalogs
 
