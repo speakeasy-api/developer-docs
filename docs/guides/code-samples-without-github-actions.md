@@ -63,13 +63,6 @@ Once you have the public URL, you can integrate it with various documentation pr
 - [Mintlify](/docs/integrations/mintlify) - Developer documentation with an interactive playground
 - [Bump.sh](/docs/integrations/bump) - Hosted API documentation and catalogs
 
-For Scalar integration:
-
-1. Open a Scalar project
-2. Go to the **Reference** tab
-3. Click **Import URL**
-4. Paste the combined spec URL from Speakeasy
-5. Click **Import**
 
 ## Automating the process
 
