@@ -81,6 +81,16 @@ For a fully automated workflow without GitHub Actions:
 2. Add `speakeasy tag promote -c my-target-name -t main` to tag the generated code samples
 3. The public URL will automatically update with the latest code samples
 
+### Why use CLI tagging instead of GitHub Actions?
+
+While GitHub Actions provides a convenient way to automate code sample generation and tagging, the CLI approach offers several advantages for teams:
+
+- **Platform independence**: Use any CI/CD system (Jenkins, GitLab CI, CircleCI, Azure DevOps) instead of being limited to GitHub Actions
+- **Custom workflows**: Integrate code sample generation into existing build processes or deployment pipelines
+- **Local development**: Generate and test code samples locally before pushing changes
+- **Private repositories**: Work with code that isn't hosted on GitHub or is in private repositories with restricted access
+- **Enterprise environments**: Support for organizations with specific security or compliance requirements that prevent using GitHub Actions
+
 ## Important notes
 
 - The `main` tag is essential - it tells Speakeasy that these code samples are "official" and should be included in the public URL
