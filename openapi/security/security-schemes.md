@@ -24,7 +24,7 @@ components:
 
 Each security scheme has a unique name in the `securitySchemes` map, and the `type` field is particular standard or convention.
 
-## Authentication Types
+## Authentication types
 
 The following authentication types are supported by OpenAPI as of v3.1:
 
@@ -111,7 +111,7 @@ components:
           refreshUrl: https://example.org/oauth/refresh
 ```
 
-To learn more about different types of security scheme, take a look at the guides for [API Key](/openapi/security/security-schemes/security-api-key), [HTTP Authorization](/openapi/security/security-schemes/security-basic) (Basic, Digest, Bearer, and more), [OAuth 2.0](/openapi/security/security-schemes/security-oauth2), [OpenID Connect](/openapi/security/security-schemes/security-openid), or [Mutual TLS](/openapi/security/security-schemes/security-mutualtls).
+To learn more about different types of security schemes, take a look at the guides for [API Key](/openapi/security/security-schemes/security-api-key), [HTTP Authorization](/openapi/security/security-schemes/security-basic) (Basic, Digest, Bearer, and more), [OAuth 2.0](/openapi/security/security-schemes/security-oauth2), [OpenID Connect](/openapi/security/security-schemes/security-openid), or [Mutual TLS](/openapi/security/security-schemes/security-mutualtls).
 
 
 ## Global authentication vs endpoint authentication
@@ -127,7 +127,7 @@ The important parts of the above example are the [security](https://spec.openapi
 
 ## How to describe security
 
-The [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) section is a list (actually a list of key-value pairs, but we will talk a bit more about that later) of security schemes that can be used to authenticate all operations or a particular operation (depending on the scope of the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) list).
+The [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) section is a list (of key-value pairs, but we will talk a bit more about that later) of security schemes that can be used to authenticate all operations or a particular operation (depending on the scope of the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) list).
 
 Below is an example of a number of different ways you can use the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) section of your document:
 
