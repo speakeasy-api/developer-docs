@@ -7,7 +7,7 @@ description: "Describe API authentication and authorization in OpenAPI using Sec
 
 Most APIs have some form of authorization and/or authentication, from simple API keys to scope-based OAuth 2 tokens on a tight rotation. APIs might support multiple methods in various combinations, so describing what goes where can become a bit of a challenge. OpenAPI helps by supporting a wide array of authorization and authentication methods, all of which can described under the larger umbrella of Security Schemes.
 
-Security scheme objects are defined in the [Components Object](/openapi/components) in the `securitySchemes` section, and the `security` field in the root object or operation object references them. The `security` field is an array of security requirement objects, which are maps of security scheme names to scopes.
+Security scheme objects are defined in the [Components Object](/openapi/components) in the `securitySchemes` section, and the `security` field references them. The `security` field is an array of security requirement objects, which are maps of security scheme names to scopes.
 
 ```yaml
 paths:
@@ -22,11 +22,11 @@ components:
       scheme: basic
 ```
 
-Each security scheme has a unique name in the `securitySchemes` map, and the `type` field is particular standard or convention.
+Each security scheme has a unique name in the `securitySchemes` map, and the `type` field specifies which authentication or authorization method will be used from a predefined list of supported types.
 
-## Authentication types
+## Security types
 
-The following authentication types are supported by OpenAPI as of v3.1:
+The following authorization/authentication types are supported by OpenAPI as of v3.1:
 
 - [API Key](/openapi/security/security-schemes/security-api-key)
 - [HTTP Authorization](/openapi/security/security-schemes/security-basic) (E.g: Basic, Digest, Bearer, and more)
@@ -116,10 +116,10 @@ To learn more about different types of security schemes, take a look at the guid
 
 ## Global authentication vs endpoint authentication
 
-Describing security in your OpenAPI document is then done through 1 of 2 different options:
+Security can be applied at two levels in OpenAPI:
 
-- **Global security:** the security you describe is available for all operations in your document.
-- **Per operation security:** when described it overrides any global level security described.
+- **Global security:** the security specified is available for all operations.
+- **Per operation security:** only applied to the operation, overriding any global level security.
 
 Here is an example of describing security in the ways mentioned above:
 
