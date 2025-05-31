@@ -3,7 +3,7 @@ title: "Security Schemes in OpenAPI"
 description: "Describe API authentication and authorization in OpenAPI using Security Schemes."
 ---
 
-# Security Schemes in OpenAPI
+# Security schemes in OpenAPI
 
 Most APIs have some form of authorization and/or authentication, from simple API keys to scope-based OAuth 2 tokens on a tight rotation. APIs might support multiple methods in various combinations, so describing what goes where can become a bit of a challenge. OpenAPI helps by supporting a wide array of authorization and authentication methods, all of which can described under the larger umbrella of Security Schemes.
 
@@ -34,7 +34,7 @@ The following authorization/authentication types are supported by OpenAPI as of 
 - [OpenID Connect](/openapi/security/security-schemes/security-openid)
 - [Mutual TLS](/openapi/security/security-schemes/security-mutualtls)
 
-## OpenAPI Example Security Scheme Schema
+## OpenAPI example security scheme schema
 
 Here's an example security schemes object with the sort of values likely to be used. The names are arbitrary and just used for clarity, but could be whatever you want.
 
@@ -129,18 +129,9 @@ The important parts of the above example are the [security](https://spec.openapi
 
 The [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) section is a list (of key-value pairs, but we will talk a bit more about that later) of security schemes that can be used to authenticate all operations or a particular operation (depending on the scope of the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) list).
 
-Below is an example of a number of different ways you can use the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) section of your document:
+```
+security:
+  - MySchemeAbc: []
+```
 
-The items in the list are key-value pairs with a name or key of a security scheme defined in the components section. We recommend giving them a boring name that explains what they are.
-
-The values are an array of scopes used only by the [oauth2](https://spec.openapis.org/oas/v3.1.0#oauth2-security-requirement) and [openIdConnect](https://tools.ietf.org/html/draft-ietf-oauth-discovery-06) type schemes, and define what scopes are needed for the API.
-
-When used as shown above it provides a list of available schemes that can be used, with the end-user of the API being able to choose one of the available schemes to use to authenticate.
-
-If more than one scheme is required to authenticate an API, then that is where additional pairs in the key-value pairs come in. See the example below:
-
-Combining schemes like above give you the option to define AND/OR type functionality when it comes to the requirements of your API.
-
-## How to describe security schemes
-
-[securitySchemes](https://spec.openapis.org/oas/v3.1.0#security-scheme-object/security-schemes) are the actual details of the options provided in the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) sections of your document. The security schemes are components that are defined with the [components](https://spec.openapis.org/oas/v3.1.0#components-object) section of your document. Below is an example of the 5 types of security schemes described above and how they are defined:
+To learn more about how the `security` keyword works in the [OpenAPI Security guide](/openapi/security.mdx). 
