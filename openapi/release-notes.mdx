@@ -1,0 +1,249 @@
+---
+title: OpenAPI Release Notes
+description: A comparative guide to the changes across different versions of the OpenAPI Specification.
+---
+
+import { Callout, Spotlight } from "@/mdx/components";
+
+# OpenAPI release notes
+
+Each release of the OpenAPI Specification introduces new features, schema refinements, and structural changes - some safe, others breaking - that influence how developers design, describe, and document their APIs.
+
+<Callout title="Note" variant="info">
+  This page is not an official OpenAPI release notes page. It explains key
+  version changes with context, examples, and practical insights to help you
+  decide whether to upgrade.
+</Callout>
+
+## OpenAPI version history
+
+| **Version**       | **Release date** | **Changes**                                                                                                                                                                                                                                                                                                                                                                         | **Breaking changes** |
+| ----------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| **OpenAPI 3.0.0** | July 26, 2017    | - Overhauls the request body structure (`content` replaces `formData`, `body`)<br />- Introduces `components` for reusable schemas, parameters, and responses<br />- Improves parameter serialization and content negotiation<br />- Adds `callbacks` for async APIs<br />- Enhances documentation via `tags`, `externalDocs`, and `examples`                                       | Yes                  |
+| **OpenAPI 3.1.0** | Feb 16, 2021     | - Achieves full JSON Schema 2020-12 compliance<br />- Adds support for the `webhooks` object<br />- Allows `$schema` declaration at the document root<br />- Makes `example` and `examples` mutually exclusive<br />- Removes the SemVer requirement in `info.version`<br />- Deprecates `nullable` in favor of `type: [T, "null"]`<br />- Relaxes rules around the `openapi` field | Yes                  |
+| **OpenAPI 3.1.1** | Oct 24, 2024     | - Clarifies required fields and schema interpretation<br />- Improves JSON Schema vocabulary integration<br />- Refines OAuth 2.0 and bearer token documentation<br />- Fixes minor spec language and formatting<br />- Confirms no breaking changes from 3.1.0                                                                                                                     | No                   |
+
+## OpenAPI 3.1 vs 3.0
+
+OpenAPI 3.1 introduces JSON Schema compliance, improved webhooks support, and breaking changes like the discontinued support for semantic versioning. You may want to stick to OpenAPI 3.0 because it offers:
+
+- **Easier migration from OpenAPI 2.0:** Incremental changes make the transition smoother.
+- **More stable tooling support:** Many API tools and frameworks still default to OpenAPI 3.0.
+
+## OpenAPI 3.1.1 vs 3.1.0
+
+[OpenAPI 3.1.1](https://github.com/OAI/OpenAPI-Specification/releases/tag/3.1.1) is not a feature release but a refinement of OpenAPI 3.1.0. It improves terminology, JSON Schema alignment, reference handling, and documentation clarity without introducing breaking changes from OpenAPI 3.1.0. The most interesting change is in terminology.
+
+Previously, "OpenAPI document" and "OpenAPI definition" were used inconsistently. OpenAPI 3.1.1 standardizes these definitions:
+
+- **OpenAPI description:** The complete API definition, which may span multiple documents.
+- **OpenAPI document:** A single file that makes up the whole or a part of an OpenAPI description.
+- **OpenAPI entry document:** The starting point of an OpenAPI description, from which references can be resolved.
+
+If your OpenAPI definition spans multiple files, the entry document is the file that tools like Swagger or Redoc first load to process your API definition.
+
+## What's new in OpenAPI 3.1?
+
+OpenAPI 3.1 introduces the following changes.
+
+### Full JSON Schema 2019-09 support
+
+In OpenAPI 3.0, handling `null` values requires the use of a separate `nullable` property, which is inconsistent with JSON Schema standards.
+
+In OpenAPI 3.1, `nullable` has been removed, and you can use `null` directly as a valid type, which aligns with the JSON Schema 2019-09.
+
+<Spotlight>
+
+#### !!steps Nullable in OpenAPI 3.0
+
+The following schema demonstrates how to define nullability in OpenAPI 3.0:
+
+```yaml ! openapi.yaml
+# !focus(5)
+type: object
+properties:
+  value:
+    type: string
+    nullable: true
+```
+
+#### !!steps Null in OpenAPI 3.1
+
+The equivalent schema in OpenAPI 3.1 uses a union type to represent `null`:
+
+```yaml ! openapi.yaml
+# !focus(4)
+type: object
+properties:
+  value:
+    type: ["string", "null"]
+```
+
+</Spotlight>
+
+You can learn more about nullability in Speakeasy's [OpenAPI schemas](/openapi/schemas/null) documentation.
+
+### Webhooks support
+
+Before OpenAPI 3.x, the OpenAPI Specification didn't provide a way to describe event-driven behavior.
+
+OpenAPI 3.0 introduces `callbacks`, which allow for the documenting of asynchronous requests from the server back to the client. While `callbacks` aren't a perfect fit for modeling webhooks, they are often used as a workaround for doing so.
+
+OpenAPI 3.1 introduces a dedicated `webhooks` field for documenting outgoing API events (for example, notifying a client when a user is created).
+
+<Spotlight>
+
+#### !!steps Webhooks in OpenAPI 3.0
+
+In OpenAPI 3.0, you need to use a workaround like `callbacks` to document webhooks:
+
+```yaml ! openapi.yaml
+paths:
+  /subscribe:
+    post:
+      summary: Subscribe to price change events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                callbackUrl:
+                  type: string
+                  format: uri
+              required:
+                - callbackUrl
+      responses:
+        "202":
+          description: Subscription accepted
+      callbacks:
+        onPriceChange:
+          "{$request.body#/callbackUrl}":
+            post:
+              summary: Price change notification
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        price:
+                          type: number
+                      required:
+                        - id
+                        - price
+              responses:
+                "200":
+                  description: Notification received
+```
+
+#### !!steps Webhooks in OpenAPI 3.1
+
+With OpenAPI 3.1, you can define `webhooks` directly:
+
+```yaml ! openapi.yaml
+webhooks:
+  userRegistered:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+      responses:
+        "200":
+          description: Acknowledged
+```
+
+OpenAPI does not provide a way to explicitly link a webhook with its registration, which is needed to allow users to subscribe to alerts, but you can address this by following the Speakeasy guide to [using webhooks in OpenAPI](/post/openapi-tips-webhooks-callbacks#creating-a-webhook-in-openapi).
+
+</Spotlight>
+
+### Path items in components
+
+In OpenAPI 3.0, if you have multiple endpoints with similar structures (for example, user-related paths like `/users/{id}` and `/admins/{id}`), you have to repeat the same request structure for each path.
+
+OpenAPI 3.1 allows reusable path item objects to be stored in `components.pathItems`, reducing duplication and improving maintainability.
+
+<Spotlight>
+
+#### !!steps Paths in OpenAPI 3.0
+
+In OpenAPI 3.0, each path has to be fully defined, even if multiple endpoints share the same request structure:
+
+```yaml ! openapi.yaml
+paths:
+  /users/{id}:
+    get:
+      summary: Get user information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User data
+
+  /admins/{id}:
+    get:
+      summary: Get admin information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Admin data
+```
+
+#### !!steps Paths in OpenAPI 3.1
+
+In OpenAPI 3.1, you can define the path structure once and reuse it across multiple paths:
+
+```yaml ! openapi.yaml
+components:
+  pathItems:
+    userLookup:
+      get:
+        summary: Get user or admin information
+        parameters:
+          - name: id
+            in: path
+            required: true
+            schema:
+              type: string
+        responses:
+          "200":
+            description: User or admin data
+
+paths:
+  /users/{id}:
+    $ref: "#/components/pathItems/userLookup"
+
+  /admins/{id}:
+    $ref: "#/components/pathItems/userLookup"
+```
+
+</Spotlight>
+
+### Breaking changes in OpenAPI 3.1
+
+Apart from these structural improvements, **OpenAPI 3.1 introduces breaking changes** that may require modifications to existing OpenAPI documents. Here are the most important ones:
+
+- **OpenAPI no longer follows semantic versioning (SemVer):** Future updates may introduce breaking changes, even in minor version increments.
+- **`exclusiveMaximum` and `exclusiveMinimum` values must be numeric:** Boolean values (`true` and `false`) are no longer valid. Use a numeric limit instead.
+- **`format` no longer defines file payloads:** You can no longer use `format: binary` or `format: base64`. Use `contentEncoding` and `contentMediaType` instead.
+- **The `jsonSchemaDialect` field has been added:** A new top-level field allows you to specify the default `$schema` value for schema objects, ensuring consistency in JSON Schema validation.
+
+Visit the OpenAPI GitHub repository to learn more about the changes introduced in [OpenAPI 3.0](https://github.com/OAI/OpenAPI-Specification/releases/tag/3.0.0) and [OpenAPI 3.1](https://github.com/OAI/OpenAPI-Specification/releases/tag/3.1.0).
