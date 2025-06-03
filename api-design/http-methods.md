@@ -8,7 +8,7 @@ description: "Design intuitive, validated request bodies that make your API easy
 We learned about URLs in _[What is a URL?](/api-design/urls)_ which is how an
 API defines its "resources". If an API request were a sentence, the URL would be the noun. In this section, we'll cover the verbs of API requests: HTTP methods.
 
-```curl focus:1[1:3]
+```curl
 GET /places?lat=40.759211&lon=-73.984638 HTTP/1.1
 Host: api.example.org
 ```

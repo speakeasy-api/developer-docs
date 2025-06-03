@@ -134,4 +134,4 @@ security:
   - MySchemeAbc: []
 ```
 
-To learn more about how the `security` keyword works in the [OpenAPI Security guide](/openapi/security.mdx). 
+Learn more about how the `security` keyword works in the [OpenAPI Security guide](/openapi/security.mdx). 
