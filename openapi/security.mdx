@@ -44,11 +44,54 @@ OpenAPI v3.1 supports the following security schemes:
 
 Once there are security schemes defined, they can be referenced in the `security` section of the OpenAPI document or at the operation level.
 
-## Security requirements
+## Security Requirement Object
 
-Depending on the API, security requirements can be simple or complex. 
+A Security Requirement Object defines a map of security scheme names, with an array of [scopes or roles](#security-requirement-scopes-or-roles) that are required to access an API (or specific operation). 
 
-To make this more concrete, some examples are provided below.
+The names **_must_** match the names of [Security Scheme Objects](/openapi/security/security-schemes) defined in the [Components Object](/openapi/components) under the `securitySchemes` field.
+
+<Table
+  data={[
+    { field: "{securitySchemeName}", type: "List<string>", required: "", description: "A list of [scopes or roles](#security-requirement-scopes-or-roles) required for the security scheme. If the security scheme type is `oauth2` or `openIdConnect`." }
+  ]}
+  columns={[
+    { key: "field", header: "Field" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+
+## Global authentication vs endpoint authentication
+
+Security can be applied at two levels in OpenAPI:
+
+- **Global security:** the security specified is available for all operations.
+- **Per operation security:** only applied to the operation, overriding any global level security.
+
+Here is an example of describing security in the ways mentioned above:
+
+```yaml
+security:
+  - apiKey: [] # Global security requirement
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks
+    post:
+      operationId: createDrink
+      summary: Create a new drink
+      security:
+        - apiKey: [] # Per operation security requirement
+```
+
+The important parts of the above example are the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) and [securitySchemes](https://spec.openapis.org/oas/v3.1.0#security-scheme-object/security-schemes) sections.
+
+## Working with security requirements
+
+Depending on the API, security requirements can be simple or complex. Some examples should hopefully help to illustrate how to work with security requirements in OpenAPI.
 
 ### Simple API Security
 
@@ -87,10 +130,10 @@ paths:
     get:
       operationId: listDrinks
       summary: Get a list of drinks
+    # !focus(1:5)
     post:
       operationId: createDrink
       summary: Create a new drink
-      # !focus(1:2)
       security:
         - apiKey: [] # This operation requires an API key
 ```
@@ -99,70 +142,73 @@ paths:
 
 A more complex API might require different security requirements for different operations, or even allow multiple security schemes to be used interchangeably.
 
+Here is an example where the API can be accessed with either an API key or OAuth 2.0. OAuth 2 allows for more granular access control using the concept of scopes, which can be defined in the `securitySchemes` section and referred to in the `security` section for specific operations.
+
 ```yaml
+# focus(3:16)
 paths:
   /drinks:
     get:
       operationId: listDrinks
       summary: Get a list of drinks
       security:
-        - 
-        - apiKey: []
-        - oauth2: # This operation can also be accessed with OAuth 2.0
+        - apiKey: [] # Can be access with an API key, or...
+        - oauth2: # an oauth2 token which has the read scope
           - read
     post:
       operationId: createDrink
       summary: Create a new drink
       security:
-        - apiKey: []
-        - oauth2: # This operation can also be accessed with OAuth 2.0
+        - apiKey: [] # Can be accessed with an API key, or... 
+        - oauth2: # an oauth2 token which has the write scope
           - write
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      name: Speakeasy-API-Key
+      in: header
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://example.com/oauth/authorize
+          tokenUrl: https://example.com/oauth/token
+          scopes:
+            read: Read access to the API
+            write: Write access to the API
 ```
 
+## Security requirement scopes or roles in openapi
 
-## 
+When defining an OAuth 2.0 or OpenID Connect [Security Requirement Object](/openapi/security#security-requirement-object) for an operation, the `{securitySchemeName}` field should contain a list of scopes or roles required for the security scheme.
 
-In valid OpenAPI v3.1, the [Security Requirement Objects](/openapi/security#security-requirement-object) listed in `security` sections may only reference [Security Scheme Objects](/openapi/security/security-schemes) that are defined in the [Components Object](/openapi/components) under the `securitySchemes` field. In other words, the `security` section may not contain inline security schemes, and it may not contain security schemes that are not defined yet.
-
-## Security Requirement Object
-
-A Security Requirement Object defines a map of security scheme names to [scopes or roles](#security-requirement-scopes-or-roles) that are required to access the API. The names **_must_** match the names of [Security Scheme Objects](/openapi/security/security-schemes) defined in the [Components Object](/openapi/components) under the `securitySchemes` field.
-
-<Table
-  data={[
-    { field: "{securitySchemeName}", type: "List<string>", required: "", description: "A list of [scopes or roles](#security-requirement-scopes-or-roles) required for the security scheme. If the security scheme type is `oauth2` or `openIdConnect`." }
-  ]}
-  columns={[
-    { key: "field", header: "Field" },
-    { key: "type", header: "Type" },
-    { key: "required", header: "Required" },
-    { key: "description", header: "Description" }
-  ]}
-/>
-
-## Global authentication vs endpoint authentication
-
-Security can be applied at two levels in OpenAPI:
-
-- **Global security:** the security specified is available for all operations.
-- **Per operation security:** only applied to the operation, overriding any global level security.
-
-Here is an example of describing security in the ways mentioned above:
-
-The important parts of the above example are the [security](https://spec.openapis.org/oas/v3.1.0#security-requirement-object) and [securitySchemes](https://spec.openapis.org/oas/v3.1.0#security-scheme-object/security-schemes) sections. We will go into some details about how they are defined and the options available.
-
-
-## Expressing Security Requirements in OpenAPI
-
-The `security` keyword can be used in the following ways to express security requirements.
-
-### Disabling Security in OpenAPI
-
-Security can be _disabled_ for a specific operation by providing an empty array (`[]`) in the list of security requirements.
-
-In this example, the `POST` operation in the `/auth` path does not require security:
+For example, the following security requirement object requires the `read` and `write` scopes for the `oauth2` security scheme:
 
 ```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks
+      # Operation requires read and write scopes
+      security:
+        - oauth2:
+            - read
+            - write
+      # ...
+```
+
+### Disabling security requirements
+
+Security can be disabled for a specific operation by providing an empty array (`[]`) in the list of security requirements.
+
+In this example, the `POST` operation in the `/auth` path does not require security, despite the global security requirement of an API key:
+
+```yaml
+security:
+  - apiKey: []
 paths:
   /auth:
     post:
@@ -172,7 +218,7 @@ paths:
       # ...
 ```
 
-### Optional Security
+### Optional security
 
 Security can also be made optional by providing an empty object (`{}`) in the list of security requirements.
 
@@ -184,7 +230,7 @@ security:
   - {}
 ```
 
-### Adding Optional Security to a Specific Operation
+### Adding optional security to a specific operation
 
 Security can be made _optional_ for a specific operation by providing an empty object (`{}`) in the list of security requirements.
 
@@ -203,21 +249,7 @@ paths:
       # ...
 ```
 
-### Allowing a Choice of Security Schemes
-
-To allow users to choose between multiple different security requirements, define the `security` keyword as a list of [Security Requirement Objects](/openapi/security#security-requirement-object). The API consumer can choose one of the requirements to authenticate.
-
-In this example, the API may be accessed with an API key **OR** OAuth 2.0:
-
-```yaml
-security: # apiKey OR oauth2 can be used
-  - apiKey: []
-  - oauth2:
-      - read
-      - write
-```
-
-### Requiring Multiple Security Schemes Together
+### Requiring multiple security schemes together
 
 If multiple schemes are required together, then the [Security Requirement Object](/openapi/security#security-requirement-object) should be defined with multiple security schemes.
 
@@ -229,7 +261,7 @@ security: # both apiKey AND basic is required
     basic: []
 ```
 
-### Complex Authorization Scenarios
+### Complex authorization scenarios
 
 This **AND**/**OR** logic along with optional (`{}`) security can be used in any combination to express complex authorization scenarios.
 
@@ -242,24 +274,4 @@ security: # apiKey AND oauth2 OR basic
       - read
       - write
   - basic: []
-```
-
-## Security Requirement Scopes or Roles in OpenAPI
-
-When defining an OAuth 2.0 or OpenID Connect [Security Requirement Object](/openapi/security#security-requirement-object) for an operation, the `{securitySchemeName}` field should contain a list of scopes or roles required for the security scheme.
-
-For example, the following security requirement object requires the `read` and `write` scopes for the `oauth2` security scheme:
-
-```yaml
-paths:
-  /drinks:
-    get:
-      operationId: listDrinks
-      summary: Get a list of drinks
-      # Operation requires read and write scopes
-      security:
-        - oauth2:
-            - read
-            - write
-      # ...
 ```
