@@ -70,12 +70,13 @@ Resources can also return `blob` values for binary content like base64-encoded P
 
 ## Declaring a resource in Python
 
-Resources are defined via two handlers:
+Resources are regular functions marked with decorators that define their role:
 
-- The `@list_resources()` handler defines URI templates or static paths.
-- The `@read_resource()` handler implements logic for resolving a resource by URI.
+- `@list_resources()` exposes static resources. You return a list of `types.Resource` items for static URIs.
+- `@list_resource_templates()` exposes dynamic resources. You return a list of `types.ResourceTemplate` items for dynamic, parameterized URIs.
+- `@read_resource()` implements logic for resolving a resource by URI.
 
-Here's an example using the Alpha Vantage API to return earnings data:
+Here's an example using the Alpha Vantage API to return earnings data. Since we want to support arbitrary stock symbols, we'll use a resource template to let clients specify the symbol.
 
 ```python
 import asyncio
@@ -88,8 +89,8 @@ import requests
 
 app = Server("stock-earnings-server")
 
-@app.list_resources()
-async def list_resources() -> list[types.ResourceTemplate]:
+@app.list_resource_templates()
+async def list_earnings_resources_handler(symbol: str) -> list[types.ResourceTemplate]:
     return [
         types.ResourceTemplate(
             uriTemplate="stock://{symbol}/earnings",
@@ -100,7 +101,7 @@ async def list_resources() -> list[types.ResourceTemplate]:
     ]
 
 @app.read_resource()
-async def read_resource(uri: AnyUrl) -> str:
+async def read_earnings_resource_handler(uri: AnyUrl) -> str:
     parsed = str(uri)
 
     if not parsed.startswith("stock://") or not parsed.endswith("/earnings"):
@@ -122,9 +123,25 @@ async def read_resource(uri: AnyUrl) -> str:
 In the example above, we:
 
 - **Declare a resource template `stock://{symbol}/earnings`** that clients can use to request dynamic resources for any stock symbol.
-- **Use `@list_resources` to expose the template** to clients, which tells the agent how to construct valid URIs.
-- **Implement `@read_resource` to handle execution**, where we fetch real-time earnings from the Alpha Vantage API for the provided stock symbol.
+- **Use `@list_resource_templates` to expose the template** to clients, which tells the agent how to construct valid URIs.
+- **Use `@read_resource` to handle execution**, where we fetch real-time earnings from the Alpha Vantage API for the provided stock symbol.
 - **Return a valid JSON text response**, which is wrapped by MCP in a `TextContent` resource and can be used as context for prompts or decisions.
+
+If the resource was static – for example, if the client only tracks Apple stock – we'd use the `@list_resources` decorator and return a list of `types.Resource` items instead:
+
+```python
+...
+@app.list_resources()
+async def list_apple_earnings_resource() -> list[types.Resource]:
+    return [
+        types.Resource(
+            uri="stock://AAPL/earnings",
+            name="Apple Earnings",
+            description="Quarterly and annual earnings for Apple Inc.",
+            mimeType="application/json"
+        )
+    ]
+```
 
 ## Best practices and pitfalls to avoid
 
