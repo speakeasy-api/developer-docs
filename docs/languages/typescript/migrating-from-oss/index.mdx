@@ -1,0 +1,564 @@
+---
+title: "Migrating from OpenAPI Generator to Speakeasy"
+description: "A step-by-step guide to migrating from OpenAPI Generator to Speakeasy"
+---
+
+import { Callout } from "@/mdx/components";
+
+If you use [OpenAPI Generator to create TypeScript Node SDKs](https://openapi-generator.tech/docs/generators/typescript-node), you're probably familiar with its challenges: although it's a neat tool to generate basic SDKs from OpenAPI, its features, documentation, error handling, and general support are limited.
+
+This guide walks you through migrating from OpenAPI Generator's TypeScript Node generator to Speakeasy and provides practical tips to make the transition smooth for you and your API consumers.
+
+## Why migrate to Speakeasy?
+
+In [our comparison of OpenAPI Generator and Speakeasy](/docs/languages/typescript/oss-comparison-ts), we highlight the benefits of using Speakeasy to generate SDKs. Here's a quick recap:
+
+- **Advanced schema validation:** Compared to the basic validation OSS generators provide, Speakeasy uses Zod for robust, type-safe schema validation.
+
+- **Comprehensive documentation generation:** Speakeasy autogenerates full documentation with examples, keeping docs in sync with the SDK.
+
+- **Enhanced union types and polymorphism:** Speakeasy supports discriminated unions and offers improved type safety for polymorphic schemas.
+
+- **Built-in support for OAuth 2.0 and retries:** Out-of-the-box features like OAuth 2.0 flows, automatic retries, and pagination simplify error handling and improve the developer experience.
+
+- **Modern ecosystem compatibility:** Speakeasy is designed for modern development environments (including support for React Hooks, Deno, Bun, and more) and integrates easily with CI/CD pipelines.
+
+## Migration example: A TypeScript SDK
+
+We'll use a coffee API as a running example to demonstrate migrating a TypeScript SDK from OpenAPI Generator to Speakeasy.
+
+We used the OpenAPI document to create a TypeScript Node SDK that allows users to interact with the coffee API. Here's a simplified version of the OpenAPI document:
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Coffee Orders API
+  version: 1.0.0
+  description: A CRUD API for managing coffee orders and available coffee types.
+security:
+  - ApiKeyAuth: []
+servers:
+  - url: http://localhost:8000
+    description: Development server
+paths:
+  /orders:
+    get:
+      tags:
+        - Orders
+      summary: Get Orders
+      operationId: GetOrders
+      parameters:
+        - name: coffee_type
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoffeeOrder"
+      x-speakeasy-group: orders
+
+  /coffee-types:
+    get:
+      tags:
+        - CoffeeTypes
+      summary: Get Coffee Types
+      operationId: GetCoffeeTypes
+      responses:
+        200:
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoffeeType"
+      x-speakeasy-group: coffeeTypes
+
+components:
+  schemas:
+    CoffeeType:
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        id:
+          type: integer
+        price_multiplier:
+          type: number
+      type: object
+      required:
+        - id
+        - name
+```
+
+<Callout title="NOTE" type="info">
+  For the complete example project, including the generated open-source SDK and
+  OpenAPI document, check out the [coffee API example
+  repository](https://github.com/speakeasy-api/speakeasy-examples/oss-migration-guide).
+</Callout>
+
+## What about all my custom code?
+
+Odds are, you've customized your OpenAPI Generator TypeScript SDK extensively, maintaining a mix of generated code and custom layers for specialized error handling, logging middleware, and helper functions.
+
+This leads to a question: "How difficult will it be to implement all of my custom functionality?"
+
+With OpenAPI Generator, these customizations often live outside the generated code or require you to modify the generated files directly, making regenerating the SDK tedious and error-prone.
+
+The good news is that Speakeasy offers built-in solutions for most custom enhancements through its hooks system, which we explore below. Instead of hacking generated code (which breaks every time you regenerate), you can extend the SDK predictably and maintainably.
+
+## Migrating your TypeScript SDK from OpenAPI Generator to Speakeasy
+
+Let's take a step-by-step look at migrating the SDK to Speakeasy, highlighting the key differences and improvements along the way.
+
+### 1. Pre-migration checklist
+
+You'll need:
+
+- **A Speakeasy account.** Sign up free at [Speakeasy.com](https://speakeasy.com/).
+- **The Speakeasy CLI.** Install the Speakeasy CLI globally in your environment.
+
+  ```bash
+  curl -fsSL https://go.speakeasy.com/cli-install.sh | sh
+  ```
+
+  Authenticate the CLI with your Speakeasy account:
+
+  ```bash
+  speakeasy auth login
+  ```
+
+- **An OpenAPI document.** Make sure you have the latest version of your OpenAPI document. If not, export it from your API documentation or source code. We use the coffee API OpenAPI document to demonstrate.
+
+- **SDK feature inventory.** List custom features in your SDK that aren't part of the standard OpenAPI Generator output, for example, custom authentication mechanisms, rate limiting logic, or extended error classes.
+
+  | Feature        | Implementation          | Used by customers? |
+  | -------------- | ----------------------- | ------------------ |
+  | Authentication | Basic API key in header | Yes, widely        |
+  | Rate limiting  | Custom retry logic      | Yes, some          |
+  | Error handling | Extended error classes  | Yes, power users   |
+
+  Don't skip this step! Understanding what custom features your SDK has helps prioritize what needs special attention during migration.
+
+### 2. Generate a Speakeasy SDK using your OpenAPI document
+
+The Speakeasy CLI provides a quickstart command that guides you through the process of importing your OpenAPI document and generating a Speakeasy SDK. Alternatively, you can create a workflow file manually and run the generation command. We'll use the quickstart command.
+
+<Callout title="NOTE" type="info">
+  If you're following along with the coffee API example, you'll need to `git
+  clone` the [example
+  repository](https://github.com/speakeasy-api/speakeasy-examples) and navigate
+  to the `oss-migration-guide` directory to run the quickstart command.
+</Callout>
+
+```bash
+# Install the CLI if you haven't
+brew install speakeasy-api/homebrew-tap/speakeasy
+
+# Run the quickstart command
+speakeasy quickstart
+```
+
+The quickstart process walks you through importing your OpenAPI document and configuring your SDK, including selecting the language, naming the SDK, and specifying the directory the SDK should be output to. Select TypeScript as the output language.
+
+Speakeasy generates your TypeScript SDK from the OpenAPI document and writes it to the specified directory.
+
+![Speakeasy SDK generation](./assets/speakeasy-quickstart.png)
+
+### 3. Compare the generated SDKs
+
+Let's compare key aspects of the SDKs generated by OpenAPI Generator and Speakeasy to understand how they affect your users.
+
+#### Authentication
+
+Speakeasy offers a more straightforward security configuration that's directly tied to the SDK instance itself, making it easier for your users to manage authentication:
+
+<div className="md:flex gap-10">
+  <div className="md:w-1/2">
+```typescript OpenAPI Generator
+import { Configuration, DefaultApi } from 'coffee-api-sdk';
+
+const config = new Configuration({
+apiKey: 'YOUR_API_KEY'
+});
+const api = new DefaultApi(config);
+
+````
+  </div>
+  <div className="md:w-1/2">
+```typescript Speakeasy
+import { SpeakeasyCoffeeClient } from "speakeasy-coffee-client";
+
+const sdk = new SpeakeasyCoffeeClient({
+  apiKeyAuth: "YOUR_API_KEY"
+});
+````
+
+  </div>
+</div>
+
+#### API calls
+
+Speakeasy's method naming convention reflects the API's path structure more explicitly. While this approach is somewhat more verbose, it's helpful for understanding API relationships:
+
+<div className="md:flex gap-10">
+  <div className="md:w-1/2">
+```typescript OpenAPI Generator
+// Flat structure
+const orders = await api.getOrders({ coffeeType: 'Latte' });
+const order = await api.getOrder(123);
+```
+  </div>
+  <div className="md:w-1/2">
+```typescript Speakeasy
+// Resource-based organization
+const orders = await sdk.orders.list({
+  coffeeType: 'Latte'
+});
+const order = await sdk.orders.getById({
+  orderId: 123
+});
+```
+  </div>
+</div>
+
+#### Error handling
+
+Speakeasy provides typed errors that allow for granular error handling, meaning your users can catch specific error types and respond accordingly:
+
+<div className="md:flex gap-10">
+  <div className="md:w-1/2">
+```typescript OpenAPI Generator
+// Generic errors
+try {
+  await api.createOrder(newOrder);
+} catch (error) {
+  console.error('API error:', error.message);
+}
+```
+  </div>
+  <div className="md:w-1/2">
+```typescript Speakeasy
+// Typed errors
+try {
+  await sdk.orders.create({
+    id: 5,
+    customerName: "Alice",
+    coffeeType: "Espresso",
+    size: "Medium",
+    extras: ["Extra shot"],
+    price: 4.50
+  });
+} catch (error) {
+  if (error instanceof sdk.Error.BadRequestError) {
+    console.error('Invalid request:', error.statusCode, error.body);
+  } else if (error instanceof sdk.Error.RateLimitError) {
+    console.error('Rate limit exceeded, retry after:',
+      error.headers.get('retry-after'));
+  } else {
+    console.error('Unknown error:', error);
+  }
+}
+```
+  </div>
+</div>
+
+A key benefit of Speakeasy is that most features are built-in, reducing the need for custom code. With OpenAPI Generator, you often need to write additional code to handle common scenarios like authentication, error handling, and pagination.
+
+### 4. Test the generated SDK
+
+By default, OpenAPI Generator doesn't provide tests for your SDK. You'll need to write your own tests to validate the generated code. For example:
+
+```typescript ./custom-test.ts
+import { Configuration, DefaultApi } from "coffee-api-sdk";
+import { expect, test } from "vitest";
+
+test("get orders returns correct data", async () => {
+  const config = new Configuration({
+    apiKey: process.env.API_KEY,
+  });
+  const api = new DefaultApi(config);
+  const orders = await api.getOrders();
+  expect(orders).toBeDefined();
+  expect(orders.length).toBeGreaterThan(0);
+});
+```
+
+By contrast, Speakeasy automatically generates a baseline suite of tests that validate core functionality, reducing the initial testing overhead.
+
+To add tests to your Speakeasy SDK, run the following command from the SDK directory:
+
+```bash
+speakeasy configure tests
+```
+
+![Configuring tests](./assets/speakeasy-configure-tests.png)
+
+Speakeasy generates a `__tests__` directory in the SDK's `/src` folder, containing baseline tests to validate core functionality.
+
+```typescript ./src/__tests__/orders.test.ts
+test("Orders Get Orders Multiple Orders", async () => {
+  const testHttpClient = createTestHTTPClient("GetOrders-multiple_orders");
+
+  const speakeasyCoffeeClient = new SpeakeasyCoffeeClient({
+    serverURL: process.env["TEST_SERVER_URL"] ?? "http://localhost:18080",
+    httpClient: testHttpClient,
+    apiKeyAuth: "your-api-key-here",
+  });
+
+  const result = await speakeasyCoffeeClient.orders.list({});
+  expect(result).toBeDefined();
+  expect(result).toEqual([
+    {
+      id: 1,
+      customerName: "Alice",
+      coffeeType: "Latte",
+      size: "Medium",
+      extras: ["Extra shot", "Soy milk"],
+      price: 4.5,
+    },
+    {
+      id: 2,
+      customerName: "Bob",
+      coffeeType: "Espresso",
+      size: "Small",
+      extras: ["Extra shot"],
+      price: 3.5,
+    },
+  ]);
+});
+```
+
+You'll need to write additional tests to cover any custom functionality in your SDK.
+
+```typescript
+// Custom test
+test("SpeakeasyCoffeeClient - Rate Limiting", async () => {
+  const testHttpClient = createTestHTTPClient("rate_limiting");
+  const sdk = new SpeakeasyCoffeeClient({
+    serverURL: process.env["TEST_SERVER_URL"] ?? "http://localhost:8000",
+    httpClient: testHttpClient,
+  });
+
+  const result = await sdk.orders.list({});
+  expect(result).toBeDefined();
+  expect(result.orders?.length).toBeGreaterThan(0);
+  expect(result.orders?.[0]).toEqual({
+    id: 1,
+    customerName: "Alice",
+    coffeeType: "Latte",
+    size: "Medium",
+    extras: ["Extra shot", "Soy milk"],
+    price: 4.5,
+  });
+});
+```
+
+### 5. Implement your migration strategy
+
+How to migrate your customers to the new SDK can be a tricky decision and depends on your customer base, the complexity of your SDK, and your team's capacity.
+
+Most teams choose one of two approaches: Side-by-side implementation or versioned migration.
+
+#### Option A: Side-by-side implementation
+
+A side-by-side implementation works well for SDKs with many users who need time to migrate, allowing you to maintain both the OpenAPI Generator and Speakeasy versions of your SDK in parallel.
+
+Here's how a side-by-side implementation works:
+
+1. Generate both SDKs in your build pipeline.
+2. Package the Speakeasy SDK as a "beta" or "next" version.
+3. Encourage users to adopt the new SDK.
+4. **Eventually** deprecate the OpenAPI Generator SDK.
+
+```text Example package structure
+coffee-api-sdk (original)
+
+coffee-api-sdk-next (Speakeasy version)
+```
+
+#### Option B: Versioned migration (recommended)
+
+For a cleaner approach, release the Speakeasy version of your SDK as a **new major version**.
+
+```json package.json
+{
+  "name": "coffee-api-sdk",
+  "version": "2.0.0",
+  "description": "Now powered by Speakeasy"
+}
+```
+
+Here's how a versioned migration works:
+
+1. Clearly document breaking changes.
+2. Provide migration examples.
+3. Support customers through the transition.
+
+This approach is typically recommended for most teams, as it avoids the maintenance burden of two parallel implementations.
+
+## Preserving custom functionality in your SDK
+
+One of the biggest challenges in migrating an SDK from OpenAPI Generator is preserving custom code. Speakeasy simplifies this with SDK hooks, which allow you to inject custom logic at specific points in the request lifecycle:
+
+- **On SDK initialization:** Configure base URLs, auth settings, or custom HTTP clients.
+- **Before request:** Add headers, validate data, or implement logging.
+- **After success:** Process successful responses or add telemetry.
+- **After error:** Customize error handling or add debugging information.
+
+### Comparing customization approaches: OpenAPI Generator vs Speakeasy
+
+With OpenAPI Generator, you typically modify generated code directly or create wrapper classes – both of which can be lost when you regenerate the SDK. Speakeasy's approach is much more maintainable.
+
+For example, if we want to add analytics to our SDK, we can create a custom hook that logs the time taken for each API call:
+
+<div className="md:flex gap-10">
+  <div className="md:w-1/2">
+
+```typescript OpenAPI Generator
+class CoffeeApiWithAnalytics extends DefaultApi {
+  constructor(config: Configuration) {
+    super(config);
+  }
+
+  async getOrders(options?: any): Promise<Order[]> {
+    const startTime = Date.now();
+
+    try {
+      const result = await super.getOrders(options);
+      console.log(`API call completed in ${Date.now() - startTime}ms`);
+      return result;
+    } catch (error) {
+      console.error(`API call failed`);
+      throw error;
+    }
+  }
+}
+```
+
+  </div>
+  <div className="md:w-1/2">
+
+```typescript Speakeasy
+import { AfterSuccessHook, BeforeRequestHook } from "./types";
+
+export class AnalyticsHook implements BeforeRequestHook, AfterSuccessHook {
+  beforeRequest(ctx, request) {
+    ctx.context.set("startTime", Date.now());
+    ctx.context.set("path", new URL(request.url).pathname);
+    return request;
+  }
+
+  afterSuccess(ctx, response) {
+    const startTime = ctx.context.get("startTime");
+    const path = ctx.context.get("path");
+    console.log(`${path} completed in ${Date.now() - startTime}ms`);
+    return response;
+  }
+}
+```
+
+  </div>
+</div>
+
+With Speakeasy, you can create a custom hook that implements the `BeforeRequestHook` and `AfterSuccessHook` interfaces, allowing you to add custom logic without modifying the generated code directly.
+
+To use your custom hook, you need to register it in your SDK configuration:
+
+```typescript src/hooks/registration.ts
+import { AnalyticsHook } from "./analytics";
+import { Hooks } from "./types";
+
+export function initHooks(hooks: Hooks) {
+  const analyticsHook = new AnalyticsHook();
+  hooks.registerBeforeRequestHook(analyticsHook);
+  hooks.registerAfterSuccessHook(analyticsHook);
+}
+```
+
+Speakeasy's SDK hooks make customizations:
+
+- **Maintainable:** Hooks are kept separate from generated code.
+- **Reusable:** One hook implementation works across all API methods.
+- **Future-proof:** Your customizations survive SDK regeneration.
+- **Testable:** Hooks can be independently unit tested.
+
+If your hooks need external packages (like a logging library), you can add them to your `gen.yaml` configuration:
+
+```yaml
+typescript:
+  additionalDependencies:
+    dependencies:
+      winston: "^3.17.0" # For logging
+```
+
+For more details on implementing various hook types, refer to the [SDK hooks documentation](/docs/customize/code/sdk-hooks).
+
+## Automating SDK generation, testing, and publishing with CI/CD
+
+OpenAPI Generator lacks built-in automation for SDK generation, testing, and publishing. Speakeasy integrates seamlessly with CI/CD pipelines, allowing you to automate the entire process from generating the SDK to publishing it to npm.
+
+Explore the [Speakeasy Platform](https://app.speakeasy.com/) to learn how it helps you automate SDK generation and deployment.
+
+## Supporting your users through migration
+
+Migrating your SDK is only half the battle – you also need to support your users through the transition. The best way to do this is by providing clear documentation that explains the migration process. For example:
+
+````markdown MIGRATION.md
+# Migrating to SDK v2.0
+
+## Key Changes
+
+### Authentication
+
+**Before:**
+\```typescript
+const config = new Configuration({ apiKey: 'YOUR_API_KEY' });
+const api = new DefaultApi(config);
+\```
+
+**After:**
+\```typescript
+const sdk = new SpeakeasyCoffeeClient({
+apiKeyAuth: 'YOUR_API_KEY'
+});
+\```
+
+### Making API Calls
+
+**Before:**
+\```typescript
+const orders = await api.getOrders({ coffeeType: 'Latte' });
+const order = await api.getOrder(123);
+\```
+
+**After:**
+\```typescript
+const orders = await sdk.orders.list({ coffeeType: 'Latte' });
+const order = await sdk.orders.getById({ orderId: 123 });
+\```
+
+### Error Handling
+
+**Before:** Generic catch-all errors
+**After:** Typed errors (`sdk.Error.BadRequestError`, etc.)
+````
+
+Speakeasy automatically generates SDK documentation, reducing the effort required on your end. In addition to generated docs, provide migration guides and examples to help customers understand the changes.
+
+## Summary
+
+Here's a quick recap of the steps involved in migrating an SDK from OpenAPI Generator to Speakeasy:
+
+- Start with a thorough inventory of your current setup.
+- Test the migrated SDK thoroughly, especially any custom functionality.
+- Decide on a migration strategy that fits your customer base.
+- Provide clear documentation of all changes to your customers.
