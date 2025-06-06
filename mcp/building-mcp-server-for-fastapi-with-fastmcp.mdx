@@ -13,31 +13,30 @@ In this article, we will learn how to build an MCP server for a [FastAPI](https:
 
 ## Requirements
 
-For this article, we are building an MCP server using the Apitizing Burgers API project that you can find [here](https://github.com/koladev32/apitizing-burgers/tree/base-mcp-fastmcp-speakeasy). Clone the project with the following command:
+For this article, we are building an MCP server using the Apitizing Burgers API project that you can find [here](https://github.com/speakeasy-api/examples/tree/main/fastmcp-speakeasy-project/base). Clone the project with the following command:
 
 ```bash
-git clone https://github.com/koladev32/apitizing-burgers
-cd apitizing-burgers/
-git checkout base-mcp-fastmcp-speakeasy
+git clone https://github.com/ritza-co/speakeasy-examples
+cd speakeasy-examples/fastmcp-speakeasy-project/base
 ```
 
 To make the setup easier, we are working with the environment manager `uv`. You can use any Python environment creation tool which you are familiar with.
 
 ```bash
 uv venv
-uv pip install "fastapi[all]"
-```
-
-Then, activate the virtual environment.
-
-```bash
 source .venv/bin/activate
 ```
 
-Then run the API using the following command in the `app` directory:
+Then, install the required dependencies for the project. The `apitizing-burger` project is already set up with FastAPI, so we will install the FastAPI package and its dependencies.
 
 ```bash
-uvicorn main:app --reload
+uv pip install "fastapi[all]"
+```
+
+Then run the API using the following command:
+
+```bash
+uvicorn app.main:server --reload
 ```
 
 We also recommend having [Claude Desktop](https://claude.ai/download) installed on your machine for testing the MCP servers. We can now start integrating FastMCP and Speakeasy in the project to build an MCP server. Let's begin by integrating FastMCP.
@@ -110,7 +109,7 @@ You can find the configuration file by going to Settings -> Developer -> Edit co
         "fastmcp",
         "fastmcp",
         "run",
-        "path/to/project/apitizing-burgers/app/mcp_server.py"
+        "path/to/project/fastmcp-speakeasy-project/base/app/mcp_server.py"
       ]
     }
   }
@@ -132,10 +131,10 @@ The `--with` option enables us to specify the dependencies to use when running t
         "fastapi[all]",
         "fastmcp",
         "run",
-        "path/to/project/apitizing-burgers/app/mcp_server.py"
+        "path/to/project/fastmcp-speakeasy-project/base/app/mcp_server.py"
       ],
       "env": {
-        "PYTHONPATH": "/path/to/project/apitizing-burgers"
+        "PYTHONPATH": "path/to/project/fastmcp-speakeasy-project/base/"
       }
     }
   }
@@ -226,7 +225,7 @@ choco install speakeasy
 
 ### 2. Uploading the OpenAPI document
 
-The `apitizing-burger` project already have OpenAPI document files, such as `openapi.yaml` and `openapi.json`. Therefore, we won't need to perform any configuration on that side.
+Our project already have OpenAPI document files, such as `openapi.yaml` and `openapi.json`. Therefore, we won't need to perform any configuration on that side.
 
 > 📌**Note**: For your FastAPI project, you will need to generate those files. We have tutorial you can follow to understand how to generate a quality OpenAPI document for your FastAPI project [here](https://www.speakeasy.com/openapi/frameworks/fastapi#basic-fastapi-setup).
 
@@ -308,19 +307,19 @@ Speakeasy allows you to [customize](https://www.speakeasy.com/docs/model-context
 
 ```yaml
 paths:
- /products:
- post:
- operationId: createProduct
- tags: [products]
- summary: Create a product
- description: API endpoint for creating a product in the CMS
- x-speakeasy-mcp:
- disabled: false
- name: create-product
- scopes: [products, create, ecommerce]
- description: |
- Creates a new product using the provided form. The product name should
- not contain any special characters or harmful words.
+  /products:
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create a product
+      description: API endpoint for creating a product in the CMS
+      x-speakeasy-mcp:
+        disabled: false
+        name: create-product
+        scopes: [products, create, ecommerce]
+        description: |
+          Creates a new product using the provided form. The product name should
+          not contain any special characters or harmful words.
 ```
 
 In the code configuration above:
@@ -355,14 +354,14 @@ With Speakeasy, when starting the MCP server, you can specify which scopes to in
 
 If modifying the OpenAPI document is a hassle, you can use [Overlays](https://www.speakeasy.com/openapi/overlays), which provides a convenient way to apply the `x-speakeasy-mcp` extension without changing the original file.
 
-```json
+```yaml
 overlay: 1.0.0
 info:
  title: Add MCP scopes
  version: 0.0.0
 actions:
  - target: $.paths.*["post","head","query"]
- update: { "x-speakeasy-mcp": { "scopes": ["products"] } }
+   update: { "x-speakeasy-mcp": { "scopes": ["products"] } }
 ```
 
 The code above instructs Speakeasy to generate tools for operations with the tag **products** and HTTP operations of types `POST`, `HEAD`, and `QUERY`.
