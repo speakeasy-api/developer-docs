@@ -164,7 +164,11 @@ Below is an example call to this API:
 
 In this `oneOf` solution, the client has to supply the label and the value, defeating the purpose of using an enum, where the label serves as a human-readable alias for the actual value. This `oneOf` solution illustrates your options for including exact values. You'll need to decide in your design whether you want a simple `enum` or a more descriptive `oneOf`.
 
-If you are using OpenAPI 3.0 or want to use `enum`, you can use an extension attribute to give labels to enum values. Different code generators and OpenAPI tools use different extension names. Below is an example using the Speakeasy extension field:
+If you are using OpenAPI 3.0 or want to use `enum`, you can use an extension attribute to give labels to enum values. Different code generators and OpenAPI tools use different extension names. Below are examples using the Speakeasy extension field:
+
+### Array Format (Full Coverage)
+
+The traditional array format provides names for all enum values in order:
 
 ```yaml
 components:
@@ -181,6 +185,51 @@ components:
         - Medium
         - Large
 ```
+
+### Map Format (Full or Partial Coverage)
+
+The map format allows you to specify custom names for specific enum values. This is useful when you want to provide names for only some values or when the enum values don't follow a predictable pattern:
+
+```yaml
+components:
+  schemas:
+    StatusCode:
+      description: HTTP status codes with descriptive names.
+      type: integer
+      enum:
+        - 100
+        - 200
+        - 300
+        - 400
+        - 500
+      x-speakeasy-enums:
+        100: ContinueProcessingRequest
+        200: SuccessfulOperationComplete
+        300: RedirectToAnotherLocation
+        400: ClientSideErrorOccurred
+        500: InternalServerError
+```
+
+You can also use partial coverage with the map format, providing names for only some enum values:
+
+```yaml
+components:
+  schemas:
+    Priority:
+      description: Task priority levels.
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+        - critical
+      x-speakeasy-enums:
+        low: MinimalImportance
+        critical: ExtremelyUrgent
+        # medium and high will use their original values
+```
+
+Both string and integer enums support the map format. When using partial coverage, enum values without explicit mappings will use their original values as names in the generated code.
 
 Or you can use a simple text description to prioritize human understanding over tooling support:
 
