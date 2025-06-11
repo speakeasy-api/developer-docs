@@ -45,12 +45,10 @@ When adding custom code that requires external packages, configure these depende
 ```yaml .speakeasy/gen.yaml
 java:
   additionalDependencies:
-    compile:
-      - "org.commonmark:commonmark:0.21.0"
-      - "org.jsoup:jsoup:1.16.1"
-    testCompile:
-      - "org.junit.jupiter:junit-jupiter:5.9.2"
-      - "org.mockito:mockito-core:5.1.1"
+    - implementation:org.commonmark:commonmark:0.21.0
+    - implementation:org.jsoup:jsoup:1.16.1
+    - testImplementation:org.junit.jupiter:junit-jupiter:5.9.2
+    - testImplementation:org.mockito:mockito-core:5.1.1
 ```
 
 This ensures dependencies persist across SDK regenerations and are properly included in the generated `build.gradle`.
@@ -74,23 +72,27 @@ import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 // #endregion imports
 
-public class Todos {
-    private HTTPClient _client;
-    
-    public Todos(HTTPClient client) {
-        this._client = client;
+public class Todos implements
+            MethodCallCreate,
+            MethodCallGetOne {
+
+    private final SDKConfiguration sdkConfiguration;
+
+    Todos(SDKConfiguration sdkConfiguration) {
+        this.sdkConfiguration = sdkConfiguration;
     }
-    
+
     // !focus(1:11)
     // #region sdk-class-body
     public String renderTodo(String id) throws Exception {
-        Todo todo = getOne(id);
-        
+        Todo todo = getOne(id).todo()
+            .orElseThrow(() -> new Exception("Todo not found"));
+
         Parser parser = Parser.builder().build();
         HtmlRenderer renderer = HtmlRenderer.builder().build();
-        
-        String markdown = String.format("# %s\n\n%s", todo.title, todo.description);
-        
+
+        String markdown = String.format("# %s\n\n%s", todo.title(), todo.description());
+
         return renderer.render(parser.parse(markdown));
     }
     // #endregion sdk-class-body
