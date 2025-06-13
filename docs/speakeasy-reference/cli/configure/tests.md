@@ -18,7 +18,7 @@ speakeasy configure tests [flags]
 
 ```
   -h, --help                        help for tests
-      --rebuild                     clears out all existing tests and regenerates them from scratch
+      --rebuild string[="*"]        clears out all existing tests and regenerates them from scratch or if operations are specified will rebuild the tests for those operations (default "*")
   -d, --workflow-directory string   directory of speakeasy workflow file
 ```
 
