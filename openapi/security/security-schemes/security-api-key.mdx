@@ -6,11 +6,39 @@ import { Table } from "@/mdx/components";
 
 # API Key Security Scheme in OpenAPI
 
+
 An API Key security scheme is the most common form of authentication for machine-to-machine APIs and supports passing a pre-shared secret in several ways. The secret can be passed either via the Authorization header (or another custom header), as a query parameter, or via a cookie.
 
-While this is probably the most commonly used mechanism, it is generally one of the least secure. This is especially true if the key is passed outside of headers or cookies (that is, via query params, as various logging mechanisms normally store query param information).
+
+Here's an example of an API key being passed in the query string.
+
+```http
+GET /drinks?api_key=abcdef12345
+```
+
+or as a request header:
+
+```http
+GET /something HTTP/1.1
+
+Speakeasy-API-Key: abcdef12345
+```
+
+or as a cookie:
+
+```http
+GET /something HTTP/1.1
+
+Cookie: X-API-KEY=abcdef12345
+```
+
+API Keys are one of the most commonly used mechanism, but depending on what that key is and how its generated it may not well be very secure. This is especially true if the key is passed outside of headers or cookies (that is, via query params, as various logging mechanisms normally store query param information).
 
 The biggest security flaw is that most pre-shared secrets are long-lived and if intercepted, can be used until they are either revoked or expire (generally in months or years). This risk is normally tolerated for machine-to-machine applications as the chance of interception (especially when using private VPCs/TLS and other mechanisms) is relatively low compared to a key from a user's device traveling on a public network.
+
+Regardless of which method you use, HTTPS/TLS is highly recommended.
+
+## API Key Object
 
 The fields for an API Key security scheme are as follows:
 
@@ -30,13 +58,37 @@ The fields for an API Key security scheme are as follows:
   ]}
 />
 
+To describe an API key, create an object in `securitySchemes` with a name of whatever you like. Perhaps it's just called `ApiKey` but it could be called `anythingYOULikeAuth`. So long as its easy to remember and a valid YAML string. Then the object defines `type: apiKey` and the name of the header/query/cookie parameter as it should show up in the HTTP request.
+
 ```yaml
 components:
   securitySchemes:
-    api_key:
+    ApiKey:
       type: apiKey
-      name: api_key
+      name: Speakeasy-API-Key
       in: header
 security:
-  - api_key: []
+  - ApiKey: []
+```
+
+A description can be added to let API users know where to go to find an API key, or an email address to request one.
+
+## Multiple API keys
+
+Some APIs require two API keys to be used at once, like an app ID and an app Key. In this case, it's possible to define both keys as `securitySchemes` then reference them both in the same [security requirement object](../../security.mdx).
+
+```yaml
+security:
+  - AppId: []
+    AppKey: [] # no leading dash
+components:
+  securitySchemes:
+    AppId:
+      type: apiKey
+      name: Speakeasy-App-Id
+      in: header
+    AppKey:
+      type: apiKey
+      name: Speakeasy-App-Key
+      in: header
 ```
