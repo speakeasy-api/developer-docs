@@ -1,0 +1,628 @@
+---
+title: "Why MCP is useful: An introduction to MCP for skeptics"
+description: "A skeptical introduction to the Model Context Protocol (MCP) and its use cases"
+---
+
+import { Callout } from "@/mdx/components";
+
+<Callout title="Gram AI by Speakeasy">
+  Unlock AI engineering by turning your API platform into an AI platform with
+  [Gram](https://app.getgram.ai). Generate agent tools for internal services and
+  connect to popular third-party APIs from one platform. [Join the
+  waitlist](https://app.getgram.ai) today.
+</Callout>
+
+# Why MCP is useful: An introduction to MCP for skeptics
+
+You're right to be skeptical about the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). From the outside, it looks like word salad, and it arrived on the heels of the hyped-up AI darlings known as "vibe coding" and "agentic". If you've dared to poke around, you're probably left with the feeling that it's a Rube Goldberg machine, and everyone's either in on the joke or dazzled by the complexity.
+
+Developers love shiny complexity, but anyone who lived through the early internet's immature, brittle protocols and torturous RPC standards knows to hit the brakes when YouTube talking heads sing a new protocol's praises in unison.
+
+This skepticism and care shouldn't end at MCP, though. To quote the sagely Samuel Colvin (of [Pydantic](https://docs.pydantic.dev/latest/)):
+
+> From a software engineer's point of view, you can think of LLMs as the worst database you've ever heard of, but worse. If LLMs weren't so bloody useful, we'd never touch them.
+
+Well, if MCP servers weren't so bloody useful, we'd never touch them either!
+
+We believe the protocol, warts and all, will eventually lead to an ecosystem of capable and connected agents, ready to help desk jockeys across all industries do their work more efficiently. Whether this will be a net positive remains to be seen, but the productivity gains in the short term are undeniable.
+
+So let's examine when MCP's complexity actually pays off, and when you should stick to what works.
+
+But before we get to use cases, we need to acknowledge the backlash. MCP has triggered passionate reactions, and not all of them are positive.
+
+## What people think about MCP
+
+> This has made a lot of people very angry and been widely regarded as a bad move.
+>
+> - Douglas Adams
+
+Polarized doesn't begin to describe the reaction to MCP on the internet. The extremes appear to fall into four clear camps:
+
+1. **The "everything about this sucks" naysayers.** Here are a few highlights from our favorite orange site:
+
+   > MCP is a kitchen sink of anti-patterns. There's no way it's not forgotten in a year, just like Langchain will be.
+
+   > It's a half-baked, rushed out, speculative attempt to capture developer mindshare and establish an ecosystem/moat early in a (perceived) market.
+
+2. **The deliberately obtuse.** I won't quote these commenters for being ignorant, but you know the people who say, "I can't get my head around this, so it must be useless." I believe some of this group's resistance is driven by the viscerally negative reaction of the naysayers. This one includes the "Isn't this just an OpenAPI spec?", "Why not just use REST?", and "I have yet to see one compelling use case" crowds.
+
+3. **The builders who use MCP to get things done _now_ or help fix what's broken in the spec.** Think of David Cramer learning MCP while building the [Sentry MCP server](https://mcp.sentry.dev/) in public - or Samuel Colvin, Armin Ronacher, the developers from Cloudflare, LangChain, Vercel, and others enthusiastically (and in record time) helping to [review updates to the MCP Specification](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/206). This includes the hackers (the best kind) and tinkerers who built more than [15,000 MCP servers](https://mcp.so/) over the past six to eight months.
+
+4. **Vendors and tooling companies.** We're in this group - we build a platform that generates MCP servers from existing APIs. This gives us a front-row seat to both MCP's potential and its implementation challenges, which we'll share honestly. We have a biased perspective, of course, but that perspective comes from solving real problems developers face with MCP implementation.
+
+## MCP's naysayers and the deliberately obtuse
+
+We get it. MCP is complex, and the spec is still evolving. But let's address some common criticisms head-on. I know this first one looks like a straw man, but we've seen it more than once:
+
+### "But MCP is just another API wrapper"
+
+Yes, it's a wrapper.
+
+Traditional API wrappers translate between formats. MCP transforms stateless, request-response APIs into stateful, conversational interfaces. Here's what that actually enables:
+
+- **Multistep workflows with persistent context:** An LLM can start a database query, examine the results, refine the query based on what it finds, join additional tables, and generate a report - all while maintaining context about the user's intent and previous results. Try doing that with REST without building a complex state machine.
+
+- **Dynamic tool discovery:** When you connect Claude to a project management MCP server, it can discover available tools at runtime - "Oh, this workspace has custom fields for priority and sprint. I can filter by those." The LLM adapts to what's available rather than failing on hardcoded function calls.
+
+- **Bidirectional communication:** MCP servers can send messages back to the LLM client, allowing it to react to events in real time. For example, a database MCP server can notify the client when a new record is added (via the MCP `notifications/resources/list_changed` message), allowing the LLM to update its understanding of the data without needing to poll or re-query.
+
+- **Session management across tools:** An LLM helping with data analysis can maintain an authenticated session with your database, keep a Jupyter Notebook kernel running, and preserve Matplotlib figure states - all simultaneously. When you ask, _"Make that graph blue instead,"_ it knows exactly which graph in which context you mean.
+
+MCP servers wrap real-world APIs in a way that makes them conversational partners rather than just data endpoints. That's the point.
+
+### "Why use MCP instead of REST, OpenAPI, or agents.json?"
+
+REST excels at CRUD operations, and it saved us from the horrors of RPC, so why are we reinventing the wheel, or worse, driving in reverse?
+
+The difference is that most of the time, agents (shudder) are not doing CRUD operations. They often need to perform multistep actions on remote services while maintaining state and context.
+
+For example, the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) allows LLMs to interact with web pages as if they were human users. It enables complex interactions like filling out forms, clicking buttons, and navigating pages, all while maintaining context about the user's session. Achieving this without a stateful protocol like MCP would drive anyone to madness. This is simply not something you can do with REST or OpenAPI.
+
+We've seen the AGPL-licensed [`agents.json` Specification](https://github.com/wild-card-ai/agents-json) mentioned as an alternative to MCP, but it doesn't have nearly the same capabilities. For the same reasons that REST is not a good fit for complex interactions, `agents.json` falls short.
+
+Using REST might sometimes add another layer of complexity. The [File System MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) lets an LLM traverse directories, read files, understand project structure, and make coordinated changes across multiple files - while maintaining context about what it's doing and why. A REST API would require the client to manage all that state explicitly.
+
+### "Why not just use function calls instead of MCP?"
+
+Native LLM function calling already enables tool use. Why add MCP?
+
+Function calls are great for simple, stateless operations - consider the classic "What's the weather in Paris?" example. They can even handle sequential operations, where the LLM calls one function, interprets the result, and calls another based on what it learned.
+
+But here's where the architectural differences matter:
+
+With function calls, all integration logic lives in the LLM client. Want to add Slack integration? The client needs Slack-specific authentication, error handling, rate limiting, and response parsing. Want database access? Add database drivers, connection pooling, and SQL validation to the client. Every new integration bloats the client with tool-specific code.
+
+With MCP, the client speaks one protocol to any number of specialized servers. Adding Slack means deploying a Slack MCP server - no client changes required. It's a plugin architecture that separates concerns: The MCP client handles conversation, MCP servers handle tool execution, and the protocol manages communication between them.
+The architectural difference becomes clear when visualized:
+
+![A function-calling architecture diagram shows user, LLM client, and LLM components with direct connections to external services (Internet, Database, Mail Server, RabbitMQ). The LLM client contains all integration logic for parsing responses, handling errors, and managing API-specific concerns.](./assets/mcp-for-skeptics/function-calls.svg?.url)
+
+**Function calls:** All integration logic lives in the LLM client. Each new service requires client-side implementation.
+
+![An MCP architecture diagram shows user, LLM client, and LLM components connected through MCP to dedicated MCP servers. Each MCP server handles specific service integrations (Browser, Database, Email, RabbitMQ) with SDK validation, maintaining clean separation between client and integration logic.](./assets/mcp-for-skeptics/mcp.svg?.url)
+
+**MCP:** The client speaks one protocol to multiple specialized servers. New integrations require no client changes.
+
+This isn't about capability - it's about managing complexity at scale. Function calls hide the complexity until it's too late. MCP acknowledges and contains it from the start.
+
+### "MCP is just a bad, terrible, no-good excuse for a protocol"
+
+Yes, we've seen the hot takes. MCP is "over-engineered," "unnecessarily complex," and "solving problems that don't exist." One particularly spicy commenter called it "a kitchen sink of anti-patterns" destined to be forgotten within a year.
+
+Let's address the elephant in the room: MCP _is_ complex. It uses JSON-RPC 2.0 over `stdio`, SSE, or WebSocket. It has its own transport negotiation, capability advertisement, and session management. If you squint, it looks like someone reinvented the Language Server Protocol (LSP) but made it worse.
+
+Could MCP have used REST with webhooks? Sure, if they were all hosted publicly. Could it have been "HTTP" instead of the much-derided `stdio`? Absolutely. But `stdio` is so well-supported and easy to implement that it makes complete sense for local servers.
+
+Another common complaint is the omission of WebSocket support. Yes, MCP doesn't use WebSocket, but it does use Streamable HTTP - a new protocol that allows for streaming responses over HTTP while maintaining the request-response model. This is a design choice, not an oversight.
+
+Using WebSocket brings its own complexities, and getting stuck on the "WebSocket vs HTTP" debate misses the point. MCP is about enabling dynamic, stateful interactions between LLMs and tools, not about picking your favorite transport layer.
+
+We're not saying MCP is perfect. The specification is under active development, the tooling is immature, and yes, the initial learning curve is steep. But dismissing it as "over-engineered" often comes from people who haven't grappled with the actual problems it solves. Once the SDKs mature and best practices emerge, much of this complexity will be abstracted away - just like nobody complains about TCP's three-way handshake anymore.
+
+### "The S in MCP is for security"
+
+Ah yes, security - MCP's favorite talking point. By now, you've probably seen the breathless blog posts about "Tool Poisoning Attacks" and "Full-Schema Poisoning" complete with scary diagrams and proof-of-concept exploits.
+
+**MCP servers are code you run on your machine.** Shocking revelation - if you run malicious code, bad things happen. This isn't a protocol vulnerability, it's basic hygiene.
+
+The discovered "vulnerabilities" essentially boil down to:
+
+- If you connect to a malicious MCP server, it can trick your LLM into doing bad things.
+- If an MCP server changes its behavior after you've approved it (a "rug pull"), your LLM might leak sensitive data.
+- If you paste untrusted data into tool descriptions, the LLM might follow those instructions.
+
+In other news, if you install a malicious npm package, it can delete your files. If you `pip install` from a sketchy source, it might mine cryptocurrency. If you `curl | bash` from the internet... well, you get the idea.
+
+Yes, MCP has unique attack vectors because LLMs process tool descriptions as instructions. That's concerning and worth addressing. But the "MCP is fundamentally insecure" takes miss the forest for the trees. The real security model is the same as any code execution environment: **Don't run code you don't trust**.
+
+The practical mitigations are straightforward:
+
+- Review MCP servers before connecting to them (just like you'd review any dependency).
+- Use signed and versioned MCP servers from trusted sources.
+- Run MCP servers in containers or sandboxed environments.
+- Implement proper access controls and least-privilege principles.
+
+The MCP ecosystem is already moving in this direction. [Docker's MCP Toolkit](https://docs.docker.com/ai/mcp-catalog-and-toolkit/toolkit/) runs servers in containers. The community is developing security scanners and best practices. The specification now includes security hints like `readOnlyHint` and `destructiveHint`. (I still have my reservations about the annotations, but that's a topic for another day.)
+
+Perfect security is the enemy of adoption, and MCP chose pragmatism over paranoia. The security concerns are real, but they're solvable with the same approaches we use everywhere else in software: Trust but verify, defense in depth, and maybe don't give your AI assistant access to your SSH keys without thinking it through first.
+
+## What MCP is: A brief introduction for the semi-interested developer
+
+OK, so we've addressed why we think MCP is useful despite the backlash, but a common reaction is still, "I just don't get it."
+
+Let's make sense of this thing.
+
+MCP stands for Model Context Protocol, but that doesn't really explain what it _does_. It gives the impression that it's a protocol for LLMs to understand context, but that isn't it.
+
+### MCP is not about models or context
+
+MCP has very little (to nothing) to do with LLMs and their context. In fact, a fully functional MCP implementation doesn't require an LLM at all. To really understand MCP, first forget about AI, LLMs, and context.
+
+So what should we think about instead?
+
+### MCP is about servers and clients
+
+MCP is a protocol that connects a **tool server** and a **client**. The server provides access to a dynamic list of tools, and the client calls those tools to perform actions. The protocol defines how they communicate, what messages they send, and how they maintain state.
+
+> For the sake of simplicity, let's focus only on tools, which are the most common use case for MCP. We'll ignore some other parts of the spec, like resources, prompts, sampling, and roots. They'll follow later.
+
+If we were to rename MCP, we'd call it the **Dynamic Tool Protocol**. Alas, we're stuck with MCP, so let's roll with it.
+
+### The MCP server
+
+An MCP server is a program that exposes a set of tools to clients. It can be anything from a simple script that runs on your local machine to a complex cloud service that integrates with multiple APIs. Even if it runs on your local machine, we'll call it a server because it _serves tools_.
+
+### The MCP client
+
+An MCP client is a program that connects to an MCP server and uses its tools.
+
+### The MCP transport
+
+MCP uses a transport layer to send messages between the client and server. The transport can be:
+
+- **`stdio`**: The client and server communicate over standard input and output streams. This is the simplest transport and works well for local MCP servers.
+- **Streamable HTTP**: The client and server communicate over HTTP with a streamable response. This is useful for remote servers, but it works just as well for local servers.
+
+### What the code looks like
+
+Here's a simple TypeScript server that implements a WhatsApp MCP server:
+
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+// Assume this is a service that interacts with WhatsApp's API
+import { ChatService } from "whatsapp";
+import { z } from "zod";
+
+// Initialize the WhatsApp MCP server
+const mcpServer = new McpServer(
+  {
+    name: "WhatsApp MCP Server",
+    description: "A Model Context Protocol server for WhatsApp",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  },
+);
+
+// describe input and output schemas for the tool
+const inputShape = {
+  chatId: z.string().describe("The chat ID to retrieve"),
+};
+const inputSchema = z.object(inputShape);
+type Input = z.infer<typeof inputSchema>;
+
+const outputShape = {
+  chat: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      isGroup: z.boolean(),
+      isReadOnly: z.boolean(),
+      isMuted: z.boolean(),
+      archived: z.boolean(),
+      unreadCount: z.number(),
+      timestamp: z.number(),
+      lastMessagePreview: z.string().optional(),
+    })
+    .optional(),
+};
+const outputSchema = z.object(outputShape);
+
+const getWhatsAppChatById = mcpServer.registerTool(
+  "getWhatsAppChatById",
+  {
+    description: "Get a specific WhatsApp chat by its ID",
+    inputSchema: inputShape,
+    outputSchema: outputShape,
+  },
+  async (args: Input) => {
+    const chat = await chatService.getChatSummaryById(chatId);
+
+    const response = {
+      chat,
+    };
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(response),
+        },
+      ],
+      structuredContent: outputSchema.parse(response),
+    };
+  },
+);
+
+// Register other tools here, like sendMessage, etc.
+
+const transport = new StdioServerTransport();
+await mcpServer.connect(transport);
+```
+
+This sets up an MCP server that clients can connect to via `stdio`. The server has a single tool, `getWhatsAppChatById`, which retrieves a WhatsApp chat by its ID. The input and output schemas are defined using Zod. This allows the server to validate input and output data, ensuring that clients can only call the tool with the correct parameters and receive the expected response format.
+
+We respond with a JSON object that contains the chat information, which the client can then use. The server can be extended with more tools as needed, for instance, to send messages or to list chats.
+
+Our example excludes error handling, authentication, and other complexities for brevity, but a real-world implementation would include these aspects.
+
+This may look like a lot of code, but it's actually rather simple. The server defines a set of tools, each with an input schema and an output schema. The client can call these tools by sending messages to the server, and the server responds with the results.
+
+Function calls would look similar and most likely simpler, but this MCP server is reusable across different clients and can be extended with more tools, without changing any client code. Adding new tools is as simple as registering them with the server, and clients can discover available tools dynamically.
+
+### How MCP works under the hood
+
+Let's use our fictional WhatsApp MCP server as an example. We're going to connect a client to this server and use its tools. Our server only has the `tools` capability.
+
+When an MCP client connects to a server, it sends an `initialize` message to start the session.
+
+```json
+{
+  "method": "initialize"
+}
+```
+
+The server responds with a `capabilities` and `serverInfo` message that lists the available tools and their descriptions.
+
+```json
+{
+  "capabilities": {
+    "tools": {}
+  },
+  "serverInfo": {
+    "name": "WhatsApp MCP Server",
+    "version": "1.0.0",
+    "description": "A Model Context Protocol server for WhatsApp"
+  }
+}
+```
+
+The client and server have now established a session. They can exchange messages.
+
+Usually, the client then sends a `tools/list` message to get the list of available tools.
+
+```json
+{
+  "method": "tools/list",
+  "params": {}
+}
+```
+
+The server responds with a `tools/list/response` message containing the available tools.
+
+```json
+{
+  "tools": [
+    {
+      "name": "getWhatsAppChatById",
+      "description": "Get a WhatsApp chat by its ID",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "description": "The ID of the chat to retrieve"
+          }
+        },
+        "required": ["chatId"]
+      }
+    }
+    // Other tools like sendMessage, etc., are listed here, but for brevity, we'll only show one tool.
+  ]
+}
+```
+
+The client can now call any of these tools by sending a `tools/call` message with the tool name and input parameters. (This example assumes the MCP server already has access to an authenticated WhatsApp API, so we'll skip the authentication step for simplicity.)
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "getWhatsAppChats",
+    "arguments": {},
+    "_meta": {
+      "progressToken": 0
+    }
+  }
+}
+```
+
+The server processes the request and responds with a `tools/call/response` message containing the result.
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"chat\":{\"id\":\"1234567890@g.us\",\"name\":\"Drum Club @ Mission Montesorri 2025\",\"isGroup\":true,\"isReadOnly\":false,\"isMuted\":false,\"archived\":false,\"unreadCount\":3,\"timestamp\":1749116430,\"lastMessagePreview\":\"Hi moms and dads, just a reminder that this week's little drummers class moved to Friday.\"}}"
+    }
+  ],
+  "structuredContent": {
+    "chat": {
+      "id": "1234567890@g.us",
+      "name": "Drum Club @ Mission Montesorri 2025",
+      "isGroup": true,
+      "isReadOnly": false,
+      "isMuted": false,
+      "archived": false,
+      "unreadCount": 3,
+      "timestamp": 1749116430,
+      "lastMessagePreview": "Hi moms and dads, just a reminder that this week's little drummers class moved to Friday."
+    }
+  }
+}
+```
+
+The client can then process the response and display the list of chats to the user.
+
+## Things you don't need to know about MCP
+
+As we saw earlier, MCP is complex and has many moving parts. But you don't need to know everything to build an MCP server. Here are some things that are outside the scope of this article and the Model Context Protocol (MCP) in general:
+
+1. **How the client presents the tools to the LLM**: The client will most likely use the tool descriptions to generate a prompt for the LLM, but this is an implementation detail outside the scope of MCP. If you're building a server, forget about the LLM and focus on the tools. The client will handle the LLM integration.
+2. **How the client handles tool calls**: The client will call the tools and pass the results to the LLM, but this is also an implementation detail. MCP doesn't care how the client processes the tool calls or how it integrates with the LLM.
+3. **How the LLM calls the tools**: The LLM will call the tools using the client, but this is again an implementation detail. Your server receives well-defined JSON-RPC messages, and you respond with well-defined JSON-RPC messages. You don't need to parse LLM output at all. The client handles that for you.
+4. **The exact details of the MCP protocol**: The protocol is defined in the [MCP specification](https://modelcontextprotocol.io/), but you don't need to know every detail to build a server. Even the messages above are overkill. The SDKs handle the protocol details for you, so you can focus on implementing your tools.
+
+## Showing the complex stuff
+
+If you're still with us, you might be wondering how to handle more complex scenarios. Let's use our WhatsApp MCP server as an example and explore some of the more advanced features of MCP.
+
+### Dynamic tool discovery in MCP
+
+Say your WhatsApp MCP server's WhatsApp authentication expires, and you need to re-authenticate. We want to hide the `getWhatsAppChatById` tool until the user re-authenticates. MCP allows you to dynamically change the list of available tools at runtime.
+
+When the server detects that the authentication has expired, it can send a `notifications/tools/list_changed` message to notify the client that the list of tools has changed. The client can then call `tools/list` to get the updated list of tools.
+
+MCP allows you to send a `notifications/tools/list_changed` message **from the server to the client** to notify it that the list of available tools has changed. This is useful for dynamic tool discovery, where the server can add or remove tools at runtime.
+
+```json
+{
+  "method": "notifications/tools/list_changed"
+}
+```
+
+The client can then call `tools/list` to get the updated list of tools. This allows the server to dynamically change its capabilities without requiring the client to reconnect or reinitialize.
+
+Here's what that would look like in our WhatsApp MCP server:
+
+```typescript
+// When the server detects that the authentication has expired, it can send a notification
+
+const authenticationExpiredListener = () => {
+  getWhatsAppChatById.disable(); // Disable the tool
+};
+```
+
+That's it! The TypeScript SDK handles the `notifications/tools/list_changed` message for you, so you don't need to worry about the details. You just call `disable()` on the tool, and the client will automatically update its list of available tools.
+
+When the user re-authenticates, you can re-enable the tool by calling `enable()`:
+
+```typescript
+const reAuthenticatedListener = () => {
+  getWhatsAppChatById.enable(); // Re-enable the tool
+};
+```
+
+### MCP resources
+
+MCP resources are used to expose data that can be accessed by the client. They are similar to tools, but they represent data rather than actions. Resources can be used to provide information about the server, such as its capabilities, or to expose data from external APIs.
+
+In our WhatsApp MCP server, we could expose all the image attachments that the server downloads as resources. This way, the client can access the images without having to call a tool every time. The client can simply request the resource by its URL, and the server will return the image data.
+
+Here's how we could implement a resource in our WhatsApp MCP server. We'd add the following code to our server:
+
+```typescript
+import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { MediaRegistry } from "whatsapp";
+
+mcpServer.resource(
+  "media",
+  new ResourceTemplate("media://{messageId}", {
+    list: () => {
+      const allMedia = mediaRegistry.getAllMediaItems();
+      const resources = [];
+      for (const { mediaItems } of allMedia) {
+        for (const mediaItem of mediaItems) {
+          resources.push({
+            uri: `media://${mediaItem.messageId}`,
+            name: mediaItem.name,
+            description: mediaItem.description,
+            mimeType:
+              mediaItem.mimetype !== "unknown" ? mediaItem.mimetype : undefined,
+          });
+        }
+      }
+      return { resources };
+    },
+  }),
+  async (uri: URL, { messageId }) => {
+    const messageIdRaw = Array.isArray(messageId) ? messageId[0] : messageId;
+    const messageIdString = decodeURIComponent(messageIdRaw);
+    const mediaData =
+      await messageService.downloadMessageMedia(messageIdString);
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          blob: mediaData.data,
+          mimeType: mediaData.mimetype,
+        },
+      ],
+    };
+  },
+);
+```
+
+This code defines a resource called `media` that can be accessed by the client. The resource has a `list` method that returns a list of all media items in the WhatsApp server. The client can then request a specific media item by its URI, and the server will return the media data.
+
+But how will the client know about this resource? The server sends a `notifications/resources/list_changed` message to notify the client that the list of resources has changed. The client can then call `resources/list` to get the updated list of resources.
+
+Here's what that would look like in our WhatsApp MCP server:
+
+```typescript
+import { MediaItem, MediaRegistry } from "whatsapp";
+
+// When the server detects that a new media item has been added, send a notification
+mediaRegistry.onMediaListChanged((mediaItems: MediaItem[]) => {
+  mcpServer.sendResourceListChanged();
+});
+```
+
+You can also send a notification when a specific resource has changed, like when a media item is updated or deleted:
+
+```typescript
+mediaRegistry.onMediaItemChanged((mediaItem: MediaItem) => {
+  void mcpServer.server.sendResourceUpdated({
+    uri: resourceUri,
+  });
+});
+```
+
+How the client handles resources is up to the client implementation. We don't need to worry about that. The server just needs to expose the resources and notify the client when they change.
+
+### MCP prompts
+
+This one is sometimes ridiculed as "just a way to pass prompts to LLMs," but MCP prompts are actually a powerful way to define reusable templates for prompts that the client can then send to the LLM.
+
+Just like with resources and tools, the server exposes a list of prompts that the client can use. Prompts are defined like this:
+
+```typescript
+mcpServer.prompt(
+  "whatsapp_chat_summarizer",
+  "Summarize WhatsApp chat and provide insights",
+  {
+    chatName: z.string().describe("Name of the WhatsApp chat to summarize"),
+  },
+  async (args) => {
+    const { chatName = "" } = args;
+
+    // Find the chat by name
+    // A real implementation would be more robust
+    const targetChat = await chatService.findChatByName(chatName);
+
+    // Get recent messages for analysis
+    const messages = await messageService.getMessages(targetChat.id);
+
+    const promptText = `Analyze this WhatsApp chat data for insights:
+
+Chat Information:
+- Chat Name: ${targetChat.name}
+- Chat Type: ${targetChat.isGroup ? "Group Chat" : "Individual Chat"}
+- Analysis Type: summary
+
+Analysis Focus:
+Provide a comprehensive overview including key topics, sentiment, and notable patterns.
+
+Recent Messages (${messages.length} messages):
+${messages.map((msg) => msg._serializedContent).join("\n")}
+
+Please provide a detailed summary.`;
+
+    return {
+      description: `Summary of WhatsApp chat: ${targetChat.name}`,
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: promptText,
+          },
+        },
+      ],
+    };
+  },
+);
+```
+
+This defines a prompt called `whatsapp_chat_summarizer` that the client can use to summarize WhatsApp chats. The prompt takes an argument `chatName` and generates a prompt text based on the chat data.
+
+The client presents a list of available prompts to the user, who can then select one to use. When the user selects a prompt with arguments, the client should display a modal or form allowing the user to fill in the required arguments. Once the user submits the form, the client sends a `prompts/call` message to the server with the selected prompt and its arguments.
+
+The server adds the relevant context to the prompt (in our case, the WhatsApp chat data) and returns the prompt to the client. The client can then send the prompt to the LLM for processing.
+
+This is especially useful for repetitive tasks where a user needs to combine tool call results with a complex prompt. If you can anticipate the user's needs, you can define a prompt that combines the necessary context and tool calls into a single reusable template.
+
+### Completables: Autocomplete for MCP prompt and resource arguments
+
+This is a more advanced MCP feature that has not been widely adopted yet. However, the TypeScript SDK supports it, so let's briefly cover it.
+
+When you register a prompt or resource that requires user input as arguments, you can register the arguments as **completables**. This allows the client to provide suggestions for the arguments by querying the server for available options. This is useful for prompts that require user input, such as selecting a chat or a file.
+
+Here's how you can register a completable for the `whatsapp_chat_summarizer` prompt we defined earlier:
+
+```typescript
+import { Completable } from "@modelcontextprotocol/sdk/server/completable.js";
+
+mcpServer.prompt(
+  "whatsapp_chat_summarizer",
+  "Summarize WhatsApp chat and provide insights",
+  {
+    chatName: Completable.create(z.string(), {
+      complete: async (partial) => {
+        return await chatService.filterChatsBySubstring(partial);
+      },
+    }).describe("Name of the WhatsApp chat to summarize"),
+  },
+  async (args) => {
+    // ... (prompt implementation as before)
+  },
+);
+```
+
+After this change, the client can now provide autocomplete suggestions for the `chatName` argument when the user selects the `whatsapp_chat_summarizer` prompt. The client will call the server with the partial input, and the server will return a list of matching chat names.
+
+We've only ever seen this work in the `@modelcontextprotocol/inspector` client, but it is likely that other clients will implement this feature as well.
+
+### Logging and debugging MCP servers
+
+MCP servers can be complex, and debugging them can be challenging. The TypeScript SDK provides a built-in logging mechanism that allows you to log messages at different levels.
+
+Call `mcpServer.server.sendLoggingMessage` to send a log message to the client. The client can then display the log messages in its UI or (most likely) write them to a file.
+
+To log a message using the TypeScript SDK, you can use the following code:
+
+```typescript
+mcpServer.server.sendLoggingMessage({
+  level: "info",
+  message: "WhatsApp chat retrieved successfully",
+});
+```
+
+Note that, unlike the earlier `mcpServer` methods, this method is a direct call to the server, not a method on the `mcpServer` wrapper instance. This might be confusing – we've seen it send Claude 4 into a loop.
+
+## The future of MCP
+
+It is still early days for MCP, but the community is rapidly building out the ecosystem. The specification is changing, and new features are being added to the SDKs. Here are some areas where we expect to see significant growth in Q3 of 2025:
+
+1. **Client-server feature parity**: As the MCP Specification matures, we expect to see more features implemented in both the server and client SDKs. This will make it easier to build and use MCP servers, improving the overall developer experience.
+2. **Tool and resource discovery**: The MCP Specification enables much more dynamic tool and resource discovery. We expect to see more servers implementing this feature, allowing clients to use fewer tokens when providing context to LLMs.
+3. **Security and access control**: As MCP servers become more widely used, we expect to see more focus on security and access control. The specification already includes OAuth 2.1 support, but this addresses only a small part of the security model. Better guardrails against prompt injection and other attacks will be needed as the ecosystem grows. This is, unfortunately, a common theme in the LLM space, and perhaps one that can't be solved completely. It isn't unique to MCP, though.
+4. **Registries and marketplaces**: We expect to see more MCP server registries and marketplaces where developers can share and discover MCP servers. This will make it easier to find and use existing servers, as well as to contribute to the ecosystem. A trusted registry would also help with security, as users could verify the authenticity of the servers they connect to.
+
+Whether MCP will become the de facto standard for LLM tool integration remains to be seen. It is useful now, and it is likely to become more useful in the near future. But who knows what this space will look like in a year or two? Your guess is as good as ours.
