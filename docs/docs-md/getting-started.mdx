@@ -1,0 +1,155 @@
+---
+title: Getting Started
+description: Learn how to get up and running with Docs MD
+hidden: true
+---
+
+import { Callout } from "@/mdx/components";
+
+# Getting Started with Docs MD
+
+## Installation
+
+Install docs from npm with:
+
+```bash
+npm install @speakeasy-api/docs-md
+```
+
+<Callout title="Warning for pnpm users" type="warning">
+If you use pnpm, you'll need to either run `pnpm add jotai motion` or `pnpm i --shamefully-hoist` to pick up some transient dependencies currently needed at the root of `node_modules`
+
+This step is part of a temporary mechanism for getting sidebar styling to inherit properly, and will be removed before the public beta in July.
+
+</Callout>
+
+## Configuration
+
+The first step in configuration is to create a file named `speakeasy.config.mjs`. This file can live anywhere, but convention is to put it beside other configuration files (e.g. `package.json`, `eslint.config.js`, etc.). Start by specifying the path to your OpenAPI spec file:
+
+```ts
+export default {
+  spec: "./my-openapi-spec.yaml",
+};
+```
+
+The next step in configuration configuration of docs looks a little different for [Docusaurus](#docusaurus) vs [Nextra](#nextra). See the relevant section below for instructions.
+
+Once core configuration is complete, check out [Try It Now](#try-it-now) for instructions on configuring live-querying of your backend from the docs.
+
+### Docusaurus
+
+For Docusaurus, you'll want to add this information to your speakeasy config file:
+
+```ts
+export default {
+  spec: "./my-openapi-spec.yaml",
+  output: {
+    framework: "docusaurus",
+    pageOutDir: "./docs/api",
+    componentOutDir: "./src/components/speakeasy",
+  },
+};
+```
+
+Let's go over what these properties do:
+
+- `framework` tells docs to run some Docusaurus specific compilation, such as configuring `_category_.json` files for pages
+- `pageOutDir` sets the directory where we'll put `.mdx` files that represents a page
+  - Assuming you are using the classic preset in `docusaurus.config.js` and have configured the docs option, then you want to pick somewhere in the `docs/` folder
+  - We automatically configure `_category_.json` files for generated docs, so that these pages properly show up in the left sidebar nav
+- `componentOutDir` set the directory where we'll put supporting code
+  - This code does not represent a page, and so should not go in the `docs/` folder
+
+### Nextra
+
+For Nextra, you'll want to add this information to your speakeasy config file
+
+```ts
+export default {
+  spec: "./my-openapi-spec.yaml",
+  output: {
+    framework: "nextra",
+    pageOutDir: "./src/app/api",
+    componentOutDir: "./src/components/speakeasy",
+  },
+};
+```
+
+Let's go over what these properties do:
+
+- `framework` tells docs to run some Nextra specific compilation, such as configuring `_meta.ts` files for pages
+- `pageOutDir` sets the directory where we'll put `.mdx` files that represents a page
+  - Assuming you are using the [documentation theme](https://nextra.site/docs/docs-theme/start), then you'll want to pick somewhere in `src/app`.
+  - IMPORTANT: make sure _not_ to have a [route group](https://nextjs.org/docs/app/api-reference/file-conventions/route-groups) in the path to generated docs. Experimentation has shown that this breaks the left sidebar
+  - We automatically configure `_meta.ts` files for generated docs, so that these pages properly show up in the left sidebar nav
+- `componentOutDir` set the directory where we'll put supporting code
+  - This code does not represent a page, and so should not go in the `src/app` folder
+
+### Common Display options
+
+You can tweak how docs are displayed with the following properties:
+
+- `showSchemasInNav`: whether or not to generate links to schemas in the left sidebar nav. Default `true`
+- `maxTypeSignatureLineLength`: controls when inline type signatures wrap into multiple lines. Default `80`
+  - If you notice weird wrapping issues with inline type signatures, try increasing or decreasing this value. Otherwise, we recommend not setting this value
+- `maxSchemaNesting`: controls how deeply to nest schemas before breaking deeper schemas into the right popout
+
+## Try It Now
+
+If you would like to use the Try It Now feature, which allows users to live-query your backend using TypeScript code samples, you'll first need your SDK published to npm.
+
+<Callout title="Note" type="info">
+  We will add support for Try It Now without needing the SDK published to npm
+  before docs reaches General Availability in August.
+</Callout>
+
+To configure Try It Now, add the following to your `speakeasy.config.mjs` file:
+
+```ts
+export default {
+  ...
+  tryItNow: {
+	  npmPackageName: 'my-awesome-npm-package',
+	  sdkClassName: 'MyAwesomeClassName'
+  }
+};
+```
+
+Let's break down what these two properties do:
+
+- `npmPackageName` is the name of the package containing a published version of your SDK
+  - This name is what you would use with `npm install my-awesome-npm-package`
+- `sdkClassName` is the name of the main export from the npm package
+  - This name is what you would use with `import { MyAwesomeClassName } from 'my-awesome-npm-package'`
+
+<Callout title="Note" type="info">
+  The current implementation of Try It Now is very new and has some rough edges.
+  We'll work to polish this feature considerably before General Availability in
+  August.
+</Callout>
+
+<Callout title="Warning" type="warning">
+  When enabling Try It Now, the spec used to build the npm package and the spec
+  pointed to by `spec` in the config file *must* match, including overlays.
+  Otherwise, code samples most likely will not run correctly due to naming
+  mismatches.
+</Callout>
+
+## Building
+
+To build docs pages, add this to the `scripts` section of your `package.json`:
+
+```json
+"build-api-docs": "docs-md",
+"prebuild": "npm run build-api-docs"
+```
+
+Then, when you run `npm run build-api-docs` or `npm run build`, files in `pageOutDir` and `componentOutDir` will be update. This command supports a few flags:
+
+- `-C` / `--clean`: delete the contents of page and component out directories
+  - This flag is useful for removing pages that no longer exist, e.g. because you renamed an operation tag
+- `-c` / `--config`: specify the configuration file to use
+  - By default, we look for the config file in directory that the command is run from, e.g. the same folder that `package.json` is in when building docs with npm scripts
+
+Once docs files have been built, you can use the standard Docusaurus or Nextra scripts for previewing or building the site, e.g. `npm run dev` or `npm run build`.
