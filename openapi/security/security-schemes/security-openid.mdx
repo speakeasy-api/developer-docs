@@ -1,14 +1,52 @@
 ---
-title: OpenID Connect in OpenAPI best practices
+title: OpenID Connect in OpenAPI
 description: "Implement OpenID Connect authentication using Security Schemes in your OpenAPI specification for better security, developer experience, and seamless integration."
 ---
 import { Table } from "@/mdx/components";
 
-# OpenID Connect Security Scheme in OpenAPI
+# OpenID Connect in OpenAPI
 
-The OpenID Connect security scheme allows for the discovery of configuration values for an OpenID Connect provider. This is generally used for authentication mechanisms based on the OpenID Connect protocol.
+OpenID Connect is an authentication layer built on top of the OAuth 2.0 protocol. It allows clients to verify the identity of end-users based on the authentication performed by an authorization server, as well as to obtain basic profile information about the end-user in an interoperable and REST-like manner.
 
-The fields for an OpenID Connect security scheme are as follows:
+As amazing as OAuth 2.0 is, it doesn't know anything much about a particular user. There is simply some entity which has an access token, and there are some conventions about how to then find out what user that is like `GET /me` or popping a user_id into a response. OpenID Connect standardizes these conventions and adds more convenience on top.
+
+OpenAPI supports OpenID Connect as a security scheme, allowing you to define the scopes and requirements for authentication in your API specification. This enables better security, a more consistent developer experience, and seamless integration with various OpenID Connect providers.
+
+## OpenID Connect Security Scheme
+
+To define an OpenID Connect security scheme in your OpenAPI specification, you use the `openIdConnect` type in the `securitySchemes` section of the `components` object. The `openIdConnectUrl` field must point to a JSON OpenID Connect Discovery document, which provides metadata about the OpenID Connect provider.
+
+```yaml
+components:
+  securitySchemes:
+    OpenIDAuth:
+      type: openIdConnect
+      openIdConnectUrl: https://example.com/.well-known/openid-configuration
+security:
+  - OpenIDAuth:
+    - drink:read
+    - drink:write
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: Get a list of drinks
+      # Operation requires read scope
+      security:
+        - OpenIDAuth:
+          - drink:read
+    post:
+      operationId: createDrink
+      summary: Create a new drink
+      # Operation requires write scope
+      security:
+        - OpenIDAuth:
+          - drink:write
+```
+
+## OpenID Connect Security Scheme Object
+
+In OpenAPI, the OpenID Connect security scheme is defined as part of the `components.securitySchemes` object. This allows you to specify the type of security scheme as `openIdConnect`, along with the URL to the OpenID Connect Discovery document.
 
 <Table
   data={[
@@ -25,38 +63,46 @@ The fields for an OpenID Connect security scheme are as follows:
   ]}
 />
 
-The following is an example of an OpenID Connect security scheme:
+## Scopes
+Scopes are a way to limit the access granted to an application when it uses OpenID Connect. They define the permissions that the application can request from the user, such as reading or writing data.
 
+To use scopes in OpenID Connect, you can specify them in the security scheme object. Scopes are defined as an array of strings, where each string represents a specific permission that the application can request.
 ```yaml
 components:
   securitySchemes:
-    openid_connect:
+    OpenIDAuth:
       type: openIdConnect
       openIdConnectUrl: https://example.com/.well-known/openid-configuration
-security:
-  - openid_connect:
-    - read
-    - write
+      description: "OpenID Connect security scheme with scopes for drink management."
+      scopes:
+        drink:read: "Allows reading drink information"
+        drink:write: "Allows writing drink information"
+```
+
+To use these scopes in your API operations, you can specify them in the `security` section of the operation object. This allows you to control which operations require which scopes, providing fine-grained access control at the global level or at the operation level.
+
+```yaml
 paths:
   /drinks:
     get:
       operationId: listDrinks
       summary: Get a list of drinks
-      # Operation requires read scope
       security:
-        - openid_connect:
-          - read:drink
+        - OpenIDAuth:
+          - drink:read
     post:
       operationId: createDrink
       summary: Create a new drink
-      # Operation requires write scope
       security:
-        - openid_connect:
-          - write:drink
+        - OpenIDAuth:
+          - drink:write
 ```
 
-## Scopes in OpenID Connect
+## Benefits of Using OpenID Connect in OpenAPI
 
-When specifying the required security schemes for an operation, you can also specify the required scopes for that operation. This is done by adding the required scopes as an array of strings to the security scheme object.
-
-In the example above, the `listDrinks` operation requires the `read:drink` scope, and the `createDrink` operation requires the `write:drink` scope. This allows for fine-grained control over the permissions required to access different parts of the API.
+Using OpenID Connect in your OpenAPI specification helps with SDK generation, documentation, and security. Here are some key benefits:
+- **Standardization**: OpenID Connect provides a standardized way to handle user authentication and authorization, making it easier for developers to implement and understand.
+- **Interoperability**: OpenID Connect is widely supported by various identity providers, allowing seamless integration with existing systems.
+- **Security**: By defining scopes and security requirements in your OpenAPI specification, you can enforce fine-grained access control, ensuring that only authorized users can access specific operations.
+- **Developer Experience**: OpenAPI's support for OpenID Connect enhances the developer experience by providing clear documentation and guidelines for authentication, making it easier for developers to understand how to use your API securely.
+- **Tooling Support**: Many tools and libraries support OpenID Connect, allowing for easy integration with your API and simplifying the authentication process for developers.

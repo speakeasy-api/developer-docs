@@ -127,11 +127,11 @@ Since all APIs need to be accurately described (warts and all), here's how to de
     { key: "field", header: "Field" },
     { key: "type", header: "Type" },
     { key: "required", header: "Required" },
-    { key: "description", header: "Description" },
+    { key: "description", header: "Description" }
   ]}
 />
 
-For example:
+For example: 
 
 ```yaml
 components:
@@ -141,6 +141,20 @@ components:
       scheme: basic
 security:
   - auth: []
+```
+
+The description field can be used to warn developers about the risks of using Basic authentication, and to encourage them to use more secure alternatives like Bearer tokens or OAuth2.
+
+```yaml
+components:
+  securitySchemes:
+    auth:
+      type: http
+      scheme: basic
+      description: |
+        **Warning:** Basic authentication sends credentials in an easily decodable format, so this
+        should only be used over HTTPS. Instead of using your password please only use a short lived access token
+        which can be obtained from <https://example.com/tokens>.
 ```
 
 ## HTTP Digest
@@ -204,4 +218,82 @@ components:
       scheme: digest
 security:
   - digestAuth: []
+```
+
+## Overlap with other security schemes
+
+The HTTP security scheme overlaps with a few other more specific schemes.
+
+The [API Key](./security-api-key.mdx) security scheme is better suited for non-standard API keys using custom headers like `Acme-API-Key`, whereas HTTP security schemes are specifically designed for HTTP-based authentication methods using `Authorization` header.
+
+There is also some overlap with [OAuth2](./security-oauth2.mdx) and [OpenID Connect](./security-openid.mdx) security schemes. These may use bearer tokens, and they may use the JWT format, but they are more complex and involve additional flows and endpoints. The `oauth2` and `openidConnect` security schemes are better suited for any APIs using the OAuth 2.0 and OpenID Connect protocols than trying to cover it with the `http` security scheme.
+
+### Unauthorized Response
+
+As well as describing the security requirements, it also helps to describe what will happen when those requirements are not met. The 401 Unauthorized response can be returned for requests with missing security credentials, showing what the client can expect to see if this happens. This response includes the `WWW-Authenticate` header, which you may want to mention. As with other generic responses, the 401 response can be defined as a component in the `responses` section, and referenced with `$ref` to avoid repetition.
+
+```yaml
+paths:
+  /drinks:
+    get:
+      # ...
+      responses:
+        # ...
+        '401':
+          $ref: '#/components/responses/HttpErrorUnauthorized'
+    post:
+      # ...
+      responses:
+        # ...
+        '401':
+          $ref: '#/components/responses/HttpErrorUnauthorized'
+
+components:
+  responses:
+    HttpErrorUnauthorized:
+      description: Unauthorized
+      headers:
+        WWW_Authenticate:
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+```
+
+Learn more about describing [responses](../../responses.mdx).
+
+## Forbidden Response
+
+The 403 Forbidden response can be returned for requests that are authenticated but not authorized to access the resource. This response can also include the `WWW-Authenticate` header, but it is not required. 
+
+As with the 401 response, the 403 response can be defined as a component in the `responses` section, and referenced with `$ref` to avoid repetition. This error is using the HTTP Problem Details format, which is a standard way to provide more information about the error.
+
+```yaml
+paths:
+  /drinks:
+    get:
+      # ...
+      responses:
+        # ...
+        '403':
+          $ref: '#/components/responses/HttpErrorForbidden'
+    post:
+      # ...
+      responses:
+        # ...
+        '403':
+          $ref: '#/components/responses/HttpErrorForbidden'
+components:
+  responses:
+    HttpErrorForbidden:
+      description: Forbidden
+      headers:
+        WWW_Authenticate:
+          type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
 ```
