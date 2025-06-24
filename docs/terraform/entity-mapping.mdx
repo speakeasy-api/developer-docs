@@ -6,10 +6,11 @@ description: |
 
 import { Callout } from "@/mdx/components";
 
+# Map API Entities to Terraform Resources
 
-#  Map API Entities to Terraform Resources
+## Entity Mapping
 
-Add the `x-speakeasy-entity` annotation to objects in your OpenAPI spec to include them as entities in the Terraform provider.
+Add the `x-speakeasy-entity` extension to objects in your OpenAPI Specification document to include them as entities in the Terraform provider, such as managed resources. The extension value may be a single string or an array of strings if the object should be represented by multiple API entities.
 
 As a component:
 
@@ -66,44 +67,62 @@ paths:
               type: object
 ```
 
- ```
+```hcl
 resource "yourprovider_order" "example" {
-  name = "Filter Blend"
+  name  = "Filter Blend"
   price = 11.5
 }
 ```
 
-Where you place the `x-speakeasy-entity` annotation affects the Terraform provider structure.
+Where you place the `x-speakeasy-entity` annotation affects the Terraform resource schema structure.
+
 - **At the top level:** Properties are nested objects.
 - **At a lower level:** Properties above the annotation are flattened.
 
+### Top Level
 
-**Top Level** 
-```yaml 
+```yaml
 Pet:
-  x-speakeasy-entity: Pet
-  #...
+  x-speakeasy-entity: Order
+  type: object
+  properties:
+    data:
+      type: object
+      properties:
+        name:
+          type: string
+        # ...
 ```
 
+Results in the following resource schema and configuration:
 
- ```
-resource "yourprovider_pet" "example" {
-  data = { name = "Filter Blend" }
+```hcl
+resource "yourprovider_order" "example" {
+  data = {
+    name = "Filter Blend"
+  }
 }
 ```
 
-**Lower Level**
-```yaml 
+### Lower Level
+
+```yaml
 Pet:
+  type: object
   properties:
     data:
-      x-speakeasy-entity: Pet
-      #...
+      x-speakeasy-entity: Order
+      type: object
+      properties:
+        name:
+          type: string
+        #...
 ```
 
+Results in the following resource schema and configuration:
 
-```
-resource "yourprovider_pet" "example" {
+```hcl
+resource "yourprovider_order" "example" {
   name = "Filter Blend"
 }
 ```
@@ -115,9 +134,10 @@ Properties above the `x-speakeasy-entity` annotation are flattened, which could 
 ## Specify CRUD Operations for API Endpoints
 
 The `x-speakeasy-entity-operation` annotation specifies CRUD (create, read, update, and delete) operations associated with each endpoint in the OpenAPI spec for a Terraform entity. The value determines the behavior of operations such as create, read, update, and delete and is structured as `Entity#operation,operation,...#order`:
-  - `Entity` represents the name of the entity.
-  - `operation` can be one or more of `create`, `read`, `update`, and `delete`, concatenated with commas.
-  - `order` is optional and can be used to define additional API calls that should be invoked for a given CRUD invocation.
+
+- `Entity` represents the name of the entity.
+- `operation` can be one or more of `create`, `read`, `update`, and `delete`, concatenated with commas.
+- `order` is optional and can be used to define additional API calls that should be invoked for a given CRUD invocation.
 
 ### Behavior of Operations
 
@@ -207,10 +227,57 @@ paths:
 ```
 
 This syntax allows you to:
+
 - Prevent automatic generation of a data source by setting `terraform-datasource` to `null`
 - Prevent invocation of the operation during the resource's Read method ("invoked as part of terraform state refresh") by setting `terraform-resource` to `null`
 
 For example, the configuration above declares that `getThing` is associated with just a resource, and a data source should not be automatically generated.
+
+### Wrapping Additional API Operation Response Data
+
+When defining multiple API operations for a single entity, an API definition may be written such that those API operation response are a flattened object. When adding those additional operations to the entity, those flattened object properties are added to the top level of the resource schema by default.
+
+Use `x-speakeasy-wrapped-attribute` extension to override this behavior, which will create a wrapping attribute that contains the underlying object properties in the final resource schema.
+
+In this example, the resource will put the second API operation response properties underneath a `subconfig` attribute:
+
+```yaml
+paths:
+  /example/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-speakeasy-entity-operation: Example#read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExampleResponse'
+  /example/{id}/subconfig:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-speakeasy-entity-operation: Example#read#2
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ExampleSubconfigResponse'
+                  - x-speakeasy-wrapped-attribute: subconfig
+```
 
 ### Resources with Soft Delete
 
