@@ -413,177 +413,24 @@ The 2025-06-18 release introduces comprehensive [security best practices](https:
 
 ### MCP Elicitation Support
 
-The new [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation) capability enables servers to request additional information from users during interactions, making conversations more dynamic and context-aware.
+The new [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation) capability enables servers to request additional information from users during interactions.
 
-**What you need to change:** Use `context.elicit()` in your tool implementations to request additional user input when needed.
+Elicitation allows servers to pause tool execution and ask users for specific information using structured JSON schemas. For example, a booking tool might request travel dates, or a file processor might ask for output format preferences.
 
-<CodeWithTabs>
+**What you need to change:** Use elicitation to request user input when your tools need additional information.
 
-```python !!tabs Python
-# Using official Python SDK - mcp package
-from mcp.server import Server
-from mcp.types import CallToolResult, ElicitationRequest
+Key features:
+- **Structured requests:** Use JSON schemas to define exactly what information you need
+- **User control:** Users can accept, reject, or cancel elicitation requests  
+- **Simple schemas:** Only primitive types (string, number, boolean) are supported for easier client implementation
+- **Security:** Servers must not request sensitive information through elicitation
 
-server = Server("booking-system", capabilities={"tools": {}, "elicitation": {}})
-
-@server.call_tool()
-async def handle_call_tool(name: str, arguments: dict, context) -> CallToolResult:
-    if name == "complex_query":
-        query = arguments.get("query", "")
-        
-        if missing_context(query):
-            # Request additional information from user using elicit
-            elicitation_request = ElicitationRequest(
-                message="I need more details about your requirements. What specific format would you like the output in?",
-                schema={
-                    "type": "object",
-                    "properties": {
-                        "format": {
-                            "type": "string",
-                            "description": "Output format preference"
-                        },
-                        "include_metadata": {
-                            "type": "boolean",
-                            "description": "Include metadata in output",
-                            "default": False
-                        }
-                    },
-                    "required": ["format"]
-                }
-            )
-            
-            result = await context.elicit(elicitation_request)
-            
-            if result.action == "accept" and result.data:
-                return CallToolResult(
-                    content=[{"type": "text", "text": process_with_context(query, result.data["format"], result.data.get("include_metadata", False))}]
-                )
-            else:
-                return CallToolResult(
-                    content=[{"type": "text", "text": "User declined to provide additional context or elicitation was cancelled"}]
-                )
-        
-        return CallToolResult(
-            content=[{"type": "text", "text": process_query(query)}]
-        )
-
-def missing_context(query: str) -> bool:
-    # Your logic to determine if more context is needed
-    return "format" not in query.lower()
-
-def process_with_context(query: str, format: str, include_metadata: bool) -> str:
-    # Your implementation here
-    return f"Processed query '{query}' in {format} format"
-
-def process_query(query: str) -> str:
-    # Your implementation here
-    return f"Processed query: {query}"
-```
-
-```typescript !!tabs TypeScript  
-// Using official TypeScript SDK - @modelcontextprotocol/sdk package
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { 
-  CallToolRequestSchema, 
-  CallToolResult,
-  ListToolsRequestSchema,
-  Tool 
-} from "@modelcontextprotocol/sdk/types.js";
-
-const server = new Server(
-  { name: "booking-system", version: "1.0.0" },
-  { capabilities: { tools: {}, elicitation: {} } }
-);
-
-// Register tools
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "complex_query",
-        description: "Process a query, requesting additional details if needed",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "The query to process" }
-          },
-          required: ["query"]
-        }
-      } as Tool
-    ]
-  };
-});
-
-// Handle tool calls with elicitation
-server.setRequestHandler(CallToolRequestSchema, async (request, context) => {
-  const { name, arguments: args } = request.params;
-  
-  if (name === "complex_query") {
-    const query = args.query || "";
-    
-    if (missingContext(query)) {
-      // Request additional information from user using elicit
-      const result = await context.elicit({
-        message: "I need more details about your requirements. What specific format would you like the output in?",
-        schema: {
-          type: "object",
-          properties: {
-            format: {
-              type: "string",
-              description: "Output format preference"
-            },
-            includeMetadata: {
-              type: "boolean",
-              description: "Include metadata in output",
-              default: false
-            }
-          },
-          required: ["format"]
-        }
-      });
-      
-      if (result.action === "accept" && result.data) {
-        return {
-          content: [{ 
-            type: "text", 
-            text: processWithContext(query, result.data.format, result.data.includeMetadata)
-          }]
-        } as CallToolResult;
-      } else {
-        return {
-          content: [{ 
-            type: "text", 
-            text: "User declined to provide additional context or elicitation was cancelled"
-          }]
-        } as CallToolResult;
-      }
-    }
-    
-    return {
-      content: [{ type: "text", text: processQuery(query) }]
-    } as CallToolResult;
-  }
-  
-  throw new Error(`Unknown tool: ${name}`);
-});
-
-function missingContext(query: string): boolean {
-  // Your logic to determine if more context is needed
-  return !query.toLowerCase().includes("format");
-}
-
-function processWithContext(query: string, format: string, includeMetadata?: boolean): string {
-  // Your implementation here
-  return `Processed query '${query}' in ${format} format${includeMetadata ? ' with metadata' : ''}`;
-}
-
-function processQuery(query: string): string {
-  // Your implementation here
-  return `Processed query: ${query}`;
-}
-```
-
-</CodeWithTabs>
+**Example flow:**
+1. Tool detects missing context (e.g., user asks to "format the data" but doesn't specify format)
+2. Server sends elicitation request with schema for format preference
+3. Client presents UI to user (form, dialog, etc.)
+4. User provides response or declines
+5. Tool continues with the additional context
 
 ### Resource Links in Tool Results
 
