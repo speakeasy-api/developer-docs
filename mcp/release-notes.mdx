@@ -417,20 +417,122 @@ The new [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/c
 
 Elicitation allows servers to pause tool execution and ask users for specific information using structured JSON schemas. For example, a booking tool might request travel dates, or a file processor might ask for output format preferences.
 
-**What you need to change:** Use elicitation to request user input when your tools need additional information.
+**What you need to change:** Enable the `elicitation` capability and use `context.elicit()` to request user input when your tools need additional information.
+
+<CodeWithTabs>
+
+```python !!tabs Python
+@server.call_tool()
+async def handle_call_tool(
+    name: str, arguments: dict[str, Any] | None, context: RequestContext
+) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    if name == "book_flight":
+        departure = arguments.get("departure")
+        destination = arguments.get("destination")
+        
+        # If departure city is missing, ask the user
+        if not departure:
+            result = await context.elicit(
+                message="What city are you departing from?",
+                schema={
+                    "type": "object",
+                    "properties": {
+                        "departure": {"type": "string", "description": "Departure city"}
+                    },
+                    "required": ["departure"]
+                }
+            )
+            
+            if result.action == "accept":
+                departure = result.content["departure"]
+            else:
+                return [types.TextContent(type="text", text="Flight booking cancelled")]
+        
+        # Continue with booking...
+        return [types.TextContent(
+            type="text", 
+            text=f"Booking flight from {departure} to {destination}"
+        )]
+```
+
+```typescript !!tabs TypeScript
+server.setRequestHandler(CallToolRequestSchema, async (request, context) => {
+  const { name, arguments: args } = request.params;
+  
+  if (name === "book_restaurant") {
+    const restaurant = args.restaurant;
+    const date = args.date;
+    const partySize = args.partySize;
+    
+    // Check availability
+    const isAvailable = await checkAvailability(restaurant, date, partySize);
+    
+    if (!isAvailable) {
+      // Ask user if they want to check alternatives
+      const result = await context.elicit({
+        message: `No availability at ${restaurant} on ${date}. Would you like to check alternative dates?`,
+        requestedSchema: {
+          type: "object",
+          properties: {
+            checkAlternatives: {
+              type: "boolean",
+              title: "Check alternative dates",
+              description: "Would you like me to check other dates?"
+            },
+            flexibleDates: {
+              type: "string",
+              title: "Date flexibility",
+              description: "How flexible are your dates?",
+              enum: ["next_day", "same_week", "next_week"],
+              enumNames: ["Next day", "Same week", "Next week"]
+            }
+          },
+          required: ["checkAlternatives"]
+        }
+      });
+
+      if (result.action === "accept" && result.content?.checkAlternatives) {
+        const alternatives = await findAlternatives(
+          restaurant, 
+          date, 
+          partySize, 
+          result.content.flexibleDates as string
+        );
+        return {
+          content: [{
+            type: "text",
+            text: `Found these alternatives: ${alternatives.join(", ")}`
+          }]
+        };
+      }
+      
+      return {
+        content: [{
+          type: "text",
+          text: "No booking made. Original date not available."
+        }]
+      };
+    }
+    
+    // Book the table
+    await makeBooking(restaurant, date, partySize);
+    return {
+      content: [{
+        type: "text",
+        text: `Booked table for ${partySize} at ${restaurant} on ${date}`
+      }]
+    };
+  }
+});
+```
+
+</CodeWithTabs>
 
 Key features:
 - **Structured requests:** Use JSON schemas to define exactly what information you need
 - **User control:** Users can accept, reject, or cancel elicitation requests  
 - **Simple schemas:** Only primitive types (string, number, boolean) are supported for easier client implementation
 - **Security:** Servers must not request sensitive information through elicitation
-
-**Example flow:**
-1. Tool detects missing context (e.g., user asks to "format the data" but doesn't specify format)
-2. Server sends elicitation request with schema for format preference
-3. Client presents UI to user (form, dialog, etc.)
-4. User provides response or declines
-5. Tool continues with the additional context
 
 ### Resource Links in Tool Results
 
