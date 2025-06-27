@@ -3,7 +3,7 @@ title: MCP release notes
 description: A comparative guide to the major changes in the Model Context Protocol (MCP) across versions.
 ---
 
-import { Callout, Table } from "@/mdx/components";
+import { Callout, CodeWithTabs, Table } from "@/mdx/components";
 
 # MCP release notes
 
@@ -12,15 +12,8 @@ Each release of the Model Context Protocol (MCP) introduces changes to how LLM a
 <Callout title="Note" type="info">
   This page is not an official MCP release notes page. It exists to help
   developers understand what changed, why it matters, and how to adopt the
-  latest MCP revisions. For the full changelog, refer to the official{" "}
-  <a
-    href="https://github.com/modelcontextprotocol/modelcontextprotocol/tags"
-    target="_blank"
-    rel="noreferrer"
-  >
-    GitHub tags
-  </a>
-  .
+  latest MCP revisions. For the full changelog, refer to the [official
+  changelog](https://github.com/modelcontextprotocol/modelcontextprotocol/tags).
 </Callout>
 
 ## MCP version history
@@ -110,21 +103,73 @@ One of the most significant changes is the **removal of JSON-RPC batching** supp
 
 The new [structured tool output](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content) capability allows tools to return data in predictable, structured formats rather than just plain text responses.
 
-```python
-@app.tool("get_user_info", description="Get structured user information")
-async def get_user_info(user_id: str):
-    return {
-        "content": [{
-            "type": "structured",
-            "data": {
-                "user": {
-                    "id": user_id,
-                    "name": "John Doe",
-                    "email": "john@example.com",
-                    "status": "active"
-                }
+**What you need to change:** Update your tool definitions to specify `Tool.outputSchema` and return `CallToolResult.structuredContent` in your tool implementations.
+
+<CodeWithTabs>
+
+```python !!tabs Python
+# Using official Python SDK - mcp package
+from mcp.server import Server
+from mcp.types import (
+    CallToolRequestSchema,
+    ListToolsRequestSchema,
+    Tool,
+    CallToolResult,
+)
+
+server = Server("example-server")
+
+# Define tool with outputSchema
+@mcp.tool()
+def get_user_info(user_id: str) -> CallToolResult:
+    """Get structured user information"""
+    user_data = {
+        "user": {
+            "id": user_id,
+            "name": "John Doe",
+            "email": "john@example.com",
+            "status": "active"
+        }
+    }
+
+    return CallToolResult(
+        content=[{"type": "text", "text": f"Retrieved user {user_id}"}],
+        # New: Use structuredContent for predictable data format
+        structuredContent=user_data
+    )
+
+# Set the tool's outputSchema property
+get_user_info.outputSchema = {
+    "type": "object",
+    "properties": {
+        "user": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+                "email": {"type": "string"},
+                "status": {"type": "string"}
+            }
+        }
+    }
+}
+
+# Register tool with outputSchema
+@server.list_tools()
+async def handle_list_tools() -> list[Tool]:
+    return [
+        Tool(
+            name="get_user_info",
+            description="Get structured user information",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string"}
+                },
+                "required": ["user_id"]
             },
-            "schema": {
+            # New: Add outputSchema to specify return format
+            outputSchema={
                 "type": "object",
                 "properties": {
                     "user": {
@@ -138,33 +183,320 @@ async def get_user_info(user_id: str):
                     }
                 }
             }
-        }]
-    }
+        )
+    ]
 ```
+
+```typescript !!tabs TypeScript
+// Using official TypeScript SDK - @modelcontextprotocol/sdk package
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import {
+  CallToolRequestSchema,
+  CallToolResult,
+  ListToolsRequestSchema,
+  Tool,
+} from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server(
+  { name: "example-server", version: "1.0.0" },
+  { capabilities: { tools: {} } },
+);
+
+// Handle tool calls with structured output
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === "get_user_info") {
+    const userData = {
+      user: {
+        id: args.user_id,
+        name: "John Doe",
+        email: "john@example.com",
+        status: "active",
+      },
+    };
+
+    return {
+      content: [{ type: "text", text: `Retrieved user ${args.user_id}` }],
+      // New: Use structuredContent for predictable data format
+      structuredContent: userData,
+    } as CallToolResult;
+  }
+});
+
+// Register tool with outputSchema
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "get_user_info",
+        description: "Get structured user information",
+        inputSchema: {
+          type: "object",
+          properties: {
+            user_id: { type: "string" },
+          },
+          required: ["user_id"],
+        },
+        // New: Add outputSchema to specify return format
+        outputSchema: {
+          type: "object",
+          properties: {
+            user: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                name: { type: "string" },
+                email: { type: "string" },
+                status: { type: "string" },
+              },
+            },
+          },
+        },
+      } as Tool,
+    ],
+  };
+});
+```
+
+</CodeWithTabs>
 
 ### Enhanced OAuth Security
 
-MCP servers are now classified as [OAuth Resource Servers](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#authorization-server-discovery):
+MCP servers are now classified as [OAuth Resource Servers](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#authorization-server-discovery), introducing two **MUST** requirements for both servers and clients:
 
-1. **Resource Server Discovery:** Servers must provide metadata to help clients discover the corresponding Authorization Server
-2. **Resource Indicators:** Clients must implement [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html) Resource Indicators to prevent malicious servers from obtaining inappropriate access tokens
-3. **Enhanced Security Guidelines:** New [security best practices](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices) documentation
+1. **Resource Server Discovery:** Servers **MUST** provide metadata to help clients discover the corresponding Authorization Server
+2. **Resource Indicators:** Clients **MUST** implement [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html) Resource Indicators to prevent malicious servers from obtaining inappropriate access tokens
+
+**What you need to change:** Update your server to expose authorization metadata and modify your client to include resource indicators in token requests.
+
+<CodeWithTabs>
+
+```python !!tabs Python Server
+# Using official Python SDK - mcp package
+from mcp.server.fastmcp import FastMCP
+from mcp.server.auth.provider import TokenVerifier, TokenInfo
+from mcp.server.auth.settings import AuthSettings
+
+class MyTokenVerifier(TokenVerifier):
+    async def verify_token(self, token: str) -> TokenInfo:
+        # MUST: Validate token is scoped to this resource
+        # Verify with your authorization server via token introspection
+        response = await introspect_token(token)
+        if not response.get("active"):
+            raise ValueError("Token is not active")
+
+        # Verify resource scope
+        if "https://api.example.com/" not in response.get("aud", []):
+            raise ValueError("Token not valid for this resource")
+
+        return TokenInfo(
+            sub=response["sub"],
+            scopes=response["scope"].split(),
+            expires_at=response["exp"]
+        )
+
+# Create server with OAuth Resource Server configuration
+mcp = FastMCP(
+    "example-server",
+    token_verifier=MyTokenVerifier(),
+    auth=AuthSettings(
+        # MUST: Expose authorization server discovery metadata
+        issuer_url="https://auth.example.com",
+        resource_server_url="https://api.example.com/",
+        required_scopes=["read", "write"],
+    ),
+)
+
+async def introspect_token(token: str) -> dict:
+    # Your token introspection implementation
+    # Typically calls your authorization server's introspection endpoint
+    pass
+```
+
+```python !!tabs Python Client
+# Using official Python SDK - mcp package
+from mcp.client.auth import OAuthClientProvider, TokenStorage
+from mcp.client.session import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
+
+class SecureTokenStorage(TokenStorage):
+    async def get_tokens(self) -> OAuthToken | None:
+        # Load tokens from secure storage
+        pass
+
+    async def set_tokens(self, tokens: OAuthToken) -> None:
+        # Save tokens to secure storage
+        pass
+
+    async def get_client_info(self) -> OAuthClientInformationFull | None:
+        # Load client registration info
+        pass
+
+    async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
+        # Save client registration info
+        pass
+
+async def connect_to_protected_server():
+    # Set up OAuth authentication with Resource Indicators
+    oauth_auth = OAuthClientProvider(
+        server_url="https://api.example.com/",  # MUST: Specify target resource
+        client_metadata=OAuthClientMetadata(
+            client_name="My MCP Client",
+            redirect_uris=["http://localhost:3000/callback"],
+            grant_types=["authorization_code", "refresh_token"],
+            response_types=["code"],
+        ),
+        storage=SecureTokenStorage(),
+        redirect_handler=lambda url: print(f"Visit: {url}"),
+        callback_handler=lambda: ("auth_code", None),
+    )
+
+    # Connect with resource-scoped authentication
+    async with streamablehttp_client(
+        "https://api.example.com/mcp", auth=oauth_auth
+    ) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            # Authenticated session ready with resource-scoped tokens
+```
+
+</CodeWithTabs>
+
+### Security Best Practices
+
+The 2025-06-18 release introduces comprehensive [security best practices](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices) documentation. This covers token validation, resource isolation, and threat mitigation to help prevent common security vulnerabilities in MCP implementations.
 
 ### MCP Elicitation Support
 
-The new [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation) capability enables servers to request additional information from users during interactions, making conversations more dynamic and context-aware.
+The new [elicitation](https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation) capability enables servers to request additional information from users during interactions.
 
-```python
-async def handle_complex_query(query: str, context):
-    if missing_context(query):
-        # Request additional information from user
-        additional_info = await context.elicit_user_input(
-            prompt="I need more details about your requirements. What specific format would you like the output in?",
-            options=["JSON", "CSV", "Plain text"]
-        )
-        # Process with additional context
-        return process_with_context(query, additional_info)
+Elicitation allows servers to pause tool execution and ask users for specific information using structured JSON schemas. For example, a booking tool might request travel dates, or a file processor might ask for output format preferences.
+
+**What you need to change:** Enable the `elicitation` capability and use `context.elicit()` to request user input when your tools need additional information.
+
+<CodeWithTabs>
+
+```python !!tabs Python
+@server.call_tool()
+async def handle_call_tool(
+    name: str, arguments: dict[str, Any] | None, context: RequestContext
+) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    if name == "book_flight":
+        departure = arguments.get("departure")
+        destination = arguments.get("destination")
+
+        # If departure city is missing, ask the user
+        if not departure:
+            result = await context.elicit(
+                message="What city are you departing from?",
+                schema={
+                    "type": "object",
+                    "properties": {
+                        "departure": {"type": "string", "description": "Departure city"}
+                    },
+                    "required": ["departure"]
+                }
+            )
+
+            if result.action == "accept":
+                departure = result.content["departure"]
+            else:
+                return [types.TextContent(type="text", text="Flight booking cancelled")]
+
+        # Continue with booking...
+        return [types.TextContent(
+            type="text",
+            text=f"Booking flight from {departure} to {destination}"
+        )]
 ```
+
+```typescript !!tabs TypeScript
+server.setRequestHandler(CallToolRequestSchema, async (request, context) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === "book_restaurant") {
+    const restaurant = args.restaurant;
+    const date = args.date;
+    const partySize = args.partySize;
+
+    // Check availability
+    const isAvailable = await checkAvailability(restaurant, date, partySize);
+
+    if (!isAvailable) {
+      // Ask user if they want to check alternatives
+      const result = await context.elicit({
+        message: `No availability at ${restaurant} on ${date}. Would you like to check alternative dates?`,
+        requestedSchema: {
+          type: "object",
+          properties: {
+            checkAlternatives: {
+              type: "boolean",
+              title: "Check alternative dates",
+              description: "Would you like me to check other dates?",
+            },
+            flexibleDates: {
+              type: "string",
+              title: "Date flexibility",
+              description: "How flexible are your dates?",
+              enum: ["next_day", "same_week", "next_week"],
+              enumNames: ["Next day", "Same week", "Next week"],
+            },
+          },
+          required: ["checkAlternatives"],
+        },
+      });
+
+      if (result.action === "accept" && result.content?.checkAlternatives) {
+        const alternatives = await findAlternatives(
+          restaurant,
+          date,
+          partySize,
+          result.content.flexibleDates as string,
+        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Found these alternatives: ${alternatives.join(", ")}`,
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No booking made. Original date not available.",
+          },
+        ],
+      };
+    }
+
+    // Book the table
+    await makeBooking(restaurant, date, partySize);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Booked table for ${partySize} at ${restaurant} on ${date}`,
+        },
+      ],
+    };
+  }
+});
+```
+
+</CodeWithTabs>
+
+Key features:
+
+- **Structured requests:** Use JSON schemas to define exactly what information you need
+- **User control:** Users can accept, reject, or cancel elicitation requests
+- **Simple schemas:** Only primitive types (string, number, boolean) are supported for easier client implementation
+- **Security:** Servers must not request sensitive information through elicitation
 
 ### Resource Links in Tool Results
 
@@ -172,7 +504,9 @@ Tools can now return [resource links](https://modelcontextprotocol.io/specificat
 
 ### MCP Protocol Version Headers
 
-HTTP requests now require the `MCP-Protocol-Version` header to enable [version negotiation](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#protocol-version-header):
+HTTP requests now require the `MCP-Protocol-Version` header to enable [version negotiation](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#protocol-version-header). **Clients are responsible** for setting this header in all HTTP requests after the initial version negotiation is completed during the handshake.
+
+**What you need to change:** Update your HTTP client to include the `MCP-Protocol-Version` header in all requests after connecting.
 
 ```http
 POST /mcp HTTP/1.1
@@ -187,12 +521,38 @@ MCP-Protocol-Version: 2025-06-18
 }
 ```
 
-### Other Notable Changes in MCP 2025-06-18
+### Title Fields for Better UX
+
+The `title` field has been added to tools, resources, and prompts to provide human-friendly display names while keeping `name` as the programmatic identifier. This improves how MCP items appear in client interfaces.
+
+**What you need to change:** Add `title` fields to your tools, resources, and prompts for better user experience in clients like VS Code Copilot Chat.
+
+In practice, this means users see "Search repositories" instead of "search_repositories" in their IDE:
+
+```python
+# Python SDK example
+@mcp.tool(title="Search repositories")
+def search_repositories(query: str, language: str = None) -> str:
+    """Search for GitHub repositories"""
+    # name remains "search_repositories" for programmatic access
+    # title shows "Search repositories" in UIs
+    return f"Searching repositories for: {query}"
+
+@mcp.resource("search://{query}", title="Repository Search Results")
+def get_search_results(query: str) -> str:
+    """Get repository search results"""
+    return f"Search results for {query}"
+```
+
+Here's how it looks in VS Code Copilot Chat:
+
+![Search repositories in VS Code](./assets/release-notes-search-repositories.png)
+
+### Other Notable Changes
 
 - **Lifecycle Operations:** Changed from **SHOULD** to **MUST** for certain [lifecycle operations](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle#operation)
 - **Meta Fields:** Added `_meta` field to additional interface types for better extensibility
 - **Completion Context:** Added `context` field to `CompletionRequest` for LLM-based autocompletion support
-- **Title Fields:** Added `title` field for human-friendly display names while keeping `name` as programmatic identifier
 
 ## MCP 2025-03-26 vs MCP 2024-11-05
 
