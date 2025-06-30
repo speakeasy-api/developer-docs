@@ -1,13 +1,52 @@
 ---
-title: "Configuration"
-description: "Learn how to configure environment values and manage custom resources in the Terraform provider."
+title: "Provider Configuration"
+description: "Learn how to customize the generated Terraform Provider, such as supporting environment variables and custom resources."
 ---
 
-# Configuration
+# Provider Configuration
 
-## Configuring Environment Values
+## Security
 
-Use the `environmentVariables` configuration in the `gen.yaml` to set up default values for provider variables to be pulled in from an environment variable. This is useful for mapping known environment values that will hold an API key into the provider.
+The generated Terraform Provider will automatically implement all global security as defined in the OpenAPI Specification via the root level `security` property and its associated `securitySchemes` components. Multiple security options are supported.
+
+In this example, the provider will be generated with bearer authenticiation token requirement using an `access_token` provider-level attribute:
+
+```yaml
+components:
+  securitySchemes:
+    accessToken:
+      type: http
+      scheme: bearer
+security:
+  - accessToken: []
+```
+
+Refer to the [Configuring Environment Variables section](#configuring-environment-variables) to optionally enable fallback environment variable configuration of the value.
+
+Operation-level security is not supported nor recommended. Instead, it is generally more desirable to implement separate providers per security layer. Terraform practitioners are conventionally used to the layering of provider implementations for this use case and Terraform itself is designed around those separation of concerns. Refer to the [HashiCorp provider design principles documentation](https://developer.hashicorp.com/terraform/plugin/best-practices/hashicorp-provider-design-principles) for more context.
+
+## Globals
+
+Enable provider-level configuration of common properties across many resources via the [`x-speakeasy-globals` extension](/docs/customize/globals). This customization allows Terraform practitioners to configure a value via:
+
+* Provider-level only: Default value applied to any resources that use the global
+* Resource-level only: Explicit value applied to only those resource instance(s)
+* Provider-level with resource-level override: Default value applied to any resources that use the global with any explicit resource-level configuration overriding the provider-level value
+
+In this example, the provider will accept an `organization_id` configuration as a global:
+
+```yaml
+x-speakeasy-globals:
+  parameters:
+    - name: organizationId
+      in: path
+      schema:
+        type: string
+```
+
+## Configuring Environment Variables
+
+Use the `environmentVariables` configuration in the `gen.yaml` to set up an environment variable fallback for provider attribute data configuration. For example, accepting an access token value via environment variable, rather than requiring explicit `provider` block attribute configuration from Terraform practitioners.
 
 ```yaml
 terraform:
@@ -99,35 +138,3 @@ The `additionalEphemeralResources` key follows the same syntax, but will insert 
 The `additionalDataSources` key follows the same syntax, but will insert data resources into the provider using `datasource` (instead of `resource`) as the value inserted into the list.
 
 To learn more about how to write a Terraform resource, please consult the [official Terraform documentation](https://developer.hashicorp.com/terraform/plugin/framework).
-
-## Modifying Resource and Data Source Descriptions
-
-The `x-speakeasy-entity-description` extension allows modification of the description of a Terraform resource or data source. This is useful when augmenting the documentation in an OpenAPI specification with documentation for specific resources. This documentation is expected to be in Markdown format. Use this extension alongside the `x-speakeasy-entity` extension.
-
-Alternatively, a template folder can be written to customize any or all aspects of generated documentation in alignment with [terraform-plugin-docs](https://github.com/hashicorp/terraform-plugin-docs).
-
-```yaml
-components:
-  schemas:
-    Order:
-      description: An order helps you make coffee
-      x-speakeasy-entity: Order
-      x-speakeasy-entity-description: |
-        The order resource allows you to declaratively construct an order for coffee.
-
-        resource "speakeasy_order" "example" {
-          name = "Filter Blend"
-          price = 11.5
-        }
-```
-
-## Deduplicate Terraform Types
-
-The `terraform` types folder includes a representation of your data models that is appropriate for the `terraform-plugin-framework` type system. However, if you have multiple types with the same _signature_ (e.g. the same set of child property _types_), there might be a lot of these types that are effectively duplicated. To minimize the git repository / binary size, it might make sense to deduplicate these by re-using types with the same _signature_ across different resources. If you would like to enable this, set the following configuration option:
-
-This option is `false` by default.
-
-```yaml
-terraform:
-  enableTypeDeduplication: true
-```
