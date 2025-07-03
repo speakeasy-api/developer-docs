@@ -4,7 +4,7 @@ description: "How to customize enums in OpenAPI documents to generate strongly t
 slug: "/customize-sdks/enums/"
 ---
 
-import { Callout } from "@/mdx/components";
+import { Callout, CodeWithTabs } from "@/mdx/components";
 
 # Customize enums
 
@@ -14,9 +14,9 @@ import { Callout } from "@/mdx/components";
 
 Enum values are named according to their values, with adjustments made to form valid identifiers:
 
-* Invalid characters are removed.
-* Values are converted to fit the case style of the target programming language.
-* Special characters (for example, `+`, `-`, and `.`) are converted to words (like `Plus`, `Minus`, and `Dot`).
+- Invalid characters are removed.
+- Values are converted to fit the case style of the target programming language.
+- Special characters (for example, `+`, `-`, and `.`) are converted to words (like `Plus`, `Minus`, and `Dot`).
 
 ### Name conflicts
 
@@ -36,7 +36,6 @@ schema:
 Resulting enum values will be `FOO_LOWER`, `FOO_MIXED`, and `FOO_UPPER`.
 
 If unique names cannot be resolved, a validation error will prompt you to resolve conflicts, potentially using the `x-speakeasy-enums` extension.
-
 
 ```yaml
 schema:
@@ -58,15 +57,15 @@ Ensure the order in the enum array corresponds to the custom names in the `x-spe
 Use the `x-speakeasy-name-override` attribute to customize enum class names:
 
 ```yaml
-  Enum:
-      x-speakeasy-name-override: example_override
-      type: string
-      enum:
-        - foo
-        - FOO
+Enum:
+  x-speakeasy-name-override: example_override
+  type: string
+  enum:
+    - foo
+    - FOO
 ```
 
-This schema will produce: 
+This schema will produce:
 
 ```python
 class ExampleOverride(str, Enum):
@@ -76,7 +75,7 @@ class ExampleOverride(str, Enum):
 
 ### Name conflict considerations
 
-Some cases (like open enums) may pose unique name resolutions challenges, particularly when similar names occur in the schema. 
+Some cases (like open enums) may pose unique name resolutions challenges, particularly when similar names occur in the schema.
 
 In name conflict cases, the parent schema is given the original name, while the child schema's name is concatenated with the parent's name.
 
@@ -93,7 +92,7 @@ enum_field:
       x-speakeasy-name-override: enum_field
 ```
 
-Results in: 
+Results in:
 
 ```python
 class EnumFieldEnumField(str, Enum):
@@ -115,7 +114,7 @@ enum_field:
               x-speakeasy-name-override: enum_field
 ```
 
-This will result in: 
+This will result in:
 
 ```python
 class EnumField(str, Enum):
@@ -126,7 +125,8 @@ class EnumField(str, Enum):
 ## Open vs closed enums
 
 <Callout title="Note" type="info">
-This feature is currently supported in Go, Python, TypeScript, Java and C# SDKs.
+  This feature is currently supported in Go, Python, TypeScript, Java and C#
+  SDKs.
 </Callout>
 
 By default, enums defined in OpenAPI are considered closed during code
@@ -153,13 +153,62 @@ components:
 
 When an SDK is generated with this type, the API is able to send values beyond
 what is specified in the enum and these will be captured and returned to the user
-in a type-safe manner. 
+in a type-safe manner.
 
-Here's an example of what this schema looks like in TypeScript:
+Here's how the `BackgroundColor` model translates to different languages:
 
-```typescript
-type BackgroundColor = 'red' | 'green' | 'blue' | Unrecognized<string>;
+<CodeWithTabs>
+
+```typescript !!tabs TypeScript
+type BackgroundColor = "red" | "green" | "blue" | Unrecognized<string>;
 ```
+
+```go !!tabs Go
+type BackgroundColor string
+
+const (
+    BackgroundColorRed   BackgroundColor = "red"
+    BackgroundColorGreen BackgroundColor = "green"
+    BackgroundColorBlue  BackgroundColor = "blue"
+)
+```
+
+```python !!tabs Python
+BackgroundColor = Union[Literal["red", "green", "blue"], UnrecognizedStr]
+```
+
+```csharp !!tabs C#
+// Known values mimic enum semantics
+var green = BackgroundColor.GREEN;
+green.IsKnown(); // true
+
+// Use .Of() to create an open-enum instance from any string value
+var purple = BackgroundColor.Of("purple");
+purple.IsKnown(); // false
+
+// Alternatively, the implicit operator can be used
+BackgroundColor red = "red";
+red.IsKnown(); // true
+
+// Enum-like equality checks are also available
+red.Equals(BackgroundColor.RED); // true
+green == BackgroundColor.Of("green"); // true
+```
+
+```java !!tabs Java
+// Known values mimic enum semantics
+BackgroundColor green = BackgroundColor.GREEN;
+
+// Use .of() to create an open-enum instance from any string value
+BackgroundColor purple = BackgroundColor.of("purple");
+purple.isKnown(); // false
+
+// Enum-like equality checks are also available
+BackgroundColor.of("blue").equals(BackgroundColor.BLUE); // true
+green == BackgroundColor.of("green"); // true
+```
+
+</CodeWithTabs>
 
 ## Native enums vs union of strings
 
@@ -187,8 +236,8 @@ import { SDK } from "cool-sdk";
 const sdk = new SDK();
 
 const result = await sdk.themes.create({
-    name: "flashy",
-    background: "dark-gray",
+  name: "flashy",
+  background: "dark-gray",
 });
 ```
 
@@ -203,9 +252,9 @@ Will result in the following output:
 
 ```typescript
 enum Color {
-  SkyBlue = 'sky-blue',
-  DarkGray = 'dark-gray',
-  Stone = 'stone',
+  SkyBlue = "sky-blue",
+  DarkGray = "dark-gray",
+  Stone = "stone",
 }
 ```
 
@@ -216,15 +265,15 @@ import { Color } from "cool-sdk/models/color";
 const sdk = new SDK();
 
 const result = await sdk.themes.create({
-    name: "flashy",
-    background: Color.DarkGray,
+  name: "flashy",
+  background: Color.DarkGray,
 });
 ```
 
 The main trade-offs to consider between the two styles are that literal unions
 do not require SDK users to import any additional types or values from the SDK
 package. The user starts typing a string or number and their IDE's autocompletion
-interface will suggest from the valid set of values. 
+interface will suggest from the valid set of values.
 
 Native enums need to be
 imported from within the SDK but benefit from having members with clear names
