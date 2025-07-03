@@ -44,6 +44,10 @@ on:
         description: Force SDK generation, even if no changes are detected.
         type: boolean
         default: false
+      runs-on:
+        description: Runner to use for the workflow (e.g., large-ubuntu-runner)
+        type: string
+        default: ubuntu-latest
 
 jobs:
   generate:
@@ -52,6 +56,7 @@ jobs:
       speakeasy_version: latest
       force: ${{ github.event.inputs.force }}
       mode: pr
+      runs-on: ${{ github.event.inputs.runs-on }}
     secrets:
       github_access_token: ${{ secrets.GITHUB_TOKEN }}
       speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
@@ -157,6 +162,55 @@ OPENAPI_DOC_AUTH_TOKEN="Bearer <TOKEN_VALUE>"
 
 Add a [GitHub secret](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions) with the same name and value as the token or key (including the `Bearer ` prefix for private repositories).
 
+## Using larger GitHub-hosted runners
+
+For resource-intensive SDK generation builds (such as large TypeScript projects that fail during compilation due to memory constraints), you can configure larger GitHub-hosted runners with more RAM and CPU resources.
+
+### Set up larger runners
+
+1. **Configure larger runners in your GitHub organization**: Larger runners are not enabled by default and require separate billing setup.
+
+   - Follow the [GitHub documentation for managing larger runners](https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/using-github-hosted-runners/using-larger-runners/managing-larger-runners)
+   - Choose a runner size with sufficient RAM (standard `ubuntu-latest` runners have only 7GB RAM)
+   - Assign a custom label to your larger runner (e.g., `large-ubuntu-runner`)
+
+2. **Update your workflow**: Once your larger runner is configured, update your workflow file to use the custom runner label:
+
+```yml
+name: SDK Generation
+permissions:
+  checks: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force SDK generation, even if no changes are detected.
+        type: boolean
+        default: false
+      runs-on:
+        description: Runner to use for the workflow (e.g., large-ubuntu-runner)
+        type: string
+        default: large-ubuntu-runner # Use your custom label here
+
+jobs:
+  generate:
+    uses: speakeasy-api/sdk-generation-action/.github/workflows/workflow-executor.yaml@v15
+    with:
+      speakeasy_version: latest
+      force: ${{ github.event.inputs.force }}
+      mode: pr
+      runs-on: ${{ github.event.inputs.runs-on }}
+    secrets:
+      github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+```
+
+This configuration allows you to specify different runner types when manually triggering the workflow, or set a default larger runner for all builds.
+
 ## Enable signed commits
 
 To include signed commits from the SDK Generation workflow, add `signed_commits: true` to the workflow file. This configuration ensures that GitHub Actions creates verified commits during workflow execution.
@@ -176,6 +230,10 @@ on:
         description: Force SDK generation, even if no changes are detected.
         type: boolean
         default: false
+      runs-on:
+        description: Runner to use for the workflow (e.g., large-ubuntu-runner)
+        type: string
+        default: ubuntu-latest
 
 jobs:
   generate:
@@ -184,6 +242,7 @@ jobs:
       speakeasy_version: latest
       force: ${{ github.event.inputs.force }}
       mode: pr
+      runs-on: ${{ github.event.inputs.runs-on }}
       signed_commits: true # !focus(1)
     secrets:
       github_access_token: ${{ secrets.GITHUB_TOKEN }}
