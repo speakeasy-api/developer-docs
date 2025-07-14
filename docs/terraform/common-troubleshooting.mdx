@@ -23,10 +23,11 @@ configuration tasks.
 
 ### Impedance Mismatch Errors
 
-An impedance mismatch error happens when Speakeasy’s generator finds properties
+An impedance mismatch error happens when Speakeasy's generator finds properties
 with different data types that need to be combined into one. This error means
-the request and response data don’t match up correctly, which can cause
-problems in the Terraform provider that’s being created.
+the data types don't match up correctly across API operations (such as between
+request and response data, or across different operations for the same entity),
+which can cause problems in the Terraform provider that's being created.
 
 #### Common example
 
@@ -62,7 +63,33 @@ impedance mismatch error.
 Speakeasy includes built-in extensions to help fix impedance mismatch errors.
 You can use these solutions to adjust either the request or the response data:
 
-**Option 1: Ignore the mismatched property**
+**Option 1: Override the property name**
+
+Use `x-speakeasy-name-override` to give the mismatched properties different
+names so they no longer attempt to merge:
+
+```yaml openapi.yaml
+TaskRequest:
+  type: object
+  x-speakeasy-entity: Task
+  properties:
+    taskId:
+      type: string
+    assignee:
+      type: string
+      x-speakeasy-name-override: assigneeId # Override the name to avoid merging
+```
+
+With this approach, the additional data (stored in the `assignee` response
+field) will still be available to Terraform consumers. However, there may be a
+loss of drift detection when Terraform updates the resource’s state during the
+read operation.
+
+Note: `x-speakeasy-name-override` can also be used to rename the conflicting
+property (in this case, "assignee") in the response schema to achieve the same
+effect. The key is to prevent a type collision between request and response.
+
+**Option 2: Ignore the mismatched property**
 
 Use `x-speakeasy-ignore` to exclude the problematic property from generation:
 
@@ -83,24 +110,7 @@ TaskResponse:
       x-speakeasy-ignore: true # Ignore this property in the response
 ```
 
-**Option 2: Override the property name**
-
-Use `x-speakeasy-name-override` to give the mismatched properties different
-names so they no longer attempt to merge:
-
-```yaml openapi.yaml
-TaskRequest:
-  type: object
-  x-speakeasy-entity: Task
-  properties:
-    taskId:
-      type: string
-    assignee:
-      type: string
-      x-speakeasy-name-override: assigneeId # Override the name to avoid merging
-```
-
-Note: `x-speakeasy-name-override` can also be used to rename the conflicting
-property (in this case, "assignee") in the response schema to achieve the same
-effect. The key is to prevent a type collision between request and response.
+This approach will resolve the impedance mismatch by removing the
+conflicting property altogether. However, this also means that the
+property will no longer be tracked in Terraform state.
 
