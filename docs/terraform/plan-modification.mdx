@@ -1,15 +1,13 @@
 ---
 title: "Plan Modification"
-description: "Learn how to customize Terraform plan behavior."
+description: "Learn how to customize Terraform plan behavior and resource versioning."
 ---
 
-# Plan Modification
+# Plan modification
 
-## Custom Attribute Plan Modification
+## Adding custom plan modification logic
 
-Attribute plan modifiers enable advanced default value, resource replacement, and difference suppression logic in managed resources. Due to the Terraform SDK implementation, attribute-level plan modifiers do not have access to provider-level configuration or the API client, however that SDK does support custom resource-level plan modification with implementing the [`resource.ResourceWithModifyPlan` interface](https://pkg.go.dev/github.com/hashicorp/terraform-plugin-framework/resource#ResourceWithModifyPlan).
-
-Use the `x-speakeasy-plan-modifiers` extension to add custom attribute-level plan modification logic to Terraform plan operations.
+Use the `x-speakeasy-plan-modifiers` extension to add custom plan modification logic to Terraform plan operations. Plan modifiers enable advanced default-value, resource-replacement, and difference-suppression logic.
 
 ```yaml
 components:
@@ -25,24 +23,44 @@ components:
           x-speakeasy-plan-modifiers: AgeModifier
 ```
 
-In this scenario, when Speakeasy next generates the Terraform provider, it will bootstrap a custom plan modifier file located at `internal/planmodifiers/int64planmodifier/age_modifier.go`, and import the schema configuration wherever `x-speakeasy-plan-modifiers: AgeModifier` is referenced. Edit the plan modifier file to contain the required logic.
+In this scenario, when Speakeasy next generates the Terraform provider, it will bootstrap a custom plan modifier file, located at `internal/planmodifiers/int64planmodifier/age_modifier.go`, and import the schema configuration wherever `x-speakeasy-plan-modifiers: AgeModifier` is referenced.
 
-The `x-speakeasy-plan-modifiers` extension supports an array of names as well, such as:
+Edit the plan modifier file to contain the required logic.
+
+### Implementation notes
+
+A plan modifier is a type that implements the plan modifier interface defined by the `terraform-plugin-framework`. A unique plan modifier is bootstrapped in the appropriate subfolder for the Terraform type that it is applied to, which is usually one of the following:
+
+- `boolplanmodifiers`
+- `float64planmodifiers`
+- `int64planmodifiers`
+- `listplanmodifiers`
+- `mapplanmodifiers`
+- `numberplanmodifiers`
+- `objectplanmodifiers`
+- `setplanmodifiers`
+- `stringplanmodifiers`
+
+Speakeasy always creates and uses a `snake_case.go` file for each `x-speakeasy-plan-modifiers` value.
+
+A plan modifier operates on the raw (untyped) Terraform value types. However, you can convert a Terraform type to a value type that Speakeasy manages (`type_mytype.go`) by using the included reflection utility. This is useful for applying modifiers to complex types, like `list`, `map`, `object`, and `set`.
+
+While working with a plan modifier, you can perform various tasks, including initiating network requests. However, it's important to ensure that plan modifiers do not result in any unintended side effects. Please refer to [the HashiCorp guidance on plan modifier development](https://developer.hashicorp.com/terraform/plugin/framework/resources/plan-modification) or reach out in our Slack if you have questions.
+
+It is possible to have an array of plan modifiers. For example:
 
 ```yaml
-x-speakeasy-plan-modifiers:
-  - FirstPlanModifier
-  - SecondPlanModifier
+x-speakeasy-plan-modifiers: [FirstModifier, SecondModifier]
 ```
 
-### Implementation Notes
+A modifier can be applied only to a resource attribute. The annotation is ignored for data sources. Modifiers cannot be applied at the same level as the `x-speakeasy-entity` annotation, because that becomes the "root" of the Terraform resource.
 
-1. A plan modifier is a type conformant to the `terraform-plugin-framework` expected interface. A unique plan modifier will be bootstrapped in the appropriate subfolder for the Terraform type it is applied to: `boolplanmodifiers`, `float64planmodifiers`, `int64planmodifiers`, `listplanmodifiers`, `mapplanmodifiers`, `numberplanmodifiers`, `objectplanmodifiers`, `setplanmodifiers`, or `stringplanmodifiers`. Speakeasy will always create and use a file as `snake_case.go` for a given `x-speakeasy-plan-modifiers` value.
+Speakeasy regenerations do not delete user-written code. If the modifier is no longer in use, it will be ignored (no longer referenced), but the source file will remain. You might want to delete orphaned modifier files for repository hygiene.
 
-2. A plan modifier operates on the raw (untyped) Terraform value types. However, you can convert a Terraform type to a value type Speakeasy manages (`type_mytype.go`) by using the included reflection utility. This is useful for applying modifiers to complex types like `list`, `map`, `object`, and `set`.
+## Specifying the resource version
 
-3. While working with a plan modifier, you have the ability to perform various tasks, including initiating network requests. However, it's important to ensure that plan modifiers do not result in any unintended side effects. Please refer to [the HashiCorp guidance on plan modifier development](https://developer.hashicorp.com/terraform/plugin/framework/resources/plan-modification) or reach out in our Slack if you have questions.
+The `x-speakeasy-entity-version` extension specifies the version of a given resource and should **only** be used if you need to write a state migrator, for example, for changing the type of a field.
 
-4. A modifier can only be applied to a resource attribute. The annotation will be ignored for data sources. Modifiers cannot be applied at the same level as the `x-speakeasy-entity` annotation because that becomes the "root" of the Terraform resource.
+Terraform resource versions are zero-indexed and default to `0`. For your first breaking change requiring a state migrator, set `x-speakeasy-entity-version: 1`. Each state migrator function must migrate from the previous version of the state.
 
-5. Speakeasy regenerations do not delete user-written code. If the modifier is no longer in use, it will be ignored (no longer referenced) but the source file will remain. You might want to delete such an orphaned modifier file for repository hygiene.
+If this is set, a boilerplate state upgrader will be written and hooked into `internal/stateupgraders/your_resource_v1.go`. Please refer to the [Terraform documentation](https://developer.hashicorp.com/terraform/plugin/framework/resources/state-upgrade) for guidance on writing a state migrator.
