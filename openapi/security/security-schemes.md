@@ -29,7 +29,7 @@ Each security scheme has a unique name in the `securitySchemes` map, and the `ty
 The following authorization/authentication types are supported by OpenAPI as of v3.1:
 
 - [API Key](/openapi/security/security-schemes/security-api-key)
-- [HTTP Authorization](/openapi/security/security-schemes/security-basic) (E.g: Basic, Digest, Bearer, and more)
+- [HTTP Authorization](/openapi/security/security-schemes/security-http) (E.g: Basic, Digest, Bearer, and more)
 - [OAuth 2.0](/openapi/security/security-schemes/security-oauth2)
 - [OpenID Connect](/openapi/security/security-schemes/security-openid)
 - [Mutual TLS](/openapi/security/security-schemes/security-mutualtls)
@@ -111,10 +111,10 @@ components:
           refreshUrl: https://example.org/oauth/refresh
 ```
 
-To learn more about different types of security schemes, take a look at the guides for [API Key](/openapi/security/security-schemes/security-api-key), [HTTP Authorization](/openapi/security/security-schemes/security-basic) (Basic, Digest, Bearer, and more), [OAuth 2.0](/openapi/security/security-schemes/security-oauth2), [OpenID Connect](/openapi/security/security-schemes/security-openid), or [Mutual TLS](/openapi/security/security-schemes/security-mutualtls).
+To learn more about different types of security schemes, take a look at the guides for [API Key](/openapi/security/security-schemes/security-api-key), [HTTP Authorization](/openapi/security/security-schemes/security-http) (Basic, Digest, Bearer, and more), [OAuth 2.0](/openapi/security/security-schemes/security-oauth2), [OpenID Connect](/openapi/security/security-schemes/security-openid), or [Mutual TLS](/openapi/security/security-schemes/security-mutualtls).
 
 ## Security requirements
 
-Once these security schemes are defined, they can be referenced by the `security` keyword. 
+Once these security schemes are defined, they can be referenced by the `security` keyword.
 
 **Learn more about security requirements in the [Security Requirements](/openapi/security) section.**

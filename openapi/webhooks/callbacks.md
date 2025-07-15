@@ -3,7 +3,7 @@ title: Callbacks
 ---
 # Callbacks in OpenAPI
 
-A map of [Callback Objects](/openapi/paths/operations/callbacks#callback-object) or [References](/openapi/references) that define incoming requests that may be triggered by the parent operation and the expected responses to be returned. The key is a unique identifier for the collection of callbacks contained within.
+A map of [Callback Objects](#callback-object-in-openapi) or [References](/openapi/references) that define incoming requests that may be triggered by the parent operation and the expected responses to be returned. The key is a unique identifier for the collection of callbacks contained within.
 
 **Note: Callbacks are only valid on operations that also pass the required URL to call the callback on, in either the parameters or the request body of the parent operation. In the event that a request from the API is sent in reaction to calling the parent operation but the callback URL is provided elsewhere, use [webhooks](/openapi/webhooks) to document the callback instead (webhooks only available in OpenAPI 3.1.x)**
 
