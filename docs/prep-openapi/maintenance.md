@@ -102,4 +102,4 @@ to OpenAPI documents.
 
 The accuracy of fixes suggested by Speakeasy Suggest cannot be guaranteed as the AI model and
 architecture are still being improved. For feedback, please
-join [Speakeasy on Slack](https://join.slack.com/t/speakeasy-dev/shared_invite/zt-1df0lalk5-HCAlpcQiqPw8vGukQWhexw).
+join [Speakeasy on Slack](https://go.speakeasy.com/slack).
