@@ -340,7 +340,16 @@ In this Dockerfile:
 Next, we'll create a `devcontainer.json` file in our `.devcontainer` directory to configure our development container:
 
 ```json .devcontainer/devcontainer.json
-!from ./assets/gnostic/devcontainer.json
+{
+  "name": "Go",
+  "dockerComposeFile": [
+    "../docker-compose.yaml",
+    "docker-compose.yaml"
+  ],
+  "service": "app",
+  "workspaceFolder": "/app",
+  "shutdownAction": "stopCompose"
+}
 ```
 
 For help with the `devcontainer.json` file, check out the [official documentation](https://containers.dev/implementors/json_reference/).
@@ -350,7 +359,15 @@ For help with the `devcontainer.json` file, check out the [official documentatio
 We'll also create a `docker-compose.yaml` file in our `.devcontainer` directory to define our development container:
 
 ```yaml .devcontainer/docker-compose.yaml
-!from ./assets/gnostic/docker-compose.yaml
+version: "3"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspaces:cached
+    command: /bin/sh -c "while sleep 1000; do :; done"
 ```
 
 This Docker Compose file defines a service called `app` that uses the `Dockerfile` in the `.devcontainer` directory. It also mounts the current directory into the container at `/app` and overrides the default command to start the server.
@@ -417,7 +434,73 @@ gnostic-grpc -input bar.pb -output .
 This command generates a `.proto` file named `bar.proto` that contains the gRPC service definition:
 
 ```cpp bar.proto
-!from ./assets/gnostic/bar.proto
+syntax = "proto3";
+
+package bar;
+
+import "google/api/annotations.proto";
+
+import "google/protobuf/descriptor.proto";
+
+import "google/protobuf/empty.proto";
+
+message IngredientsRequest {
+  repeated string ingredients = 1;
+}
+
+message DrinkResponse {
+  string name = 1;
+
+  string description = 2;
+
+  string recipe = 3;
+
+  string photo = 4;
+}
+
+message DrinkNameRequest {
+  string name = 1;
+}
+
+message DrinkRecipeResponse {
+  repeated IngredientQuantity ingredients = 1;
+
+  string recipe = 2;
+
+  string photo = 3;
+}
+
+message IngredientQuantity {
+  string name = 1;
+
+  string quantity = 2;
+}
+
+message Error {
+  int32 code = 1;
+
+  string message = 2;
+}
+
+//CreateDrinkParameters holds parameters to CreateDrink
+message CreateDrinkRequest {
+  IngredientsRequest ingredients_request = 1;
+}
+
+//GetDrinkParameters holds parameters to GetDrink
+message GetDrinkRequest {
+  DrinkNameRequest drink_name_request = 1;
+}
+
+service Bar {
+  rpc CreateDrink ( CreateDrinkRequest ) returns ( DrinkResponse ) {
+    option (google.api.http) = { post:"/create-drink" body:"ingredients_request"  };
+  }
+
+  rpc GetDrink ( GetDrinkRequest ) returns ( DrinkRecipeResponse ) {
+    option (google.api.http) = { post:"/get-drink" body:"drink_name_request"  };
+  }
+}
 ```
 
 ### Generating Go Code Using Buf and the gRPC Go Plugin
@@ -433,7 +516,9 @@ This command initializes a new Buf module in the current directory.
 Update the `buf.yaml` file created in the project root with the following content:
 
 ```yaml buf.yaml
-!from ./assets/gnostic/buf.yaml
+version: v1
+deps:
+  - buf.build/googleapis/googleapis
 ```
 
 We depend on `googleapis` because the gRPC Go plugin requires it.

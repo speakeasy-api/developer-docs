@@ -5,7 +5,7 @@ sidbar_label: Workflow File Reference
 ---
 
 import Image from "next/image";
-import { Callout, Spotlight } from "@/mdx/components";
+import { Callout } from "@/mdx/components";
 
 # Speakeasy Workflow File
 
@@ -39,153 +39,157 @@ speakeasyVersion: v1.250.0
 
 Sources can be added to a workflow programmatically `speakeasy configure sources` or manually by editing the workflow file.
 
-<Spotlight>
-
-#### !!steps Sources
+### Sources
 
 Sources are the inputs to the workflow. A single Source is one or more OpenAPI documents and Overlays that are merged together to create a single OpenAPI document.
 
-```yaml ! workflow.yaml focus=3:13
-!from ./assets/workflow.yaml
+```yaml
+sources:
+  my-source:
+    inputs:
+      - location: ./openapi.yaml
+      - location: ./another-openapi.yaml
+      # .... more openapi documents can be added here
+    overlays:
+      - location: ./overlay.yaml
+      - location: ./another-overlay.yaml
+      # .... more openapi overlays can be added here
+    transformations:
 ```
 
----
-
-#### !!steps SourceName
+### SourceName
 
 Each Source is given a name. In this example the name is `my-source`. This name is used to reference the source in the workflow file.
 
-```yaml ! workflow.yaml focus=4
-!from ./assets/workflow.yaml
+```yaml
+  my-source:
 ```
 
----
-
-#### !!steps Inputs
+### Inputs
 
 Each Source has a list of inputs. Each input is an OpenAPI document or Overlay. The OpenAPI documents and Overlays are merged together to create a single OpenAPI document.
 
-```yaml ! workflow.yaml focus=5:8
-!from ./assets/workflow.yaml
+```yaml
+    inputs:
+      - location: ./openapi.yaml
+      - location: ./another-openapi.yaml
+      # .... more openapi documents can be added here
 ```
 
----
-
-#### !!steps Location
+### Location
 
 Each input has a location. The location is the path to the OpenAPI document or Overlay. The path can be a local reference or a remote URL. If a URL is a used
 authentication may need to be provided.
 
-```yaml ! workflow.yaml focus=6:8
-!from ./assets/workflow.yaml
+```yaml
+      - location: ./openapi.yaml
+      - location: ./another-openapi.yaml
+      # .... more openapi documents can be added here
 ```
 
----
-
-#### !!steps Transformations
+### Transformations
 
 Sources can include transformations that modify the OpenAPI document before it's used to generate SDKs. Transformations are applied in order after merging inputs and applying overlays.
 
-```yaml ! workflow.yaml focus=11:19
-!from ./assets/workflow.yaml
+```yaml
+      # .... more openapi overlays can be added here
+    transformations:
+      # Remove unused components from the OpenAPI document
+      - removeUnused: true
+      # Filter to include only specific operations
+      - filterOperations:
+          operations: getPets, createPet
+          include: true
+      # General cleanup of the OpenAPI document (formatting and style)
 ```
 
----
-
-#### !!steps Output
+### Output
 
 Each source can specify an output location where the merged OpenAPI document will be written.
 
-```yaml ! workflow.yaml focus=20
-!from ./assets/workflow.yaml
+```yaml
+    output: ./merged-openapi.yaml
 ```
 
----
-
-#### !!steps Registry
+### Registry
 
 Sources can be configured to publish to the API Registry found in the Speakeasy workspace.
 
-```yaml ! workflow.yaml focus=21:22
-!from ./assets/workflow.yaml
+```yaml
+    registry:
+      location: registry.speakeasy.com/my-org/my-api
 ```
-
----
-
-</Spotlight>
 
 ## Targets
 
 Targets can be added to a workflow programmatically `speakeasy configure targets` or manually by editing the workflow file.
 
-<Spotlight>
-
-#### !!steps Targets
+### Targets
 
 Targets are the outputs of the workflow. A single Target is a SDK, Terraform or other generated artifact from sources.
 
-```yaml ! workflow.yaml focus=28:35
-!from ./assets/workflow.yaml
+```yaml
+targets:
+  my-target:
+    target: python
+    source: my-source
+    testing:
+      enabled: true
+      mockServer:
+        enabled: false
 ```
 
----
-
-#### !!steps TargetName
+### TargetName
 
 Each Target is given a name. In this example the name is `my-target`. This name is used to reference the target in the workflow file.
 
-```yaml ! workflow.yaml focus=29
-!from ./assets/workflow.yaml
+```yaml
+  my-target:
 ```
 
----
-
-#### !!steps TargetType
+### TargetType
 
 Each Target has a type. The target is the type of artifact that will be generated from the sources. The target can be one of the supported languages [here](/docs/create-client-sdks)
 
-```yaml ! workflow.yaml focus=30
-!from ./assets/workflow.yaml
+```yaml
+    target: python
 ```
 
----
-
-#### !!steps TargetSource
+### TargetSource
 
 Each Target has a source. The source is the name of the source that the target will be generated from.
 
-```yaml ! workflow.yaml focus=31
-!from ./assets/workflow.yaml
+```yaml
+    source: my-source
 ```
 
----
-
-#### !!steps Testing
+### Testing
 
 Each Target supports enabling testing as part of the workflow, if test generation is licensed. This will run target-specific testing, such as `go test` or `pytest`, after code generation. Use this with CLI-only `speakeasy run` development workflows (instead of separately calling `speakeasy test`) or GitHub Actions `mode: direct` or `mode: test` development workflows to ensure tests are successful with any potential code updates.
 
-```yaml ! workflow.yaml focus=32:35
-!from ./assets/workflow.yaml
+```yaml
+    testing:
+      enabled: true
+      mockServer:
+        enabled: false
 ```
 
----
-
-#### !!steps MockServer
+### MockServer
 
 Target testing, when licensed and enabled, starts a mock API server automatically as part of the workflow. This disables the mock API server, if the testing should always pointed at a test environment server URL instead.
 
-```yaml ! workflow.yaml focus=34:35
-!from ./assets/workflow.yaml
+```yaml
+      mockServer:
+        enabled: false
 ```
 
----
-
-#### !!steps CodeSamples
+### CodeSamples
 
 Each target can be configured to generate code samples and publish them to Speakeasy's registry.
 
-```yaml ! workflow.yaml focus=36:39
-!from ./assets/workflow.yaml
+```yaml
+    codeSamples:
+      output: codeSamples.yaml
+      registry:
+        location: registry.speakeasy.com/my-org/my-api/code-samples
 ```
-
-</Spotlight>
