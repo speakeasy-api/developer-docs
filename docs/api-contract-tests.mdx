@@ -1,50 +1,47 @@
 ---
 title: "Configure Custom API Contract Tests"
-description: "Learn how to generate contract and end-to-end tests for APIs and SDKs using the Arazzo workflow specification."
+description: "Learn how to generate contract and end-to-end tests for APIs and SDKs using the Arazzo Specification."
 ---
 
 import { Callout, CodeWithTabs } from "@/mdx/components";
 
 <Callout title="Early access" type="warning">
 
-We highly recommend fully setting up SDK tests in all of your SDK repositories before moving on to exploring this.
+We highly recommend fully setting up SDK tests in all your SDK repositories before exploring custom API contract tests.
 
-Custom End-to-End API Contract Tests against live APIs is in an early feature set stage.
+The ability to run custom end-to-end API contract tests against live APIs is in an early feature set stage.
 
 </Callout>
 
-# Custom End-to-End API Contract Tests with Arazzo
+# Custom end-to-end API contract tests with Arazzo
 
-Speakeasy can also be used to create custom end-to-end contract tests that run against a real API.
+You can use Speakeasy to create custom end-to-end contract tests that run against a real API.
 
-This document will walk through how to write those more complex tests via the Arazzo specification.
-It will also walk through key configuration features for these tests such as:
+This document guides you through writing more complex tests using the Arazzo Specification, as well as through the key configuration features for these tests, which include:
 
 - Server URLs
 - Security credentials
-- Environment Variable Provided Values
+- Environment variable-provided values
 
-[Arazzo](/openapi/arazzo) is a simple, human-readable, and extensible specification for defining API workflows. Arazzo powers test generation, allowing you to define custom tests for any use case and define rich tests capable of:
+[Arazzo](/openapi/arazzo) is a simple, human-readable, and extensible specification for defining API workflows. Arazzo powers custom test generation, allowing you to define rich tests capable of:
 
-- Testing multiple operations.
-- Testing different inputs.
-- Validating the correct response is returned.
-- Run against a real API or mock server.
-- Configure setup and teardown routines for complex E2E tests.
+- Testing multiple operations
+- Testing different inputs
+- Validating that the correct response is returned
+- Running against a real API or mock server
+- Configuring setup and teardown routines for complex end-to-end (E2E) tests
 
-The Arazzo Specification allows you to define sequences of API operations and their dependencies for contract testing, enabling you to validate that your API behaves correctly across multiple interconnected endpoints and complex workflows.
+The Arazzo Specification allows you to define sequences of API operations and their dependencies for contract testing, enabling you to validate whether your API behaves correctly across multiple interconnected endpoints and complex workflows.
 
-When a `.speakeasy/tests.arazzo.yaml` file is found in your SDK repo, the Arazzo workflow will be used to generate tests for each of the workflows defined in the file.
+When a `.speakeasy/tests.arazzo.yaml` file is found in your SDK repo, the Arazzo workflow is used to generate tests for each of the workflows defined in the file.
 
 ## Prerequisites
 
-The following are requirements for generating tests:
+Before generating tests, ensure that you meet the [testing feature prerequisites](/docs/testing#prerequisites).
 
-- [Testing feature prerequisites](/docs/testing#prerequisites) are met.
+## Writing custom end-to-end tests
 
-## Writing custom End-to-End tests
-
-The following is an example Arazzo document defining a simple E2E test for the life cycle of a user resource in the example API.
+The following is an example Arazzo document defining a simple E2E test for the lifecycle of a user resource in the example API:
 
 ```yaml
 arazzo: 1.0.0
@@ -166,9 +163,16 @@ workflows:
           - condition: $statusCode == 200
 ```
 
-The above workflow defined 4 steps that each feed into the next, representing the creation of a user, retrieving that user via its new ID, updating the user, and finally deleting the user. The workflow defines outputs for certain steps that serve as inputs for the following steps.
+This workflow defines four steps, each of which feeds into the next:
 
-It will generate the test shown below:
+1. Create a user
+2. Retrieve that user via its new ID
+3. Update the user
+4. Delete the user
+
+This is possible because the workflow defines outputs for certain steps that serve as inputs for the following steps.
+
+The workflow generates the test shown below:
 
 <CodeWithTabs>
 
@@ -466,17 +470,21 @@ func TestSDK_UserLifecycle(t *testing.T) {
 
 </CodeWithTabs>
 
-## Input and Outputs
+## Input and outputs
 
 ### Inputs
 
-Inputs can be provided to steps in a number of ways, either via inputs defined in the workflow, references from previous steps, or via values defined inline .
+There are various ways to provide an input for a step, including:
 
-**Workflow Inputs**
+- Defining it in the workflow
+- Referencing it in a previous step
+- Including it as an inline value
 
-[Workflow inputs](/openapi/arazzo#workflow-object) are a way to provide input parameters to the workflow that can be used by any step defined in the workflow. The `inputs` field of a workflow is a JSON Schema object that defines a property for each input the workflow wants to expose.
+**Workflow inputs**
 
-Test Generation can use any examples defined for a property in the `inputs` json schemas as literal values to use as inputs for the test. As tests are none interactive, if no examples are defined, the test generation will just randomly generate values for the inputs, as it can't ask the user for input.
+You can provide input parameters to the workflow using the `inputs` field, which is a JSON Schema object that defines a property for each input that the workflow wants to expose. These [workflow inputs](/openapi/arazzo#workflow-object) can be used by any step defined in the workflow.
+
+Test generation can use any of the examples defined for a property in an `inputs` JSON schema as a literal value, which it then uses as an input for the test. Because tests are non-interactive and cannot ask users for input, the test generation randomly generates values for the inputs if no examples are defined.
 
 ```yaml
 arazzo: 1.0.0
@@ -512,9 +520,11 @@ workflows:
           - condition: $statusCode == 200
 ```
 
-**Step References**
+**Step references**
 
-Parameters and request body payloads can reference values via [Runtime Expressions](/openapi/arazzo#runtime-expressions) from previous steps in the workflow. This allows for the generation of tests that are more complex than a simple sequence of operations. Speakeasy's implementation currently only allows the referencing of a previous step's outputs, which means you will need to define what values you want to expose to future steps.
+Parameters and request body payloads can reference values via [runtime expressions](/openapi/arazzo#runtime-expressions) from previous steps in the workflow. This allows for the generation of tests that are more complex than a simple sequence of operations.
+
+Speakeasy's implementation currently only allows the referencing of a previous step's output, which means you will need to define which values you want to expose to future steps.
 
 ```yaml
 arazzo: 1.0.0
@@ -543,9 +553,9 @@ workflows:
           - condition: $statusCode == 200
 ```
 
-**Inline Values**
+**Inline values**
 
-For any parameters or request body payloads a step defines, literal values can be provided inline to populate the tests if static values are suitable for the test.
+For any parameters or request body payloads that a step defines, you can also provide literal values inline to populate the tests (if static values are suitable for the tests).
 
 ```yaml
 arazzo: 1.0.0
@@ -581,11 +591,15 @@ workflows:
           - condition: $statusCode == 200
 ```
 
-**Payload Values**
+**Payload values**
 
-When using the `payload` field of a request body input, the value can be a static value to use, a value with interpolated [Runtime Expressions](/openapi/arazzo#runtime-expressions) or a [Runtime Expression](/openapi/arazzo#runtime-expression) by itself.
+If you use the `payload` field of a request body input, its value can be any of the following:
 
-The payload value can then be overlayed using the `replacements` field which represents a list of targets within the payload to replace with the value of the replacements, which themselves can be a static value or a [Runtime Expression](/openapi/arazzo#runtime-expression).
+- A static value
+- A value with interpolated [runtime expressions](/openapi/arazzo#runtime-expressions)
+- A [runtime expression](/openapi/arazzo#runtime-expression) by itself
+
+You can then overlay the payload value using the `replacements` field, which represents a list of targets within the payload that will be replaced with the value of the replacements. These replacements can be static values or [runtime expressions](/openapi/arazzo#runtime-expression).
 
 ```yaml
 arazzo: 1.0.0
@@ -617,9 +631,9 @@ workflows:
 
 ### Outputs
 
-As shown above, outputs can be defined for each step in a workflow allowing values from things such as the response body to be used as values in following steps.
+As shown above, you can define outputs for each of the steps in a workflow, allowing you to use values from things such as response bodies in following steps.
 
-Current Speakeasy supports only referencing values from a response body, using the [Runtime Expressions](/openapi/arazzo#runtime-expressions) syntax and json-pointers.
+Currently, Speakeasy supports only referencing values from a response body, using the [runtime expressions](/openapi/arazzo#runtime-expressions) syntax and json-pointers.
 
 Any number of outputs can be defined for a step.
 
@@ -645,15 +659,15 @@ workflows:
           allergies: $response.body#/metadata/allergies
 ```
 
-## Success Criteria
+## Success criteria
 
-The `successCriteria` field of a step is a list of [Criterion Objects](/openapi/arazzo#criterion-object) that are used to validate the success of the step. For test generation these will form the basis of the test assertions.
+A step's `successCriteria` field contains a list of [criterion objects](/openapi/arazzo#criterion-object) used to validate the success of the step and form the basis of the test assertions for test generation.
 
-`successCriteria` can be as simple as a single condition testing the status code of the response, or as complex as testing multiple individual fields within the response body.
+The `successCriteria` may be as simple as a single condition testing the status code of the response or as complex as multiple conditions testing various individual fields within the response body.
 
-Speakeasy's implementation currently only supports `simple` criteria and the equality operator `==` for comparing values, and testing status codes, response headers and response bodies.
+Speakeasy's implementation currently only supports `simple` criteria and the use of the equality operator `==` for comparing values and for testing status codes, response headers, and response bodies.
 
-For testing values within the response body, criteria for testing the status code and content type of the response are also required, to help the generator determine which response schema to validate against due to the typed nature of the SDKs.
+To test values within the response body, due to the typed nature of the SDKs, you need criteria for testing the status code and content type of the response to help the generator determine which response schema to validate against.
 
 ```yaml
 arazzo: 1.0.0
@@ -692,7 +706,9 @@ workflows:
 
 ## Testing operations requiring binary data
 
-Some operations will required providing binary data to test uploading or downloading files etc. In these cases test files can be provided to the test using the `x-file` directive in the example for that field.
+Some operations require you to provide binary data, for example, for testing file uploads and downloads.
+
+To provide the test with the test files, use the `x-file` directive in the example for the relevant field.
 
 ```yaml
 arazzo: 1.0.0
@@ -714,19 +730,19 @@ workflows:
             type: simple
 ```
 
-The files will be sourced from the `.speakeasy/testfiles` directory in the root of your SDK repo, where the path provided in the `x-file` directive is relative to the testfiles directory.
+The files are sourced from the `.speakeasy/testfiles` directory in the root of your SDK repo, where the path provided in the `x-file` directive is relative to the `testfiles` directory.
 
-The contents of the sourced file will be used as the value for the field being tested.
+The content of the sourced file is used as the value for the field being tested.
 
-## Configuring an API to Test Against
+## Configuring an API to test against
 
-By default, tests will be generated to run against Speakeasy's mock server (URL of `http://localhost:18080`) which will validate the SDKs are functioning correctly but not guaranteeing the correctness of the API.
+By default, tests are generated to run against Speakeasy's mock server, which has a URL of `http://localhost:18080`. The mock server validates that the SDKs are functioning correctly but does not guarantee that the API is correct.
 
-The generator can be configured to run all tests against another URL or just individual tests. This is done through the use `x-speakeasy-test-server` extensions in the `.speakeasy/tests.arazzo.yaml` file.
+The generator can be configured to run all tests against another URL or against individual tests using the `x-speakeasy-test-server` extensions in the `.speakeasy/tests.arazzo.yaml` file.
 
-If the extension is found at the top level of the Arazzo file then all workflows/tests will be configured to run against the specified server URL. If the extension is found within a workflow then only that workflow will be configured to run against the specified server URL.
+If the extension is found at the top level of the Arazzo file, all workflows and tests will be configured to run against the specified server URL. If the extension is found within a workflow, only that workflow will be configured to run against the specified server URL.
 
-The server URL can either be a static URL or a `x-env: EXAMPLE_ENV_VAR` value that will be pull the value from the environment variable `EXAMPLE_ENV_VAR` where the name of the environment variable can be any specified name.
+The server URL can be either a static URL or an `x-env: EXAMPLE_ENV_VAR` value that pulls the value from the environment variable, `EXAMPLE_ENV_VAR` (where the name of the environment variable can be any specified name).
 
 ```yaml
 arazzo: 1.0.0
@@ -736,11 +752,11 @@ x-speakeasy-test-server:
 workflows:
   - workflowId: some-test
     x-speakeasy-test-server:
-      baseUrl: "x-env: CUSTOM_API_URL" # If specified within a workflow, only that workflow will be configured to run against the specified server URL. This will override any top level configuration.
+      baseUrl: "x-env: CUSTOM_API_URL" # If specified within a workflow, only that workflow will be configured to run against the specified server URL. This will override any top-level configuration.
     # ...
 ```
 
-A default value can be provided in the `x-env` directive if the environment variable is not set. This can be useful for local development or non-production environments.
+You may provide a default value in the `x-env` directive if the environment variable is not set. This can be useful for local development or non-production environments.
 
 ```yaml
 x-speakeasy-test-server:
@@ -749,15 +765,15 @@ x-speakeasy-test-server:
 
 <Callout title="Reserved Environment Variable" type="warning">
 
-The `TEST_SERVER_URL` environment variable is reserved for use by Speakeasy's mockserver. When running tests via `speakeasy test`, if the mockserver is generated and enabled, `TEST_SERVER_URL` will be automatically set to the URL of the running mockserver and will overwrite any existing value for that environment variable while running.
+The `TEST_SERVER_URL` environment variable is reserved for use by Speakeasy's mock server. When running tests via `speakeasy test`, if the mock server is generated and enabled, `TEST_SERVER_URL` is automatically set to the URL of the running mock server and overwrites any existing value for that environment variable while running.
 
-If you want to use a custom test server instead of the mockserver, you can:
+If you want to use a custom test server instead of the mock server, you can:
 - Use the `--disable-mockserver` flag when running `speakeasy test` to prevent the automatic setting of `TEST_SERVER_URL`
 - Use a different environment variable name (like `CUSTOM_API_URL` in the examples above) for your custom server configuration
 
 </Callout>
 
-If all tests are configured to run against other server URLs, mock server generation can be disabled within the `.speakeasy/gen.yaml` file.
+If all tests are configured to run against other server URLs, you can disable mock server generation in the `.speakeasy/gen.yaml` file:
 
 ```yaml
 # ...
@@ -767,11 +783,11 @@ generation:
     disabled: true # Setting this to true will disable mock server generation
 ```
 
-## Configuring security credentials for Contract tests
+## Configuring security credentials for contract tests
 
-When running tests against a real API, the SDK may need to be configured with security credentials to authenticate with the API. This can be done by adding the `x-speakeasy-test-security` extension to the document, a workflow or a individual step.
+When running tests against a real API, the SDK may need to be configured with security credentials to authenticate with the API. To configure the SDK, add the `x-speakeasy-test-security` extension to the document, workflow, or individual step.
 
-The `x-speakeasy-test-security` extension allows static values or values pulled from the environment to be used when instantiating an SDK instance and making requests to the API.
+The `x-speakeasy-test-security` extension enables the use of static values or values pulled from the environment for instantiating an SDK instance and making requests to the API.
 
 ```yaml
 arazzo: 1.0.0
@@ -801,9 +817,9 @@ workflows:
         # ...
 ```
 
-## Configuring environment variable provided values for Contract tests
+## Configuring environment variable-provided values for contract tests
 
-When running tests against a real API, you may need to fill in certain input values from dynamic environment variables. This can be done using the Speakeasy environment variable extension.
+When running tests against a real API, you may need to fill in certain input values from dynamic environment variables. Use the Speakeasy environment variable extension to do so:
 
 ```yaml
 arazzo: 1.0.0
