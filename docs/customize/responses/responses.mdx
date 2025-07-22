@@ -6,7 +6,6 @@ slug: "/customize-sdks/responses/"
 
 import { CodeWithTabs } from "@/mdx/components";
 
-
 # Customize responses
 
 ## Response formats
@@ -82,7 +81,6 @@ The flat response format is the simplest and most ergonomic option, as it avoids
 
 When `responseFormat: flat` is enabled, the generated SDK code will return the `Payment` type directly with no indirection:
 
-
 <CodeWithTabs>
     ```typescript !!tabs TypeScript
     export class SDK extends ClientSDK {
@@ -106,6 +104,11 @@ When `responseFormat: flat` is enabled, the generated SDK code will return the `
 ```php !!tabs PHP
     public function getPayment(string $id, ?Options $options = null): Payment
     ```
+
+```ruby !!tabs ruby
+    sig { params(id: ::String).returns(Payment) }
+    def get_payment(id:)
+  ```
 
 </CodeWithTabs>
 
@@ -152,7 +155,7 @@ When `envelope-http` is enabled, the generated SDK code will produce the respons
     ```python !!tabs Python
     class SDK:
         def get_payment(self, id: str) -> operations.GetPaymentResponse:
-    
+
     ####################################
 
     @dataclasses.dataclass
@@ -176,9 +179,9 @@ When `envelope-http` is enabled, the generated SDK code will produce the respons
 
     ```go !!tabs Go
     func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
-   
+
     /*--------------------------------*/
-   
+
     type GetPaymentResponse struct {
       HTTPMeta components.HTTPMetadata
 
@@ -278,6 +281,38 @@ When `envelope-http` is enabled, the generated SDK code will produce the respons
 
     }
     ```
+
+    ``` ruby !!tabs ruby
+    class SDK
+      # @param id String
+      # @return GetPaymentResponse
+      def get_payment(string id) end
+    end
+
+    #####################################
+
+    class GetPaymentResponse
+      include Crystalline::MetadataFields
+
+      field :http_meta, Models::Shared::HTTPMetadata, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
+
+      field :payment, Crystalline::Nilable.new(Shared::Payment)
+
+    end
+
+    #####################################
+
+
+    class HTTPMetadata
+      extend T::Sig
+      include Crystalline::MetadataFields
+
+      # Raw HTTP response; suitable for custom response parsing
+      field :response, ::Faraday::Response, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
+      # Raw HTTP request; suitable for debugging
+      field :request, ::Faraday::Request, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
+    end
+    ```
 </CodeWithTabs>
 
 Built-in HTTP metadata is included in both custom and built-in error types that are thrown or returned from the SDK.
@@ -301,6 +336,7 @@ console.log(data.httpMeta.response.headers.get('x-total-count'));
 #### Headers in SDKs
 
 Headers in SDKs are treated as metadata rather than structured response objects for several reasons:
+
 - Headers are metadata, separate from the main response payload
 - The dynamic nature of headers makes strict typing impractical
 - This approach follows standard SDK behavior across the industry
@@ -324,7 +360,7 @@ When `responseFormat: envelope` is enabled, the generated SDK code will produce 
     }
 
     /*--------------------------------*/
-    
+
     export type GetPaymentResponse = {
       /**
        * HTTP response content type for this operation
@@ -348,7 +384,7 @@ When `responseFormat: envelope` is enabled, the generated SDK code will produce 
     ```python !!tabs Python
     class SDK:
         def get_payment(self, id: str) -> operations.GetPaymentResponse:
-   
+
     ####################################
 
     @dataclasses.dataclass
@@ -357,7 +393,7 @@ When `responseFormat: envelope` is enabled, the generated SDK code will produce 
 
         payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
         r"""Details about a payment"""
-    
+
     ####################################
 
     @dataclasses.dataclass
@@ -374,7 +410,7 @@ When `responseFormat: envelope` is enabled, the generated SDK code will produce 
 
     ```go !!tabs Go
     func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
-   
+
     /*--------------------------------*/
 
     type GetPaymentResponse struct {
@@ -423,8 +459,8 @@ When `responseFormat: envelope` is enabled, the generated SDK code will produce 
     class SDK
     {
         public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
-    }   
-    
+    }
+
     /*--------------------------------*/
 
     class GetPaymentResponse
@@ -458,6 +494,33 @@ When `responseFormat: envelope` is enabled, the generated SDK code will produce 
         public ?Payment $payment = null;
 
     }
+    ```
+
+    ``` ruby !!tabs ruby
+    class SDK
+        # @params id ::String
+        # @return GetPaymentReponse
+        def get_payment(id) end
+    end
+
+    #######################################
+
+    class GetPaymentResponse
+      include Crystalline::MetadataFields
+
+      # HTTP response content type for this operation
+      field content_type ::String
+
+      # HTTP response status code for this operation
+      field status_code ::Integer
+
+      # Raw HTTP response; suitable for custom response parsing
+      field raw_response ::Faraday::Response
+
+      # Details about a payment
+      field payment Crystalline::Nilable.new(Models::PaymentPublic)
+    end
+
     ```
 
   </CodeWithTabs>

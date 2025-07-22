@@ -1,6 +1,281 @@
 ---
-title: "Ruby Design - Coming Soon!"
+title: "Ruby Design"
 description: "Discover the Speakeasy Ruby SDK design methodology."
 ---
 
-# Ruby Design - Coming Soon ! 
+import { FileTree } from "nextra/components";
+
+# Create Ruby SDKs from OpenAPI documents
+
+## Ruby SDK overview
+
+The Speakeasy Ruby SDK is designed to be easy to use and debug, and uses modern, object-oriented programming in ruby for a robust and strongly-typed experience.
+
+Some core features of the SDK are:
+
+- Our custom Crystalline serialization/deserialization library, using the object oriented structure of your api components to provide a totally ruby-native object oriented interface to your api
+- Configure your api interactions at the SDK level or per operation, using simple class constructors and function parameters
+- Initial support for security.  This includes complete support for simple security patterns, and built in support for some common OAuth flows and other standard security mechanisms.
+- SDK Hooks to allow custom behaviour at various stages of the request response cycle.
+
+## Flexible Type Safety
+
+Type safety in ruby is a controversial topics, with no typing approach being universally accepted by the community.  Therefore instead of making an executive decision, you can specify your preferred `typingStrat` in your `gen.yaml` file.
+
+### No Type Safety
+
+If you want Speakeasy to generate an SDK that does not include any typing directives, specifying a `typingStrat` of 'none'.
+
+Please note that even in this mode, the Crystalline serialization/deserialization library will necessarily do some type checking as it's processing requests and responses.
+
+### Sorbet Mode
+
+If, however, you prefer for Speakeasy to generate an SDK that includes thorough type checking, specify a `typingStrat` of `sorbet`.
+
+In this mode, all methods and classes, etc will be annotated with the corresponding `sig` directives.  In addition, `sorbet` will be added as a dependency for your project, and at compilation, a full static typecheck will be run.
+
+
+## External libraries
+
+The Speakeasy ruby SDK seeks to support the majority of the OpenAPI Specification features, and as such, supports some features that aren't contained in the ruby standard library.
+
+Speakeasy fills the gaps using some external dependencies, which are detailed below.
+
+### HTTP
+
+For rich support of HTTP processing, retries, form handling, etc.  we take advantage of the excellent [Faraday](https://lostisland.github.io/faraday/#/) library, along with two of it's companion libraries [Faraday Retry](https://github.com/lostisland/faraday-retry) and [Faraday Multipart](https://github.com/lostisland/faraday-multipart).
+
+### Base64
+
+Since Ruby 3, the stdlib no longer includes base64 functionality, so we require this related package.
+
+### Linting With Rubocop
+
+We include rubocop as a development dependency, and ensure that all of our builds pass a lot of the linter checks.
+
+### Tests
+
+[Mini Test](https://rubygems.org/gems/minitest/versions/5.25.5?locale=en) is included with the SDK for running tests. However, no tests are created for the SDK automatically.
+
+## Ruby SDK package structure
+
+<FileTree>
+    <FileTree.Folder name="lib">
+        <FileTree.Folder name="open_api_sdk">
+            <FileTree.File name="sdk.rb" />
+            <FileTree.File name="sdkconfiguration.rb" />
+            <FileTree.File name="..." />
+            <FileTree.Folder name="models">
+                <FileTree.Folder name="components">
+                    <FileTree.File name="..." />
+                </FileTree.Folder>
+                <FileTree.Folder name="operations">
+                    <FileTree.File name="..." />
+                </FileTree.Folder>
+                <FileTree.Folder name="errors">
+                    <FileTree.File name="apierror.rb" />
+                </FileTree.Folder>
+                <FileTree.Folder name="webhooks">
+                    <FileTree.File name="..." />
+                </FileTree.Folder>
+            </FileTree.Folder>
+            <FileTree.Folder name="sdk_hooks">
+                <FileTree.File name="..." />
+            </FileTree.Folder>
+            <FileTree.Folder name="utils">
+                <FileTree.File name="..." />
+            </FileTree.Folder>
+        </FileTree.Folder>
+        <FileTree.Folder name="docs">
+            <FileTree.File name="..." />
+        </FileTree.Folder>
+    </FileTree.Folder>
+    <FileTree.File name="openapi.gemspec" />
+    <FileTree.File name="Rakefile" />
+    <FileTree.File name="Gemfile" />
+    <FileTree.Folder name="vendor">
+        <FileTree.File name="..." />
+    </FileTree.Folder>
+    <FileTree.Folder name="sorbet">
+        <FileTree.File name="..." />
+    </FileTree.Folder>
+</FileTree>
+
+## Ruby SDK data types and classes
+
+The Speakeasy Ruby SDK uses native types wherever possible:
+
+- `String`
+- `Date`
+- `DateTime`
+- `Integer`
+- `Float`
+- `TrueClass` & `FalseClass`
+
+SDK Components are generated as ruby classes, and use a simple DSL to publicly declare the fields and types of fields as found in the sdk.
+
+## Parameters
+
+When configured, Speakeasy will include up to a specified number of parameters directly in the function signatures, rather than providing the list of parameters as an object to be passed to the operation methods.
+
+The maximum number of parameters to be placed in the method signature is set in the `maxMethodParams` option in the `gen.yaml` file. If `maxMethodParams` is not set or is set to `0`, no method parameters will be added.
+
+## Errors
+
+The Speakeasy ruby SDK raises exceptions using the appropriate `error` class as defined in the sdk specification. Wrap requests in a `begin` block to handle the error in the response.
+
+## User agent strings
+
+The ruby SDK includes a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests, which can be leveraged to track SDK usage amongst broader API usage. The format is as follows:
+
+```stmpl
+speakeasy-sdk/ruby {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{PackageName}}
+```
+
+- `SDKVersion` is the version of the SDK defined in `gen.yaml` and released.
+- `GenVersion` is the version of the Speakeasy generator.
+- `DocVersion` is the version of the OpenAPI document.
+- `PackageName` is the name of the package defined in `gen.yaml`.
+
+## Feature examples
+
+Let's take a look at how OpenAPI features are mapped to ruby code. We'll use snippets from the [Swagger PetStore 3.1](https://petstore31.swagger.io/) OpenAPI document, [`openapi.yaml`](https://petstore31.swagger.io/api/v31/openapi.yaml). If you're not familiar with the example, it provides operations for managing users, customers, pets, and orders for pets in a hypothetical pet store.
+
+### Tags
+
+Each `tag` in the OpenAPI document becomes a sub-sdk, captured in it's own file, containing all tagged operations, such as `pet.rb`, `store.rb`, and `user.rb` for:
+
+```yaml
+tags:
+  - name: pet
+    description: Everything about your Pets
+    externalDocs:
+      description: Find out more
+      url: http://swagger.io
+...
+```
+
+### Security
+
+The Swagger Petstore OpenAPI document uses API key security and OAuth 2.0:
+
+```yaml
+/pet/{petId}:
+ security:
+    - api_key: []
+    - petstore_auth:
+        - write:pets
+        - read:pets
+...
+components:
+  securitySchemes:
+    petstore_auth:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://petstore31.swagger.io/oauth/authorize
+          scopes:
+            write:pets: modify pets in your account
+            read:pets: read your pets
+    api_key:
+      type: apiKey
+      name: api_key
+      in: header
+```
+
+The ruby SDK creates a security class you can call with either scheme:
+
+```ruby
+class GetPetByIdSecurity
+    include Crystalline::MetadataFields
+
+    field :api_key, Crystalline::Nilable.new(::String), {'security': {'scheme': true, 'type': 'apiKey', 'subtype': 'header', 'name': 'api_key'}}
+    field :pet_store_auth, Crystalline::Nilable.new(::String), {'security': {'scheme': true,'type': 'oauth2','name': 'Authorization'} }
+
+    def initialize(api_key: nil, pet_store_auth: nil)
+        @api_key = api_key
+        @pet_store_auth = pet_store_auth
+    end
+end
+
+# Example call:
+
+request_security = GetPetByIdSecurity.new(api_key: '<YOUR_API_KEY_HERE>');
+response = sdk.pet.get_pet_by_id(request_security, 504151);
+```
+
+The implicit flow is the only OAuth flow currently supported.
+
+### Enums
+
+Speakeasy uses sorbet `T::Enum` enums, if sorbet is the typing strategy:
+
+```ruby
+class Status < T::Enum
+  enums do
+    AVAILABLE = new('available')
+    PENDING = new('pending')
+    SOLD = new('sold')
+  end
+end
+```
+
+If you are not using sorbet, Crystalline provides a suitable mixin:
+
+```ruby
+class Status
+  include ::Crystalline::Enum
+  enums do
+    AVAILABLE = new('available')
+    PENDING = new('pending')
+    SOLD = new('sold')
+  end
+end
+```
+
+
+
+### Typed parameters
+
+Consider the following example of an array of strings in `openapi.yaml`:
+
+```yaml
+/pet/findByTags:
+ get:
+   operationId: findPetsByTags
+   parameters:
+      - name: tags
+        in: query
+        required: false
+        explode: true
+        schema:
+          type: array
+          items:
+            type: string
+```
+
+The ruby SDK provides sorbet types in a signature block.
+
+```ruby
+sig { params(tags: T.nilable(T::Array[::String])).returns(FindPetsByTagsResponse) }
+def find_pets_by_tags(tags: nil)
+```
+
+You can use `oneOf` in an OpenAPI document like this:
+
+```yaml
+Pet:
+  type: object
+  properties:
+    age:
+      oneOf:
+      - type: integer
+      - type: string
+```
+
+The `age` property will be typed as a union in ruby:
+
+
+```ruby
+  field age T.nilable(T.any(::Integer,::String))
+```
