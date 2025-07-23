@@ -1,0 +1,95 @@
+---
+description: "How to automatically generate code sample URLs from an SDK."
+sidebar_label: "Automated Code Sample URLs"
+slug: "/docs/sdk-docs/code-samples/automated-code-sample-urls"
+---
+
+import { Callout, Screenshot } from "@/mdx/components";
+
+
+# Automated code sample URLs
+
+For paid accounts, Speakeasy can automatically apply code samples to the base OpenAPI document in the cloud, with no intervention required.
+This is the most elegant solution for exposing code samples to documentation providers.
+
+In the **APIs** tab of the dashboard, look for an entry marked as **Combined Spec**.
+Click into the entry to see a breakdown of the base OpenAPI document and code samples overlays that were used to produce it.
+
+<Screenshot 
+  variant="web"
+  image={{
+    src: '/assets/docs/code-samples/combined-spec.png',
+    alt: "Screenshot of the dashboard showing a Combined Spec."
+  }}
+/>
+
+<Screenshot 
+  variant="web"
+  image={{
+    src: '/assets/docs/code-samples/combined-spec-details.png',
+    alt: "Screenshot of the dashboard showing Combined Spec details."
+  }}
+/>
+
+To configure one of these combined code sample specs as a public URL for documentation providers, visit the **Docs** tab in the Speakeasy dashboard.
+
+## How Speakeasy automates code sample URLs
+
+Speakeasy automatically tracks the base OpenAPI document and code samples when an SDK is generated using GitHub Actions and changes are merged to the main branch.
+Based on this, Speakeasy generates a combined spec in the background that contains all your existing OpenAPI operations along with any added `x-code-samples` extensions.
+
+## Requirements for using automated code sample URLs
+
+If the SDK setup in GitHub is not yet complete, a notification like the following may appear in the **Docs** tab.
+
+<Screenshot 
+  variant="web"
+  image={{
+    src: '/assets/docs/code-samples/automatic-code-samples-url-unavailable.png',
+    alt: "Automatic code sample URLs not available."
+  }}
+/>
+
+To use automated code sample URLs, the SDK must meet the following requirements:
+
+- Each SDK's `workflow.yaml` file must include the following:
+  - The `source` (the OpenAPI document) with a specified `registry` location.
+  - The `target` (the SDK) with a `codeSamples` section that includes a specified `registry` location.
+- The SDK must be generated with GitHub Actions and merged to main.
+- The SDK GitHub Action must be in `direct` mode, or the `sdk-publish` action must be configured. While publishing to a package manager is _not_ necessary, release tagging must be handled by this action.
+- The base OpenAPI document must not include `x-codeSamples` extensions, as they will not be overwritten.
+
+When the setup is correct, the following will be available in the **APIs** tab of the Speakeasy dashboard:
+
+- An entry for the base OpenAPI document (for example, `my-source`).
+- For each SDK you include, a corresponding code samples overlay (for example, `my-source-{lang}-code-samples`).
+
+Revisions to the base OpenAPI document and code sample overlays must be tagged with `main`, which is why using GitHub Actions is required.
+
+<Callout title="Alternatives to configuring sdk-publish.yaml:" type="warning">
+If publishing setup is not ready, temporarily set up the following tagging action in each SDK repo.
+
+```yaml .github/workflows/tagging.yaml
+name: Speakeasy Tagging
+permissions:
+  checks: write
+  contents: write
+  pull-requests: write
+  statuses: write
+"on":
+  push:
+    branches:
+      - main
+    paths: []
+  workflow_dispatch: {}
+jobs:
+  tag:
+    uses: speakeasy-api/sdk-generation-action/.github/workflows/tag.yaml@v15
+    with:
+      registry_tags: main
+    secrets:
+      github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+```
+
+</Callout>

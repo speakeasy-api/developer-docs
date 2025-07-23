@@ -20,7 +20,7 @@ OpenAPI documents to fix issues, manage overlays, regenerate SDKs, and more.
 Navigate to the [Speakeasy UI](https://app.speakeasy.com/) and log in. Go to the **Studio** tab and follow the
 instructions. Alternatively, run `speakeasy run --watch` from the root of the SDK repo to start the Studio UI.
 
-![Speakeasy Studio](../assets/maintenance/studio-ui.png)
+![Speakeasy Studio](/assets/docs/maintenance/studio-ui.png)
 
 ## Refine SDK method names
 
@@ -33,7 +33,7 @@ and `users.get()` would require both operation IDs to be `get`). Speakeasy Sugge
 Open the Speakeasy Studio UI following the instructions above. Click the **Improve Method Names** card to
 see the suggested fixes. After a few seconds of generating the fixes, the following appears:
 
-![Studio Method Name Suggestions](../assets/maintenance/method-names-subview.png)
+![Studio Method Name Suggestions](/assets/docs/maintenance/method-names-subview.png)
 
 Review the suggested fixes, uncheck any that shouldn't be applied, and click **Apply** to apply the changes to the SDK. This creates
 an [overlay file](https://www.speakeasy.com/docs/prep-openapi/overlays/create-overlays) and updates the Speakeasy workflow to apply it. Future SDK generations will use the overlay to include the applied changes.
@@ -46,7 +46,7 @@ Run the following command to generate an example output:
 
 ```bash
 speakeasy suggest operation-ids -s ~/Downloads/petstore.yaml -o ./updated-petstore.yaml --overlay=false
-``` 
+```
 
 This command:
 
@@ -55,7 +55,7 @@ This command:
 - Disables the `overlay` output to apply the suggestions to the entire spec in the output file
 
 Below is the output of the command:
-![Speakeasy suggest output](../assets/maintenance/suggest-cli.png)
+![Speakeasy suggest output](/assets/docs/maintenance/suggest-cli.png)
 
 ## Refine SDK error handling
 
@@ -73,7 +73,7 @@ Run the following command to generate an example output:
 
 ```bash
 speakeasy suggest error-types -s ~/Downloads/petstore.yaml -o ./updated-petstore.yaml --overlay=false
-``` 
+```
 
 This command:
 
@@ -82,10 +82,10 @@ This command:
 - Disables the `overlay` output to apply the suggestions to the entire spec in the output file
 
 The document updates to include new error schemas, two of which are shown below:
-![Speakeasy suggest output](../assets/maintenance/error-types-schemas.png)
+![Speakeasy suggest output](/assets/docs/maintenance/error-types-schemas.png)
 
 Each operation is updated to list the appropriate response codes and their corresponding error types:
-![Speakeasy suggest output](../assets/maintenance/error-types-codes.png)
+![Speakeasy suggest output](/assets/docs/maintenance/error-types-codes.png)
 
 Codes already defined elsewhere in the document are re-used. For example, if the `403` response code
 is already defined with a `CustomUnauthorizedResponse` for one operation, it will be re-used for all operations, giving users a consistent
@@ -102,4 +102,4 @@ to OpenAPI documents.
 
 The accuracy of fixes suggested by Speakeasy Suggest cannot be guaranteed as the AI model and
 architecture are still being improved. For feedback, please
-join [Speakeasy on Slack](https://join.slack.com/t/speakeasy-dev/shared_invite/zt-1df0lalk5-HCAlpcQiqPw8vGukQWhexw).
+join [Speakeasy on Slack](https://go.speakeasy.com/slack).

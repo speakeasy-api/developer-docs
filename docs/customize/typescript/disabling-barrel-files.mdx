@@ -1,25 +1,25 @@
 ---
-title: Disabling barrel files
+title: Disabling Barrel Files
 ---
 
 import { Callout } from "@/mdx/components";
 
-# Disabling Barrel Files
+# Disabling barrel files
 
-By default, the SDK generator creates "barrel files" or "index.ts" files that centralize module re-exports within an SDK package.
+By default, the SDK generator creates **barrel files** (`index.ts` files) that centralize module re-exports within an SDK package.
 
-## Configuring Barrel File Generation
+## Configuring barrel file generation
 
-The `useIndexModules` configuration option controls barrel file generation, which centralizes module re-exports. Configure this option by adding or modifying `useIndexModules` in `gen.yaml` file under the `typescript` section:
+The `useIndexModules` configuration option controls barrel file generation. Configure this option by adding or modifying `useIndexModules` under the `typescript` section in the `gen.yaml` file:
 
 ```yaml <sdk-root>/.speakeasy/gen.yaml
 typescript:
   # add or modify `useIndexModules`
   useIndexModules: true # or false
-  # other Typescript configuration options...
+  # other TypeScript configuration options...
 ```
 
-With `useIndexModules` set to `true` (the default), Speakeasy will generate barrel files that look like this:
+By default, `useIndexModules` is set to `true` so that Speakeasy generates barrel files that look like this:
 
 ```typescript <sdk-root>/src/models/errors/index.ts
 // petstore sdk
@@ -31,10 +31,10 @@ export * from "./httpclienterrors.js";
 export * from "./sdkvalidationerror.js";
 ```
 
-Consumers of the SDK could then import from the barrel file:
+SDK consumers can then import modules from barrel files as follows:
 
 ```typescript example.ts
-// somewhere in a consumer's code code
+// somewhere in a consumer's code
 import {
   ApiErrorInvalidInput,
   ApiErrorNotFound,
@@ -43,7 +43,7 @@ import {
 } from "petstore/models/errors";
 ```
 
-Conversely, with `useIndexModules` set to `false`, Speakeasy will not generate these barrel files. Consumers would need to import directly from the individual module files:
+If you set `useIndexModules` to `false`, Speakeasy will not generate these barrel files. Consumers need to import modules directly from the individual module files:
 
 ```typescript example.ts
 // somewhere in a consumer's code
@@ -53,55 +53,63 @@ import { ApiErrorUnauthorized } from "petstore/models/errors/apierrorunauthorize
 import { SDKValidationError } from "petstore/models/errors/sdkvalidationerror.js";
 ```
 
-## Pros and Cons of Using Barrel Files
+## Pros and cons of using barrel files
 
-Barrel files, or `index.ts` files, provide a convenient way to centralize imports for SDK consumers. When `useIndexModules` is `true`, users can import from a single entry point rather than having to supply the exact file structure of the package's resources.
+Barrel files provide a convenient way to centralize imports for SDK consumers. When `useIndexModules` is `true`, users can use a single entry point to import modules, rather than having to supply the exact file structure of the package's resources.
 
-On the other hand, disabling barrel files can have some advantages:
+On the other hand, disabling barrel files has some advantages:
 
-- **Superior Tree Shaking Performance**: Barrel files can significantly impair effective tree shaking in modern bundlers. When importing from a barrel file, bundlers often struggle to determine which exports are actually used, leading to the inclusion of unused code. By disabling barrel files, bundlers can accurately track dependencies and exclude unused code, resulting in smaller production bundles.
+- **Superior tree shaking performance**: Barrel files can significantly impair effective tree shaking in modern bundlers. When importing modules from a barrel file, bundlers often struggle to determine which exports are actually used, leading to the inclusion of unused code. Disabling barrel files allows bundlers to accurately track dependencies and exclude unused code, resulting in smaller production bundles.
+- **Enhanced developer tooling**: Without barrel files, IDE "Go to Definition" features (for example, `Cmd`/`Ctrl` + Click) link directly to the source file containing the implementation, rather than through an intermediate barrel file. This improves code navigation and makes it easier to understand the codebase structure.
+- **Faster build performance**: Barrel files create additional import chains that build tools have to process. When you remove these intermediary files:
 
-- **Enhanced Developer Tooling**: Without barrel files, IDE "Go to Definition" features (e.g., CMD/Ctrl + Click) navigate directly to the source file containing the implementation, rather than through an intermediate barrel file. This improves code navigation and makes it easier to understand the codebase structure.
-
-- **Faster Build Performance**: Barrel files create additional import chains that build tools must process. By removing these intermediary files:
   - Build tools process fewer files during compilation
   - Module dependency graphs become simpler and more efficient
   - Hot module replacement (HMR) becomes more precise
   - TypeScript type checking performance improves
 
 <Callout title="Performance tip" type="info">
-When combined with `moduleFormat: dual`, disabling barrel files provides optimal tree-shaking performance. The ESM format&apos;s static analysis capabilities work best with direct imports, allowing bundlers to eliminate unused code more effectively.
+  Disabling barrel files provides optimal tree shaking performance when combined
+  with `moduleFormat: dual`. The ESM format&apos;s static analysis capabilities
+  work best with direct imports, allowing bundlers to eliminate unused code more
+  effectively.
 </Callout>
 
-## Making the Right Choice
+## Making the right choice
 
-The decision to use `useIndexModules` depends on your project's priorities:
+Whether you should use `useIndexModules` depends on your project's priorities:
 
 - **Disable barrel files** (`useIndexModules: false`) when:
+
   - Bundle size optimization is critical
   - You're using modern bundlers like Webpack, Rollup, or Vite
   - Build performance is important
   - Your team values clear dependency paths
-  
+
 - **Keep barrel files** (`useIndexModules: true`) when:
+
   - Import convenience is more important than bundle optimization
-  - Your project doesn't use a bundler with tree-shaking
+  - Your project doesn't use a bundler with tree shaking
   - You prefer centralized import management
 
 <Callout title="Recommendation" type="info">
-For modern web applications, we recommend setting `useIndexModules: false`. While barrel files offer convenient imports, the performance benefits of direct imports typically outweigh this convenience, especially when using modern IDEs with good import management features.
+  For modern web applications, we recommend setting `useIndexModules: false`.
+  While barrel files offer convenient imports, the performance benefits of
+  direct imports typically outweigh this convenience, especially when using
+  modern IDEs with good import management features.
 </Callout>
 
 <Callout title="Note" type="info">
-  Note: This article draws information from the following sources: - [Why you
-  should avoid barrel files in
-  Javascript](https://laniewski.me/blog/pitfalls-of-barrel-files-in-javascript-modules/)
-  by Bartosz Łaniewski - [Please Stop Using Barrel
+  This article draws information from [Why you should avoid barrel files in
+  JavaScript](https://laniewski.me/blog/pitfalls-of-barrel-files-in-javascript-modules/)
+  by Bartosz Łaniewski and [Please Stop Using Barrel
   Files](https://tkdodo.eu/blog/please-stop-using-barrel-files) by Dominik
-  Dorfmeister
+  Dorfmeister.
 </Callout>
 
-## Additional Reading
+## Additional reading
 
-- [Typescript Configuration Options](/docs/customize/typescript/configuring-module-format)
-- [Lean SDKs with Standalone Functions](/post/standalone-functions)
+Visit the following pages to learn more about generating SDKs with Speakeasy:
+
+- [TypeScript configuration options](/docs/customize/typescript/configuring-module-format)
+- [Lean SDKs with standalone functions](/post/standalone-functions)

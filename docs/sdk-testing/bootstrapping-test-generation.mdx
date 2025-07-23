@@ -1,0 +1,105 @@
+---
+title: "Bootstrapping SDK Tests"
+description: "Learn how to automatically generate contract testing for APIs and SDKs."
+---
+
+import { Table } from "@/mdx/components";
+
+# Bootstrapping SDK Tests
+
+Automatically generate tests for SDKs. Speakeasy can boostrap tests for all operations including any new operations added in the future.
+
+These tests use any examples available in the OpenAPI document if available, or autogenerate examples based on the field name, type, and format of schemas.
+
+Multiple tests per operation can be configured using the named examples detailed for parameters, request bodies and responses.
+
+By default these tests will run against a mock server to validate the correctness of the SDK's serialization and deserialization.
+
+Tests are boostrapped into a `.speakeasy/tests.arazzo.yaml` file in the SDK repo. Once the test exists it can be customized from that `.speakeasy/tests.arazzo.yaml` without being overwritten.
+
+## Prerequisites
+
+The following are requirements for generating tests:
+
+- [Testing feature prerequisites](/docs/sdk-testing#prerequisites) are met.
+
+## Enabling Test Generation
+
+Navigate to the SDK repo and run the following command:
+
+```bash
+speakeasy configure tests
+```
+
+This command will enable both `generateTests` and `generateNewTests` settings in your [`gen.yaml`](/docs/speakeasy-reference/generation/gen-yaml) configuration file.
+
+Test generation and mock API server generation will be enabled when the following exist in the `generation` section of the configuration.
+
+```yaml
+# !focus(2:4)
+configVersion: 2.0.0
+generation:
+  # ... other existing configuration ...
+  tests:
+    generateTests: true        # Controls whether tests are generated during speakeasy run
+    generateNewTests: true     # Controls whether new tests are added for new operations
+```
+
+The `generateTests` setting controls whether test generation is enabled when running [`speakeasy run`](/docs/speakeasy-reference/cli/run). When set to `true`, tests defined in the `.speakeasy/tests.arazzo.yaml` document will be generated. When set to `false`, tests won't be generated.
+
+The `generateNewTests` setting controls whether new tests are automatically added to the `.speakeasy/tests.arazzo.yaml` document when new operations are found in the OpenAPI specification.
+
+When enabling for the first time this will generate tests for all operations in the OpenAPI document.
+Then going forward it will only generate tests for any operations not already found in the `.speakeasy/tests.arazzo.yaml` file.
+
+## Disabling test generation
+
+To completely disable test generation, delete the `.speakeasy/tests.arazzo.yaml` file from your repository:
+
+```bash
+rm .speakeasy/tests.arazzo.yaml
+```
+
+The existence of this file is what triggers test generation. Once removed, no tests will be generated regardless of your configuration.
+
+### Disable test generation for specific operations
+
+After enabling test generation, to disable generation of tests for a specific operation, explicitly set `x-speakeasy-test: false`:
+
+```yaml
+paths:
+  /example1:
+    get:
+      # This operation, without being explicitly disabled, will generate testing.
+      # ... operation configuration ...
+  /example2:
+    get:
+      # This operation will not generate testing.
+      # ... other operation configuration ...
+      x-speakeasy-test: false
+```
+
+### Generated Test Location
+
+Generated test files are written in language-specific locations, relative to the root of the SDK:
+
+<Table
+  data={[
+    { language: "Go", location: "`tests/`" },
+    { language: "Python", location: "`tests/`" },
+    { language: "TypeScript", location: "`src/__tests__`" },
+    { language: "Java", location: "`src/test/java`" },
+  ]}
+  columns={[
+    { key: "language", header: "Language" },
+    { key: "location", header: "Location" },
+  ]}
+/>
+
+If the mock server is also generated, its output will be in a `mockserver` directory under these locations.
+
+## Next Steps
+
+- [Running SDK tests](/docs/sdk-testing/running-tests)
+- [Customize SDK tests](/docs/sdk-testing/customizing-sdk-tests)
+- [Setup testing in GitHub Actions](/docs/sdk-testing/github-actions)

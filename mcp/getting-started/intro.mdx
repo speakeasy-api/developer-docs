@@ -3,7 +3,6 @@ title: "What is MCP? An overview of the Model Context Protocol"
 description: Learn how the MCP lets your agents or clients connect to real-world tools and data through a universal protocol.
 ---
 
-import { Spotlight } from "@/mdx/components";
 import GramCallout from "../.partials/gram-callout.mdx";
 
 <GramCallout />
@@ -142,58 +141,154 @@ Unlike many client-server protocols where clients only make requests and servers
 
 This bidirectional design enables workflows in which servers can actively participate in decision-making by requesting LLM assistance through the client.
 
-![MCP Architecture](../assets/getting-started/mcp-architecture.png)
+![MCP Architecture](/assets/mcp/getting-started/mcp-architecture.png)
 
 MCP offers SDKs in multiple languages (including Python and JavaScript) to simplify building and exposing MCP-compliant servers.
 
-<Spotlight>
-
-## !!steps overview
+## MCP Server Example
 
 Here is an example of an MCP server in Python that exposes a single tool to write notes to a local directory:
 
-```python ! mcp-server.py
-!from ../assets/intro/mcp.py.txt
+```python mcp-server.py
+from mcp.server.fastmcp import FastMCP
+from mcp.server.stdio import stdio_server
+from mcp.server import InitializationOptions, NotificationOptions
+from pathlib import Path
+import asyncio
+
+NOTES_DIR = Path("notes")
+NOTES_DIR.mkdir(exist_ok=True)
+
+app = FastMCP("MCP Notes Server")
+
+#### TOOLS ####
+@app.tool()
+def write_note(slug: str, content: str) -> str:
+  note_path = NOTES_DIR / f"{slug}.txt"
+  note_path.write_text(content.strip(), encoding="utf-8")
+  return f"Note '{slug}' saved."
+
+#### RESOURCES ####
+@app.resource("note://{slug}")
+def read_note(slug: str) -> str:
+  note_path = NOTES_DIR / f"{slug}.txt"
+  if not note_path.exists():
+      return "Note not found."
+  return note_path.read_text(encoding="utf-8")
+
+#### PROMPTS ####
+@app.prompt()
+def suggest_note_prompt(topic: str) -> str:
+  return f"""
+      Write a short, thoughtful note for someone who needs advice about: {topic}
+  """
+
+#### ROOTS ####
+@app.tool()
+def list_notes(root: str = None) -> list[str]:
+  all_slugs = [f"note://{f.stem}" for f in NOTES_DIR.glob("*.txt")]
+  if root:
+      return [slug for slug in all_slugs if slug.startswith(root)]
+  return all_slugs
+
+# -----------------------------
+# ENTRYPOINT (Explicit Transport)
+# -----------------------------
+async def main():
+  async with stdio_server() as (read_stream, write_stream):
+      await app.run(
+          read_stream,
+          write_stream,
+          InitializationOptions(
+              server_name="mcp-notes-server",
+              server_version="0.1.0",
+              capabilities=app.get_capabilities(
+                  notification_options=NotificationOptions(),
+                  experimental_capabilities={},
+              ),
+          ),
+      )
+
+if __name__ == "__main__":
+  asyncio.run(main())
 ```
 
-## !!steps tools
+Let's break it down into chunks:
+
+### Tools
 
 A tool is a function exposed by the server that an AI agent can call using `JSON-RPC`. Each tool includes its name, input parameters, output schema, and a description.
 
-```python ! mcp-server.py focus=12:17
-!from ../assets/intro/mcp.py.txt
+```python
+#### TOOLS ####
+@app.tool()
+def write_note(slug: str, content: str) -> str:
+  note_path = NOTES_DIR / f"{slug}.txt"
+  note_path.write_text(content.strip(), encoding="utf-8")
+  return f"Note '{slug}' saved."
 ```
 
-## !!steps resources
+### Resources
 
 Resources are named, read-only data references addressable via URIs. Resources are used to load contextual read-only data into the MCP session.
 
-```python ! mcp-server.py focus=19:25
-!from ../assets/intro/mcp.py.txt
+```python
+#### RESOURCES ####
+@app.resource("note://{slug}")
+def read_note(slug: str) -> str:
+  note_path = NOTES_DIR / f"{slug}.txt"
+  if not note_path.exists():
+      return "Note not found."
+  return note_path.read_text(encoding="utf-8")
 ```
 
-## !!steps prompts
+### Prompts
 
 Prompts are predefined message templates that servers expose to clients. When invoked with arguments, they return a list of messages (`messages[]`) that the client sends to the LLM to perform a specific task.
 
-```python ! mcp-server.py focus=27:32
-!from ../assets/intro/mcp.py.txt
+```python
+#### PROMPTS ####
+@app.prompt()
+def suggest_note_prompt(topic: str) -> str:
+  return f"""
+      Write a short, thoughtful note for someone who needs advice about: {topic}
+  """
 ```
 
-## !!steps roots
+### Roots
 
 Roots are a set of scoped access boundaries provided by the client at handshake. Roots allow the server to limit the visibility of tools, resources, or data based on a given namespace.
 
-```python ! mcp-server.py focus=34:40
-!from ../assets/intro/mcp.py.txt
+```python
+#### ROOTS ####
+@app.tool()
+def list_notes(root: str = None) -> list[str]:
+  all_slugs = [f"note://{f.stem}" for f in NOTES_DIR.glob("*.txt")]
+  if root:
+      return [slug for slug in all_slugs if slug.startswith(root)]
+  return all_slugs
 ```
 
-## !!steps transports
+### Transports
 
 A transport defines the communication method the server uses to handle client connections. MCP supports multiple transports, including `stdio` for local execution and `http` for web-based deployment.
 
-```python ! mcp-server.py focus=45:58
-!from ../assets/intro/mcp.py.txt
-```
+```python
+async def main():
+  async with stdio_server() as (read_stream, write_stream):
+      await app.run(
+          read_stream,
+          write_stream,
+          InitializationOptions(
+              server_name="mcp-notes-server",
+              server_version="0.1.0",
+              capabilities=app.get_capabilities(
+                  notification_options=NotificationOptions(),
+                  experimental_capabilities={},
+              ),
+          ),
+      )
 
-</Spotlight>
+if __name__ == "__main__":
+  asyncio.run(main())
+```

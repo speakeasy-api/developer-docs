@@ -4,18 +4,17 @@ sidebar_label: Customize Authentication
 description: "Customize security and authentication SDK settings for OAuth."
 ---
 
-import { CodeWithTabs, Callout } from "@/mdx/components";
+import { Callout, CodeWithTabs } from "@/mdx/components";
 
+# Customize security and authentication
 
-# Customize Security and Authentication
+## Scope authentication
 
-## Scope Authentication
+### Global security
 
-### Global
+Global security allows users to configure the SDK once and then reuse the security configuration for all subsequent calls.
 
-Global security allows users to configure the SDK once and reuse the security configuration for all subsequent calls.
-
-To use global security, define the security configuration in the `security` block at the root of the SDK.
+To use global security, define the security configuration in the `security` block at the root of the SDK:
 
 ```yaml
 paths:
@@ -185,17 +184,34 @@ try {
 }
 ```
 
+```ruby !!tabs ruby
+require 'openapi'
+
+s = ::OpenApiSDK::SDK.new(security: ::OpenApiSDK::Models::Shared::Security.new(api_key: "<YOUR_API_KEY_HERE>"))
+
+begin
+    res = s.drinks.list_drinks
+
+    unless res.drinks.nil?
+    # handle response
+    end
+rescue APIError
+    # handle exception
+end
+
+```
+
 </CodeWithTabs>
 
-### Per-Operation Security
+### Per-operation security
 
 <Callout title="Note" type="info">
 
-**Security Hoisting:** In cases where global security is **not** defined, Speakeasy automatically hoists the most commonly occurring operation-level security to be considered global. This will simplify SDK usage.
+**Security hoisting:** In cases where global security is **not** defined, Speakeasy automatically hoists the most commonly occurring operation-level security to be considered global. This simplifies SDK usage.
 
 </Callout>
 
-Operation-specific security configuration overrides the default authentication settings for an endpoint. This is commonly used for operations that do not require authentication or are part of an authentication flow, such as obtaining a short-lived access token.
+Operation-specific security configurations override the default authentication settings for an endpoint. Per-operation configurations are commonly used for operations that do not require authentication or that are part of an authentication flow, such as for obtaining a short-lived access token.
 
 Define `security` within an operation's scope to apply operation-specific security:
 
@@ -220,7 +236,7 @@ security:
   - {}
 ```
 
-In the SDK, the user can pass in a specific security configuration as an argument to the method call:
+In the resulting SDK, the user can pass in a specific security configuration as an argument to the method call:
 
 <CodeWithTabs>
 
@@ -369,15 +385,39 @@ try {
 }
 ```
 
+```ruby !!tabs ruby
+  require 'openapi'
+
+  Models = ::OpenApiSDK::Models
+
+  s = ::OpenApiSDK::SDK.new
+
+  begin
+    res = s.drinks.list_drinks(
+      security: Models::Shared::ListDrinksSecurity.new(
+        api_key: '<YOUR_API_KEY_HERE>',
+      ),
+    )
+
+    unless res.drinks.nil?
+      # handle response
+    end
+  rescue Models::Errors::APIError => e
+    # handle exception
+    raise e
+  end
+
+```
+
 </CodeWithTabs>
 
-## Environment Variables
+## Environment variables
 
-A common pattern for setting global parameters and security options in an SDK is by using environment variables. Speakeasy supports this with environment variable prefixes. To enable this feature, set the `envVarPrefix` variable in the language section of the SDK's `gen.yaml` file.
+The global parameters and security options for an SDK are commonly set using environment variables. Speakeasy supports this pattern with environment variable prefixes. To enable this feature, set the `envVarPrefix` variable in the language section of the SDK's `gen.yaml` file.
 
-Global parameters can then be provided via environment variables in the format `{PREFIX}_{GLOBALNAME}`. Documentation for this will be automatically included in the README.
+You can then provide global parameters via environment variables in the format `{PREFIX}_{GLOBALNAME}`. The relevant documentation will be automatically included in the README.
 
-Security options can also be set via environment variables if not provided directly to the SDK. For example, a security field like `api_key` can be set with the variable `{PREFIX}_{API_KEY}`.
+Security options can also be set via environment variables if not provided directly to the SDK. For example, a security field like `api_key` can be set with the variable `{PREFIX}_{API_KEY}`:
 
 ```ts
 const SDK = new SDK({
@@ -387,8 +427,8 @@ const SDK = new SDK({
 
 <Callout title="Note" type="info">
 
-Note: In some cases, adding `envVarPrefix` may alter the structure of security options. Required global security will become optional to allow setting it via environment variables.
+In some cases, adding `envVarPrefix` may alter the structure of security options. Required global security will become optional to allow you to set it via environment variables.
 
 </Callout>
 
-For details on enabling this feature during generation, see the language-specific `gen.yaml` [configuration reference](/docs/speakeasy-reference/generation/gen-yaml).
+To learn more about enabling this feature during generation, see the language-specific `gen.yaml` [configuration reference](/docs/speakeasy-reference/generation/gen-yaml).

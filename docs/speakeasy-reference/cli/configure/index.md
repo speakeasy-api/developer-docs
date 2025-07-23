@@ -20,7 +20,7 @@ Configure your Speakeasy workflow file.
 
 [Publishing](https://www.speakeasy.com/docs/publish-sdks/publish-sdks)
 
-[Testing](https://www.speakeasy.com/docs/customize-testing/bootstrapping-test-generation)
+[Testing](/docs/sdk-testing/bootstrapping-test-generation)
 
 
 

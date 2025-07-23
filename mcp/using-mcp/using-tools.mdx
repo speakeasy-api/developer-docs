@@ -1,0 +1,106 @@
+---
+title: "Best practices for using MCP tools"
+description: "Learn how to use MCP tools effectively."
+---
+
+import GramCallout from "../.partials/gram-callout.mdx";
+
+<GramCallout />
+
+# Best practices for using MCP tools
+
+Model Context Protocol (MCP) tools are designed to be used by Large Language Models (LLMs), so why would we need to learn how to use them? We've learned that leaving tool selection over to the LLM alone can lead to wasted tokens, crammed context windows, and agents running in circles. To avoid these issues, let's explore how to make the most of MCP tools.
+
+If you haven't had great success using MCP before, we're not here to say, "You're holding it wrong." We're mostly saying that when it comes to tool selection, less is more.
+
+## MCP tool selection: Add fewer tools
+
+When adding MCP servers to your client, you may be tempted to give the LLM access to every single tool you can find. This would be a mistake.
+
+Overwhelming the LLM with tool choices often leads to suboptimal tool choices or wasted tokens while the LLM goes on irrelevant side quests.
+
+Some clients acknowledge this problem by showing the user a warning when the number of tools exceeds a certain threshold.
+
+![A screenshot of the Cursor Settings interface shows a warning about exceeding the total tools limit, which is quoted below.](/assets/mcp/using-tools/cursor-limit.png)
+
+Here, we see that Cursor shows a warning when the number of tools from installed MCP servers exceeds 40:
+
+> Exceeding total tools limit. You have 56 tools from enabled servers. Too many tools can degrade performance, and some models may not respect more than 40 tools.
+
+Perhaps the Cursor developers chose 40 after some experimentation, but [research shows](https://arxiv.org/abs/2411.15399) that some smaller models get confused long before 40 tools are included in the context. The problem does not appear to be caused by the context window filling up (due to too many tool definitions using too many tokens). Instead, at least for smaller or quantized models, the issue seems to stem from confusion. The LLM gets tools' names and definitions mixed up, hallucinates tools, or doesn't follow the instructions in tool descriptions.
+
+How do we help an LLM in situations like this?
+
+## Tool loadout: Limit MCP tools per conversation
+
+> Tool Loadout is the act of selecting only relevant tool definitions to add to your context.
+
+In his excellent blog post, [How to Fix Your Context](https://www.dbreunig.com/2025/06/26/how-to-fix-your-context.html#tool-loadout), Drew Breunig shares strategies for improving performance through tool loadout. While some of these strategies recommend using retrieval-augmented generation (RAG) to help an LLM select the most relevant tools when it's faced with too many options, there is a much simpler solution for most clients: Deactivate the tools you know the LLM won't need.
+
+When you're starting a task, check whether the client you're using supports enabling selected MCP tools per conversation. If not, check whether you can select tools application-wide. Failing both of these options, curate your MCP servers by editing your client's configuration directly and disabling extra servers.
+
+Let's see how we can selectively activate tools in two popular clients.
+
+### How to select tools in Cursor
+
+<video
+  controls={false}
+  loop={true}
+  autoPlay={true}
+  muted={true}
+  width="100%"
+  className="mx-auto my-10 max-w-6xl"
+>
+  <source src="/assets/mcp/using-tools/cursor-tools.webm" type="video/webm" />
+</video>
+
+Click the gear icon at the top-right corner of the Cursor window, then select the **Tools & Integrations** tab. You'll see a list of all the installed MCP servers, with toggles for enabling servers individually. When you click the **X tools enabled** link below each server's name, you'll find a list of toggles that you can use to activate specific tools for that server.
+
+### How to filter tools in Claude Desktop
+
+<video
+  controls={false}
+  loop={true}
+  autoPlay={true}
+  muted={true}
+  width="100%"
+  className="mx-auto my-10 max-w-6xl"
+>
+  <source src="/assets/mcp/using-tools/claude-tools.webm" type="video/webm" />
+</video>
+
+With a conversation open, click the "Search and tools" icon below the message box.
+
+Here, you'll see all the MCP servers you've installed. Each server has a submenu, where you can enable or disable tools individually or in bulk.
+
+Claude Desktop allows users to change tools mid-conversation, which leads us to think it may send a list of tools with each completion request to the model, thereby using even more tokens per conversation with many tools enabled.
+
+## Tell the LLM which tools to use and when
+
+We've learned that too many tools can confuse LLMs, but occasionally, we simply need many tools in context. In these cases, help the LLM with tool selection.
+
+Rather than hoping the LLM will choose the right tools, be explicit in your instructions:
+
+* **Direct tool specification:** Instead of *"Help me analyze this data,"* try *"Use the `read_csv` tool to load the data, then use `create_chart` to visualize the trends."*
+
+* **Conditional tool usage:** Provide clear decision trees. For example, *"If the file is a CSV, use `read_csv`. If it's JSON, use `parse_json`. If neither works, use `read_file` and ask me for clarification."*
+
+* **Tool sequencing:** When tasks require multiple steps, outline the expected tool sequence. For example, *"First use `web_search` to find recent articles, then `fetch_url` to get full content, then `summarize_text` to create a brief overview."*
+
+* **Fallback strategies:** Define what to do when tools fail. For example, *"If `api_call` returns an error, use `log_error` to record it and try `alternative_api` instead."*
+
+## Include tool use pointers in your system prompt
+
+Include tips on using tools that you know you will almost always have enabled. For example, if you always have [Context7](https://context7.com/) and [MCP Run Python](https://ai.pydantic.dev/mcp/run-python/) installed and active, include a note on how and when you expect the LLM to use the tools provided by these servers.
+
+Anecdotally, we've seen better results by including these tools and pointers in our system prompts:
+
+> When you need to do any calculations, always use the `run_python_code` tool.
+
+> Before using a library, make sure to get updated documentation from Context7 by calling `resolve-library-id`, followed by `get-library-docs`.
+
+## This will only get easier
+
+In the long term, we hope we'll need to be less selective with tools for our LLMs. We're already seeing meta servers pop up that act as "tool selectors" or proxies, claiming to improve tool calling performance. We haven't seen any that can completely replace our roles as "human tool curators" in our workflows yet, but we think it is only a matter of time until a solid solution comes along.
+
+For now, keep pruning the list of tools at your LLM's disposal wherever possible, and provide tips on using tools when you think the LLM may get confused.

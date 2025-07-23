@@ -1,9 +1,9 @@
 ---
-title: How to generate an OpenAPI document with FastAPI
+title: How To Generate an OpenAPI Document With FastAPI
 description: "Creating an OpenAPI document with FastAPI and using it to generate SDKs with Speakeasy."
 ---
 
-import { YouTube, Callout } from "@/mdx/components";
+import { Callout, YouTube } from "@/mdx/components";
 
 # How to generate an OpenAPI document with FastAPI
 
@@ -13,19 +13,19 @@ import { YouTube, Callout } from "@/mdx/components";
 
 Many developers start their API development with FastAPI, and with good reason. FastAPI has rapidly gained traction in the Python community for its excellent performance, intuitive design, and flexibility. It enables developers to craft API solutions that not only run fast but also meet their users' unique needs.
 
-FastAPI is great for building your core API, but you'll want to layer on SDKs and docs to provide your users with easy integration. For that, you'll want an OpenAPI file.
+FastAPI is great for building your core API, but you'll want to layer on SDKs and docs to provide your users with easy integration. For that, you'll want an OpenAPI document.
 
-The good news is that FastAPI provides you with an OpenAPI file out of the box. The less good news is that you'll need some tweaking to get the OpenAPI document to a level where it becomes usable with other tooling.
+The good news is that FastAPI provides you with an OpenAPI document out of the box. The less good news is that you'll need some tweaking to get the OpenAPI document to a level where it becomes usable with other tooling.
 
 This article will show you how to improve the default OpenAPI document generation to make the most of the generated schema.
 
 ## Generating an OpenAPI document with FastAPI
 
-Understanding how FastAPI generates OpenAPI schemas can help you make more informed decisions when you customize your FastAPI setup.
+Understanding how FastAPI generates OpenAPI documents can help you make more informed decisions when you customize your FastAPI setup.
 
-The process is fairly straightforward: FastAPI builds the OpenAPI schema based on the routes and models you've defined in your application. For every route in your FastAPI application, FastAPI adds an operation to the OpenAPI schema. For every model used in these routes, FastAPI adds a schema definition. The request and response bodies, parameters, and headers all draw from these schema definitions.
+The process is fairly straightforward: FastAPI builds the OpenAPI document based on the routes and models you've defined in your application. For every route in your FastAPI application, FastAPI adds an operation to the OpenAPI document. For every model used in these routes, FastAPI adds a schema definition. The request and response bodies, parameters, and headers all draw from these schema definitions.
 
-While this process works well out of the box, FastAPI also offers several customization options that can change the generated OpenAPI schema. We'll cover some of these options in the following sections.
+While this process works well out of the box, FastAPI also offers several customization options that can change the generated OpenAPI document. We'll cover some of these options in the following sections.
 
 ## Our FastAPI example app: APItizing Burgers
 
@@ -33,11 +33,11 @@ Let's get this out of the way: The name came in a daydream shortly before luncht
 
 To guide us through this journey, we'll use a simple example FastAPI application: the "APItizing Burgers" burger shop API. This API includes two models, `Burger` and `Order`, and provides basic CRUD operations for managing burgers and orders at our hypothetical burger shop. Additionally, we have a webhook defined for order status events.
 
-We'll look at how we optimized this FastAPI application and refined our models and routes so that the generated OpenAPI document is intuitive and easy to use. We will also explore how we can use this schema to generate SDKs using Speakeasy. The source code for our example API is available in the [apitizing-burgers](https://github.com/speakeasy-api/apitizing-burgers) repository.
+We'll look at how we optimized this FastAPI application and refined our models and routes so that the generated OpenAPI document is intuitive and easy to use. We will also explore how we can use this schema to generate SDKs using Speakeasy. The source code for our example API is available in the [framework-fastapi](https://github.com/speakeasy-api/examples/tree/main/framework-fastapi) folder of the Speakeasy Examples repository.
 
-The repository consists of two directories: `app` and `sdk`.
+The `framework-fastapi` directory consists of two directories: `app` and `sdk`.
 
-The `app` directory contains only our FastAPI server definition: `app/main.py`. This is where we'll look at what we customized.
+The `app` directory contains the FastAPI server definition: `app/main.py`. This is where we'll look at what we customized.
 
 The `sdk` directory and the two OpenAPI documents, `openapi.yaml` and `openapi.json`, are generated by running `gen.sh` in the root of the project.
 
@@ -60,7 +60,33 @@ Let's get started with the basics – some things you probably do already.
 
 These straightforward examples are trivial but will help you better understand the three steps in the automation pipeline: How FastAPI setup influences OpenAPI documents, which, in turn, influences SDK code.
 
-### Server Configuration
+### Scalar API documentation
+
+FastAPI automatically generates API documentation using Swagger UI. This example also has [Scalar](https://scalar.com/) API documentation. Scalar is an alternative to Swagger UI. Its standout feature, as explained in our blog post, [Choosing a docs vendor: Mintlify vs Scalar vs Bump vs ReadMe vs Redocly](https://www.speakeasy.com/blog/choosing-a-docs-vendor#mintlify-seriously-beautiful-docs), is that it can be used as a standalone API client. Scalar is also easy to use and has a modern UI that can be customized to create branded documentation. We use it for our [Speakeasy docs](https://www.speakeasy.com/blog/release-speakeasy-docs#why-we-partnered-with-scalar).
+
+We added Scalar to the FastAPI app by installing the [Scalar FastAPI plugin](https://github.com/scalar/scalar/blob/main/integrations/fastapi/README.md).
+
+After installing the plugin, we added a "/scalar" route, in `app/main.py`, that returns the Scalar API Reference:
+
+```python
+from scalar_fastapi import get_scalar_api_reference
+
+# ...
+
+app = FastAPI()
+
+# ...
+
+@app.get("/scalar", include_in_schema=False)
+async def scalar_html():
+    return get_scalar_api_reference(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Scalar",
+    )
+
+```
+
+### Server configuration
 
 This may seem obvious, but while first working with FastAPI in development, the generated docs, development server, and API operations all work out of the box without the need to manually specify your server address.
 
@@ -90,7 +116,7 @@ servers:
   #   url: https://api.example.com/
 ```
 
-### Application Information
+### Application information
 
 In our `app/main.py`, if we have the following:
 
@@ -115,11 +141,11 @@ info:
   version: 0.1.0
 ```
 
-### Route Customizations
+### Route customizations
 
 With the basics out of the way, let's look at a few more substantial recommendations.
 
-### Typed Responses
+### Typed responses
 
 When developers use your generated SDK, they may wish to see what all the possible responses for an API call could be.
 
@@ -190,7 +216,7 @@ components:
       type: object
 ```
 
-### Operation Tags
+### Operation tags
 
 As your API develops and grows bigger, you're likely to split it into separate files. FastAPI [provides conveniences](https://fastapi.tiangolo.com/tutorial/bigger-applications/) to help reduce boilerplate and repetition when splitting an API into multiple modules.
 
@@ -222,7 +248,7 @@ def read_burger(burger_id: int):
     }
 ```
 
-### Tag Metadata
+### Tag metadata
 
 You can add metadata to your tags to further improve the developer experience.
 
@@ -289,7 +315,7 @@ paths:
       # ...
 ```
 
-### Operation ID Customization
+### Operation ID customization
 
 When FastAPI outputs an OpenAPI document, it generates a unique OpenAPI `operationId` for each path. By default, this unique ID is generated by the FastAPI `generate_unique_id` function:
 
@@ -411,17 +437,51 @@ webhooks:
       summary: Webhook Order Status Changed
 ```
 
-## Speakeasy Integration
+## Speakeasy integration
 
-Now that we have a customized OpenAPI document, we can use Speakeasy to generate SDKs based on it. Let's take a look at how the information we detailed in the OpenAPI document affects how Speakeasy generates SDKs.
+Now that we have a customized OpenAPI document, we can use Speakeasy to generate SDKs based on it. You can generate an SDK by running the `gen.sh` bash script, which runs the `speakeasy generate` command. Alternatively, you can use the Speakeasy quick start command for a guided SDK setup:
 
-After we added our local server information, this is how it generates in the `openapi.yaml` file:
+```bash Terminal
+speakeasy quickstart
+```
+
+Following the prompts, provide the OpenAPI document location, name your SDK, and select the SDK language.
+In the terminal, you'll see the steps taken by Speakeasy to create the SDK:
+
+```
+│   └─Source: APItizing Burgers API - success
+│     └─Validating Document - success
+│     └─Diagnosing OpenAPI - success
+│     └─Tracking OpenAPI Changes - success
+│       └─Snapshotting OpenAPI Revision - success
+│       └─Storing OpenAPI Revision - success
+│   └─Validating gen.yaml - success
+│   └─Generating Python SDK - success
+│     └─Setup Environment - success
+│     └─Load and Validate Document - success
+│     └─Generate SDK - success
+│     └─Compile SDK - success
+│     └─Setup Environment - success
+│     └─Load and Validate Document - success
+│     └─Generate SDK - success
+│   └─Generating Code Samples - success
+│     └─Snapshotting Code Samples - success
+│       └─Snapshotting Code Samples - success
+│       └─Uploading Code Samples - success
+```
+
+Speakeasy [validates](/docs/concepts#validation) the OpenAPI document to check that it's ready for code generation. Validation issues will be printed in the terminal and the generated SDK will be saved as a folder in your project.
+Speakeasy also suggests improvements for your SDK using [Speakeasy Suggest](/docs/prep-openapi/maintenance), which is an AI-powered tool in Speakeasy Studio. You can see suggestions by opening the link to your Speakeasy Studio workspace in the terminal.
+
+Let's take a look at how the information we detailed in the OpenAPI document affects how Speakeasy generates SDKs.
+
+Adding the local server information leads to the following generated output in the `openapi.yaml` file:
 
 ```yaml
 # This server configuration will be used by Speakeasy when generating SDKs
-openapi: 3.0.2
+openapi: 3.1.0
 info:
-  title: FastAPI Example
+  title: APItizing Burgers API
   version: 0.1.0
 servers:
   - description: Local server
@@ -489,7 +549,7 @@ class SDKConfiguration:
         return SERVERS[self.server_idx], {}
 ```
 
-Speakeasy uses the title, summary, and descriptions we provided earlier to add helpful text to the generated SDK documentation, including comments in the SDK code. For example, in `sdk/src/sdk/sdk.py`:
+Speakeasy uses the title, summary, and descriptions we provided earlier to add helpful text to the generated SDK documentation, including comments in the SDK code. For example, in `sdk/src/openapi/sdk.py`:
 
 ```python
 class SDK(BaseSDK):
@@ -508,7 +568,7 @@ from dataclasses import dataclass
 class SDKConfiguration:
     ...
     openapi_doc_version: str = '0.1.0'
-    user_agent: str = "speakeasy-sdk/python 0.1.0 2.484.0 0.1.0 openapi"
+    user_agent: str = "speakeasy-sdk/python 0.2.0 2.607.0 0.1.0 openapi"
     ...
 ```
 
@@ -528,7 +588,7 @@ def _build_request_with_client(
     ...
 ```
 
-### Operation ID Issues and Solutions
+### Operation ID issues and solutions
 
 The unique `operation_id` generated by FastAPI does not translate well into an SDK. We need to customize the unique `operation_id` that FastAPI generates for better readability.
 
@@ -549,7 +609,7 @@ req = operations.ReadBurgerBurgerBurgerIDGetRequest(
 res = s.burger.read_burger_burger_burger_id_get(req)
 ```
 
-However, after using the custom function `generate_unique_id` we defined previously, the `read_burger` operation gets a much friendlier operation ID: `readBurger`. And the usage example becomes much easier to read:
+However, after using the custom function `generate_unique_id` we defined previously, the `read_burger` operation gets a friendlier operation ID, `readBurger`, and the usage example becomes easier to read:
 
 ```python
 import sdk
@@ -564,9 +624,8 @@ req = operations.ReadBurgerRequest(
 res = s.burger.read_burger(req)
 ```
 
-In addition to the two methods described earlier for customizing the `operation_id`, there is a third way. We can add the top-level `x-speakeasy-name-override` extension to our OpenAPI document, allowing Speakeasy to override these generated names when it generates SDK code.
-
-To add this extension, follow the Speakeasy guide on [changing method names](/docs/customize-sdks/methods).
+In addition to the two methods described earlier, there is a third way to customize the `operation_id`. We can add the top-level `x-speakeasy-name-override` [Speakeasy extension](https://www.speakeasy.com/docs/speakeasy-reference/extensions) to our OpenAPI document, allowing Speakeasy to override the generated names when it generates SDK code.
+To add this extension, follow the Speakeasy guide to [changing method names](/docs/customize-sdks/methods).
 
 ```yaml ! name-override.yaml
 # Example of x-speakeasy-name-override extension
@@ -576,7 +635,7 @@ x-speakeasy-name-override:
     createBurger: addBurger
 ```
 
-### Adding Retry Functionality
+### Adding retry functionality
 
 Speakeasy can generate SDKs that follow custom rules for retrying failed requests. For instance, if your server fails to return a response within a specified time, you may want your users to retry their request without clobbering your server.
 
@@ -602,10 +661,6 @@ app = FastAPI(
     version="0.1.0",
     title="APItizing Burger API",
 )
-
-@app.get("/")
-def root():
-    return {"message": "Root"}
 
 def custom_openapi():
     if app.openapi_schema:
@@ -641,7 +696,7 @@ def custom_openapi():
 app.openapi = custom_openapi
 ```
 
-Keep in mind, you'll need to add this customization _after_ declaring your operation routes.
+Keep in mind that you'll need to add this customization _after_ declaring your operation routes.
 
 This change adds the following top-level section to `openapi.yaml`:
 
@@ -687,9 +742,9 @@ def list_burgers():
     return []
 ```
 
-### Authentication and Security
+### Authentication and security
 
-FastAPI supports several authentication mechanisms that can be easily integrated into your API.
+FastAPI supports several authentication mechanisms that can easily be integrated into your API.
 
 The example below demonstrates adding an API key authentication scheme to the `/burger/` endpoint of our API. We use the `APIKeyHeader` dependency to validate the API key passed in the `Authorization` header:
 
@@ -726,7 +781,7 @@ def list_burgers(key: str = Depends(header_scheme)):
 
 Now when generating the OpenAPI document, the API key authentication scheme will be included and only required for the listing on the `/burger/` endpoint.
 
-### Handling Form Data
+### Handling form data
 
 Form data is a common way to receive information from clients, particularly in web applications. FastAPI provides robust support for form data through its `Form` class, and it correctly documents these form fields in the OpenAPI schema.
 
@@ -752,7 +807,7 @@ async def create_burger_form(
     }
 ```
 
-In the OpenAPI schema, FastAPI correctly identifies this endpoint as accepting form data:
+In the OpenAPI document, FastAPI correctly identifies this endpoint as accepting form data:
 
 ```yaml
 paths:
@@ -803,7 +858,7 @@ req = operations.CreateBurgerFormRequest(
 res = s.burger.create_burger_form(req)
 ```
 
-#### File Uploads
+#### File uploads
 
 FastAPI also supports file uploads, both as individual files or as multiple files. The OpenAPI schema will correctly document these endpoints as accepting multipart form data.
 
@@ -831,7 +886,7 @@ async def upload_burger_image(
 
 This endpoint will be documented in the OpenAPI schema with `multipart/form-data` content type, allowing Speakeasy to generate appropriate SDK code for handling file uploads.
 
-#### Advanced Form Validation
+#### Advanced form validation
 
 For form data that needs validation beyond simple type checking, you can combine Pydantic models with the `Form` class. First, define your model with the validation rules:
 
@@ -854,14 +909,14 @@ async def create_burger_validated(
     price: Annotated[float, Form()]
 ):
     burger_data = BurgerFormData(
-        name=name, 
-        description=description, 
+        name=name,
+        description=description,
         price=price
     )
     return burger_data
 ```
 
-FastAPI will generate an OpenAPI schema that includes these validation constraints, allowing SDK users to understand the requirements before submitting the form.
+FastAPI will generate an OpenAPI document that includes these validation constraints, allowing SDK users to understand the requirements before submitting the form.
 
 ## Summary
 

@@ -1,0 +1,185 @@
+---
+title: "OpenAPI Data in Tests"
+description: "Learn how changes to OpenAPI examples influence tests."
+---
+
+# OpenAPI Data in Tests
+
+The definition of each operation determines what data is used in generated testing. In addition to the [data type system](/openapi/schemas) shaping data, OpenAPI Specification supports [examples](/openapi/examples). Test generation automatically uses defined examples when available. In the absence of defined examples, test generation attempts to use a realistic example based on the `type`, `format` (if set), and property name (if applicable).
+
+#### Example Property
+
+By default, a single test is created based on any `example` properties found throughout any defined operation `parameters`, `requestBody`, and `responses`.
+
+Consider the below example. The generator traverses the OpenAPI document to create a single test for the `updatePet` operation with `id`, `name`, and `photoUrls` data:
+
+```yaml openapi.yaml
+# !focus(8,9,14,16,22,25:29,31,34,35,37,40:43)
+paths:
+  "/pet":
+    put:
+      tags:
+      - pet
+      summary: Update an existing pet
+      description: Update an existing pet by Id
+      operationId: updatePet
+      requestBody:
+        description: Update an existent pet in the store
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/Pet"
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Pet"
+components:
+  schemas:
+    Pet:
+      required:
+      - name
+      - photoUrls
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 10
+        name:
+          type: string
+          example: doggie
+        category:
+          "$ref": "#/components/schemas/Category"
+        photoUrls:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Tag"
+        status:
+          type: string
+          description: pet status in the store
+          enum:
+          - available
+          - pending
+          - sold
+```
+Here's how the generator parses this example document:
+
+- `paths[/pet].put.updatePet` - The test uses the `updatePet` operationId in the test name.
+- `paths[/pet].put.requestBody` - The test uses the `Pet` shared component for both the constructed request body and response object.
+- `components.schemas.Pet.required` - The `Pet` shared component is an object type with required `name` and `photoUrls` properties.
+- `components.schemas.Pet.id` - While not required, the `Pet` object `id` property has an `example` property, which is automatically included in the test.
+- `components.schemas.Pet.name` - The required `Pet` object `name` property has an `example` property, which is included in the test.
+- `components.schemas.Pet.photoUrls` - The required `Pet` object `photoUrls` property does not include an `example` property, however it has an example value automatically created since it is required.
+
+This definition creates a test with `Pet` object request body and response data:
+
+```yaml
+id: 10
+name: doggie
+photoUrls:
+  - <value>
+```
+
+#### Examples Property
+
+Multiple tests for an operation can be defined using the `examples` property, which in this context is a mapping of example name string keys to example values. Prevent missing or mismatched test generation by ensuring the same example name key is used across all necessary `parameters`, `requestBody`, and `responses` parts of the operation. If desired, [define reusable examples under components](/openapi/examples) similar to schemas.
+
+In this example, multiple tests (`fido` and `rover`) are created for the `addPet` operation:
+
+```yaml openapi.yaml
+# !focus(15:32,41:60)
+paths:
+  "/pet":
+    post:
+      tags:
+      - pet
+      summary: Add a new pet to the store
+      description: Add a new pet to the store
+      operationId: addPet
+      requestBody:
+        description: Create a new pet in the store
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/Pet"
+            examples:
+              fido:
+                summary: fido request
+                description: fido example requestBody for test generation
+                value:
+                  name: Fido
+                  photoUrls:
+                    - https://www.example.com/fido.jpg
+                  status: available
+              rover:
+                summary: rover request
+                description: rover example requestBody for test generation
+                value:
+                  name: Rover
+                  photoUrls:
+                    - https://www.example.com/rover1.jpg
+                    - https://www.example.com/rover2.jpg
+                  status: pending
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Pet"
+              examples:
+                fido:
+                  summary: fido response
+                  description: fido example response for test generation
+                  value:
+                    id: 1
+                    name: Fido
+                    photoUrls:
+                      - https://www.example.com/fido.jpg
+                    status: available
+                rover:
+                  summary: rover response
+                  description: rover example response for test generation
+                  value:
+                    id: 2
+                    name: Rover
+                    photoUrls:
+                      - https://www.example.com/rover1.jpg
+                      - https://www.example.com/rover2.jpg
+                    status: pending
+```
+
+#### Ignoring Data
+
+Data properties can be explicitly ignored in testing via the `x-speakeasy-test-ignore` annotation.
+
+In this example, the `other` property is omitted from test generation:
+
+```yaml
+paths:
+  /example:
+    get:
+      # ... other operation configuration ...
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: string
+                  other:
+                    type: string
+                    x-speakeasy-test-ignore: true
+```
