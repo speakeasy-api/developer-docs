@@ -773,7 +773,7 @@ generation:
 
 When running tests against a real API, the SDK may need to be configured with security credentials to authenticate with the API. This can be done by adding the `x-speakeasy-test-security` extension to the document, a workflow or a individual step.
 
-The `x-speakeasy-test-security` extension allows static values or values pulled from the environment to be used when instantiating an SDK instance and making requests to the API.
+The `x-speakeasy-test-security` extension allows static values, values pulled from the environment, or runtime expressions referencing outputs from previous steps to be used when instantiating an SDK instance and making requests to the API.
 
 **Important:** The keys under `value` must exactly match the names of the `securitySchemes` defined in your OpenAPI document's `components.securitySchemes` section.
 
@@ -821,6 +821,73 @@ workflows:
       - stepId: step2
         # ...
 ```
+
+### Using Runtime Expressions for Dynamic Security
+
+The `x-speakeasy-test-security` extension also supports runtime expressions, allowing you to populate security credentials dynamically from the outputs of previous steps. This is particularly useful for workflows that require authentication tokens obtained from login operations.
+
+For example, you can use a runtime expression to reference a token from a previous authentication step:
+
+```yaml
+arazzo: 1.0.0
+info:
+  title: Example
+  summary: Example of a test suite
+  version: 0.0.1
+sourceDescriptions:
+  - name: ./example.yaml
+    url: https://example.com
+    type: openapi
+workflows:
+  - workflowId: createUser
+    x-speakeasy-test-security:
+      value:
+        apiKey: $steps.authenticate.outputs.token
+    steps:
+      - stepId: authenticate
+        workflowId: authenticate
+        requestBody:
+          contentType: application/json
+          payload: {"username": "trystan.crooks@example.com", "password": "x-env: TEST_PASSWORD"}
+        successCriteria:
+          - condition: $steps.authenticate.outputs.token != ""
+        outputs:
+          token: $steps.authenticate.outputs.token
+      - stepId: create
+        operationId: createUser
+        requestBody:
+          contentType: application/json
+          payload: {"email": "Trystan_Crooks@hotmail.com", "first_name": "Trystan", "last_name": "Crooks", "age": 32, "postal_code": 94110, "metadata": {"allergies": "none", "color": "red", "height": 182, "weight": 77, "is_smoking": true}}
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.header.Content-Type == "application/json"
+          - condition: $response.body#/email == Trystan_Crooks@hotmail.com
+          - condition: $response.body#/postal_code == 94110
+        outputs:
+          id: $response.body#/id
+      - stepId: get
+        operationId: getUser
+        parameters:
+          - name: id
+            in: path
+            value: $steps.create.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.header.Content-Type == "application/json"
+          - condition: $response.body#/email == Trystan_Crooks@hotmail.com
+          - condition: $response.body#/first_name == Trystan
+          - condition: $response.body#/last_name == Crooks
+          - condition: $response.body#/age == 32
+          - condition: $response.body#/postal_code == 94110
+```
+
+In this example:
+- The workflow defines `x-speakeasy-test-security` at the workflow level with `apiKey: $steps.authenticate.outputs.token`
+- The first step (`authenticate`) calls an authentication workflow and captures the token in its outputs
+- All subsequent steps in the workflow will use this dynamically obtained token for authentication
+- The runtime expression `$steps.authenticate.outputs.token` references the token output from the authenticate step
+
+This approach enables complex authentication flows where tokens must be obtained dynamically during test execution, rather than being provided as static values or environment variables.
 
 ## Configuring environment variable provided values for Contract tests
 
