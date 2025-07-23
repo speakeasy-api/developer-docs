@@ -81,7 +81,7 @@ workflows:
             }
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/postal_code == 94110
         outputs:
@@ -94,7 +94,7 @@ workflows:
             value: $steps.create.outputs.id
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/first_name == Trystan
           - condition: $response.body#/last_name == Crooks
@@ -119,7 +119,7 @@ workflows:
               value: $steps.get.outputs.age
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/first_name == Trystan
           - condition: $response.body#/last_name == Crooks
@@ -150,7 +150,7 @@ workflows:
             }
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/first_name == Trystan
           - condition: $response.body#/last_name == Crooks
@@ -529,7 +529,7 @@ workflows:
           payload: #....
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
         outputs:
           id: $response.body#/id # The id field of the response body will be exposed as an output for the next step
@@ -636,7 +636,7 @@ workflows:
           payload: #....
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
         outputs: # Outputs are a map of an output id to a runtime expression that will be used to populate the output
           id: $response.body#/id # json-pointers are used to reference fields within the response body
@@ -651,7 +651,9 @@ The `successCriteria` field of a step is a list of [Criterion Objects](/openapi/
 
 `successCriteria` can be as simple as a single condition testing the status code of the response, or as complex as testing multiple individual fields within the response body.
 
-Speakeasy's implementation currently only supports `simple` criteria and the equality operator `==` for comparing values, and testing status codes, response headers and response bodies.
+Speakeasy's implementation currently only supports `simple` criteria and the equality (`==`) and inequality (`!=`) operators for comparing values, and testing status codes, response headers and response bodies.
+
+**Note:** While the [Arazzo specification](/openapi/arazzo#operators) defines additional operators like `>`, `<`, `>=`, `<=`, `~`, and `!~`, Speakeasy currently only supports `==` and `!=`.
 
 For testing values within the response body, criteria for testing the status code and content type of the response are also required, to help the generator determine which response schema to validate against due to the typed nature of the SDKs.
 
@@ -668,7 +670,7 @@ workflows:
           payload: #....
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           # or
           - context: $response.body
@@ -708,7 +710,7 @@ workflows:
             file: "x-file: some-test-file.txt"
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/octet-stream
+          - condition: $response.header.Content-Type == "application/octet-stream"
           - context: $response.body
             condition: "x-file: some-other-test-file.dat"
             type: simple
@@ -773,29 +775,48 @@ When running tests against a real API, the SDK may need to be configured with se
 
 The `x-speakeasy-test-security` extension allows static values or values pulled from the environment to be used when instantiating an SDK instance and making requests to the API.
 
+**Important:** The keys under `value` must exactly match the names of the `securitySchemes` defined in your OpenAPI document's `components.securitySchemes` section.
+
+For example, if your OpenAPI document defines:
+```yaml
+components:
+  securitySchemes:
+    myApiKeyScheme:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    myBasicAuthScheme:
+      type: http
+      scheme: basic
+    myBearerTokenScheme:
+      type: http
+      scheme: bearer
+```
+
+Then your Arazzo test configuration should reference these exact scheme names:
+
 ```yaml
 arazzo: 1.0.0
 # ...
 x-speakeasy-test-security: # Defined at the top level of the Arazzo file, all workflows will be configured to use the specified security credentials
   value:
-    # The keys in the value map are the names of the security schemes defined in the OpenAPI document.
-    # For simple schemes, the values is for example the API key value required.
-    # For schemes like basic auth or OAuth2 that require multiple values, the value is a map of the required values.
-    apiKey: x-env: TEST_API_KEY # Values can be pulled from the environment
-    basicAuth:
-      username: "test-user" # Or defined as static values
-      password: x-env: TEST_PASSWORD
+    # The keys below MUST match the securitySchemes names from your OpenAPI document
+    myApiKeyScheme: "x-env: TEST_API_KEY" # Values can be pulled from the environment
+    myBasicAuthScheme:
+      username: "test-user" # For schemes requiring multiple values, provide a map
+      password: "x-env: TEST_PASSWORD"
+    myBearerTokenScheme: "x-env: TEST_BEARER_TOKEN"
 workflows:
   - workflowId: some-test
     x-speakeasy-test-security: # Security can be defined/overridden for a specific workflow
       value:
-        apiKey: "test-key"
+        myApiKeyScheme: "test-key"
     # ...
     steps:
       - stepId: step1
         x-speakeasy-test-security: # Or security can be defined/overridden for a specific step
           value:
-            authToken: x-env: TEST_AUTH_TOKEN
+            myBearerTokenScheme: "x-env: TEST_AUTH_TOKEN"
         # ...
       - stepId: step2
         # ...
@@ -820,7 +841,7 @@ workflows:
         requestBody:
           contentType: application/json
           payload: {
-            "email": "x-env: TEST_EMAIL; default, # Provide an environment variable and an optional default value if that env variable is not present.
+            "email": "x-env: TEST_EMAIL; default", # Provide an environment variable and an optional default value if that env variable is not present.
             "first_name": "Trystan",
             "last_name": "Crooks",
             "age": 32,
