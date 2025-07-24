@@ -78,7 +78,7 @@ workflows:
             }
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/postal_code == 94110
         outputs:
@@ -91,7 +91,7 @@ workflows:
             value: $steps.create.outputs.id
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/first_name == Trystan
           - condition: $response.body#/last_name == Crooks
@@ -116,7 +116,7 @@ workflows:
               value: $steps.get.outputs.age
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/first_name == Trystan
           - condition: $response.body#/last_name == Crooks
@@ -147,7 +147,7 @@ workflows:
             }
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           - condition: $response.body#/first_name == Trystan
           - condition: $response.body#/last_name == Crooks
@@ -539,7 +539,7 @@ workflows:
           payload: #....
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
         outputs:
           id: $response.body#/id # The id field of the response body will be exposed as an output for the next step
@@ -650,7 +650,7 @@ workflows:
           payload: #....
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
         outputs: # Outputs are a map of an output id to a runtime expression that will be used to populate the output
           id: $response.body#/id # json-pointers are used to reference fields within the response body
@@ -665,7 +665,9 @@ A step's `successCriteria` field contains a list of [criterion objects](/openapi
 
 The `successCriteria` may be as simple as a single condition testing the status code of the response or as complex as multiple conditions testing various individual fields within the response body.
 
-Speakeasy's implementation currently only supports `simple` criteria and the use of the equality operator `==` for comparing values and for testing status codes, response headers, and response bodies.
+Speakeasy's implementation currently only supports `simple` criteria and the use of the equality (`==`) and inequality (`!=`) operators for comparing values and for testing status codes, response headers, and response bodies.
+
+**Note:** While the [Arazzo specification](/openapi/arazzo#operators) defines additional operators like `>`, `<`, `>=`, `<=`, `~`, and `!~`, Speakeasy currently only supports `==` and `!=`.
 
 To test values within the response body, due to the typed nature of the SDKs, you need criteria for testing the status code and content type of the response to help the generator determine which response schema to validate against.
 
@@ -682,7 +684,7 @@ workflows:
           payload: #....
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/json
+          - condition: $response.header.Content-Type == "application/json"
           - condition: $response.body#/email == Trystan_Crooks@hotmail.com
           # or
           - context: $response.body
@@ -724,7 +726,7 @@ workflows:
             file: "x-file: some-test-file.txt"
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $response.header.Content-Type == application/octet-stream
+          - condition: $response.header.Content-Type == "application/octet-stream"
           - context: $response.body
             condition: "x-file: some-other-test-file.dat"
             type: simple
@@ -787,37 +789,123 @@ generation:
 
 When running tests against a real API, the SDK may need to be configured with security credentials to authenticate with the API. To configure the SDK, add the `x-speakeasy-test-security` extension to the document, workflow, or individual step.
 
-The `x-speakeasy-test-security` extension enables the use of static values or values pulled from the environment for instantiating an SDK instance and making requests to the API.
+The `x-speakeasy-test-security` extension allows static values, values pulled from the environment, or runtime expressions referencing outputs from previous steps to be used when instantiating an SDK instance and making requests to the API.
+
+**Important:** The keys under `value` must exactly match the names of the `securitySchemes` defined in your OpenAPI document's `components.securitySchemes` section.
+
+For example, if your OpenAPI document defines:
+```yaml
+components:
+  securitySchemes:
+    myApiKeyScheme:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    myBasicAuthScheme:
+      type: http
+      scheme: basic
+    myBearerTokenScheme:
+      type: http
+      scheme: bearer
+```
+
+Then your Arazzo test configuration should reference these exact scheme names:
 
 ```yaml
 arazzo: 1.0.0
 # ...
 x-speakeasy-test-security: # Defined at the top level of the Arazzo file, all workflows will be configured to use the specified security credentials
   value:
-    # The keys in the value map are the names of the security schemes defined in the OpenAPI document.
-    # For simple schemes, the values is for example the API key value required.
-    # For schemes like basic auth or OAuth2 that require multiple values, the value is a map of the required values.
-    apiKey: x-env: TEST_API_KEY # Values can be pulled from the environment
-    basicAuth:
-      username: "test-user" # Or defined as static values
-      password: x-env: TEST_PASSWORD
+    # The keys below MUST match the securitySchemes names from your OpenAPI document
+    myApiKeyScheme: "x-env: TEST_API_KEY" # Values can be pulled from the environment
+    myBasicAuthScheme:
+      username: "test-user" # For schemes requiring multiple values, provide a map
+      password: "x-env: TEST_PASSWORD"
+    myBearerTokenScheme: "x-env: TEST_BEARER_TOKEN"
 workflows:
   - workflowId: some-test
     x-speakeasy-test-security: # Security can be defined/overridden for a specific workflow
       value:
-        apiKey: "test-key"
+        myApiKeyScheme: "test-key"
     # ...
     steps:
       - stepId: step1
         x-speakeasy-test-security: # Or security can be defined/overridden for a specific step
           value:
-            authToken: x-env: TEST_AUTH_TOKEN
+            myBearerTokenScheme: "x-env: TEST_AUTH_TOKEN"
         # ...
       - stepId: step2
         # ...
 ```
 
-## Configuring environment variable-provided values for contract tests
+### Using Runtime Expressions for Dynamic Security
+
+The `x-speakeasy-test-security` extension also supports runtime expressions, allowing you to populate security credentials dynamically from the outputs of previous steps. This is particularly useful for workflows that require authentication tokens obtained from login operations.
+
+For example, you can use a runtime expression to reference a token from a previous authentication step:
+
+```yaml
+arazzo: 1.0.0
+info:
+  title: Example
+  summary: Example of a test suite
+  version: 0.0.1
+sourceDescriptions:
+  - name: ./example.yaml
+    url: https://example.com
+    type: openapi
+workflows:
+  - workflowId: createUser
+    x-speakeasy-test-security:
+      value:
+        apiKey: $steps.authenticate.outputs.token
+    steps:
+      - stepId: authenticate
+        workflowId: authenticate
+        requestBody:
+          contentType: application/json
+          payload: {"username": "trystan.crooks@example.com", "password": "x-env: TEST_PASSWORD"}
+        successCriteria:
+          - condition: $steps.authenticate.outputs.token != ""
+        outputs:
+          token: $steps.authenticate.outputs.token
+      - stepId: create
+        operationId: createUser
+        requestBody:
+          contentType: application/json
+          payload: {"email": "Trystan_Crooks@hotmail.com", "first_name": "Trystan", "last_name": "Crooks", "age": 32, "postal_code": 94110, "metadata": {"allergies": "none", "color": "red", "height": 182, "weight": 77, "is_smoking": true}}
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.header.Content-Type == "application/json"
+          - condition: $response.body#/email == Trystan_Crooks@hotmail.com
+          - condition: $response.body#/postal_code == 94110
+        outputs:
+          id: $response.body#/id
+      - stepId: get
+        operationId: getUser
+        parameters:
+          - name: id
+            in: path
+            value: $steps.create.outputs.id
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.header.Content-Type == "application/json"
+          - condition: $response.body#/email == Trystan_Crooks@hotmail.com
+          - condition: $response.body#/first_name == Trystan
+          - condition: $response.body#/last_name == Crooks
+          - condition: $response.body#/age == 32
+          - condition: $response.body#/postal_code == 94110
+```
+
+In this example:
+- The workflow defines `x-speakeasy-test-security` at the workflow level with `apiKey: $steps.authenticate.outputs.token`
+- The first step (`authenticate`) calls an authentication workflow and captures the token in its outputs
+- All subsequent steps in the workflow will use this dynamically obtained token for authentication
+- The runtime expression `$steps.authenticate.outputs.token` references the token output from the authenticate step
+
+This approach enables complex authentication flows where tokens must be obtained dynamically during test execution, rather than being provided as static values or environment variables.
+
+## Configuring environment variable provided values for Contract tests
 
 When running tests against a real API, you may need to fill in certain input values from dynamic environment variables. Use the Speakeasy environment variable extension to do so:
 
@@ -836,7 +924,7 @@ workflows:
         requestBody:
           contentType: application/json
           payload: {
-            "email": "x-env: TEST_EMAIL; default, # Provide an environment variable and an optional default value if that env variable is not present.
+            "email": "x-env: TEST_EMAIL; default", # Provide an environment variable and an optional default value if that env variable is not present.
             "first_name": "Trystan",
             "last_name": "Crooks",
             "age": 32,
