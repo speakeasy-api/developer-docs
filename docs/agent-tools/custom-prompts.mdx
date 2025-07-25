@@ -1,0 +1,185 @@
+---
+title: "Custom Prompts"
+description: "Create custom prompts for your generated servers using Speakeasy extensions"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Custom Prompts
+
+You can use [MCP prompts](https://modelcontextprotocol.io/docs/concepts/prompts) to create reusable prompt templates and workflows for MCP. Custom prompts allow you to define structured interactions that can be invoked by MCP clients.
+
+## Building and registering custom MCP prompts
+
+Below are examples of custom MCP prompts that demonstrate different patterns for prompt creation:
+
+```typescript custom/customPrompts.ts
+import { z } from "zod";
+import { formatResult, PromptDefinition } from "../prompts.js";
+
+const myNameArg = { first_name: z.string(), last_name: z.string() };
+
+export const prompt$aboutMyName: PromptDefinition<typeof myNameArg> = {
+  name: "tell-me-about-my-name-prompt",
+  description: "tell me about the origins of my name",
+  args: myNameArg,
+  prompt: (_client, args, _extra) => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please tell me about the origin of my name first_name: ${args.first_name} last_name: ${args.last_name}`,
+        },
+      },
+    ],
+  }),
+};
+
+const prompt$aboutSpeakeasy: PromptDefinition<undefined> = {
+  name: "tell-me-about-speakeasy",
+  prompt: (_client, _extra) =>
+    formatResult("Please tell me about the company Speakeasy"),
+};
+```
+
+```typescript server.extensions.ts
+import {
+  prompt$aboutMyName,
+  prompt$aboutSpeakeasy,
+} from "./custom/customPrompts.js";
+import { Register } from "./extensions.js";
+
+export function registerMCPExtensions(register: Register): void {
+  register.prompt(prompt$aboutMyName);
+  register.prompt(prompt$aboutSpeakeasy);
+}
+```
+
+## Prompt patterns
+
+### Simple prompts
+
+For basic prompts without parameters:
+
+```typescript
+export const prompt$helpDesk: PromptDefinition<undefined> = {
+  name: "help-desk-assistant",
+  description: "A helpful customer service assistant",
+  prompt: (_client, _extra) => ({
+    messages: [
+      {
+        role: "system",
+        content: {
+          type: "text",
+          text: "You are a helpful customer service assistant. Be polite, professional, and solution-oriented.",
+        },
+      },
+    ],
+  }),
+};
+```
+
+### Parameterized prompts
+
+For prompts that accept arguments:
+
+```typescript
+const codeReviewArgs = { 
+  language: z.string(), 
+  code: z.string(),
+  focus: z.enum(["security", "performance", "style", "all"]).optional()
+};
+
+export const prompt$codeReview: PromptDefinition<typeof codeReviewArgs> = {
+  name: "code-review-prompt",
+  description: "Review code for best practices and issues",
+  args: codeReviewArgs,
+  prompt: (_client, args, _extra) => ({
+    messages: [
+      {
+        role: "system",
+        content: {
+          type: "text",
+          text: `You are an expert ${args.language} developer. Review the following code focusing on ${args.focus || "all aspects"}.`,
+        },
+      },
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please review this ${args.language} code:\n\n\`\`\`${args.language}\n${args.code}\n\`\`\``,
+        },
+      },
+    ],
+  }),
+};
+```
+
+### Multi-step prompts
+
+For complex workflows with multiple interactions:
+
+```typescript
+const troubleshootArgs = { 
+  issue: z.string(),
+  system: z.string(),
+  urgency: z.enum(["low", "medium", "high"])
+};
+
+export const prompt$troubleshoot: PromptDefinition<typeof troubleshootArgs> = {
+  name: "troubleshooting-workflow",
+  description: "Systematic troubleshooting workflow",
+  args: troubleshootArgs,
+  prompt: (_client, args, _extra) => ({
+    messages: [
+      {
+        role: "system",
+        content: {
+          type: "text",
+          text: `You are a technical support specialist. Follow a systematic approach to troubleshoot ${args.system} issues.`,
+        },
+      },
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Issue: ${args.issue}\nSystem: ${args.system}\nUrgency: ${args.urgency}\n\nPlease provide step-by-step troubleshooting guidance.`,
+        },
+      },
+    ],
+  }),
+};
+```
+
+## Setting up MCP extensions
+
+To register your custom prompts, add them to your `server.extensions.ts` file:
+
+```typescript server.extensions.ts
+import { Register } from "./extensions.js";
+import { 
+  prompt$helpDesk,
+  prompt$codeReview,
+  prompt$troubleshoot 
+} from "./custom/customPrompts.js";
+
+export function registerMCPExtensions(register: Register): void {
+  register.prompt(prompt$helpDesk);
+  register.prompt(prompt$codeReview);
+  register.prompt(prompt$troubleshoot);
+}
+```
+
+After adding the `server.extensions.ts` file and defining your custom prompts, execute `speakeasy run` to regenerate your MCP server with the new prompts.
+
+## Best practices
+
+- **Use clear, descriptive names** for your prompts that indicate their purpose
+- **Provide detailed descriptions** to help users understand when to use each prompt
+- **Validate input parameters** using Zod schemas for type safety
+- **Structure messages logically** with appropriate roles (system, user, assistant)
+- **Handle edge cases** gracefully with fallback content
+- **Test prompts thoroughly** with various input combinations
+- **Keep prompts focused** on specific tasks rather than trying to handle everything
+- **Use consistent formatting** for similar types of prompts across your server

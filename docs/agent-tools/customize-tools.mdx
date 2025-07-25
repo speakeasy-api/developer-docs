@@ -1,0 +1,107 @@
+---
+title: "Customize Tools"
+description: "Learn how to customize tools for your generated servers using the x-speakeasy-mcp OpenAPI extension"
+---
+
+import { Callout, CodeWithTabs } from "@/mdx/components";
+
+# Customize Tools
+
+You can customize how your API operations are exposed as MCP tools using the `x-speakeasy-mcp` OpenAPI extension. This allows you to control tool names, descriptions, scopes, and whether specific operations should be included in your MCP server.
+
+## Set the configuration options
+
+The `x-speakeasy-mcp` extension can be used on any operation to customize the MCP tool:
+
+```yaml openapi.yaml
+paths:
+  /products:
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create product
+      description: API endpoint for creating a product in the CMS
+      x-speakeasy-mcp:
+        disabled: false
+        name: create-product
+        scopes: [write, ecommerce]
+        description: |
+          Creates a new product using the provided form. The product name should
+          not contain any special characters or harmful words.
+      # ...
+```
+
+### `disabled` <small>(_optional_, default: `false`)</small>
+
+If set to `true`, the generator will not create the MCP tool for this operation.
+
+### `name` <small>(_optional_)</small>
+
+This is the name of the MCP tool. The default value is derived from `operationId`, `tags`, `x-speakeasy-name-override`, and `x-speakeasy-name-group`. In the example above, the default name would be `products_create-product`.
+
+### `scopes` <small>(_optional_)</small>
+
+You can use scopes to tag tools so that users can choose which set of tools they want to mount when the MCP server starts. For example, tagging relevant operations with a `read` scope allows users to start a server in read-only mode.
+
+### `description` <small>(_optional_)</small>
+
+Each MCP tool description is passed as context to MCP clients and language models. The default value is the OpenAPI operation summary and description. It's a good practice to review and customize these descriptions for better context.
+
+## Use overlays
+
+[Overlays](/openapi/overlays) are a convenient way you can add the `x-speakeasy-mcp` extension to existing OpenAPI documents without modifying them. To create an Overlay file, you can use the Speakeasy [Overlay Playground](https://overlay.speakeasy.com/).
+
+For example, you can add scopes based on HTTP methods:
+
+```yaml overlay.yaml
+overlay: 1.0.0
+info:
+  title: Add MCP scopes
+  version: 0.0.0
+actions:
+  - target: $.paths.*["get","head","query"]
+    update: { "x-speakeasy-mcp": { "scopes": ["read"] } }
+
+  - target: $.paths.*["post","put","delete","patch"]
+    update: { "x-speakeasy-mcp": { "scopes": ["write"] } }
+```
+
+## Advanced usage
+
+### Specify scopes at runtime
+
+When starting the MCP server, you can specify which scopes to include:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["-y", "--", "your-sdk-package", "mcp", "start", "--scope", "read"]
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```
+
+This example configuration only mounts tools tagged with the `read` scope, creating a read-only server.
+
+### Specify individual tools
+
+You can further limit the subset of tools mounted on an MCP server by specifying individual tool names:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["-y", "--", "your-sdk-package", "mcp", "start", "--tool", "my_tool_1", "--tool", "my_tool_2"]
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```

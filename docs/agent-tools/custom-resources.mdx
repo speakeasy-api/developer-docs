@@ -1,0 +1,138 @@
+---
+title: "Custom Resources"
+description: "Build custom resources for your generated servers using Speakeasy extensions"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Custom Resources
+
+An [MCP resource](https://modelcontextprotocol.io/docs/concepts/resources) represents any kind of data source that an MCP server can make available to clients. Each resource is identified by a unique URI and can contain either text or binary data.
+
+Resources can encompass a variety of things, including:
+
+- File contents (local or remote)
+- Database records
+- Screenshots and images
+- Static API responses
+
+## Setting up MCP extensions
+
+To set up MCP extensions, create a new file under the `mcp-server` directory and name it `server.extensions.ts`. The file should expose the following function contract exactly:
+
+```typescript server.extensions.ts
+import { Register } from "./extensions.js";
+
+export function registerMCPExtensions(register: Register): void {
+  register.tool(...);
+  register.resource(...);
+  register.prompt(...);
+}
+```
+
+This function can be used to register custom tools, resources, and prompts on a generated MCP server.
+
+After adding the `server.extensions.ts` file and defining the custom tools and resources, execute `speakeasy run`.
+
+## Building and registering custom MCP resources
+
+Below is an example of a custom MCP resource that embeds a local PDF file as a resource in an MCP server.
+
+The custom resource must fit the `ResourceDefinition` or `ResourceTemplateDefinition` type exposed by Speakeasy and define a `read` function for reading data from the defined URI.
+
+Speakeasy exposes a `formatResult` utility function from `resources.ts` that you can use to ensure the result is returned in the proper MCP format. Using this function is optional, as long as the return matches the required type.
+
+```typescript custom/aboutSpeakeasyResource.ts
+import fs from "node:fs/promises";
+import { formatResult, ResourceDefinition } from "../resources.js";
+
+export const resource$aboutSpeakeasy: ResourceDefinition = {
+  name: "About Speakeasy",
+  description: "Reads the about Speakeasy PDF",
+  resource: "file:///Users/ryanalbert/about_speakeasy.pdf",
+  scopes: [],
+  read: async (_client, uri, _extra) => {
+    try {
+      const pdfContent = await fs.readFile(uri, null);
+      return formatResult(pdfContent, uri, {
+        mimeType: "application/pdf",
+      });
+    } catch (err) {
+      console.error(err);
+      return {
+        contents: [
+          {
+            isError: true,
+            uri: uri.toString(),
+            mimeType: "application/json",
+            text: `Failed to read PDF file: ${String(err)}`,
+          },
+        ],
+      };
+    }
+  },
+};
+```
+
+```typescript server.extensions.ts
+import { resource$aboutSpeakeasy } from "./custom/aboutSpeakeasyResource.js";
+import { Register } from "./extensions.js";
+
+export function registerMCPExtensions(register: Register): void {
+  register.resource(resource$aboutSpeakeasy);
+}
+```
+
+## Resource types and patterns
+
+### Static resources
+
+For resources that don't change based on parameters, use static resource definitions:
+
+```typescript
+export const resource$staticConfig: ResourceDefinition = {
+  name: "Application Config",
+  description: "Static application configuration",
+  resource: "config://app/settings",
+  scopes: [],
+  read: async (_client, uri, _extra) => {
+    const config = {
+      version: "1.0.0",
+      environment: "production",
+      features: ["auth", "analytics"]
+    };
+    return formatResult(JSON.stringify(config), uri, {
+      mimeType: "application/json",
+    });
+  },
+};
+```
+
+### Dynamic resources
+
+For resources that change based on parameters, use resource templates:
+
+```typescript
+export const resource$userProfile: ResourceTemplateDefinition = {
+  uriTemplate: "user://{userId}/profile",
+  name: "User Profile",
+  description: "User profile information",
+  mimeType: "application/json",
+  read: async (_client, uri, _extra) => {
+    const userId = extractUserIdFromUri(uri);
+    const profile = await fetchUserProfile(userId);
+    return formatResult(JSON.stringify(profile), uri, {
+      mimeType: "application/json",
+    });
+  },
+};
+```
+
+## Best practices
+
+- Use clear, descriptive URI schemes like `file://`, `config://`, or `user://`
+- Keep resource data consistent and read-only
+- Validate inputs or file paths to prevent injections or errors
+- Set correct MIME types so clients can parse content properly
+- Handle errors gracefully and return meaningful error messages
+- Use the `formatResult` utility for consistent response formatting
