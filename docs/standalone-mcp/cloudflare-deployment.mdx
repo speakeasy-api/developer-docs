@@ -1,0 +1,136 @@
+---
+title: "Deploy to Cloudflare Workers"
+description: "Deploy your MCP server to Cloudflare Workers using Speakeasy's built-in deployment configuration"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Deploy to Cloudflare Workers
+
+Deploy your MCP server to Cloudflare Workers for global edge distribution and zero-ops scaling using Speakeasy's built-in Cloudflare deployment configuration.
+
+## Prerequisites
+
+Before deploying to Cloudflare Workers:
+
+- [Generate an MCP server](/docs/agent-tools/build-server) using Speakeasy
+- Install the [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
+- Have a Cloudflare account
+
+## Configuration
+
+Enable Cloudflare Worker deployment by adding the following configuration to your `.speakeasy/gen.yaml` file:
+
+```yaml
+mcp-typescript:
+  cloudflareEnabled: true
+  cloudflareURL: https://your-worker-name.your-subdomain.workers.dev
+```
+
+### Configuration options
+
+- **`cloudflareEnabled`**: Set to `true` to enable Cloudflare Worker deployment configuration
+- **`cloudflareURL`**: The URL where your MCP server will be deployed. This should match your Cloudflare Worker's URL
+
+<Callout type="info">
+  The `cloudflareURL` determines the endpoint where your MCP server will be
+  accessible after deployment. Make sure this matches your intended Worker
+  domain.
+</Callout>
+
+## Generating the deployment
+
+After configuring your `gen.yaml` file, regenerate your SDK to include Cloudflare Worker deployment files:
+
+```bash
+speakeasy run
+```
+
+This creates an additional file in your generated SDK for the Cloudflare Worker.
+
+## Deployment process
+
+### 1. Authenticate with Cloudflare
+
+```bash
+npx wrangler login
+```
+
+### 2. Deploy your MCP server
+
+Navigate to your generated SDK directory and deploy:
+
+```bash
+npx wrangler deploy
+```
+
+### 3. Verify deployment
+
+Your MCP server is now running at the URL specified in your `cloudflareURL` configuration. You can test the deployment by accessing the URL via curl:
+
+```bash
+curl https://your-worker-name.your-subdomain.workers.dev/
+```
+
+or in a browser window where the MCP Server configuration will appear.
+
+## Using the deployed server
+
+Configure your MCP client to connect to the deployed Cloudflare Worker. Different clients use different configuration formats:
+
+### Claude Code
+
+Use the Claude Code CLI to add your deployed MCP server:
+
+```bash
+claude mcp add --transport sse MyAPI https://your-worker-name.your-subdomain.workers.dev/sse \
+--header "X-API-Key: your-api-key-here"
+```
+
+### Windsurf
+
+Add the server configuration to your Windsurf MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "serverUrl": "https://your-worker-name.your-subdomain.workers.dev/sse",
+      "headers": {
+        "X-API-Key": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+### Cursor
+
+Configure your MCP server in Cursor's settings:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "url": "https://your-worker-name.your-subdomain.workers.dev/mcp",
+      "headers": {
+        "X-API-Key": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+<Callout type="info">
+  Note the different endpoint paths: Claude Code and Windsurf use `/sse` for
+  server-sent events, while Cursor uses `/mcp` for the standard MCP protocol
+  endpoint.
+</Callout>
+
+### Updating your deployment
+
+To update your deployed MCP server:
+
+1. Make changes to your OpenAPI specification
+2. Regenerate your SDK with `speakeasy run`
+3. Redeploy with `npx wrangler deploy`
