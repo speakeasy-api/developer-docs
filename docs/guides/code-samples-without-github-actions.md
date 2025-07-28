@@ -11,6 +11,7 @@ Speakeasy can automatically generate code samples for your OpenAPI specification
 - Speakeasy CLI installed
 - An OpenAPI specification
 - A Speakeasy account and API key
+- **CI environment**: The generation must run from a CI environment or with the `CI_ENABLED` environment variable set to `true`
 
 ## Step-by-step process
 
@@ -40,13 +41,13 @@ This command:
 
 ### 3. Promote code samples to main
 
-The critical step for enabling automated code samples is to tag your generated code samples with the `main` tag:
+The critical step for enabling automated code samples is to tag both your source specification and generated code samples with the `main` tag:
 
 ```bash
-speakeasy tag promote -c my-target-name -t main
+speakeasy tag promote -s my-source-name -c my-target-name -t main
 ```
 
-This command marks your code samples as "official" so they can be incorporated into the public URL. Similar to how the `main` branch in GitHub represents the production-ready version of your code, the `main` tag in Speakeasy indicates these are the production-ready code samples that should be publicly available. Replace `my-target-name` with the name of your target as defined in your workflow configuration.
+This command tags both the source specification (`-s my-source-name`) and the generated code samples (`-c my-target-name`) as "official" so they can be incorporated into the public URL. Similar to how the `main` branch in GitHub represents the production-ready version of your code, the `main` tag in Speakeasy indicates these are the production-ready specifications and code samples that should be publicly available. Replace `my-source-name` and `my-target-name` with the names as defined in your workflow configuration.
 
 ### 4. Access the public URL
 
@@ -68,7 +69,7 @@ Once you have the public URL, you can integrate it with various documentation pr
 For a fully automated workflow without GitHub Actions:
 
 1. Create a script or CI pipeline that runs `speakeasy run` to generate SDKs and code samples
-2. Add `speakeasy tag promote -c my-target-name -t main` to tag the generated code samples
+2. Add `speakeasy tag promote -s my-source-name -c my-target-name -t main` to tag both the source specification and generated code samples
 3. The public URL will automatically update with the latest code samples
 
 ### Why use CLI tagging instead of GitHub Actions?
@@ -90,12 +91,15 @@ Here's a simple bash script example that could be used in a custom CI pipeline:
 # Install Speakeasy CLI if needed
 # curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
+# Set CI environment variable if not running in CI
+export CI_ENABLED=true
+
 # Generate SDKs and code samples
 speakeasy run
 
-# Tag code samples as main
-speakeasy tag promote -c my-python-target -t main
-speakeasy tag promote -c my-typescript-target -t main
+# Tag both source specification and code samples as main
+speakeasy tag promote -s my-source-name -c my-python-target -t main
+speakeasy tag promote -s my-source-name -c my-typescript-target -t main
 
 echo "Code samples have been generated and tagged. They will be available at the public URL in the Speakeasy dashboard."
 ```
