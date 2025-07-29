@@ -1,0 +1,146 @@
+---
+title: "Why Less is More for MCP"
+description: "Understand the benefits of curating your MCP tools"
+---
+
+# MCP Tools: Less is more
+
+While building MCP servers, it's often tempting to include every single tool you think might be useful to someone someday. But [researchers at Southern Illinois University](https://arxiv.org/pdf/2411.15399) have found that this (lack of) strategy confuses LLMs and leads to worse performance.
+
+We recommend a more curated approach. By curating smaller MCP servers per use case, you can help your users install the MCP servers they need without overwhelming the LLM or depending on users to know how to curate their own MCP tools for each use case.
+
+## What curated MCP servers look like
+
+The idea of curating MCP servers is to create smaller, focused servers that contain only the tools relevant to a specific use case or department. This reduces the cognitive load on users and helps LLMs perform better by limiting the number of tools they need to consider at any one time.
+
+Take a hypothetical example of a company that provides an MCP server for their internal customers. This server should feature tools used by Sales, Marketing, and Customer Support. Tools could include:
+
+- `/getCustomer` - a tool to retrieve customer information
+- `/getProductInfo` - a tool to retrieve product details
+- `/getSalesData` - a tool to retrieve sales statistics
+- `/getMarketingCampaigns` - a tool to retrieve marketing campaign details
+- `/getSupportTickets` - a tool to retrieve customer support tickets
+- `/getFeedback` - a tool to retrieve customer feedback
+
+The naive approach would be to create a single MCP server that includes all these tools.
+
+What we're suggesting instead is to create separate MCP servers for each department:
+
+- **Sales MCP Server**: Contains tools like `/getCustomer`, `/getProductInfo`, and `/getSalesData`.
+- **Marketing MCP Server**: Contains tools like `/getMarketingCampaigns` and `/getProductInfo`.
+- **Customer Support MCP Server**: Contains tools like `/getSupportTickets` and `/getFeedback`.
+
+This way, each MCP server is tailored to the specific needs of its users, reducing confusion and improving the performance of the LLMs that interact with these tools.;
+
+Here's what that might look like in practice:
+
+![Diagram comparing two MCP server approaches. Top section labeled with red text Single Monolithic Server Bad Approach shows one large server containing 12 mixed tools including getCustomer, getProductInfo, getSalesData, getMarketingCampaigns, getSupportTickets, getFeedback, updateCustomerRecord, createSalesOpportunity, scheduleMarketingEmail, escalateSupportTicket, generateSalesReport, and trackCampaignMetrics. Bottom section labeled with green text Curated Server Approach (Recommended) shows three smaller focused servers: Sales MCP containing 6 sales-specific tools, Marketing MCP containing 6 marketing-focused tools, and Support MCP containing 7 support-related tools. Each curated server includes relevant getCustomer and getProductInfo tools for their specific context. Green text below each server explains that teams get only relevant tools. The diagram uses red borders for the problematic approach and green borders for the recommended solution, conveying a clear instructional tone about best practices for MCP server organization.](../assets/less-is-more/mcp-curated.svg?url)
+
+## Why curated MCP servers are better
+
+Recent research on "Tool Loadout", the practice of selecting only relevant tool definitions for a given context, reveals concrete numbers about when LLMs start to struggle with too many options.
+
+### The research: when tool confusion kicks in
+
+Drew Breunig, in his article "[How to Fix Your Context](https://www.dbreunig.com/2025/06/26/how-to-fix-your-context.html#:~:text=When%20prompting%20DeepSeek,tool%20selection%20accuracy)" discusses two papers that found these thresholds:
+
+For large models (like DeepSeek-v3):
+
+- **30 tools:** The critical threshold where tool descriptions begin to overlap and create confusion.
+- **100+ tools:** Models are virtually guaranteed to fail at tool selection tasks.
+- **3x improvement:** Using RAG techniques to keep tool count under 30 resulted in dramatically better tool selection accuracy.
+
+For smaller models (like Llama 3.1 8B):
+
+- **19 tools:** The sweet spot where models succeed at benchmark tasks.
+- **46 tools:** The failure point where the same models fail the same benchmarks.
+- **44% improvement:** Dynamic tool selection improved performance when the tool count was reduced.
+
+### Real-world testing: The Dog API example
+
+To demonstrate this principle in action, we created a practical test using the [Dog CEO API](https://dog.ceo/) with Gram-hosted MCP servers. The results clearly show how tool count affects LLM performance.
+
+We created an OpenAPI document for the Dog API, with an endpoint per dog breed. The full API had 107 dog breeds, so our OpenAPI document has 107 get operations.
+
+We then uploaded the OpenAPI document to Gram and created a single MCP server with all 107 tools, and installed this remote MCP server in Claude Desktop.
+
+On our very first test using Claude Sonnet 3.5, the LLM halucinated an endpoint for Golden Retrievers, when in fact there is only a single Retriever endpoint. Although later tests using Claude Code and Claude Desktop with different models yielded better results, the initial confusion was evident.
+
+The effect of 107 tools in one server caused Claude Desktop to frequently stop responding after one sentence with a generic error:
+
+> Claude's response was interrupted. This can be caused by network problems or exceeding the maximum conversation length. Please contact support if the issue persists.
+
+![Claude Desktop interface displaying an error message in the chat area. The main content shows a conversation where Claude responds with I'll get four different dog images for you using the available tools, followed by a loading spinner. Below that is a red warning triangle icon next to an error message stating Claudes response was interrupted. This can be caused by network problems or exceeding the maximum conversation length. Please contact support if the issue persists. The interface has a dark theme with the characteristic Claude branding and shows the conversation was interrupted mid-response, demonstrating the performance issues that occur when an LLM is overwhelmed with too many tool options.](../assets/less-is-more/claude-network-issue.png)
+
+Next, we decided to test the same MCP server using a smaller model on LM Studio. We used the `qwen/qwen3-1.7b` model, which is trained specifically for tool calling.
+
+With the same 107 tools, the model struggled to select a tool most of the time. It halucinated incorrect tool names based on patterns it recognized in the tool names.
+
+![LM Studio interface showing a conversation where the qwen3-1.7b model fails to use correct tool names when presented with 107 dog breed API tools. The model attempts to call openapi_fetch_random_springer_photo and openapi_fetch_random_poodle_photo but receives error messages stating Cannot find tool with name followed by the attempted tool calls. The interface shows multiple failed tool call attempts in red error text, demonstrating how too many available tools causes smaller models to hallucinate incorrect function names.](/assets/less-is-more/lm-studio-107-tools-qwen.png)
+
+We then created several smaller MCP servers with fewer tools, each containing only a subset of the dog breeds. We tested these servers with the same `qwen/qwen3-1.7b` model in LM Studio.
+
+First, we created a server with 40 tools, which included a random selection of dog breeds. The model was able to successfully call three out of four tools, but still halucinated one endpoint.
+
+![LM Studio interface displaying a conversation where the qwen3-1.7b model successfully uses correct tool names for three of four tool calls. It halucinated one endpoint.](/assets/less-is-more/lm-studio-40-tools-qwen.png)
+
+Next, we created a server with 20 tools, which included a mixture of random dog breeds. The model got 19 out of 20 tool calls correct, with only one halucinated tool call.
+
+![LM Studio interface showing a successful conversation where the qwen3-1.7b model correctly uses all tool names when presented with only 20 dog breed API tools. The interface displays only one hallucinated tool call, demonstrating improved performance when the number of available tools is reduced to an optimal range for smaller language models.](/assets/less-is-more/lm-studio-20-tools-qwen.png)
+
+Finally, we created two servers with only 10 carefully selected tools each. One which included the most common dog breeds, and another for rare dog breeds. The model successfully retrieved images of four different dog breeds with correct tool names and no errors.
+
+![LM Studio interface showing a conversation where the qwen3-1.7b model successfully retrieves images of four different dog breeds with correct tool names when presented with only 10 carefully selected API tools. The interface displays clean successful tool calls for openapi_retrieve_vizsla_image, openapi_show_terrier_image, openapi_find_dachshund_photo, and openapi_fetch_corgi_photo without any error messages. The conversation shows the model providing a helpful response listing Vizsla: Image Link, Terrier: Image Link, Dachshund: Image Link, and Corgi: Image Link, demonstrating optimal performance when the number of available tools is reduced to a manageable set for smaller language models.](/assets/less-is-more/lm-studio-10-tools-qwen.png)
+
+We then created a new conversation with both the rare and common dog breed servers installed. These servers have ten tools each, but they are focused on different sets of dog breeds. The model was able to successfully use tools from both servers without any errors.
+
+![LM Studio interface displaying a conversation where the qwen3-1.7b model successfully uses MCP tools from multiple curated servers. The interface shows clean tool calls to different specialized servers including one for rare breeds and one for common breeds;. The conversation demonstrates how splitting tools across multiple focused MCP servers allows smaller models to maintain accuracy while accessing a broader range of functionality through targeted, domain-specific tool sets.](/assets/less-is-more/lm-studio-split-tools-qwen.png)
+
+### Our test results
+
+We know this isn't an exhaustive test, nor is it scientific in any way. But this method demonstrates how you can quickly set up tests to compare the performance of LLMs with different tool counts and configurations.
+
+Here's a summary of our findings:
+
+**With 107 tools**, both large and small models struggled to select the correct tools, leading to frequent errors and halucinations.
+
+**With 20 tools**, the smaller model got 19 out of 20 tool calls correct, with only one halucinated tool call.
+
+**With 10 tools**, the model successfully retrieved images of four different dog breeds with correct tool names and no errors.
+
+And most surprisingly, when **20 tools were split across two focused** servers, the model was able to successfully use tools from both servers without any errors.
+
+This shows that by curating MCP servers to contain only the most relevant tools for a specific use case, we can significantly improve the performance of LLMs, especially smaller models.
+
+### Benefits beyond accuracy
+
+From our testing with Qwen 3.1 1.7B, we found that curating MCP servers improves accuracy and dramatically speeds up the response time and thinking time of the model. Parsing the prompt, selecting the right tools, and generating a response all happen much faster when the model has fewer tools to consider. This is especially important for real-time applications where response time is critical.
+
+## How to implement curated MCP servers
+
+We recommend following these steps to implement curated MCP servers:
+
+### 1. Identify use cases
+
+Start by identifying the specific use cases or departments that will benefit from their own MCP servers. This could be based on job roles, projects, or specific tasks.
+
+### 2. Select relevant tools per use case
+
+For each use case, select only the tools that are relevant to that specific context. Avoid including tools that are not directly applicable to the tasks at hand.
+
+### 3. Create focused MCP servers
+
+Create separate MCP servers for each use case, ensuring that each server contains only the tools selected in the previous step. This will help reduce confusion and improve performance.
+
+### 4. Test and iterate
+
+Use the same approach as our Dog API example:
+
+- Create test scenarios for your use cases.
+- Compare performance between monolithic and curated approaches.
+- Measure both accuracy and response time.
+- Gather user feedback on ease of use.
+
+## We're here to help
+
+At Gram, we understand the importance of curating MCP servers for optimal performance. If you think creating curated MCP servers seems like too much work, think again! Curating tools for specific use cases is so straightforward with Gram's Toolkit builder, that we didn't think it necesary to include a step-by-step guide here. It really is as simple as ticking the boxes for the tools you want to include in your MCP server.
