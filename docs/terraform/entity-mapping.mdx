@@ -141,11 +141,13 @@ The `x-speakeasy-entity-operation` annotation specifies CRUD (create, read, upda
 
 ### Behavior of Operations
 
-- `Entity:create` makes the entity a Terraform resource.
-- `Entity:read` ensures consistency with Terraform state, updates attributes, and generates a data source.
-- `Entity:update` provides update support for the resource. Without it, any attribute change requires resource replacement (`ForceNew`).
-- `Entity:delete` enables deletion of the resource. Without it, no action is taken on deletion.
-- `Entity:create,update` **(idempotent operations)** indicates the API is idempotent. Combine these operations to allow the same API call to create new objects and update existing ones, depending on attribute changes.
+- `Entity#create` makes the entity a Terraform resource.
+- `Entity#read` ensures consistency with Terraform state, updates attributes, and generates a data source.
+- `Entity#update` provides update support for the resource. Without it, any attribute change requires resource replacement (`ForceNew`).
+- `Entity#delete` enables deletion of the resource. Without it, no action is taken on deletion.
+- `Entity#create,update` **(idempotent operations)** indicates the API is idempotent. Combine these operations to allow the same API call to create new objects and update existing ones, depending on attribute changes.
+
+In this example, a Pet managed resource with full create, read, update, and delete lifecycle and Pet data resource (due to `Pet#read`) are defined:
 
 ```yaml
 paths:
@@ -171,6 +173,33 @@ paths:
         - pet
       summary: Delete the pet 
       x-speakeasy-entity-operation: Pet#delete
+```
+
+<Callout title="Note" type="info">
+  Terraform generation automatically handles pagination implementation details
+  via the [`x-speakeasy-pagination` extension](/docs/customize/runtime/pagination).
+  This includes paging through all responses and removing unnecessary pagination
+  handling properties from the schema.
+</Callout>
+
+In this example, an automatically paginated Pets data resource is defined:
+
+```yaml
+paths:
+  /pet:
+    get:
+      tags:
+        - pet
+      summary: Lists all pets
+      x-speakeasy-entity-operation: Pets#read
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: page
+            in: parameters
+            type: page
+        outputs:
+          results: $.results
 ```
 
 ### Multiple API Operations for One Resource
