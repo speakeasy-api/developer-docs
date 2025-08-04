@@ -24,60 +24,13 @@ To build an MCP server using Speakeasy:
 
 2. **Run Speakeasy quickstart**:
    ```bash
-   speakeasy quickstart
+   speakeasy quickstart --mcp
    ```
 
-3. **Generate an MCP server**:
-   ```bash
-   What would you like to generate?
-    Software Development Kit (SDK)
-    Terraform Provider
-    > Model Context Protocol (MCP) Server
-   ```
-
-4. **Indicate whether you plan to deploy your server on Cloudflare**:
+3. **Indicate whether you plan to deploy your server on Cloudflare**:
    [Cloudflare](https://developers.cloudflare.com/agents/guides/remote-mcp-server/) is a popular choice for hosting MCP servers. If selected, a Cloudflare Worker config file will be generated with your MCP server code. This will make deploying your server to Cloudflare Worker easy.
 
 This creates a TypeScript-based MCP server in the specified directory ready to be deployed into production.
-
-## Desktop Extension (DXT) Generation
-
-Speakeasy automatically generates [Anthropic Desktop Extensions (.dxt)](https://github.com/anthropics/dxt) as part of standalone MCP generation. Desktop Extensions provide a packaged format for distributing MCP servers that can be easily installed and managed in Claude Desktop and other MCP-compatible clients.
-
-### Automatic DXT Creation
-
-When generating an MCP server, Speakeasy automatically creates a DXT package alongside your TypeScript server code. The DXT includes:
-
-- A `manifest.json` file with metadata describing your MCP server
-- All necessary server files packaged for distribution
-- Tool descriptions and parameters automatically inferred from your OpenAPI specification
-- Icon and branding assets (if provided)
-
-### DXT Manifest Customization
-
-You can customize the generated DXT manifest through the `gen.yaml` configuration file using the `mcp-typescript.dxtManifestOverlay` key. This follows the [DXT Manifest specification](https://github.com/anthropics/dxt/blob/main/MANIFEST.md).
-
-```yaml
-targets:
-  mcp-typescript:
-    dxtManifestOverlay:
-      icon: "https://example.com/my-icon.png"
-      displayName: "My Custom API Tools"
-      description: "Custom description for my MCP server"
-      version: "1.0.0"
-```
-
-### DXT Manifest Population
-
-The DXT manifest is automatically populated using a convention-over-configuration approach:
-
-- **Tool definitions**: Automatically inferred from OpenAPI operations
-- **Parameters**: Derived from OpenAPI parameters and request schemas  
-- **Descriptions**: Extracted from OpenAPI operation summaries and descriptions
-- **Icon**: Automatically detected by searching for `.png` files in your project
-- **Metadata**: Pulled from your `gen.yaml` configuration and OpenAPI info section
-
-This ensures the DXT always remains synchronized with your generated MCP server, maintaining a shared source of truth between the server implementation and its distribution package.
 
 ## Example server code
 
@@ -194,33 +147,9 @@ The generated MCP server includes a comprehensive file structure with TypeScript
 
 ## Run your MCP server locally
 
-### Using the Generated DXT
+### Local Development Setup
 
-The easiest way to test your MCP server locally is to use the generated DXT package. Claude Desktop and other MCP clients can load DXT files directly:
-
-1. **Locate your generated DXT file** in the output directory (typically with a `.dxt` extension)
-2. **Install the DXT** in your MCP client following the client's installation process
-3. **Configure environment variables** if your server requires authentication
-
-### Traditional MCP Configuration
-
-You can also configure your MCP server to run locally using traditional MCP configuration:
-
-```json
-{
-  "mcpServers": {
-    "MyAPI": {
-      "command": "npx",
-      "args": ["-y", "--", "your-sdk-package", "mcp", "start"],
-      "env": {
-        "API_TOKEN": "your-api-token-here"
-      }
-    }
-  }
-}
-```
-
-For local development:
+For local development and debugging, you can run your MCP server directly from the generated code:
 
 ```json
 {
@@ -236,6 +165,40 @@ For local development:
 }
 ```
 
+This configuration allows you to:
+- Debug your server code directly
+- Make real-time changes during development
+- Test API integrations locally
+- Validate tool functionality before distribution
+
+### Testing with Published Package
+
+Once you've published your MCP server to npm (following our [SDK Publishing Guide](/docs/publish-sdk)), you can test using the npm package format that will be used in production:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["your-npm-package@latest"],
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```
+
+Note: You must first publish your package to npm before you can test it using this configuration.
+
+### Using the Generated DXT
+
+For the most user-friendly testing experience, use the generated DXT package. Claude Desktop and other MCP clients can load DXT files directly:
+
+1. **Locate your generated DXT file** in the output directory (typically with a `.dxt` extension)
+2. **Install the DXT** in your MCP client following the client's installation process
+3. **Configure environment variables** if your server requires authentication
+
 ## Advanced configuration
 
 ### Specify scopes at runtime
@@ -247,7 +210,7 @@ When starting the MCP server, you can specify which scopes to include:
   "mcpServers": {
     "MyAPI": {
       "command": "npx",
-      "args": ["-y", "--", "your-sdk-package", "mcp", "start", "--scope", "read"],
+      "args": ["your-npm-package@latest", "--scope", "read"],
       "env": {
         "API_TOKEN": "your-api-token-here"
       }
@@ -267,7 +230,7 @@ You can further limit the subset of tools mounted on an MCP server by specifying
   "mcpServers": {
     "MyAPI": {
       "command": "npx",
-      "args": ["-y", "--", "your-sdk-package", "mcp", "start", "--tool", "my_tool_1", "--tool", "my_tool_2"],
+      "args": ["your-npm-package@latest", "--tool", "my_tool_1", "--tool", "my_tool_2"],
       "env": {
         "API_TOKEN": "your-api-token-here"
       }
@@ -276,31 +239,82 @@ You can further limit the subset of tools mounted on an MCP server by specifying
 }
 ```
 
-## Distribution methods
+## Distribution and hosting options
 
-Speakeasy generates MCP servers with multiple distribution options:
+Speakeasy generates MCP servers with three primary distribution methods. These methods are not mutually exclusive - most customers use all three approaches to serve different use cases, with npm being the most common starting point:
 
-### Desktop Extension (DXT) Distribution
+### 1. Distribute on npm
 
-The generated DXT package provides the most user-friendly distribution method:
+Publishing your MCP server as an npm package provides the most flexible distribution method. Follow the [SDK publishing guide](/docs/publish-sdk) for detailed instructions on publishing to npm and other package managers.
 
-- **Easy installation**: Users can install DXT files directly in compatible MCP clients
-- **Self-contained**: All dependencies and metadata are bundled together
-- **Automatic updates**: DXT format supports version management and update notifications
+**Benefits:**
+- **Universal compatibility**: Single command works with all major MCP clients
+- **Easy customization**: Users can modify tools, add tools, and extend functionality
+- **Version management**: Standard npm versioning and dependency management
+- **Team sharing**: Simple distribution across development teams
+
+**Usage:**
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["your-npm-package@latest"],
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```
+
+### 2. Host on Cloudflare Workers
+
+Cloudflare hosting enables OAuth authentication flows and eliminates the need for users to manage API keys directly:
+
+**Benefits:**
+- **OAuth support**: End-users authenticate through OAuth instead of providing API keys
+- **Serverless hosting**: No infrastructure management required
+- **Global distribution**: Cloudflare's edge network for low latency
+- **Same customization**: Full tool customization capabilities available
+
+**Setup:**
+Follow the [Cloudflare deployment guide](/docs/standalone-mcp/cloudflare-deployment) for detailed instructions.
+
+### 3. Distribute as Desktop Extension (DXT)
+
+DXT provides a drag-and-drop experience for end users, particularly in Claude Desktop:
+
+**Benefits:**
+- **User-friendly installation**: Drag-and-drop installation in Claude Desktop
+- **Guided setup**: Nicely prompts end-users for API keys and auth credentials
+- **Self-contained**: All dependencies and metadata bundled together
 - **Cross-platform**: Works across different operating systems and MCP clients
 
-### Traditional Distribution
+**DXT Generation:**
+Speakeasy automatically generates [Anthropic Desktop Extensions (.dxt)](https://github.com/anthropics/dxt) as part of MCP server generation. The DXT includes:
 
-MCP servers can also be published and distributed as npm packages or used directly with `npx`:
+- A `manifest.json` file with metadata describing your MCP server
+- All necessary server files packaged for distribution
+- Tool descriptions and parameters automatically inferred from your OpenAPI specification
+- Icon and branding assets (if provided)
 
-- Share tools across teams
-- Deploy to different environments  
-- Distribute to external users
-- Version and maintain your MCP servers independently
+**DXT Customization:**
+You can customize the generated DXT manifest through the `gen.yaml` configuration file:
 
-### Hybrid Approach
+```yaml
+targets:
+  mcp-typescript:
+    dxtManifestOverlay:
+      icon: "https://example.com/my-icon.png"
+      displayName: "My Custom API Tools"
+      description: "Custom description for my MCP server"
+      version: "1.0.0"
+```
 
-You can distribute your MCP server using both methods simultaneously, giving users the flexibility to choose their preferred installation method.
+### Hybrid Distribution Strategy
+
+You can use all three distribution methods simultaneously, giving users flexibility to choose their preferred installation method based on their specific needs and technical requirements.
 
 ## Best practices
 
@@ -319,7 +333,7 @@ When building MCP servers with Speakeasy:
 
 Having set up your MCP server with Speakeasy, explore these additional capabilities:
 
-- [Customize Tools](/docs/standalone-mcp/customize-tools) - Learn how to use the `x-speakeasy-mcp` OpenAPI extension
-- [Custom Resources](/docs/standalone-mcp/custom-resources) - Add custom resources to your server
+- [Customize Tools](/docs/standalone-mcp/customize-tools) - Learn how to customize generated tools using the `x-speakeasy-mcp` OpenAPI extension
+- [Custom Resources](/docs/standalone-mcp/custom-resources) - Add custom tools and resources to your server
 - [Custom Prompts](/docs/standalone-mcp/custom-prompts) - Create reusable prompt templates
 - [Setting up OAuth](/docs/standalone-mcp/setting-up-oauth) - Configure authentication for your server
