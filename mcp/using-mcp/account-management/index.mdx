@@ -1,0 +1,1087 @@
+---
+title: "Use MCP for Account Management with Slack and HubSpot"
+description: "Learn how to use MCP to automate account management tasks with Slack, HubSpot and Claude Desktop."
+---
+
+import { Screenshot } from "@/mdx/components";
+
+# Use MCP for Account Management with Slack and HubSpot
+
+[17% of businesses](https://www.zippia.com/advice/crm-statistics/#:~:text=17%25%20of%20businesses%20say%20that%20manual%20data%20entry%20is%20their%20biggest%20challenge%20in%20using%20their%20current%20CRM.) say manual data entry is their biggest CRM challenge. Sales teams post call summaries in Slack, but critical updates never make it to the CRM. Managers spot urgent opportunities in chat notifications but can't quickly prioritize them. In the meantime, your competitor is closing deals because you are not prioritizing quickly in your workflow, and your sales team has to look for what is prioritized. Lead volume increases but conversion rates stay flat because urgent opportunities get buried in manual workflows.
+
+What if emoji reactions could highlight priority messages? Your manager reacts to a Slack message with ‼️ and the sales rep asks Claude Desktop to show all high-priority messages and update the corresponding HubSpot deals.
+
+In this article, you'll build an integration where Claude Desktop reads emoji-marked Slack messages and updates HubSpot records on command. Your account managers will be able to prioritize deals through emoji reactions on Slack messages.
+
+## Why use MCP? 
+
+If you're managing sales follow-ups manually, you're probably:
+
+- Listening to call summaries in Slack notifications
+- Identifying which deals need immediate attention
+- Logging into HubSpot to find deal records
+- Adding notes and updating deal status manually
+- Coordinating priority changes with your team
+
+If your sales team handles dozens of calls daily, this process becomes overwhelming. Important deals get delayed while account managers spend time on CRM updates instead of selling.
+
+You could build custom integrations to automate this workflow. You might write scripts to monitor Slack notifications, parse deal information, and update HubSpot records. But you'd need webhook handling, API authentication for multiple services, and logic to classify urgent versus routine follow-ups.
+
+Instead, you can ask Claude Desktop to find all urgent messages and update your CRM records. You ask Claude to "show me all high-priority messages marked with ‼️ emoji in Slack," review the urgent calls, then ask Claude to "add notes to the HubSpot deal for those urgent calls." Claude uses MCP servers to read Slack reactions, find messages, locate HubSpot deals, and update records.
+
+### The MCP Advantage
+
+MCP standardizes how LLMs access different tools. Instead of writing custom integrations for Slack, HubSpot, and future tools you want to add, you get one consistent interface that LLMs can use intelligently across any platform. Since MCP is an open protocol, it works with any LLM model or agent framework.
+
+Claude Desktop makes MCP integration simple. Add MCP server configurations to your `claude_desktop_config.json` file, reload the app, and Claude gains access to your tools.
+
+## Prerequisites
+
+To build this automated account management workflow, you'll need:
+
+- **Python 3.11 or higher** – For running the Slack API server
+- **Claude Desktop** – For the MCP-powered workflow interface
+- **Ngrok** – To expose your local API during development (or use any hosting provider)
+
+- HubSpot private app with these scopes:
+  - `crm.lists.read` and `crm.lists.write` – To manage contact lists
+  - `crm.objects.companies.read` – To access company records
+  - `crm.objects.contacts.read` and `crm.objects.contacts.write` – To manage contact information
+  - `crm.objects.deals.read` and `crm.objects.deals.write` – To read and update deal records
+  - `crm.objects.appointments.read` and `crm.objects.appointments.write` – To manage meeting data
+  - `crm.objects.leads.read` and `crm.objects.leads.write` – To handle lead management
+  - `crm.objects.custom.read` and `crm.objects.custom.write` – To access custom objects
+
+- **Gram account** – To host your Slack MCP server
+- Slack app with user token containing these scopes:
+  - `channels:history` – Read channel messages
+  - `channels:read` – Access channel information
+  - `search:read` – Search across messages
+  - `search:read.private` – Search in private channels
+  - `search:read.public` – Search in public channels
+  - `users:read` – Get user profile details
+  - `groups:history` – Access private channel history
+  - `groups:read` – View basic information about private channels
+  - `reactions:read` – Detect emoji reactions
+
+## Build the Slack integration 
+
+You'll create an API that retrieves Slack messages and reactions for account management. This API serves as the backend for the MCP server, giving Claude Desktop access to sales call notifications and priority reactions.
+
+The API exposes these endpoints for account management workflow:
+
+- GET` /messages/search` – Search for sales call notifications and follow-up messages across channels
+- GET` /channels` – List accessible channels where sales notifications are posted
+- GET` /users/{user_id}` – Get information about sales team members and managers
+- GET `/channels/{channel_id}/messages` – Retrieve messages from specific sales channels
+
+Here's how you'll build the API:
+
+- Set up the Python project with dependencies
+- Define the FastAPI application and Pydantic models for message data validation
+- Implement the endpoint logic with Slack SDK integration for call notifications
+- Enrich the OpenAPI document with `x-gram` extensions that help Gram generate better MCP tool descriptions for Claude Desktop.
+
+### Create the project
+
+Create a new Python project with uv (you can use any dependency manager you prefer):
+
+```
+uv init
+```
+
+The command above creates a `pyproject.toml` file where you'll define the dependencies. We need the Slack SDK for API integration and FastAPI for the web server.
+
+```toml
+[project]
+name = "slack-account-management"
+version = "0.1.0"
+description = "A FastAPI server for Slack account management workflows with MCP integration"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi[all]==0.115.5",
+    "slack-sdk==3.29.0",
+    "python-dotenv==1.0.1",
+    "pydantic>=2.11.2",
+    "uvicorn[standard]==0.32.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+```
+
+Install the dependencies:
+
+```bash
+uv sync
+```
+
+Create an `app` directory with `main.py` and `__init__.py` files for your FastAPI endpoints. With the project structure ready, you can implement the Slack API integration.
+
+### Add the FastAPI app and Pydantic models
+
+Now you'll set up the FastAPI application with authentication and data validation. You will need the Bearer token authentication to access Slack securely, Pydantic models to structure your API responses, and detailed endpoint documentation for Gram's MCP conversion.
+
+In the `main.py` file, start by creating the FastAPI app with Bearer token security:
+
+```python
+from fastapi import FastAPI, HTTPException, Depends, Query, Path, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import PlainTextResponse, JSONResponse
+from typing import Optional, List, Dict, Any, Union
+from pydantic import BaseModel, Field
+from datetime import datetime
+from dotenv import load_dotenv
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+import asyncio
+
+load_dotenv()
+
+app = FastAPI(
+    title="Slack MCP Server API",
+    description="A comprehensive API for searching and retrieving Slack messages, threads, and user information",
+    version="1.0.0",
+    openapi_tags=[
+        {
+            "name": "messages",
+            "description": "Operations for searching and retrieving Slack messages",
+        },
+        {"name": "threads", "description": "Operations for managing message threads"},
+        {"name": "users", "description": "Operations for retrieving user information"},
+        {
+            "name": "channels",
+            "description": "Operations for channel management and information",
+        },
+    ],
+)
+
+# Security
+security = HTTPBearer()
+```
+
+Define Pydantic models for data validation and automatic OpenAPI schema generation:
+
+```python
+# Pydantic models
+class SlackMessage(BaseModel):
+    """Model representing a Slack message"""
+
+    ts: str = Field(..., description="Message timestamp")
+    text: str = Field(..., description="Message text content")
+    user: str = Field(..., description="User ID who sent the message")
+    channel: str = Field(..., description="Channel ID where message was sent")
+    thread_ts: Optional[str] = Field(
+        None, description="Thread timestamp if message is part of a thread"
+    )
+    reply_count: Optional[int] = Field(None, description="Number of replies in thread")
+    reactions: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Message reactions"
+    )
+
+
+class SlackUser(BaseModel):
+    """Model representing a Slack user"""
+
+    id: str = Field(..., description="User ID")
+    name: str = Field(..., description="Username")
+    real_name: Optional[str] = Field(None, description="Real name")
+    email: Optional[str] = Field(None, description="Email address")
+    is_bot: bool = Field(..., description="Whether user is a bot")
+    profile: Optional[Dict[str, Any]] = Field(
+        None, description="User profile information"
+    )
+
+
+class SlackChannel(BaseModel):
+    """Model representing a Slack channel"""
+
+    id: str = Field(..., description="Channel ID")
+    name: str = Field(..., description="Channel name")
+    is_private: bool = Field(..., description="Whether channel is private")
+    is_archived: bool = Field(..., description="Whether channel is archived")
+    member_count: Optional[int] = Field(None, description="Number of members")
+    topic: Optional[str] = Field(None, description="Channel topic")
+    purpose: Optional[str] = Field(None, description="Channel purpose")
+
+
+class MessageSearchResponse(BaseModel):
+    """Response model for message search results"""
+
+    messages: List[SlackMessage] = Field(..., description="List of matching messages")
+    total: int = Field(..., description="Total number of results")
+    has_more: bool = Field(..., description="Whether more results are available")
+
+
+class ThreadResponse(BaseModel):
+    """Response model for thread information"""
+
+    parent_message: SlackMessage = Field(
+        ..., description="Parent message of the thread"
+    )
+    replies: List[SlackMessage] = Field(..., description="Thread replies")
+    reply_count: int = Field(..., description="Total number of replies")
+```
+
+Create the authenticated Slack client dependency:
+
+```python
+async def get_slack_client(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> WebClient:
+    """
+    Get authenticated Slack WebClient
+
+    Args:
+        credentials: Bearer token from Authorization header
+
+    Returns:
+        WebClient: Authenticated Slack client
+
+    Raises:
+        HTTPException: If token is invalid
+    """
+    try:
+        client = WebClient(token=credentials.credentials)
+        # Test the token
+        response = client.auth_test()
+        if not response["ok"]:
+            raise HTTPException(status_code=401, detail="Invalid Slack token")
+        return client
+    except SlackApiError as e:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Slack authentication failed: {e.response['error']}",
+        )
+```
+
+The FastAPI application now has proper authentication, data validation, and models. You can now generate a clean OpenAPI document for the app that Gram can convert into MCP tools.
+
+### Add the endpoints
+
+Each endpoint handles a specific aspect of Slack data retrieval, from searching messages to retrieving complete threads.
+
+Add the `/messages/search` GET endpoint to enable searching Slack messages across channels and filtering by text, user, channel, date range, or result limits:
+
+```python
+@app.get(
+    "/messages/search",
+    response_model=MessageSearchResponse,
+    tags=["messages"],
+    summary="Search Slack messages",
+    operation_id="search_messages",
+    description="""
+    Search for messages across Slack channels using various filters.
+    Supports text search, user filtering, date ranges, and channel-specific searches.
+    Requires a valid Slack bot token with search:read scope.
+    """,
+    responses={
+        200: {"description": "Search results with matching messages"},
+        401: {"description": "Authentication failed - invalid token"},
+        403: {"description": "Insufficient permissions"},
+        429: {"description": "Rate limit exceeded"},
+    },
+)
+async def search_messages(
+    query: str = Query(
+        ..., description="Search query text", examples=["important meeting"]
+    ),
+    channel: Optional[str] = Query(
+        None, description="Specific channel ID to search in", examples=["C1234567890"]
+    ),
+    user: Optional[str] = Query(
+        None, description="Filter by user ID", examples=["U1234567890"]
+    ),
+    after: Optional[datetime] = Query(
+        None, description="Search messages after this date"
+    ),
+    before: Optional[datetime] = Query(
+        None, description="Search messages before this date"
+    ),
+    limit: int = Query(
+        20, ge=1, le=100, description="Maximum number of results to return"
+    ),
+    slack_client: WebClient = Depends(get_slack_client),
+):
+    """Search for messages in Slack channels with comprehensive filtering options"""
+    try:
+        # Build search query
+        search_query = query
+
+        if channel:
+            search_query += f" in:#{channel}"
+        if user:
+            search_query += f" from:@{user}"
+        if after:
+            search_query += f" after:{after.strftime('%Y-%m-%d')}"
+        if before:
+            search_query += f" before:{before.strftime('%Y-%m-%d')}"
+
+        # Perform search
+        response = slack_client.search_messages(
+            query=search_query, count=limit, sort="timestamp"
+        )
+
+        if not response["ok"]:
+            raise HTTPException(
+                status_code=400, detail=f"Search failed: {response['error']}"
+            )
+
+        # Process results
+        messages = []
+        for match in response["messages"]["matches"]:
+            message = SlackMessage(
+                ts=match["ts"],
+                text=match.get("text", ""),
+                user=match.get("user", ""),
+                channel=match.get("channel", {}).get("id", ""),
+                thread_ts=match.get("thread_ts"),
+                reply_count=match.get("reply_count", 0),
+            )
+            messages.append(message)
+
+        return MessageSearchResponse(
+            messages=messages,
+            total=response["messages"]["total"],
+            has_more=len(messages) < response["messages"]["total"],
+        )
+
+    except SlackApiError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Slack API error: {e.response['error']}"
+        )
+
+```
+
+The code above constructs a Slack search query by combining the text query with optional filters, sends the request through the Slack SDK client, and returns structured message data in `MessageSearchResponse` that the MCP server will expose as a tool.
+
+Add the `/users/{user_id` GET endpoint to enable retrieving detailed user information that helps Claude understand message authorship and context when analyzing threads.
+
+```python
+@app.get(
+    "/users/{user_id}",
+    response_model=SlackUser,
+    tags=["users"],
+    summary="Get user information",
+    operation_id="get_user",
+    description="""
+    Retrieve detailed information about a Slack user including profile details, 
+    real name, and other metadata. Requires a valid Slack bot token with users:read scope.
+    """,
+    responses={
+        200: {"description": "User information"},
+        401: {"description": "Authentication failed"},
+        404: {"description": "User not found"},
+    },
+)
+async def get_user(
+    user_id: str = Path(..., description="Slack user ID", examples=["U1234567890"]),
+    slack_client: WebClient = Depends(get_slack_client),
+):
+    """Get detailed information about a Slack user"""
+    try:
+        response = slack_client.users_info(user=user_id)
+
+        if not response["ok"]:
+            if response["error"] == "user_not_found":
+                raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(
+                status_code=400, detail=f"Failed to get user: {response['error']}"
+            )
+
+        user_data = response["user"]
+
+        return SlackUser(
+            id=user_data["id"],
+            name=user_data["name"],
+            real_name=user_data.get("real_name"),
+            email=user_data.get("profile", {}).get("email"),
+            is_bot=user_data.get("is_bot", False),
+            profile=user_data.get("profile", {}),
+        )
+
+    except SlackApiError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Slack API error: {e.response['error']}"
+        )
+
+```
+
+The endpoint above fetches user profile information from Slack's API and formats it into the structured `SlackUser` model, giving Claude access to names, email addresses, and other profile details for better thread analysis.
+
+Add the `/channels` GET endpoint to enable listing all accessible channels in the workspace, allowing Claude to discover available channels and convert channel names to IDs for targeted searches and message retrieval.
+
+```python
+@app.get(
+    "/channels",
+    response_model=List[SlackChannel],
+    tags=["channels"],
+    summary="List channels",
+    operation_id="list_channels",
+    description="""
+    List all channels accessible to the bot, including public channels,
+    private channels the bot is a member of, and optionally archived channels.
+    Requires a valid Slack bot token with channels:read scope.
+    """,
+    responses={
+        200: {"description": "List of accessible channels"},
+        401: {"description": "Authentication failed"},
+    },
+)
+async def list_channels(
+    include_private: bool = Query(True, description="Include private channels"),
+    include_archived: bool = Query(False, description="Include archived channels"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Maximum number of channels to return"
+    ),
+    slack_client: WebClient = Depends(get_slack_client),
+):
+    """List all accessible Slack channels"""
+    try:
+        # Get public channels
+        channels = []
+
+        # Get public channels
+        response = slack_client.conversations_list(
+            types="public_channel", exclude_archived=not include_archived, limit=limit
+        )
+
+        if response["ok"]:
+            channels.extend(response["channels"])
+
+        # Get private channels if requested
+        if include_private:
+            response = slack_client.conversations_list(
+                types="private_channel",
+                exclude_archived=not include_archived,
+                limit=limit,
+            )
+
+            if response["ok"]:
+                channels.extend(response["channels"])
+
+        # Convert to SlackChannel objects
+        result = []
+        for channel_data in channels:
+            channel = SlackChannel(
+                id=channel_data["id"],
+                name=channel_data["name"],
+                is_private=channel_data.get("is_private", False),
+                is_archived=channel_data.get("is_archived", False),
+                member_count=channel_data.get("num_members"),
+                topic=channel_data.get("topic", {}).get("value"),
+                purpose=channel_data.get("purpose", {}).get("value"),
+            )
+            result.append(channel)
+
+        return result
+
+    except SlackApiError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Slack API error: {e.response['error']}"
+        )
+```
+
+The endpoint above makes separate API calls to retrieve public and private channels, then transforms the raw Slack data into the structured `SlackChannel` models with standardized fields.
+
+Add the ` /channels/{channel_id}/message` GET endpoint to enable retrieving messages from a specific channel with optional date filtering and pagination, enabling Claude to analyze recent channel activity or messages from specific time periods.
+
+```python
+@app.get(
+    "/channels/{channel_id}/messages",
+    response_model=List[SlackMessage],
+    tags=["messages"],
+    summary="Get channel messages",
+    operation_id="get_channel_messages",
+    description="""
+    Retrieve messages from a specific channel with optional date range filtering 
+    and pagination support. Requires a valid Slack bot token with channels:history 
+    scope and access to the specified channel.
+    """,
+    responses={
+        200: {"description": "List of channel messages"},
+        401: {"description": "Authentication failed"},
+        403: {"description": "Access denied to channel"},
+        404: {"description": "Channel not found"},
+    },
+)
+async def get_channel_messages(
+    channel_id: str = Path(..., description="Channel ID to retrieve messages from"),
+    latest: Optional[str] = Query(
+        None, description="Latest message timestamp to include"
+    ),
+    oldest: Optional[str] = Query(
+        None, description="Oldest message timestamp to include"
+    ),
+    limit: int = Query(
+        50, ge=1, le=1000, description="Maximum number of messages to return"
+    ),
+    slack_client: WebClient = Depends(get_slack_client),
+):
+    """Retrieve messages from a specific channel"""
+    try:
+        response = slack_client.conversations_history(
+            channel=channel_id,
+            latest=latest,
+            oldest=oldest,
+            limit=limit,
+            inclusive=True,
+        )
+
+        if not response["ok"]:
+            if response["error"] == "channel_not_found":
+                raise HTTPException(status_code=404, detail="Channel not found")
+            elif response["error"] == "not_in_channel":
+                raise HTTPException(status_code=403, detail="Bot not in channel")
+            raise HTTPException(
+                status_code=400, detail=f"Failed to get messages: {response['error']}"
+            )
+
+        # Convert to SlackMessage objects
+        messages = []
+        for msg_data in response["messages"]:
+            message = SlackMessage(
+                ts=msg_data["ts"],
+                text=msg_data.get("text", ""),
+                user=msg_data.get("user", ""),
+                channel=channel_id,
+                thread_ts=msg_data.get("thread_ts"),
+                reply_count=msg_data.get("reply_count", 0),
+                reactions=msg_data.get("reactions", []),
+            )
+            messages.append(message)
+
+        return messages
+
+    except SlackApiError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Slack API error: {e.response['error']}"
+        )
+```
+
+The code above uses Slack's `conversations_history` API with optional timestamp filtering to retrieve messages from a specific channel, handling common errors like missing channels or insufficient permissions, then converts the raw message data into the `SlackMessage` model.
+
+
+
+### Customize the OpenAPI output
+
+Let's enhance the OpenAPI document for MCP server generation. 
+
+Standard OpenAPI descriptions are designed for humans, not LLMs. Verbose descriptions cause token bloat and vague descriptions lead to poor tool selection. 
+
+Gram's `x-gram` extensions provide better context and instructions for Claude, letting you add LLM-optimized descriptions with context about when to use each tool and any prerequisites needed.
+
+```python
+def custom_openapi():
+    """Customize OpenAPI Output with x-gram extensions for getgram MCP servers"""
+
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+    )
+
+    # Add x-gram extensions to specific operations
+    x_gram_extensions = {
+        "search_messages": {
+            "x-gram": {
+                "name": "search_slack_messages",
+                "summary": "Search for messages in Slack channels",
+                "description": """<context>
+                This tool searches for messages across Slack channels with comprehensive filtering options.
+                It can search by text content, specific users, date ranges, and within specific channels.
+                Perfect for finding important conversations, tracking mentions, or analyzing communication patterns.
+                </context>
+
+                <prerequisites>
+                - If you have a channel name instead of ID, use the list_channels tool first to get the channel ID
+                - If you have a username instead of user ID, use the get_user tool first to get the user ID  
+                - Ensure the bot has appropriate permissions to search the target channels
+                </prerequisites>""",
+                "responseFilterType": "jq",
+            }
+        },
+        "get_thread": {
+            "x-gram": {
+                "name": "get_slack_thread",
+                "summary": "Retrieve complete message thread with replies",
+                "description": """<context>
+                This tool fetches an entire conversation thread, including the original message
+                and all replies. Essential for understanding the full context of discussions
+                and following conversation flows in Slack.
+                </context>
+
+                <prerequisites>
+                - You need both the channel ID and the timestamp of the parent message
+                - The message timestamp should be the thread_ts value from search results
+                - Ensure the bot has access to the channel containing the thread
+                </prerequisites>""",
+                "responseFilterType": "jq",
+            }
+        },
+        "get_user": {
+            "x-gram": {
+                "name": "get_slack_user",
+                "summary": "Get detailed information about a Slack user",
+                "description": """<context>
+                This tool retrieves comprehensive user information from Slack, including
+                profile details, contact information, and user status. Perfect for understanding
+                message authorship and getting user context.
+                </context>
+
+                <prerequisites>
+                - You need the user ID (starts with U) not the username
+                - If you only have a username or display name, search for it first
+                - User information availability depends on workspace privacy settings
+                </prerequisites>""",
+                "responseFilterType": "jq",
+            }
+        },
+        "list_channels": {
+            "x-gram": {
+                "name": "list_slack_channels",
+                "summary": "List all accessible Slack channels",
+                "description": """<context>
+                This tool provides a comprehensive list of Slack channels that the bot can access.
+                Includes channel names, IDs, member counts, and topics. Use this to discover
+                available channels before searching or retrieving messages.
+                </context>
+
+                <prerequisites>
+                - The bot will only see public channels and private channels it's a member of
+                - To access private channels, the bot must be explicitly added to them
+                - Channel information depends on bot permissions and workspace settings
+                </prerequisites>""",
+                "responseFilterType": "jq",
+            }
+        },
+        "get_channel_messages": {
+            "x-gram": {
+                "name": "get_channel_messages",
+                "summary": "Retrieve messages from a specific channel",
+                "description": """<context>
+                This tool fetches messages from a particular Slack channel, with support
+                for date range filtering and pagination. Ideal for getting recent channel
+                activity or messages from specific time periods.
+                </context>
+
+                <prerequisites>
+                - You need the channel ID (starts with C) not the channel name
+                - Use the list_channels tool first if you only have the channel name
+                - Ensure the bot is a member of private channels to access their messages
+                </prerequisites>""",
+                "responseFilterType": "jq",
+            }
+        }
+    }
+
+    # Apply x-gram extensions to paths
+    if "paths" in openapi_schema:
+        for path, path_item in openapi_schema["paths"].items():
+            for method, operation in path_item.items():
+                if method.lower() in ["get", "post", "put", "delete", "patch"]:
+                    operation_id = operation.get("operationId")
+                    if operation_id in x_gram_extensions:
+                        operation.update(x_gram_extensions[operation_id])
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+```
+
+This customization adds structured context and prerequisites to each endpoint, helping Gram generate MCP tools that the AI agent can use more effectively.
+
+Next, override the custom openapi definition from FastAPI and add the logic to run the FastAPI app.
+
+```python
+# Override the default OpenAPI function
+app.openapi = custom_openapi
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+### Generate OpenAPI files
+
+The following script generates JSON and YAML versions of the OpenAPI document. 
+
+At the root of the project, create a file called `generate_openapi.py` and add the following content.
+
+```python
+import json
+import yaml
+from pathlib import Path
+
+# Add the app directory to the path so we can import main
+import sys
+sys.path.insert(0, str(Path(__file__).parent / "app"))
+
+from main import app
+
+
+def save_openapi_to_json():
+    """Save OpenAPI spec to JSON"""
+    
+    with open("openapi.json", "w", encoding="utf-8") as json_file:
+        json.dump(
+            app.openapi(),
+            json_file,
+            indent=2,
+        )
+    print("Generated openapi.json")
+
+
+def save_openapi_to_yaml():
+    """Save OpenAPI spec to YAML"""
+    
+    with open("openapi.yaml", "w", encoding="utf-8") as yaml_file:
+        yaml.dump(
+            app.openapi(),
+            yaml_file,
+            default_flow_style=False,
+            sort_keys=False,
+            indent=2,
+        )
+    print("Generated openapi.yaml")
+
+
+if __name__ == "__main__":
+    print("🚀 Generating OpenAPI document files...")
+    
+    save_openapi_to_json()
+    save_openapi_to_yaml()
+
+```
+
+This script imports the FastAPI app, and calls the `app.openapi()` method, and returns the dict version of the OpenAPI document. 
+
+Run the generation script:
+
+```bash
+uv run python generate_openapi.py
+```
+
+This is the output from the command:
+
+```txt
+🚀 Generating OpenAPI document files...
+Generated openapi.json
+Generated openapi.yaml
+```
+
+### Run the API
+
+Start the FastAPI server and expose it with ngrok for testing:
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+In another terminal, expose the API:
+
+```bash
+ngrok http 127.0.0.1:8000
+```
+
+<Screenshot
+  image={{
+    src: "./assets/ngrok-terminal-running.png",
+    alt: "Ngrok running in a terminal",
+  }}
+/>
+
+Copy the HTTPS forwarding URL from ngrok. You'll use the URL when configuring the MCP server in Gram.
+
+## Turn the API into an MCP Server
+
+Gram works with three key concepts: 
+
+- **Tool definitions** that describe each API endpoint to LLMs.
+- **Tool variations** that let you customize descriptions.
+- **Toolsets** that group related tools together. 
+
+The `x-gram` extensions you added previously will define how Gram provides the tools to Claude.
+
+### Upload the OpenAPI document
+
+Navigate to the **Toolsets** page in your Gram dashboard.
+
+<Screenshot
+  image={{
+    src: "./assets/gram-nav-to-toolsets.png",
+    alt: "Navigate to Toolsets page",
+  }}
+/>
+
+Click the **+ ADD API** button to add an API source. Upload the `openapi.json` file you generated and give your API source a descriptive name like **Slack MCP API**.
+
+<Screenshot
+  image={{
+    src: "./assets/gram-adding-api-source.png",
+    alt: "Adding an API source",
+  }}
+/>
+
+### Create a toolset
+
+Click the **+ ADD TOOLSET** button on the Toolsets page. A modal will appear asking for a toolset name. Enter something like "Slack Tools" and click **Create**. You'll be redirected to a new page showing all available tools from your APIs. 
+
+You can see the tool definitions you created from the **Slack MCP API** API source: search messages, get threads, get users, list slack channels, get channel messages. Click **Enable All** to include all tools in your toolset.
+
+<Screenshot
+  image={{
+    src: "./assets/gram-adding-toolsets.png",
+    alt: "Adding Toolset",
+  }}
+/>
+
+### Create a new environment
+
+Navigate to the Environments page and click **+ NEW ENVIRONMENT**. Enter "slack" as the environment name. Once created, you'll be redirected to the environment configuration page. Click **NEW VARIABLE** to add environment variables.
+
+<Screenshot
+  image={{
+    src: "./assets/adding-environment-variable.png",
+    alt: "Adding environment variables",
+  }}
+/>
+
+Add your Slack user token as `SLACK_API_HTTP_BEARER` . And add the ngrok URL as `SLACK_API_SERVER_URL`. These new variables will allow Gram to authenticate with Slack and route requests to your running API.
+
+### Create a Gram API key
+
+You'll need a Gram API key to connect Claude to the MCP server. In your Gram dashboard, go to Settings and click **Create API Key**.
+
+<Screenshot
+  image={{.  
+    src: "./assets/creating-gram-api-key.png",
+    alt: "Creating a Gram API key",
+  }}
+/>
+
+Copy the API key somewhere safe as we will need it in the next section for Claude Desktop configuration.
+
+## Install the Slack MCP server in Claude Desktop
+
+With Slack MCP server ready and deployed, let's add the server in Claude Desktop. 
+
+Now, click on the `MCP` tab to access your MCP server deployment configurations. 
+
+You can make your server public or private. For security, this tutorial works with a private server. We will configure the API URL and the token, on the client side, and also add the Gram Key.
+
+<Screenshot
+  image={{
+    src: "./assets/gram-mcp-configuration.png",
+    alt: "MCP tab in Claude Desktop",
+  }}
+/>
+
+Copy the configuration under the `Pass-through Authentication` section. We will add this configuration in our `claude_desktop_config.json` file. 
+
+```json
+{
+  "mcpServers": {
+    "SlackMCP": {
+      "command": "npx",
+      "args": [
+          "mcp-remote",
+          "https://app.getgram.ai/mcp/xxxxxxx",
+          "--header",
+          "MCP-SLACK-API-HTTP-BEARER:${VALUE}",
+          "--header",
+          "MCP-SLACK-API-SERVER-URL:${VALUE}",
+          "--header",
+          "Authorization:${GRAM_KEY}"
+        ],
+      "env": {
+        "GRAM_KEY": "Bearer <your-key-here>"
+      }
+    }
+  }
+}
+```
+
+Replace `${VALUE}` with the the values of the Slack token and the API server URL, which will just be the ngrok URL. 
+
+Open the `claude-desktop-config.json` file and add the configuration for the Slack MCP server.
+
+```json
+{
+  "mcpServers": {
+    "SlackMCP": {
+      "command": "npx",
+      "args": [
+          "mcp-remote",
+          "https://app.getgram.ai/mcp/xxxxxxx",
+          "--header",
+          "MCP-SLACK-API-HTTP-BEARER:${VALUE}",
+          "--header",
+          "MCP-SLACK-API-SERVER-URL:${VALUE}",
+          "--header",
+          "Authorization:${GRAM_KEY}"
+        ],
+      "env": {
+        "GRAM_KEY": "Bearer <your-key-here>"
+      }
+    }
+  }
+}
+
+```
+
+You can run a test in Claude desktop to make sure the integration is working by asking Claude to list the current channels in your Slack workspace.
+
+## Configure HubSpot
+
+HubSpot has launched an MCP service to allow AI assistants like Claude to connect and interact with HubSpot data in real-time. Users can install the MCP server in Claude Desktop and give instructions.
+
+### Create the HubSpot private application 
+
+Before adding the HubSpot MCP server in Claude Desktop, you will create a HubSpot private application, assign scopes for the actions you want Claude to execute, and retrieve the API key.
+
+On the dashboard homepage, click on the settings icon in the top navigation bar. 
+
+<Screenshot
+  image={{
+    src: "./assets/hubspot-settings-icon.png",
+    alt: "Navigating to Settings in HubSpot",
+  }}
+/>
+
+This redirects you to your HubSpot account settings. Navigate to Integrations -> Private Apps and click the **Create a private app** button.
+
+<Screenshot
+  image={{
+    src: "./assets/hubspot-create-private-app.png",
+    alt: "Creating a private app in HubSpot",
+  }}
+/> 
+
+Enter a name for the application.
+
+<Screenshot
+  image={{
+    src: "./assets/hubspot-create-private-app-name.png",
+    alt: "Creating a private app in HubSpot with a name",
+  }}
+/>
+
+Navigate to the scopes tab and add the following scopes:
+
+- `crm.lists.read` and `crm.lists.write` 
+- `crm.objects.companies.read` 
+- `crm.objects.contacts.read` and `crm.objects.contacts.write`
+- `crm.objects.deals.read` and `crm.objects.deals.write` 
+- `crm.objects.appointments.read` and `crm.objects.appointments.write`
+- `crm.objects.leads.read` and `crm.objects.leads.write` 
+- `crm.objects.custom.read` and `crm.objects.custom.write` 
+
+<Screenshot
+  image={{
+    src: "./assets/hubspot-create-private-app-scopes.png",
+    alt: "Setting up scopes for the private app",
+  }}
+/>
+
+Click the **Create app** button in the top right corner and validate the creation. HubSpot will show you a modal with your API key. Copy this API key and store it safely. You'll use the key when adding the MCP server in Claude Desktop.
+
+### Add HubSpot MCP server
+
+In your `claude_desktop_config.json` file, add the MCP configuration for HubSpot. Here is what your configuration should look like currently.
+
+```json
+{
+  "mcpServers": {
+    "HubspotMCP": {
+      "command": "npx",
+      "args": ["-y", "@hubspot/mcp-server"],
+      "env": {
+        "PRIVATE_APP_ACCESS_TOKEN": "YOUR_HUBSPOT_KEY"
+      }
+    },
+    "SlackMCP": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://app.getgram.ai/mcp/xxxxxx",
+        "--header",
+        "MCP-SLACK-API-HTTP-BEARER:YOUR_SLACK_TOKEN",
+        "--header",
+        "MCP-SLACK-API-SERVER-URL:YOUR_SERVER_URL",
+        "--header",
+        "Authorization:${GRAM_KEY}"
+      ],
+      "env": {
+        "GRAM_KEY": "Bearer YOUR_GRAM_API_KEY"
+      }
+    }
+  }
+}
+
+```
+
+Close and reopen Claude Desktop. You're ready to test the integration.
+
+## Test the integration 
+
+Now let's test the complete workflow. The test scenario follows this flow. Feel free to adapt it to your current setup:
+
+- A notification message is posted in a Slack channel called leads. 
+- Someone adds the ‼️emoji to the message indicating high priority. 
+- Using Claude Desktop, we ask for a summary of today messages in the leads channel and the one with priority. 
+- We then ask Claude to add a note to the priority ones with message content that helps decide if this is a positive or negative lead.
+
+Let's ask Claude to send a summary of leads call notifications and the high priority ones.
+
+<Screenshot
+  image={{
+    src: "./assets/claude-summary-of-notifications-and-priority-leads.png",
+    alt: "Asking Claude to summarize notifications and priority leads",
+  }}
+/>
+
+Claude found priority leads for us. Now ask Claude to add a note to those leads and mark them as high priority.
+
+<Screenshot
+  image={{
+    src: "./assets/claude-add-note-to-priority-leads.png",
+    alt: "Asking Claude to add a note to the priority leads",
+  }}
+/>
+
+Navigate to HubSpot -> Contacts -> Deals and click on the related to see the results.
+
+<Screenshot
+  image={{
+    src: "./assets/hubspot-results.png",
+    alt: "HubSpot results showing updated leads",
+  }}
+/>
+
+Now you have an integration that turns emoji reactions in Slack into automatic HubSpot updates through Claude Desktop.
+
+## Final thoughts
+
+We've built an account management system that turns manual CRM work into simple conversations with Claude Desktop. Sales managers can now use emoji reactions in Slack to highlight important messages for Claude Desktop and Claude will read the messages and use HubSpot for updates without switching between tools or logging into different systems.
+
+This shows how MCP makes business tools work together. Instead of building custom integrations or doing manual data entry, Claude Desktop can interact with both Slack and HubSpot.
+
+You can make this workflow even better:
+
+- Add more CRM features like creating tasks, scheduling meetings, or generating reports through Claude.
+- Make prioritization smarter by rewriting the prompts so Claude can spot different types of urgent deals based on message content.
