@@ -1,8 +1,8 @@
-# pull
+# pull  
+`speakeasy pull`  
 
-`speakeasy pull`
 
-pull
+pull  
 
 ## Usage
 
@@ -14,7 +14,7 @@ speakeasy pull [flags]
 
 ```
   -h, --help                help for pull
-      --output-dir string   The directory to output the image to (default "current working directory")
+      --output-dir string   The directory to output the image to (default "/home/runner/work/speakeasy/speakeasy/speakeasy")
       --revision string     The revision to pull (default "latest")
       --spec string         The name of the spec to want to pull
 ```
@@ -27,4 +27,4 @@ speakeasy pull [flags]
 
 ### Parent Command
 
-- [speakeasy](/docs/speakeasy-reference/cli/getting-started) - The Speakeasy CLI tool provides access to the Speakeasy.com platform
+* [speakeasy](/docs/speakeasy-reference/cli/getting-started)	 - The Speakeasy CLI tool provides access to the Speakeasy.com platform

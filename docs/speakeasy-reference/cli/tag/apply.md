@@ -14,7 +14,7 @@ speakeasy tag apply [flags]
 
 ```
   -h, --help                     help for apply
-  -n, --namespace-name string    the revision to tag
+  -n, --namespace-name string    the namespace to tag
   -r, --revision-digest string   the revision ID to tag
   -t, --tags strings             A list of tags to apply (comma-separated list)
 ```
