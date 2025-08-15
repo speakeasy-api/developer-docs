@@ -21,24 +21,23 @@ Use --use-raw-workflow if you need to debug overlay or workflow source issues.
 
 Example usage:
 ```bash
-speakeasy repro --execution-id c303282d-f2e6-46ca-a04a-35d3d873712d
-speakeasy repro --execution-id c303282d-f2e6-46ca-a04a-35d3d873712d --directory /tmp/debug
-speakeasy repro --execution-id c303282d-f2e6-46ca-a04a-35d3d873712d --use-raw-workflow  # Debug workflow/overlay issues
+speakeasy repro myorg_myworkspace_c303282d-f2e6-46ca-a04a-35d3d873712d
+speakeasy repro myorg_myworkspace_c303282d-f2e6-46ca-a04a-35d3d873712d --directory /tmp/debug
+speakeasy repro myorg_myworkspace_c303282d-f2e6-46ca-a04a-35d3d873712d --use-raw-workflow  # Debug workflow/overlay issues
 ```
 
 ## Usage
 
 ```
-speakeasy repro [flags]
+speakeasy repro [repro-id] [flags]
 ```
 
 ### Options
 
 ```
-  -d, --directory string      Directory to create reproduction files in (default: /tmp/{orgSlug}.{workspaceSlug})
-  -e, --execution-id string   Execution ID of the generation to reproduce
-  -h, --help                  help for repro
-      --use-raw-workflow      Use the original workflow to debug overlay/source issues (default: use merged spec)
+  -d, --directory string   Directory to create reproduction files in (default: /tmp/{orgSlug}.{workspaceSlug})
+  -h, --help               help for repro
+      --use-raw-workflow   Use the original workflow to debug overlay/source issues (default: use merged spec)
 ```
 
 ### Options inherited from parent commands
