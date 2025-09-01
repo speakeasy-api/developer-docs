@@ -56,7 +56,7 @@ speakeasy [flags]
 * [speakeasy merge](/docs/speakeasy-reference/cli/merge)	 - Merge multiple OpenAPI documents into a single document
 * [speakeasy openapi](/docs/speakeasy-reference/cli/openapi)	 - Utilities for working with OpenAPI documents
 * [speakeasy overlay](/docs/speakeasy-reference/cli/overlay)	 - Work with OpenAPI Overlays
-* [speakeasy pull](/docs/speakeasy-reference/cli/pull)	 - pull
+* [speakeasy pull](/docs/speakeasy-reference/cli/pull)	 - pull a spec from the registry
 * [speakeasy quickstart](/docs/speakeasy-reference/cli/quickstart)	 - Guided setup to help you create a new SDK in minutes.
 * [speakeasy repro](/docs/speakeasy-reference/cli/repro)	 - Reproduce a failed generation locally
 * [speakeasy run](/docs/speakeasy-reference/cli/run)	 - Run all the workflows defined in your workflow.yaml file. This can include multiple SDK generations from different OpenAPI sources

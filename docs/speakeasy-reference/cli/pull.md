@@ -2,7 +2,11 @@
 `speakeasy pull`  
 
 
-pull  
+pull a spec from the registry  
+
+## Details
+
+pull a spec from the registry
 
 ## Usage
 
