@@ -24,7 +24,6 @@ The annotation also has other [SDK customization capabilities](/docs/customize-s
 
 The `x-speakeasy-match` annotation adjusts the API parameter name to align with a Terraform state property. If mismatches occur, a generation error will highlight appropriate root-level properties for accurate mapping.
 
-
 ```yaml
 paths:
   /pet/{petId}:
@@ -35,7 +34,23 @@ paths:
       x-speakeasy-entity-operation: Pet#delete
 ```
 
-##  Hide Sensitive Properties
+## Property Defaults
+
+Setting a property default value that matches your API responses when unconfigured will enhance the Terraform plan to include the known value, rather than propagate the value as unknown `(known after apply)` during creation and updates.
+
+Speakeasy generation automatically adds a Terraform schema attribute default with OAS `default` value, for each of the following OAS types:
+
+| OAS Schema Type | OAS default Support   |
+| --------------- | --------------------- |
+| `array`         | Partial (`[]` only)   |
+| `boolean`       | Yes                   |
+| `map`           | No                    |
+| `number`        | Yes                   |
+| `object`        | Partial (`null` only) |
+| `oneOf`         | No                    |
+| `string`        | Yes                   |
+
+## Hide Sensitive Properties
 
 Properties marked as `x-speakeasy-param-sensitive` will be concealed from the console output of Terraform. This helps to ensure the confidentiality of sensitive data within Terraform operations.
 
@@ -57,7 +72,12 @@ components:
 When `x-speakeasy-terraform-ignore: true`, this extension ensures the specified property and any interactions involving it are omitted from Terraform's state management.
 
 <Callout title="Info" type="info">
-This extension completely suppresses the property from the Terraform state. If you want to suppress a specific operation, use `x-speakeasy-ignore: true` to omit the operation from the annotated CRUD method. For example, if a field is present in both the `CREATE` and `READ` response bodies, omitting it from the `READ` response body will turn off drift detection for that field. The field will remain in the `CREATE` response body and the Terraform state.
+  This extension completely suppresses the property from the Terraform state. If
+  you want to suppress a specific operation, use `x-speakeasy-ignore: true` to
+  omit the operation from the annotated CRUD method. For example, if a field is
+  present in both the `CREATE` and `READ` response bodies, omitting it from the
+  `READ` response body will turn off drift detection for that field. The field
+  will remain in the `CREATE` response body and the Terraform state.
 </Callout>
 
 ```yaml
@@ -76,10 +96,10 @@ components:
         - name
 ```
 
-```
+```hcl
 resource "petstore_pet" "mypet" {
   name = "myPet"
-  # Attempting to set an ignored parameter results in an error  
+  # Attempting to set an ignored parameter results in an error
   # optionalMetadata = true
 }
 ```
@@ -127,10 +147,10 @@ components:
           x-speakeasy-type-override: any
           type: object
           properties:
-            object: 
+            object:
               type: object
               additionalProperties: true
-              properties: 
+              properties:
                 in:
                   type: object
                   properties:
@@ -142,7 +162,7 @@ components:
         - name
 ```
 
-```
+```hcl
 resource "petstore_pet" "mypet" {
   name = "myPet"
   deep = jsonencode({
@@ -158,7 +178,6 @@ resource "petstore_pet" "mypet" {
 
 Setting the `x-speakeasy-param-suppress-computed-diff` to true suppresses unnecessary Terraform plan changes for computed attributes that are not definitively known until after application. This is useful in scenarios where computed attributes frequently cause spurious plan changes.
 
-
 ```yaml
 components:
   schemas:
@@ -173,7 +192,9 @@ components:
           type: string
 ```
 
-
 <Callout title="Warning" type="warning">
-Applying this modifier when `x-speakeasy-entity-operation: my_resource#read` is not defined may result in drift between the Terraform plan and remote state should updates to attributes happen outside of Terraform changes. Please only apply this when necessary.
+  Applying this modifier when `x-speakeasy-entity-operation: my_resource#read`
+  is not defined may result in drift between the Terraform plan and remote state
+  should updates to attributes happen outside of Terraform changes. Please only
+  apply this when necessary.
 </Callout>
