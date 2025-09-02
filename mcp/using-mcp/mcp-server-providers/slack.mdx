@@ -1,0 +1,126 @@
+---
+title: "MCP Use Case: Connect Slack"
+description: Learn how to connect the open-source Slack MCP Server to Claude Desktop.
+---
+
+# How to use Slack from your MCP Client
+
+This guide demonstrates how to connect your Slack workspace to your MCP Client. 
+
+As Slack doesn't provide an official MCP server, and Anthropic's reference implementation was deprecated due to [security vulnerabilities](https://embracethered.com/blog/posts/2025/security-advisory-anthropic-slack-mcp-server-data-leakage/), this guide uses the open-source [`slack-mcp-server`](https://github.com/korotovsky/slack-mcp-server) instead.
+
+After following this guide you'll be able to read and summarize conversations, search message history, and analyze team communications without leaving Claude Desktop or whatever client you prefer. Here's an example where Claude finds all messages with reactions in a specific channel:
+
+<video
+  controls={false}
+  loop={true}
+  autoPlay={true}
+  muted={true}
+  width="100%"
+  className="mt-10"
+>
+  <source src="/assets/mcp/using-mcp/slack-claude-quickstart/demo.mp4" type="video/mp4" />
+</video>
+
+## Prerequisites
+
+To follow along, you'll need
+
+* A user account on a Slack workspace
+* An MCP Client like Claude Desktop
+* Ideally some familiarity with editing JSON files and using your browser's developer tools
+
+## Getting your Slack `xoxc` and `xoxd` auth tokens 
+
+Instead of connecting to the Slack API, which would require admin access, we'll use the browser session tokens to authorize the Slack MCP Server to connect to your Slack workspace. Your MCP client will then have access to anything that you would in Slack. To get these, you'll need to log into your Slack workspace using a browser like Google Chrome.
+
+To get the `xoxc` token:
+
+1. Open the Slack workspace in your browser.
+2. Open the developer console by pressing `Ctrl+Shift+I` (`Cmd+Option+I` on macOS) or `F12`.
+3. Switch to the **Console** tab.
+4. Type "allow pasting" into the console and press `Enter`.
+5. Paste the following snippet into the console and press `Enter`:
+
+   ```text
+   JSON.parse(localStorage.localConfig_v2).teams[document.location.pathname.match(/^\/client\/([A-Z0-9]+)/)[1]].token
+   ```
+
+The token will be returned in the console. It starts with `xoxc-`. Save this somewhere.
+
+![Browser developer console showing Slack xoxc token location](/assets/mcp/using-mcp/slack-claude-quickstart/slack-xoxc-token-console.png)
+
+To get the `xoxd` token:
+
+1. Switch to the **Application** tab (**Storage** in Firefox and Safari).
+2. In the sidebar, under **Storage**, click **Cookies**.
+3. Find the cookie named `d` in the table.
+4. Copy the cookie's value to the clipboard.
+
+![Developer tools cookies panel showing how to locate and copy the Slack xoxd authentication token](/assets/mcp/using-mcp/slack-claude-quickstart/slack-xoxd-token-cookie.png)
+
+The token value starts with `xoxd-`. Save this somewhere.
+
+## Cloning and modifying the project
+
+The Slack MCP Server only [recently added support](https://github.com/korotovsky/slack-mcp-server/pull/91) for reactions, and that functionality is not yet included in their latest release, so we need to clone and build the project locally.
+
+Run the following commands
+
+
+```bash
+mkdir slack-mcp-setup
+cd slack-mcp-setup
+git clone https://github.com/korotovsky/slack-mcp-server.git
+cd slack-mcp-server
+go build -o slack-mcp-server ./cmd/slack-mcp-server
+```
+
+The build will be located in the root of the cloned project at `slack-mcp-server/slack-mcp-server`.
+
+## Installing the MCP server in Claude
+
+Now update your Claude Desktop configuration to include the MCP server. 
+
+Open Claude Desktop and go to **Settings** >  **Developer** > **Edit Config**. 
+
+![Claude Desktop configuration settings](/assets/mcp/using-mcp/slack-claude-quickstart/claude-desktop-config-settings.png)
+
+In the `claude_desktop_config.json` file that opens, add the Slack MCP Server configuration:
+
+```json
+{
+  "mcpServers": {
+    "SlackMCPServer": {
+      "command": "PATH_TO_MCP_SERVER/slack-mcp-server",
+      "args": ["-transport", "stdio"],
+      "env": {
+        "SLACK_MCP_XOXC_TOKEN": "YOUR_XOXC_TOKEN",
+        "SLACK_MCP_XOXD_TOKEN": "YOUR_XOXD_TOKEN",
+        "SLACK_MCP_USERS_CACHE": "PATH_TO_MCP_SERVER/.users_cache.json",
+        "SLACK_MCP_CHANNELS_CACHE": "PATH_TO_MCP_SERVER/.channels_cache.json"
+      }
+    }
+  }
+}
+```
+
+Replace `PATH_TO_MCP_SERVER` with the absolute path to your cloned `slack-mcp-server` directory. Replace `YOUR_XOXC_TOKEN` and `YOUR_XOXD_TOKEN` with the Slack tokens you saved previously.
+
+Restart Claude Desktop to load the server.
+
+To test that the connection is working, ask Claude to list the current channels in your Slack workspace.
+
+## Testing reaction functionality
+
+In Claude Desktop, start a new chat. Click the **Search and tools** button to see the MCP server listed. Enable all tools if needed.
+
+![Screenshot showing how to locate the Slack MCP Server in Claude Desktop "Search and tools"](/assets/mcp/using-mcp/slack-claude-quickstart/claude-mcp-server-settings.png)
+
+Add reaction emojis to messages in your Slack workspace, then ask Claude to show you messages with reactions to test the server's reaction-reading functionality.
+
+![Slack messages with reactions displayed in Claude](/assets/mcp/using-mcp/slack-claude-quickstart/slack-messages-with-reactions.png)
+
+## Conclusion
+
+Claude Desktop can now access your Slack workspace and read message reactions through the customized MCP server. While the server can be installed directly using a [DXT file](https://github.com/korotovsky/slack-mcp-server/blob/master/docs/03-configuration-and-usage.md#Using-DXT), building from source lets you customize functionality for your workflows.
