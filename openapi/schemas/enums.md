@@ -166,29 +166,9 @@ In this `oneOf` solution, the client has to supply the label and the value, defe
 
 If you are using OpenAPI 3.0 or want to use `enum`, you can use an extension attribute to give labels to enum values. Different code generators and OpenAPI tools use different extension names. Below are examples using the Speakeasy extension field:
 
-### Array Format (Full Coverage)
+### Map Format (Recommended)
 
-The traditional array format provides names for all enum values in order:
-
-```yaml
-components:
-  schemas:
-    CupSize:
-      description: Size of the cup to order, represented by a numeric code with a corresponding label.
-      type: integer
-      enum:
-        - 10
-        - 20
-        - 50
-      x-speakeasy-enums:
-        - Small
-        - Medium
-        - Large
-```
-
-### Map Format (Full or Partial Coverage)
-
-The map format allows you to specify custom names for specific enum values. This is useful when you want to provide names for only some values or when the enum values don't follow a predictable pattern:
+The map format is the recommended approach for `x-speakeasy-enums` as it prevents length mismatch errors and allows flexible naming of enum values. You can specify custom names for specific enum values without worrying about array ordering:
 
 ```yaml
 components:
@@ -230,6 +210,28 @@ components:
 ```
 
 Both string and integer enums support the map format. When using partial coverage, enum values without explicit mappings will use their original values as names in the generated code.
+
+### Array Format (Alternative)
+
+The array format provides names for all enum values in order, but requires that the array length matches the enum values exactly to prevent errors:
+
+```yaml
+components:
+  schemas:
+    CupSize:
+      description: Size of the cup to order, represented by a numeric code with a corresponding label.
+      type: integer
+      enum:
+        - 10
+        - 20
+        - 50
+      x-speakeasy-enums:
+        - Small
+        - Medium
+        - Large
+```
+
+**Note**: The array format requires the order in the enum array to correspond exactly to the custom names in the `x-speakeasy-enums` array. If the lengths don't match, this will cause errors. For this reason, the map format is recommended as the safer approach.
 
 Or you can use a simple text description to prioritize human understanding over tooling support:
 
