@@ -8,55 +8,283 @@ import { FileTree } from "nextra/components";
 
 # Generate a Java SDK from OpenAPI / Swagger
 
-## Java SDK overview
+## Overview
 
-The Speakeasy Java SDK is designed to be easy to use and debug. This includes generating strongly typed classes that enforce required fields and other validations to ensure the messages sent are correct. This allows for a tighter development cycle so API consumers can spend less time developing solutions using the API.
+Speakeasy generates Java SDKs that integrate naturally with existing Java ecosystems, following established conventions for consistency with hand-written libraries. The generated code provides full IDE support, compile-time validation, and seamless integration with standard tooling.
 
-The core features of the SDK include:
-
-- **Type-safety**: Strong typing is used extensively so that problems are seen at compile time, not runtime.
-- **Null-safety**: Primitive types are used where possible, improving **compile-time** null safety. For non-required and nullable fields, the `java.util.Optional` and `JSONNullable` classes are used. Passing Java `null` arguments will provoke an exception.
-- **Builders and method chaining for all SDK objects.** For example, to create a `Person` object:
+**Design principles:**
+- **Native Java ergonomics**: Code generation leverages Java's type system, generics, and method chaining to create APIs that feel natural to Java developers. Builder patterns, fluent interfaces, and standard library types eliminate the need to learn framework-specific abstractions
+- **Comprehensive type safety**: Strong typing catches API contract violations at compile time, while JSR-305/Jakarta nullability annotations provide rich IDE warnings and autocomplete derived directly from your OpenAPI specification
+- **Flexible concurrency models**: Synchronous execution by default supports traditional blocking patterns, while `.async()` mode provides `CompletableFuture<T>` and reactive streams support for non-blocking architectures—enabling incremental adoption without rewriting existing code
+- **Minimal runtime dependencies**: Built on Java standard library primitives like `CompletableFuture<T>` and `Flow.Publisher<T>` rather than heavyweight frameworks, ensuring clean integration into existing codebases and microservice architectures
+- **Specification fidelity**: Method signatures, documentation, and validation rules generated directly from OpenAPI definitions maintain accuracy between API contracts and client code, reducing integration surprises
 
 ```java
-Person person = Person.builder()
-    .firstName("Albert")
-    .lastName("Einstein")
-    .dateOfBirth(LocalDate.parse("1879-03-14"))
+// Initialize SDK with builder pattern - idiomatic Java design
+SDK sdk = SDK.builder()
+    .serverURL("https://api.example.com")
+    .apiKey("your-api-key")
     .build();
+
+// Type-safe method chaining with IDE autocomplete
+User user = sdk.users()
+    .userId("user-123")                    // Required field - compile-time safety
+    .includeMetadata(true)                 // Optional field - null-friendly
+    .call();                               // Synchronous by default
+
+// Seamless async with same API - just add .async()
+CompletableFuture<User> asyncUser = sdk.async().users()
+    .userId("user-123")
+    .includeMetadata(true)
+    .call();
+
+// Native reactive streams support
+Publisher<Order> orderStream = sdk.async().orders()
+    .status("active")
+    .callAsPublisher();
+
+// Pagination with familiar Java patterns
+sdk.orders()
+    .status("completed")
+    .callAsStream()                        // Returns java.util.Stream
+    .filter(order -> order.amount() > 100)
+    .limit(50)
+    .forEach(System.out::println);
+
+// Rich exception handling with context
+try {
+    User result = sdk.users().userId("invalid").call();
+} catch (APIException e) {
+    // Detailed error context from OpenAPI spec
+    System.err.println("API Error: " + e.getMessage());
+    System.err.println("Status: " + e.statusCode());
+}
 ```
 
-- All-field constructors are available for most SDK objects, so a user can get a compile-time indication of changes to the OpenAPI document if required.
-- **Readability**: Appropriately formatted method chaining is more understandable and maintainable.
-- **Discoverability**: Method chaining and favorable naming strategies make life easier. For example, to build a `Person` object, you call `Person.builder()` and **not** `new Builders.PersonFactory()`.
-- **Convenient overloads in builders.** For example, a `long` can be passed directly when the underlying field is `Optional<Long>`.
-- The `java.util.Optional` class is used for non-required arguments.
-- The `JsonNullable` class is used for nullable arguments.
-- The Java platform `OffsetDateTime` and `LocalDate` types are used for `date-time` and `date`.
-- A `utils` package provides shared code used by generated classes, making the generated code easier to follow.
-- Authentication support for OAuth flows and other standard security mechanisms.
-- Custom enum types using string or integer values.
-- Pagination support, including the option to return `java.util.Stream` so that paging is auto-handled.
-- Well-formatted source code to make debugging easier.
+## Core Features
 
-The SDK includes minimal dependencies. It requires:
+### Type Safety & Null Handling
 
-- [Jackson Library](https://github.com/FasterXML/jackson) to serialize and deserialize data over the wire.
-- [Apache HttpClient](https://hc.apache.org/httpcomponents-client-4.5.x/index.html) to make HTTP requests.
-- [Jayway JsonPath](https://github.com/json-path/JsonPath) to support JSON path expressions in Speakeasy metadata fields in OpenAPI documents.
+The SDK provides compile-time validation and runtime checks for required fields, with intuitive null handling:
 
-## Java package structure
+- **Compile-time validation**: Strong typing catches problems before runtime
+- **Runtime validation**: Required fields throw exceptions if missing
+- **Null-friendly setters**: Simple setters without Optional/JsonNullable wrapping
+- **Smart getters**: Return types match field semantics - direct access for required fields, `Optional<T>` for non-required fields, and [`JsonNullable<T>`](https://github.com/OpenAPITools/jackson-databind-nullable) for non-required nullable fields
+
+```java
+// Builder with various field types
+User user = User.builder()
+    .id(123L)                           // Required primitive
+    .name("John Doe")                   // Required string
+    .email("john@example.com")          // Required field
+    .age(30)                           // Optional primitive - defaults if not set
+    .bio("Developer")                   // Optional string - can be null
+    .profileImage(null)                 // Nullable field - accepts null explicitly
+    .build();                           // Throws runtime exception if required fields missing
+
+// Type-safe getters with semantically appropriate return types
+String name = user.name();                    // Direct access for required fields
+Optional<Integer> age = user.age();           // Optional for non-required fields
+JsonNullable<String> bio = user.bio();        // JsonNullable for non-required + nullable fields
+
+// Method chaining with runtime validation
+CreateUserRequest request = CreateUserRequest.builder()
+    .user(user)                         // Required - runtime exception if missing
+    .sendWelcomeEmail(true)             // Optional boolean
+    .metadata(Map.of("source", "api"))  // Optional complex type
+    .build();                           // Validates all required fields
+```
+
+### Fluent Call-Builder Chaining
+
+The SDK supports fluent method chaining that combines method builders with request builders for intuitive API calls:
+
+```java
+// Fluent chaining: method builder → parameters → request body → call
+User res = sdk.updateUser()
+        .id("user-123")                                // Path/query parameters
+        .payload(PatchUser.builder()
+            .name("John Doe")                          // Request body fields
+            .email("john@example.com")
+            .build())
+        .call();                                       // Execute request
+```
+
+### Authentication & Security
+
+- OAuth flows and standard security mechanisms
+- Custom enum types using string or integer values
+- All-field constructors for compile-time OpenAPI change detection
+
+## Synchronous Methods
+
+### Basic Methods
+
+Synchronous methods are the default mode for all SDK calls:
+
+```java
+// Standard synchronous calls
+Portfolio portfolio = sdk.getPortfolio("user-123");
+List<Trade> trades = sdk.getTrades(portfolio.getId());
+```
+
+### Pagination
+
+For synchronous pagination, use `.call()`, `.callAsIterable()`, `.callAsStream()`, or `.callAsStreamUnwrapped()`:
+
+- **`.call()`**: Returns the first page only
+- **`.callAsIterable()`**: Returns `Iterable<>` for for-each iteration with automatic paging
+- **`.callAsStream()`**: Returns `java.util.Stream` of pages with automatic paging
+- **`.callAsStreamUnwrapped()`**: Returns `java.util.Stream` of concatenated items from all pages
+
+```java
+// Stream unwrapped example
+sdk.searchDocuments()
+   .contains("simple")
+   .minSize(200)
+   .maxSize(400)
+   .callAsStreamUnwrapped()  // Returns Stream<Document>
+   .filter(document -> "fiction".equals(document.category()))
+   .limit(200)
+   .forEach(System.out::println);
+```
+
+### Server-Sent Events
+
+For synchronous SSE, use the `events()` method with try-with-resources:
+
+```java
+// Traverse event stream with while loop
+try (EventStream<JsonEvent> events = response.events()) {
+    Optional<JsonEvent> event;
+    while ((event = events.next()).isPresent()) {
+        processEvent(event.get());
+    }
+}
+
+// Use with java.util.Stream
+try (EventStream<JsonEvent> events = response.events()) {
+    events.stream().forEach(this::processEvent);
+}
+```
+
+### Error Handling
+
+Check the status code of the response. If it's an error response, the `error` field contains the decoded error value.
+
+<Callout title="Coming Soon" type="info">
+  Support for throwing unsuccessful status codes as exceptions is coming soon.
+</Callout>
+
+## Asynchronous Methods
+
+### Dual SDK Architecture
+
+Speakeasy Java SDKs implement a dual interface pattern that provides both synchronous and asynchronous programming models without breaking changes:
+
+- **Synchronous by default**: All SDK instances work synchronously out of the box, maintaining compatibility with existing code.
+- **Async opt-in**: Call `.async()` on any SDK instance to switch to asynchronous mode for that method chain.
+- **Consistent API**: The same methods and parameters work in both modes, only the return types differ.
+
+```java
+// Single SDK instance serves both paradigms
+TradingSDK sdk = TradingSDK.builder()
+    .serverURL("https://api.example.com")
+    .apiKey("your-api-key")
+    .build();
+
+// Synchronous usage
+Portfolio portfolio = sdk.getPortfolio("user-123");
+List<Trade> trades = sdk.getTrades(portfolio.getId());
+
+// Asynchronous usage
+CompletableFuture<Portfolio> asyncPortfolio = sdk.async()
+    .getPortfolio("user-123");
+CompletableFuture<List<Trade>> asyncTrades = asyncPortfolio
+    .thenCompose(p -> 
+        sdk.async().getTrades(p.getId()));
+```
+
+### Non-blocking I/O implementation
+
+The async implementation uses Java 11's `HttpClient` async APIs and NIO.2 primitives for end-to-end non-blocking method calls:
+
+- **HTTP requests**: `HttpClient.sendAsync()` with `CompletableFuture<HttpResponse<T>>`
+- **File I/O**: `AsynchronousFileChannel` for non-blocking file methods
+- **Stream processing**: `Flow.Publisher<List<ByteBuffer>>` for efficient byte handling
+
+```java
+// Underlying HTTP implementation
+client.sendAsync(request, HttpResponse.BodyHandlers.ofPublisher())
+    .thenApply(response -> response.body()) // Flow.Publisher<List<ByteBuffer>>
+    .thenCompose(this::decodeJsonAsync);
+```
+
+### Reactive Streams integration
+
+For async iterables, the SDK leverages [Reactive Streams](https://www.reactive-streams.org/) `Publisher<T>` to provide:
+
+- **Backpressure handling**: Consumers control the rate of data processing
+- **Ecosystem interoperability**: Works with [Project Reactor](https://projectreactor.io/), RxJava, Akka Streams, and other reactive libraries
+- **Resource efficiency**: Memory-efficient processing of large datasets
+- **Composition**: Chain and transform async streams declaratively
+
+The examples in this documentation use `Flux` from [Project Reactor](https://projectreactor.io/) to demonstrate interoperability with reactive frameworks.
+
+The SDK implements custom publishers, subscribers, and subscriptions using JDK-native operators while maintaining lightweight dependencies.
+
+### Async Pagination
+
+For async pagination, use `callAsPublisher()` and `callAsPublisherUnwrapped()` methods that return reactive streams:
+
+```java
+// Async pagination - returns Publisher<PageResponse>
+Publisher<UserPageResponse> userPages = sdk.async().listUsers()
+    .callAsPublisher();
+
+// Async pagination unwrapped - returns Publisher<User> (concatenated items)
+Publisher<User> users = sdk.async().listUsers()
+    .callAsPublisherUnwrapped();
+
+// Use with reactive libraries (Flux is from Project Reactor)
+Flux.from(users)
+    .filter(User::isActive)
+    .take(100)
+    .subscribe(this::processUser);
+```
+
+### Async Server-Sent Events
+
+For async SSE, `EventStream` implements `Publisher<EventType>` directly:
+
+```java
+// Async SSE streaming - EventStream implements Publisher and handles async response
+EventStream<LogEvent> eventStream = sdk.async().streamLogs().events();
+
+// Process with reactive libraries - EventStream is a Publisher
+Flux.from(eventStream)
+    .filter(event -> "ERROR".equals(event.getLevel()))
+    .subscribe(this::handleErrorEvent);
+```
+
+### Migration & DevX Improvements
+
+Async-enabled SDKs provide backward compatibility, gradual adoption via `.async()` calls, and compatibility with Java 21+ virtual threads. Additional enhancements include null-friendly parameters, Jakarta annotations, enhanced error handling, and built-in timeout/cancellation support.
+
+### Package Structure
 
 <FileTree>
   <FileTree.File name="build.gradle" />
   <FileTree.File name="build-extras.gradle" />
-  <FileTree.Folder name="build">
-    <FileTree.File name="..." />
-  </FileTree.Folder>
   <FileTree.Folder name="src">
     <FileTree.Folder name="main">
       <FileTree.Folder name="{SDK Package Name}">
         <FileTree.File name="SDK.java" />
+        <FileTree.File name="AsyncSDK.java" />
+        <FileTree.File name="SDKConfiguration.java" />
+        <FileTree.File name="SubSDK.java" />
+        <FileTree.File name="AsyncSubSDK.java" />
         <FileTree.File name="..." />
         <FileTree.Folder name="models">
           <FileTree.Folder name="operations">
@@ -65,8 +293,32 @@ The SDK includes minimal dependencies. It requires:
           <FileTree.Folder name="shared">
             <FileTree.File name="..." />
           </FileTree.Folder>
+          <FileTree.Folder name="errors">
+            <FileTree.File name="..." />
+          </FileTree.Folder>
+        </FileTree.Folder>
+        <FileTree.Folder name="operations">
+          <FileTree.File name="CreateUser.java" />
+          <FileTree.File name="GetUser.java" />
+          <FileTree.File name="PostFile.java" />
+          <FileTree.File name="..." />
         </FileTree.Folder>
         <FileTree.Folder name="utils">
+          <FileTree.File name="HTTPClient.java" />
+          <FileTree.File name="Blob.java" />
+          <FileTree.File name="EventStream.java" />
+          <FileTree.File name="AsyncHooks.java" />
+          <FileTree.File name="AsyncRetries.java" />
+          <FileTree.Folder name="pagination">
+            <FileTree.File name="..." />
+          </FileTree.Folder>
+          <FileTree.Folder name="reactive">
+            <FileTree.File name="..." />
+          </FileTree.Folder>
+          <FileTree.File name="..." />
+        </FileTree.Folder>
+        <FileTree.Folder name="hooks">
+          <FileTree.File name="SDKHooks.java" />
           <FileTree.File name="..." />
         </FileTree.Folder>
       </FileTree.Folder>
@@ -76,136 +328,100 @@ The SDK includes minimal dependencies. It requires:
     <FileTree.File name="..." />
   </FileTree.Folder>
   <FileTree.File name="gradlew" />
-  <FileTree.File name="gradlew.bat" />
   <FileTree.File name="settings.gradle" />
-  <FileTree.Folder name="gradle">
-    <FileTree.File name="..." />
-  </FileTree.Folder>
   <FileTree.File name="..." />
 </FileTree>
 
-## Build customization
+## Advanced Topics
 
-The `build.gradle` file should not be edited because generation updates will overwrite changes. However, customization of `build.gradle` is possible:
+### Blob Abstraction
 
-- Additions to `build.gradle` can be made by editing `build-extras.gradle`, which is untouched by generation updates.
-- However, `build-extras.gradle` does not allow for the addition of plugins. You need to use the `additionalPlugins` property in `gen.yaml` to add plugins to `build.gradle`:
+The `Blob` class provides efficient byte-stream handling across both sync and async methods:
 
-```yaml
-java:
-  version: 0.2.0
-  artifactID: openapi
----
-additionalPlugins:
-  - 'id("java")'
+```java
+// Create from various sources
+Blob.from(Paths.get("large-file.json"));    // File path
+Blob.from(inputStream);                      // InputStream  
+Blob.from("content");                        // String
+Blob.from(publisherOfByteBuffers);          // Flow.Publisher
+
+// Async consumption
+CompletableFuture<byte[]> bytes = blob.toByteArray();
+CompletableFuture<Path> path = blob.toFile(targetPath);
+Publisher<ByteBuffer> stream = blob.asPublisher();
 ```
 
-Dependencies can be customized in two ways:
+### HTTP Client Customization
 
-- You can add a `dependencies` block to `build-extras.gradle`. Note that with standard Gradle techniques, you can exclude dependencies, exclude transitive dependencies, and modify dependencies in `build-extras.gradle`.
-
-- You can use the `additionalDependencies` property in `gen.yaml`. For example, the fragment below overrides the `jackson-databind` and adds `commons-compress`:
-
-  ```yaml
-  java:
-    version: 0.2.0
-  ---
-  addditionalDependencies:
-    - implementation:com.fasterxml.jackson.core:jackson-databind:2.16.0
-    - api:org.apache.commons:commons-compress:1.26.1
-  ```
-
-## HTTP client
-
-The Java SDK HTTP client is configurable using a class implementing the following interface and is found in the `util` package of the generated code:
+The Java SDK HTTP client is configurable and supports both synchronous and asynchronous methods:
 
 ```java
 public interface HTTPClient {
-    public HTTPResponse<byte[]> send(HTTPRequest request)
-      throws IOException, InterruptedException, URISyntaxException
+    HttpResponse<InputStream> send(HttpRequest request)
+            throws IOException, InterruptedException, URISyntaxException;
+      
+    CompletableFuture<HttpResponse<Blob>> sendAsync(HttpRequest request);
 }
 ```
 
-A default implementation is provided based on `java.net.HttpClient`. Any developer using the SDK can easily replace this implementation with their own:
+A default implementation based on `java.net.HttpClient` provides sync and async patterns with connection pooling and streaming support.
 
-```java
-MyHttpClient client = new MyHttpClient();
+### Data Types & Serialization
 
-SDK sdkInstance = SDK.builder().setClient(client).build();
-```
+The SDK uses native Java types where possible and provides custom handling for complex OpenAPI constructs.
 
-This gives developers using your Java SDK the flexibility to set up proxies, cookie jars, special headers, or any other low-level customization.
+#### Primitive and Native Types
 
-## Serialization and deserialization
-
-Low-level customizations like request and response hooks or `HTTPClient`-based interceptions may require the serialization and deserialization of generated objects to and from JSON.
-
-You **must** use the generated custom Jackson `ObjectMapper` for these actions. The `ObjectMapper` is available as a Singleton in the generated `utils` package via `JSON.getMapper()`.
-
-## Java SDK data types and classes
-
-### Primitives and native types
-
-Where possible, the Java SDK uses native types from the language and uses primitives to increase null safety. For example:
+Where possible, the Java SDK uses native types and primitives to increase null safety:
 
 - `java.lang.String`
-- `java.time.OffsetDateTime`
-- `java.time.LocalDate`
-- `java.math.BigInteger`
-- `java.math.BigDecimal`
+- `java.time.OffsetDateTime` for `date-time` format
+- `java.time.LocalDate` for `date` format  
+- `java.math.BigInteger` for unlimited-precision integers
+- `java.math.BigDecimal` for unlimited-precision decimals
 - `int` (or `java.lang.Integer`)
 - `long` (or `java.lang.Long`)
 - `float` (or `java.lang.Float`)
 - `double` (or `java.lang.Double`)
 - `boolean` (or `java.lang.Boolean`)
 
-### Unlimited-precision numerics
+#### Unlimited-Precision Numerics
 
-Using high-precision decimal or integer types is crucial in certain applications, such as in code that manipulates monetary amounts and in situations where overflow, underflow, or truncation caused by precision loss can lead to significant incidents.
-
-To mark a field as an unlimited-precision integer, you can use either an integer:
+For applications requiring high-precision decimal or integer types (such as monetary amounts), use format specifications:
 
 ```yaml
+# Unlimited-precision integer
 type: integer
 format: bigint
-```
-
-Or a string:
-
-```yaml
+# OR
 type: string
 format: bigint
 ```
 
-The above types are mapped to `java.math.BigInteger` in the generated SDK. Object builders have convenient overloads that allow for passing integer values directly without wrapping them in `BigInteger`.
-
-Similarly, for an unlimited-precision decimal, you can use either a number:
-
 ```yaml
+# Unlimited-precision decimal  
 type: number
 format: decimal
-```
-
-Or a string:
-
-```yaml
+# OR
 type: string
 format: decimal
 ```
 
-The above types are mapped to `java.math.BigDecimal` in the generated SDK and object builders have convenient overloads that allow passing float and double values directly without wrapping them in `BigDecimal`.
+Both map to `java.math.BigInteger` and `java.math.BigDecimal` respectively, with convenient builder overloads:
 
-**Note:** SDKs in other languages may choose to map to native high-precision types rather than unlimited-precision types. Check the documentation of the language you are interested in.
+```java
+// Object builders accept primitives directly
+Payment.builder()
+    .amount(99.99)              // Accepts double, converts to BigDecimal
+    .transactionId(12345L)      // Accepts long, converts to BigInteger  
+    .build();
+```
 
-### Union types
+#### Union Types
 
-Support for polymorphic types is critical to most production applications. In OpenAPI, these types are defined using the `oneOf` keyword.
+Support for polymorphic types uses OpenAPI's `oneOf` keyword with different strategies based on discriminator presence.
 
-#### Non-discriminated `oneOf`
-
-The subtypes of a non-discriminated `oneOf` type may be objects or primitives, so a **composition** approach is adopted to represent a `oneOf` type.
-
-Consider this OpenAPI fragment:
+**Non-discriminated oneOf** uses composition:
 
 ```yaml
 Pet:
@@ -214,78 +430,22 @@ Pet:
     - $ref: "#/components/schemas/Dog"
 ```
 
-Here's how a `Pet` is created in Java code:
-
 ```java
-Cat cat = ...;
-Dog dog = ...;
+Cat cat = Cat.builder().name("Whiskers").build();
+Dog dog = Dog.builder().name("Rex").build();
 
-// Pet.of only accepts Cat or Dog types, and throws if passed null.
+// Pet.of accepts only Cat or Dog types
 Pet pet = Pet.of(cat);
-```
 
-Here is how a `Pet` is inspected:
-
-```java
-Pet pet = ...; // might be returned from an SDK call
-if (pet.value() instanceof Cat) {
-   Cat cat = (Cat) pet.value();
-   // Do something with the cat.
-} else if (pet.value() instanceof Dog) {
-   Dog dog = (Dog) pet.value();
-   // Do something with the dog.
-} else {
-   throw new RuntimeException("unexpected value, openapi definition has changed?");
-}
-```
-
-Java versions 14+ also offer pattern-matching language features, which you can use as follows:
-
-```java
-Pet pet = ...; // might be returned from an SDK call
+// Type inspection for handling
 if (pet.value() instanceof Cat cat) {
-   // Do something with the cat.
+    System.out.println("Cat: " + cat.name());
 } else if (pet.value() instanceof Dog dog) {
-   // Do something with the dog.
-} else {
-   throw new RuntimeException("unexpected value, openapi definition has changed?");
+    System.out.println("Dog: " + dog.name());
 }
 ```
 
-#### `oneOf` customization
-
-In some circumstances, the `of` static factory method of a `oneOf` class may need to be differentiated by a suffix to avoid type erasure. For example, you would need to use a suffix to differentiate the two array subtypes in the following fragment:
-
-```yaml
-Info:
-  oneOf:
-    - type: array
-      items:
-        type: integer
-      x-speakeasy-name-override: counts
-    - type: array
-      items:
-        type: string
-      x-speakeasy-name-override: descriptions
-```
-
-Without accounting for this scenario, the static factory methods `Info.of(List<Long>)` and `Info.of(List<String>)` would conflict due to generic type erasure by the Java compiler and cause a compile error in the generated code. Code generation detects this scenario and adds an `of` method suffix. For the fragment above, the generated static factory methods are the following:
-
-- `ofCounts(List<Long>)`
-- `ofDescriptions(List<String>)`
-
-A suffix for `of` is selected according to the following priority (and only for subtypes with potential erasure conflicts):
-
-- Use the `x-speakeasy-name-override` value, if present.
-- Use the Speakeasy-calculated name of the type, if present.
-- Use the Speakeasy-calculated name of the item type, if present.
-- Use the 1-based subtype index.
-
-#### Discriminated `oneOf`
-
-The subtypes of a discriminated `oneOf` type must be objects, so an interface-based **inheritance** approach can be adopted, as it provides more polymorphic convenience than the composition approach.
-
-Consider this OpenAPI fragment:
+**Discriminated oneOf** uses inheritance:
 
 ```yaml
 Pet:
@@ -294,256 +454,224 @@ Pet:
     - $ref: "#/components/schemas/Dog"
   discriminator:
     propertyName: petType
-    mapping:
-      cat: "#/components/schemas/Cat"
-      dog: "#/components/schemas/Dog"
 ```
-
-Here's how a `Pet` is created in Java code:
 
 ```java
-Pet cat = Cat.builder().name("Moggie").build();
-Pet dog = Dog.builder().name("Fido").build();
+Pet cat = Cat.builder().name("Whiskers").build();  // Cat implements Pet
+Pet dog = Dog.builder().name("Rex").build();       // Dog implements Pet
 ```
 
-`Pet` is a Java interface with a single `petType()` method, and `Cat` and `Dog` both implement that interface.
+**oneOf Type Erasure Handling:**
 
-The `discriminator` property should be marked as required in the `oneOf` subtypes. Considering the discriminator has a constant value in each `oneOf` subtype, it also makes sense to use a Singleton `enum` or a `const` for the `discriminator` property type.
-
-The `enum` is used as follows:
+When generic types would conflict, suffixed factory methods are generated:
 
 ```yaml
-    Cat:
-      type: object
-      properties:
-        name:
-          type: string
-        petType:
-          type: string
-          enum: [cat]
-     required: [name, petType]
+Info:
+  oneOf:
+    - type: array
+      items: { type: integer }
+      x-speakeasy-name-override: counts
+    - type: array  
+      items: { type: string }
+      x-speakeasy-name-override: descriptions
 ```
 
-The `const` is used in the same way:
+```java
+// Generates specialized factory methods to avoid erasure
+Info countsInfo = Info.ofCounts(List.of(1, 2, 3));
+Info descriptionsInfo = Info.ofDescriptions(List.of("a", "b", "c"));
+```
+
+**anyOf Support:**
+
+The `anyOf` keyword is treated as `oneOf` with forgiving deserialization—when multiple subtypes match, the heuristic selects the subtype with the greatest number of matching properties.
+
+#### Enums
+
+**Closed Enums** (standard Java enum):
+
+```java
+public enum Color {
+    RED("red"), GREEN("green"), BLUE("blue");
+    
+    @JsonValue
+    private final String value;
+    
+    public String value() { return value; }
+    
+    public static Optional<Color> fromValue(String value) {
+        // Returns Optional.empty() for unknown values
+    }
+}
+```
+
+**Open Enums** with `x-speakeasy-unknown-values: allow`:
 
 ```yaml
-    Cat:
-      type: object
-      properties:
-        name:
-          type: string
-        petType:
-          type: string
-          const: cat
-     required: [name, petType]
+Color:
+  type: string
+  enum: [red, green, blue]
+  x-speakeasy-unknown-values: allow
 ```
 
-#### `oneOf` deserialization
-
-Speakeasy uses a forgiving deserialization strategy for `oneOf`. If more than one match exists in the subtypes, a heuristic selects a **best** match (rather than throwing an exception). This strategy fits nicely with the auto-transformation of `anyOf` to `oneOf` while considering `anyOf` implementation options.
-
-In short, the `oneOf` deserialization heuristic (only applied when deserializing a JSON object) returns the first matching subtype that has the greatest number of properties.
-
-#### `anyOf`
-
-The `anyOf` keyword is frequently used when `oneOf` is appropriate. Speakeasy is still considering specific `anyOf` implementation options. For the moment, `anyOf` is always treated as a `oneOf`. The heuristic used for `oneOf` deserialization is described above and ensures compatibility with `anyOf`.
-
-### Enums
-
-An OpenAPI `enum` is represented using a normal Java `enum` such as the following:
+Generates a concrete class instead of Java enum:
 
 ```java
-   public enum Color {
+// Looks like enum but handles unknown values
+Color red = Color.RED;                    // Static constants
+Color unknown = Color.of("purple");       // Handles unknown values
+boolean isUnknown = unknown.isUnknown();   // Check if value is unknown
 
-        RED("red"),
-        GREEN("green"),
-        BLUE("blue");
-
-        @JsonValue
-        private final String value;
-
-        private ColorEnum(String value) {
-            this.value = value;
-        }
-
-        public String value() {
-            return value;
-        }
-
-        public static Optional<Console> fromValue(long value) {
-            for (Color o: Color.values()) {
-                if (Objects.deepEquals(o.value, value)) {
-                    return Optional.of(o);
-                }
-            }
-            return Optional.empty();
-        }
+// For switch expressions, convert to real enum
+unknown.asEnum().ifPresent(knownColor -> {
+    switch (knownColor) {
+        case RED -> System.out.println("Red");
+        // ... handle known values
     }
+});
 ```
 
-The above enum is **closed** in the sense that if a user attempts to deserialize an unexpected `enum` value (like `orange` for the `enum` above), then an exception will be thrown.
+#### Custom Serialization
 
-#### Open enums
-
-Speakeasy also supports an **open enum** to ensure that an enum can evolve without breaking outdated API SDK usage. The addition of the `x-speakeasy-unknown-values: allow` extension to an `enum` changes the code generation to produce a concrete class rather than a Java `enum`.
-
-Consider the following when using this concrete class:
-
-- It looks like a Java `enum` and compiles without changes for simple usage. For example, `Color.RED` is used for both closed and open enums.
-- Like a closed enum, it has a `value()` method that can hold an unknown value.
-- It has an `isUnknown()` method to indicate that the value is not a declared `enum` member.
-- It offers the `values()` method used to iterate all members of an enum. The same signature is used for both closed and open enums.
-- Like a Java `enum`, it honors reference equality. For example, `Color.RED == Color.of("red")` and `Color.BROWN == Color.of("brown")`.
-- Is not usable in a switch expression. It can only be used with `int`, `String`, and `enum` types in Java.
-- You can use the convenience method `Optional<ColorEnum> asEnum()` to access a real `enum` if desired, for example, in a switch expression. However, you have to navigate the `Optional` value, and `ColorEnum` is only relevant for known `enum` values.
-- It includes custom serialization and deserialization for ensuring Singleton references.
-
-Be aware that migrating a closed enum to an open enum may bring about compile errors in an end-user's code, because the concrete class cannot be used in a switch expression in the way a Java `enum` can. This is a breaking change. For this reason, it is helpful to identify potentially **open** enums earlier rather than later.
-
-## Parameters
-
-If parameters are defined in the OpenAPI document, Speakeasy will generate methods with parameters as part of the method call itself rather than as part of a separate request object.
-
-The number of parameters defined should not exceed the `maxMethodParams` value configured in the `gen.yaml` file. If they do or the `maxMethodParams` value is absent or set to `0`, all generated methods require a single request object that contains all the parameters that may be used to call an endpoint in the API.
-
-## Default values
-
-The `default` keyword in the OpenAPI specification allows a user to omit a field or parameter and it will be set with a given default value.
-
-Default values are represented in the Java SDK with `java.util.Optional` wrappers. Passing `Optional.empty()`, or if you're using a builder, not setting the field or parameter, will mean that the default value in the OpenAPI document is used.
-
-Bear in mind that it's lazy-loaded (only loaded once) and that if the default value is not valid for the given type, an `IllegalArgumentException` will be thrown. For example, if `default: abc` is specified for `type: integer`, the exception is thrown.
-
-If you encounter this situation, you have two options:
-
-- Regenerate the SDK with a fixed default value in the OpenAPI document.
-- Set the value of the field explicitly, so that the once-only lazy load of the default value never occurs. This technique is most likely the immediate workaround for a user who does not own the SDK repository.
-
-## Constant values
-
-The `const` keyword in the OpenAPI specification ensures that a field is essentially read-only and that its value will be the specified constant. Fields for `const` will not be settable in all-parameter constructors or builders, their value will be set internally. However, `const` fields are readable in terms of object getters. The `const` values are lazy-loaded once only (like `default` values). If the `const` value is not valid for the given type, then an `IllegalArgumentException` will be thrown. The best fix for this is to regenerate the SDK with a fixed `const` value in the OpenAPI document.
-
-## Errors
-
-To handle errors in the Java SDK, you need to check the status code of the response. If it is an error response, the `error` field of the response will contain the decoded error value.
-
-<Callout title="Coming Soon" type="info">
-  Support for throwing unsuccessful status codes as exceptions is coming soon.
-</Callout>
-
-## Pagination and `java.util.Stream`
-
-Enabling pagination for an operation in your API is described [here](/docs/customize/runtime/pagination).
-
-If pagination is enabled for an operation, you have the option to run `.call()`, `.callAsIterable()`, `.callAsStream()`, or `.callAsStreamUnwrapped()` when using the operation builder.
-
-- The `.call()` method will return the first page, and you will have to repeatedly check for the existence of another page and retrieve it.
-- The `.callAsIterable()` method returns an `Iterable<>` that can be used with for-each iteration style. Page retrieval is handled automatically as the iteration progresses.
-- The `callAsStream()` method returns a `java.util.Stream` of the pages, allowing you to use the convenient `java.util.Stream` API. Retrieving more pages when required and available is handled automatically.
-- The `callAsStreamUnwrapped()` method returns a `java.util.Stream` of the concatenated items in the lists on each page. Concatenation and page retrieval are handled automatically.
-
-Below is an example of `callAsIterable()`:
+You **must** use the generated custom Jackson `ObjectMapper` for serialization/deserialization:
 
 ```java
-SDK sdk = SDK.builder() ... ;
+// Access the singleton ObjectMapper
+ObjectMapper mapper = JSON.getMapper();
 
-var iterable = sdk.searchDocuments()
-    .contains("simple")   // parameter
-    .minSize(200)         // parameter
-    .maxSize(400)         // parameter
-    .callAsIterable();    // returns Iterable<DocumentsPageResponse>
-
-for (var response : iterable) {
-    List<Document> documents = response.res()
-        .map(page -> page.documents())
-        .orElse(Collections.emptyList());
-    for (Document document : documents) {
-        if ("fiction".equals(document.category())) {
-            System.out.println(document.name());
-        }
-    }
-}
+// Serialize/deserialize generated objects
+String json = mapper.writeValueAsString(user);
+User user = mapper.readValue(json, User.class);
 ```
 
-Below is an example of `callAsStream()`:
+### Build Customization
+
+- **Preserve customizations**: Use `build-extras.gradle` for additions (untouched by generation updates)
+- **Add plugins**: Use `additionalPlugins` property in `gen.yaml`
+- **Manage dependencies**: Add to `build-extras.gradle` or use `additionalDependencies` in `gen.yaml`
+
+```yaml
+java:
+  version: 0.2.0
+---
+additionalPlugins:
+  - 'id("java")'
+additionalDependencies:
+  - implementation:com.fasterxml.jackson.core:jackson-databind:2.16.0
+```
+
+### Dependencies
+
+The SDK maintains minimal dependencies:
+
+- [Jackson Library](https://github.com/FasterXML/jackson) for JSON serialization/deserialization
+- [Apache HttpClient](https://hc.apache.org/httpcomponents-client-4.5.x/index.html) for HTTP requests
+- [Jayway JsonPath](https://github.com/json-path/JsonPath) for JSON path expressions in Speakeasy metadata
+
+## Configuration Reference
+
+### Parameters & Method Generation
+
+Method parameter handling is controlled by the `maxMethodParams` configuration in `gen.yaml`:
+
+```yaml
+java:
+  version: 1.0.0
+  maxMethodParams: 5  # Default threshold
+```
+
+**When parameter count ≤ `maxMethodParams`:**
+```java
+// Parameters become method arguments
+User user = sdk.getUser("user-123", true, "email,name");
+```
+
+**When parameter count > `maxMethodParams` or `maxMethodParams = 0`:**
+```java  
+// All parameters wrapped in request object
+GetUserRequest request = GetUserRequest.builder()
+    .userId("user-123")
+    .includeMetadata(true) 
+    .fields("email,name")
+    .build();
+    
+User user = sdk.getUser(request);
+```
+
+### Default Values & Constants
+
+The SDK handles OpenAPI `default` and `const` keywords with lazy-loading behavior:
+
+#### Default Values
+
+Fields with `default` values use `Optional` wrappers and lazy-loading:
+
+```yaml
+# OpenAPI specification
+User:
+  type: object
+  properties:
+    status:
+      type: string
+      default: "active"
+```
 
 ```java
-SDK sdk = SDK.builder() ... ;
+// Usage - passing Optional.empty() uses the OpenAPI default
+User user = User.builder()
+    .name("John")
+    .status(Optional.empty())  // Will use "active" from OpenAPI spec
+    .build();
 
-sdk.searchDocuments()    // builder for the request
-   .contains("simple")   // parameter
-   .minSize(200)         // parameter
-   .maxSize(400)         // parameter
-   .callAsStream()       // returns Stream<DocumentsPageResponse>
-   .flatMap(x -> x.res() // returns Optional<DocumentsPage>
-                  .stream()
-                  .flatMap(y -> y.documents().stream()))
-   // we are now dealing with a Stream<Document>
-   .filter(document -> "fiction".equals(document.category())
-   .limit(200) // no more than 200 documents
-   .map(document -> document.name())
-   .forEach(System.out::println);
+// Or omit the field entirely in builders
+User user = User.builder()
+    .name("John")
+    // status not specified - uses OpenAPI default "active" 
+    .build();
 ```
 
-Note that the `flatMap` calls above concatenate the page lists. If you use `callAsStreamUnwrapped`, it concatenates the page lists for you, so you can omit `flatMap`:
+**Important:** Default values are lazy-loaded once. If the OpenAPI default is invalid for the field type (e.g., `default: abc` for `type: integer`), an `IllegalArgumentException` is thrown.
+
+**Workarounds for invalid defaults:**
+1. Regenerate SDK with corrected OpenAPI default
+2. Always set the field explicitly to avoid lazy-loading the invalid default
+
+#### Constant Values
+
+Fields with `const` values are read-only and set internally:
+
+```yaml
+# OpenAPI specification
+ApiResponse:
+  type: object
+  properties:
+    version:
+      type: string
+      const: "1.0"
+```
 
 ```java
-sdk.searchDocuments()    // builder for the request
-   .contains("simple")   // parameter
-   .minSize(200)         // parameter
-   .maxSize(400)         // parameter
-   .callAsStreamUnwrapped()
-   // we are now dealing with a Stream<Document>
-   .filter(document -> "fiction".equals(document.category())
-   .limit(200) // no more than 200 documents
-   .map(document -> document.name())
-   .forEach(System.out::println);
+// Const fields are not settable in constructors or builders
+ApiResponse response = ApiResponse.builder()
+    .data(responseData)
+    // version is automatically set to "1.0" - cannot be overridden
+    .build();
+
+// But const values are readable via getters
+String version = response.version(); // Returns "1.0"
 ```
 
-## Server-sent events
+Like default values, `const` values are lazy-loaded once. Invalid const values throw `IllegalArgumentException`.
 
-General Speakeasy support for server-sent events (SSE) is described [here](/docs/customize-sdks/server-sent-events).
+### User Agent Strings
 
-When an operation response has a content type of `text/event-stream`, the generated response class will have an `events()` method.
+The Java SDK includes a user agent string in all requests for tracking SDK usage:
 
-The `events()` method can be used to traverse the event stream using a `while` loop:
-
-```java
-// We use try-with-resources to ensure closure of the underlying HTTP connection.
-try (EventStream<JsonEvent> events = response.events()) {
-    Optional<JsonEvent> event;
-    while ((event = events.next()).isPresent()) {
-         processEvent(event.get());
-    }
-}
 ```
-
-The `events()` method can also be used with `java.util.Stream`:
-
-```java
-// We use try-with-resources to ensure the closure of the underlying HTTP connection.
-try (EventStream<JsonEvent> events = response.events()) {
-    events.stream().forEach(event -> processEvent(event));
-}
-```
-
-The `events()` method can also be used to aggregate events into a list:
-
-```java
-// closes for you
-List<JsonEvent> events = response.events().toList();
-events.forEach(event -> processEvent(event));
-```
-
-## User agent strings
-
-The Java SDK will include a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent) string in all requests that can be used to track SDK usage among broader API usage. The format is as follows:
-
-```stmpl
 speakeasy-sdk/java {{SDKVersion}} {{GenVersion}} {{DocVersion}} {{groupId.artifactId}}
 ```
 
-- `SDKVersion` is the version of the SDK, defined in `gen.yaml` and released.
-- `GenVersion` is the version of the Speakeasy generator.
-- `DocVersion` is the version of the OpenAPI document.
-- `groupId.artifactId` is the concatenation of the `groupId` and `artifactId` defined in `gen.yaml`.
+- `SDKVersion`: SDK version defined in `gen.yaml`
+- `GenVersion`: Speakeasy generator version  
+- `DocVersion`: OpenAPI document version
+- `groupId.artifactId`: Concatenated from `gen.yaml` configuration
