@@ -223,3 +223,87 @@ go:
     { key: "description", header: "Description" },
   ]}
 />
+
+## Nullable and optional field handling
+
+```yml
+go:
+  nullableOptionalWrapper: true
+```
+
+<Table
+  data={[
+    {
+      name: "nullableOptionalWrapper",
+      required: "false",
+      default: "newSDK",
+      description:
+        "When enabled, fields that are both optional and nullable in the source schema are generated using a wrapper type with explicit presence semantics: `optionalnullable.OptionalNullable[T]`. Defaults to `true` for new Go SDKs and `false` for existing SDKs to avoid breaking changes.",
+    },
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "required", header: "Required" },
+    { key: "default", header: "Default Value" },
+    { key: "description", header: "Description" },
+  ]}
+/>
+
+### When it applies
+
+The wrapper is generated only for fields that are:
+
+- Optional (the property is not listed in the parent schema's `required` array)
+- Nullable (the property `type` includes `"null"` in OpenAPI 3.1)
+
+For example, the following JSON Schema (OpenAPI 3.1) defines an optional, nullable `nickname`:
+
+```yaml
+type: object
+required:
+  - id
+properties:
+  id:
+    type: string
+  nickname:
+    type:
+      - string
+      - "null"
+```
+
+### Generated code
+
+With `nullableOptionalWrapper: true`, the corresponding Go model uses a wrapper type:
+
+```go
+type Pet struct {
+    ID       string                                    `json:"id"`
+    Nickname optionalnullable.OptionalNullable[string] `json:"nickname,omitempty"`
+}
+```
+
+Without the wrapper (when disabled for existing SDKs), the same field may be generated as a pointer type.
+
+### Using the wrapper
+
+Set values using helper constructors on `OptionalNullable` and retrieve values via `Get()`, which returns `(*T, bool)` — `ok` indicates presence, and a `nil` pointer indicates an explicit null value:
+
+```go
+// Set a present, non-null value
+pet := shared.Pet{}
+nickname := "Finn"
+pet.Nickname = optionalnullable.From(&nickname)
+
+// Read a value
+if val, ok := pet.Nickname.Get(); ok {
+    if val == nil {
+        fmt.Println("nickname is explicitly null")
+    } else {
+        fmt.Println("nickname:", *val)
+    }
+} else {
+    fmt.Println("nickname not set")
+}
+```
+
+Enabling this flag changes the generated field type and how values are set and read. This is a breaking change for existing SDKs and requires migrating code that accessed those fields directly or through pointer checks to use `optionalnullable.From(...)` and `.Get()`.
