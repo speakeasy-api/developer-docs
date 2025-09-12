@@ -50,6 +50,54 @@ Speakeasy generation automatically adds a Terraform schema attribute default wit
 | `oneOf`         | No                    |
 | `string`        | Yes                   |
 
+### Custom Defaults
+
+For unsupported or advanced use cases, the [Terraform SDK supports calling schema-defined custom default logic](https://developer.hashicorp.com/terraform/plugin/framework/resources/default#custom-default-implementations). Create the custom code implementing the [Terraform type-specific `resource/schema/defaults` package interface](https://pkg.go.dev/github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults) in any code location and use the OAS `x-speakeasy-terraform-custom-default` extension to reference that implementation in the schema definition.
+
+In this example, a custom string default implementation is created in `internal/customdefaults/example.go`:
+
+```go
+package customdefaults
+
+import (
+  "context"
+
+  "github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
+  "github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+func Example() defaults.String {
+  return exampleDefault{}
+}
+
+type exampleDefault struct{}
+
+func (d exampleDefault) Description(ctx context.Context) string {
+  return "Example custom default description"
+}
+
+func (d exampleDefault) MarkdownDescription(ctx context.Context) string {
+  return "Example custom default description"
+}
+
+func (d exampleDefault) DefaultString(ctx context.Context, req defaults.StringRequest, resp *defaults.StringResponse) {
+  resp.PlanValue = types.StringValue("example custom default")
+}
+```
+
+With the following OAS configuration on the target property:
+
+```yaml
+example:
+  type: string
+  x-speakeasy-terraform-custom-default:
+    imports:
+      - github.com/examplecorp/terraform-provider-examplecloud/internal/customdefaults
+    schemaDefinition: customdefaults.Example()
+```
+
+The `imports` configuration is optional if the custom code is within the `internal/provider` package and does not require additional imports.
+
 ## Hide Sensitive Properties
 
 Properties marked as `x-speakeasy-param-sensitive` will be concealed from the console output of Terraform. This helps to ensure the confidentiality of sensitive data within Terraform operations.
