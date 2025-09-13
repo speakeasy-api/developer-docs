@@ -26,7 +26,7 @@ As with all Speakeasy SDKs, our PHP SDKs place an emphasis on being idiomatic an
 PHP is live the Speakeasy CLI, so just upgrade to the latest version and create a great SDK for your PHP users:
 
 ```bash
-speakeasy generate sdk -s openapi.yaml -o ./php-sdk -l php
+speakeasy quickstart
 ```
 
 And here’s some example output from the canonical Petstore example API for an `addPet` method:
