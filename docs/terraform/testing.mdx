@@ -1,0 +1,205 @@
+---
+title: "Create Terraform Testing"
+description: |
+  Learn how to create acceptance testing to verify Terraform Provider behaviors.
+---
+
+import { Callout } from "@/mdx/components";
+
+# Terraform Testing
+
+Testing a Terraform Provider is critical for ensuring your customers are successfully able to write configurations that apply consistently without errors or unexpected behaviors.
+
+There are two categories of Terraform Provider testing:
+
+- Manual: Locally install the Terraform Provider with Terraform CLI configuration provider development overrides and run Terraform commands with individual configurations.
+- Automated: Using native Go programming language testing functionality, automatically run Terraform configurations using real Terraform commands for provider code under development.
+
+It is recommended to implement automated testing to simplify development and verification over time.
+
+## Prerequisites
+
+For both categories of testing, [install the Terraform CLI](https://developer.hashicorp.com/terraform/install) where the testing will be ran. Locally, install via a package manager or binary download. On GitHub Actions, install via the [`hashicorp/setup-terraform`](https://github.com/hashicorp/setup-terraform) action.
+
+## Manual Testing
+
+After generating a Terraform Provider using Speakeasy, the README file includes instructions for how to manually test with [Terraform CLI provider development overrides](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers). Those instructions are similar to the below.
+
+In the repository root directory, build the provider binary:
+
+```shell
+go build .
+```
+
+Create or edit your [Terraform CLI configuration file](https://developer.hashicorp.com/terraform/cli/config/config-file), such as `~/.terraformrc`, to point to your provider directory:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "registry.terraform.io/hashicorp/examplecloud" = "/path/to/terraform-provider-examplecloud"
+  }
+  direct {}
+}
+```
+
+Change to any directory containing Terraform configurations for your provider and run Terraform commands such as `terraform apply`. The output should include a warning about the provider development overrides from the `~/.terraformrc` configuration.
+
+## Automated Testing
+
+<Callout title="Info" type="info">
+  Speakeasy intends to generate automated testing in the future, similar to
+  SDKs. Over time, these steps will be automatically handled during generation.
+</Callout>
+
+Automated tests take Terraform configuration(s) and then perform create, read, import, update, and delete actions against those using real Terraform commands. Automated testing also supports writing assertions against the Terraform plan or state per test step. This is accomplished through the HashiCorp-maintained [`github.com/hashicorp/terraform-plugin-testing` Go module](https://pkg.go.dev/github.com/hashicorp/terraform-plugin-testing). Refer to the [Terraform Provider testing documentation](https://developer.hashicorp.com/terraform/plugin/testing) for full details about capabilities.
+
+There are a few steps required to get started:
+
+- Add `github.com/hashicorp/terraform-plugin-testing` dependency to Speakeasy generation so it is automatically downloaded and installed.
+- Create provider code to testing code mapping function.
+- Create resource test files and configurations.
+- Run automated testing.
+
+### Add Dependency
+
+In `.speakeasy/gen.yaml`, add `github.com/hashicorp/terraform-plugin-testing` to the `terraform` section `additionalDependencies` configuration. View the [latest Go package documentation for `terraform-plugin-testing`](https://pkg.go.dev/github.com/hashicorp/terraform-plugin-testing) to retrieve the latest version number.
+
+```yaml
+terraform:
+  # ... other configuration ...
+  additionalDependencies:
+    github.com/hashicorp/terraform-plugin-testing: v1.13.3
+```
+
+### Provider Mapping Function
+
+Create a shared function in `internal/provider/provider_test.go` to reference the provider during testing. Ensure the provider package import matches your Go module name and provider name in the mapping matches the provider type (short name).
+
+```go
+package provider_test
+
+import (
+  "github.com/hashicorp/terraform-plugin-framework/providerserver"
+  "github.com/hashicorp/terraform-plugin-go/tfprotov6"
+  "github.com/examplecorp/terraform-provider-examplecloud/internal/provider"
+)
+
+// Returns a mapping of provider type names to provider server implementations,
+// suitable for acceptance testing via the ProtoV6ProtocolFactories field.
+func testProviders() map[string]func() (tfprotov6.ProviderServer, error) {
+  return map[string]func() (tfprotov6.ProviderServer, error){
+    "examplecloud": providerserver.NewProtocol6WithError(provider.New("test")()),
+  }
+}
+```
+
+### Resource Testing Files
+
+Resource testing code is conventionally written as a Go test file (`internal/provider/xxx_resource_test.go`) while configurations are in `internal/provider/testdata` directories named after the test.
+
+Create a resource test by creating a Go test file, such as `internal/provider/thing_resource_test.go`. Modify the configuration and checks as necessary to match the resource implementation.
+
+```go
+package provider_test
+
+import (
+  "regexp"
+  "testing"
+
+  "github.com/hashicorp/terraform-plugin-testing/config"
+  "github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+  "github.com/hashicorp/terraform-plugin-testing/helper/resource"
+  "github.com/hashicorp/terraform-plugin-testing/knownvalue"
+  "github.com/hashicorp/terraform-plugin-testing/statecheck"
+  "github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+)
+
+// Verifies the create, read, import, update, and delete lifecycle of the
+// `examplecloud_thing` resource.
+func TestThingResource_lifecycle(t *testing.T) {
+  t.Parallel()
+
+  randomName := "test-" + acctest.RandString(10)
+  resourceAddress := "examplecloud_thing.test"
+
+  resource.Test(t, resource.TestCase{
+    ProtoV6ProviderFactories: testProviders(),
+    Steps: []resource.TestStep{
+      // Verifies resource create and read.
+      {
+        ConfigDirectory: config.TestNameDirectory(),
+        ConfigVariables: config.Variables{
+          "name": config.StringVariable(randomName+"-original"),
+        },
+        // Check computed values.
+        ConfigStateChecks: []statecheck.StateCheck{
+          statecheck.ExpectKnownValue(
+            resourceAddress,
+            tfjsonpath.New("id"),
+            knownvalue.StringRegexp(regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)),
+          ),
+        },
+      },
+      // Verifies resource import.
+      {
+        ConfigDirectory: config.TestNameDirectory(),
+        ConfigVariables: config.Variables{
+          "name": config.StringVariable(randomName+"-original"),
+        },
+        ResourceName:      resourceAddress,
+        ImportState:       true,
+        ImportStateVerify: true,
+      },
+      // Verifies resource update.
+      {
+        ConfigDirectory: config.TestNameDirectory(),
+        ConfigVariables: config.Variables{
+          "name": config.StringVariable(randomName+"-updated"),
+        },
+      },
+      // Testing framework implicitly verifies resource delete.
+    },
+  })
+}
+```
+
+Create the associated testing configuration in `internal/provider/testdata/TestThingResource_lifecycle/main.tf`:
+
+```terraform
+variable "name" {
+  type = string
+}
+
+resource "examplecloud_thing" "test" {
+  name = var.name
+}
+```
+
+### Run Automated Testing
+
+<Callout title="Note" type="info">
+  Ensure Speakeasy generation, such as `speakeasy run`, has been run at least
+  once beforehand to ensure the `github.com/hashicorp/terraform-plugin-testing`
+  dependency is downloaded and installed. Verify via `go.mod` file contents.
+</Callout>
+
+Run automated testing via native Go programming language testing functionality, such as the `go test` command. The `github.com/hashicorp/terraform-plugin-testing` Go module requires the `TF_ACC` environment variable to set, conventionally to `1` (enabled). Depending on your provider configuration requirements, you may also need to set other security or server URL environment variables.
+
+Run the following commands to perform the automated testing:
+
+```shell
+# required once per session
+export TF_ACC=1
+
+# ... export any required provider configuration environment variables ...
+
+go test -count=1 -timeout=10m -v ./...
+```
+
+The testing library will handle all the underlying details to run the provider code, call Terraform commands, and verify assertions.
+
+Run individual tests with the `-run` flag, which accepts a regular expression pattern. For example:
+
+```shell
+go test -count=1 -run='TestThingResource_lifecycle' -timeout=10m -v ./...
+```
