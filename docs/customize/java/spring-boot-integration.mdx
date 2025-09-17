@@ -1,0 +1,247 @@
+---
+title: "Spring Boot Integration for Java SDKs"
+description: "Generate Spring Boot auto-configuration modules with layered bean configuration and property-driven setup for Java SDKs."
+---
+
+import { Callout } from "@/mdx/components";
+import { FileTree } from "nextra/components";
+
+# Spring Boot Integration for Java SDKs
+
+Speakeasy auto-generates [Spring Boot starters](https://docs.spring.io/spring-boot/docs/current/reference/html/using.html#using.build-systems.starters) alongside Java SDKs, enabling **zero-configuration integration** with **sensible defaults**.
+
+<Callout title="Configuration" type="info">
+  Set `generateSpringBootStarter: false` in your `gen.yaml` to disable. Enabled by default.
+</Callout>
+
+## Module Structure
+
+<FileTree>
+  <FileTree.File name="build.gradle" />
+  <FileTree.Folder name="src">
+    <FileTree.Folder name="main">
+      <FileTree.Folder name="java">
+        <FileTree.Folder name="{package}">
+          <FileTree.File name="SDK.java" />
+          <FileTree.File name="AsyncSDK.java" />
+          <FileTree.Folder name="models">
+            <FileTree.File name="..." />
+          </FileTree.Folder>
+          <FileTree.Folder name="operations">
+            <FileTree.File name="..." />
+          </FileTree.Folder>
+          <FileTree.Folder name="utils">
+            <FileTree.File name="..." />
+          </FileTree.Folder>
+        </FileTree.Folder>
+      </FileTree.Folder>
+    </FileTree.Folder>
+  </FileTree.Folder>
+  <FileTree.Folder name="{project-name}-spring-boot-autoconfigure">
+    <FileTree.File name="build.gradle" />
+    <FileTree.Folder name="src">
+      <FileTree.Folder name="main">
+        <FileTree.Folder name="java">
+          <FileTree.Folder name="{package}">
+            <FileTree.File name="YourApiAutoConfiguration.java" />
+            <FileTree.File name="YourApiProperties.java" />
+          </FileTree.Folder>
+        </FileTree.Folder>
+        <FileTree.Folder name="resources">
+          <FileTree.Folder name="META-INF">
+            <FileTree.Folder name="spring">
+              <FileTree.File name="org.springframework.boot.autoconfigure.AutoConfiguration.imports" />
+            </FileTree.Folder>
+          </FileTree.Folder>
+        </FileTree.Folder>
+      </FileTree.Folder>
+    </FileTree.Folder>
+  </FileTree.Folder>
+  <FileTree.Folder name="{project-name}-spring-boot-starter">
+    <FileTree.File name="build.gradle" />
+  </FileTree.Folder>
+</FileTree>
+
+Three modules provide complete Spring Boot integration:
+- **Auto-configuration**: Bean registration with [`@ConditionalOnMissingBean`](https://docs.spring.io/spring-boot/docs/current/api/org/springframework/boot/autoconfigure/condition/ConditionalOnMissingBean.html)
+- **Properties**: [`@ConfigurationProperties`](https://docs.spring.io/spring-boot/docs/current/reference/html/features.html#features.external-config.typesafe-configuration-properties) from OpenAPI spec
+- **Starter**: [Dependency aggregator](https://docs.spring.io/spring-boot/docs/current/reference/html/using.html#using.build-systems.starters)
+
+## Configuration Properties
+
+Type-safe `@ConfigurationProperties` are auto-generated from your OpenAPI spec, namespaced under `projectId`:
+
+```java
+@ConfigurationProperties(prefix = "my-api")  // From your gen.yaml projectId
+public class MyApiProperties {
+    // Core Configuration
+    private String serverUrl;                    // From OpenAPI servers section
+    private String server;                       // Server name (if using named servers)
+    private int serverIdx = 0;                   // Server index (0-based, defaults to first server)
+    
+    // Server Variables (from OpenAPI spec)
+    private ServerVariables serverVariables = new ServerVariables();
+    
+    // Security Configuration (flattened from OpenAPI security schemes)
+    private Security security = new Security();
+    
+    // Global Parameters (from OpenAPI components)
+    private Globals globals = new Globals();
+    
+    // SDK Behavior Configuration
+    private RetryConfig retryConfig = new RetryConfig();
+    private HttpClient httpClient = new HttpClient();
+}
+```
+
+**Property Mapping:**
+- **Servers**: Indexed (`serverIdx`) or named (`server`) with variables as enums
+- **Security**: Flattened schemes (API keys, OAuth, HTTP auth)
+- **Global Parameters**: Headers, query params, path params from spec
+- **SDK Behavior**: Retry policies, HTTP client settings
+- **Rich Types**: OpenAPI enums → Java enums, duration strings → `Duration` objects
+
+## Auto-Configuration
+
+Beans are conditionally registered based on classpath and properties:
+
+```java
+@AutoConfiguration
+@ConditionalOnClass(SDK.class)
+@EnableConfigurationProperties(MyApiProperties.class)
+public class MyApiAutoConfiguration {
+    
+    @Bean
+    @ConditionalOnMissingBean
+    public SDK sdk(SDKConfiguration config) {
+        return new SDK(config);  // Main SDK bean
+    }
+    
+    @Bean  // Individual sub-SDKs automatically available
+    @ConditionalOnMissingBean
+    public UsersSDK usersSDK(SDK sdk) { 
+        return sdk.users(); 
+    }
+    
+    @Bean  // Conditional on property presence
+    @ConditionalOnProperty(prefix = "my-api.retry-config", name = "strategy")
+    public RetryConfig retryConfig(MyApiProperties properties) {
+        return convertToRetryConfig(properties.getRetryConfig());
+    }
+    
+    @Bean  // Conditional on security configuration
+    @ConditionalOnPropertyPrefix(prefix = "my-api.security")
+    public SecuritySource securitySource(MyApiProperties properties) {
+        return buildSecurityFromProperties(properties.getSecurity());
+    }
+}
+```
+
+**Bean Registration:**
+- **Core SDK**: Always present with starter
+- **Sub-SDKs**: Per API group (Users, Orders, etc.)
+- **Security**: Conditional on `my-api.security.*`
+- **Retry**: Conditional on `my-api.retry-config.strategy`
+- **Async**: When async mode enabled
+
+## Usage
+
+Configure via `application.yml`:
+
+```yaml
+my-api:  # Namespace from your projectId
+  server-url: "https://api.example.com"
+  server-variables:      # Rich type mapping with enum support
+    environment: PROD    # Enum values provide IDE dropdown selection
+    region: US_EAST_1    # Type-safe enum prevents configuration errors
+  security:              # Structured security configuration
+    api-key: "${API_KEY}"
+    oauth:
+      client-id: "${CLIENT_ID}"
+      client-secret: "${CLIENT_SECRET}"
+  retry-config:          # SDK behaviors with readable duration formats
+    strategy: BACKOFF    # Enum with IDE autocomplete
+    backoff:
+      initial-interval: 500ms    # Duration parsing: ms, s, m, h
+      max-interval: 30s          # Human-readable format
+      max-elapsed-time: 5m       # Automatically converted to Duration objects
+  globals:               # Global parameters from OpenAPI spec
+    user-agent: "MyApp/1.0"
+    api-version: "2023-10"
+  http-client:           # HTTP behavior configuration
+    enable-debug-logging: false
+    redacted-headers: ["Authorization", "X-API-Key"]
+```
+
+Inject and use with zero boilerplate:
+
+```java
+@RestController
+public class UserController {
+    
+    @Autowired
+    private UsersSDK usersSDK;          // Direct sub-SDK injection
+    
+    @Autowired 
+    private AsyncUsersSDK asyncUsersSDK; // Async variant
+    
+    // Synchronous usage
+    @GetMapping("/users/{id}")
+    public User getUser(@PathVariable String id) {
+        return usersSDK.getUser()
+            .userId(id)
+            .call();
+    }
+    
+    // Reactive usage with WebFlux
+    @GetMapping("/users/{id}/async")
+    public Mono<User> getUserAsync(@PathVariable String id) {
+        return Mono.fromFuture(
+            asyncUsersSDK.getUser()
+                .userId(id)
+                .call()  // Returns CompletableFuture<User>
+        );
+    }
+    
+    // Streaming data
+    @GetMapping(value = "/users/stream", produces = "application/x-ndjson")
+    public Flux<User> streamUsers(@RequestParam String department) {
+        Publisher<User> userStream = asyncUsersSDK.listUsers()
+            .department(department)
+            .callAsPublisher(); // Returns Publisher<User> for pagination
+        
+        return Flux.from(userStream);
+    }
+}
+```
+
+## WebFlux Integration
+
+Async SDKs integrate seamlessly with [Spring WebFlux](https://docs.spring.io/spring-framework/docs/current/reference/html/web-reactive.html):
+- `CompletableFuture` → `Mono` conversion
+- `Publisher` → `Flux` for streaming (pagination, SSE, JSONL)
+- Non-blocking [reactive streams](https://docs.spring.io/spring-framework/docs/current/reference/html/web-reactive.html#webflux-reactive-streams) support
+
+## Publishing
+
+**No workflow changes required.** Gradle auto-configures additional artifacts:
+- `{project-name}-spring-boot-autoconfigure-{version}.jar`
+- `{project-name}-spring-boot-starter-{version}.jar`
+
+Published alongside your main SDK to existing repositories.
+
+## Benefits
+
+**For API Producers:**
+- Zero deployment overhead
+- Reduced support via familiar [Spring Boot patterns](https://docs.spring.io/spring-boot/docs/current/reference/html/using.html)
+- Faster adoption by Spring developers
+- Enterprise appeal with [Actuator](https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html) and ecosystem compatibility
+
+**For SDK Users:**
+- Add starter dependency, configure via `application.yml`
+- Type-safe properties with IDE support
+- Rich type mapping (enums, durations)
+- WebFlux integration when async enabled
+
+**Compatibility:** Spring Boot 2.x/3.x, Java 11+
