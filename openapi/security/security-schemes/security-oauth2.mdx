@@ -1,31 +1,20 @@
 ---
-title: OAuth 2 in OpenAPI best practices
-description: "Implement OAuth 2 authentication using Security Schemes in your OpenAPI specification for better security, developer experience, and seamless integration."
+title: "OAuth 2 in OpenAPI"
+description: "Implement OAuth 2 authentication using security schemes in your OpenAPI document to improve security with short-lived tokens."
 ---
 import { Table } from "@/mdx/components";
 
-# OAuth 2 Security Scheme in OpenAPI
+# The OAuth 2 security scheme in OpenAPI
 
-OAuth 2 is a popular open authentication mechanism that supports an
-authentication flow allowing servers to authenticate on behalf of a user, and/or
-a whole application. 
+OAuth 2 is a popular open authentication mechanism that supports an authentication flow allowing servers to authenticate on behalf of a user or an entire application.
 
-While more generally used for authenticating end-users (e.g.: Log in with
-Facebook), it is also used machine-to-machine flows where a whole application
-authenticates itself with the API (e.g. Connect Shopify to Xero).
+While more generally used for authenticating end users (for example, logging the user in with Facebook), OAuth 2 is also used for machine-to-machine flows where a whole application authenticates itself with the API (for example, connecting Shopify to Xero).
 
-OAuth 2 is considered more secure than other mechanisms due to its granted
-privileges through short-lived tokens that limit damage from intercepted tokens.
-Tokens that can only be used for a day can only cause damage for a day, and a
-well built API will not allow those tokens to be used to escelate privileges
-(change users password) so there's less damage to be done whilst the token is
-valid.
+OAuth 2 is considered more secure than other mechanisms due to its granting privileges through short-lived tokens that limit damage from intercepted tokens. Tokens that can only be used for a day can only cause damage for a day. A well-built API won't allow short-lived tokens to be used to escalate privileges (for example, to change a user's password), so less damage can be done while the token is valid.
 
-The OAuth 2 protocol defines multiple ways of building a request against the
-`tokenUrl` endpoint, and supports mutliple flows at once so that different types
-of integrations can be set up for the same API.
+The OAuth 2 protocol defines multiple ways of building a request against the `tokenUrl` endpoint and supports multiple flows at once, so that developers can set up different types of integration for the same API.
 
-## OAuth 2 Security Scheme Object in OpenAPI
+## Defining the OAuth 2 security scheme
 
 The fields for an OAuth 2 security scheme are as follows:
 
@@ -34,7 +23,7 @@ The fields for an OAuth 2 security scheme are as follows:
     { field: "`type`", type: "String", required: "✅", description: "`oauth2`" },
     { field: "`description`", type: "String", required: "", description: "Human-readable information. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description." },
     { field: "`flows`", type: "Map[{key}, [OAuth Flow Object](#oauth-flow-object)]", required: "✅", description: "An object containing configuration for the available OAuth 2 flows. Valid keys are `implicit`, `password`, `clientCredentials`, and `authorizationCode`." },
-    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the security scheme object to be used by tooling and vendors." }
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the Security Scheme Object to be used by tooling and vendors." }
   ]}
   columns={[
     { key: "field", header: "Field" },
@@ -44,7 +33,7 @@ The fields for an OAuth 2 security scheme are as follows:
   ]}
 />
 
-Below is an example of an OAuth 2 security scheme using the `clientCredentials` flow:
+The following example shows an OAuth 2 security scheme using the `clientCredentials` flow:
 
 ```yaml
 components:
@@ -59,32 +48,29 @@ security:
   - clientCredentials: []
 ```
 
-## OAuth Flow Object in OpenAPI
+## Defining OAuth flows
 
-The value of the `flows` object is a map of OAuth 2 flow objects.
+The value of the [OAuth Flows Object](https://spec.openapis.org/oas/v3.1.0#oauth-flows-object) is a map of [OAuth Flow Objects](https://spec.openapis.org/oas/v3.1.0#oauth-flow-object).
 
-The four OAuth 2 flows that OpenAPI v3.1 supports are:
+The OpenAPI Specification 3.1 supports the following four OAuth Flow Objects:
 
-- `clientCredentials` (previously, `application` in OpenAPI 2.0) - [Client Credentials Flow Object](#client-credentials-flow-object)
-- `authorizationCode` (previously, `accessCode` in OpenAPI 2.0) - [Authorization Code Flow Object](#authorization-code-flow-object)
-- `password` - [Password Flow Object](#password-flow-object)
-- `implicit` - [Implicit Flow Object](#implicit-flow-object)
+- The [Client Credentials](#the-client-credentials-flow) flow (using `clientCredentials`, previously `application` in OpenAPI 2.0)
+- The [Authorization Code](#the-authorization-code-flow) flow (using `authorizationCode`, previously `accessCode` in OpenAPI 2.0)
+- The [Password](#the-password-flow) flow (using `password`)
+- The [Implicit](#the-implicit-flow) flow (using `implicit`)
 
-Each flow object has its own configuration parameters, so let's look at them individually.
+Each OAuth Flow Object has its own configuration parameters, so let's look at them individually.
 
-### Client Credentials Flow Object in OpenAPI
+### The Client Credentials flow
 
-The Client Credentials flow is generally used for machine-to-machine
-communication where a specific user's permission and context is not required.
-Think of an entire application integrating with a whole other application, to
-sync billing information or other organization-wide information.
+The Client Credentials flow is generally used for machine-to-machine communication that doesn't require a specific user's permission and context. Think of an entire application integrating with a whole other application, to sync billing information or other organization-wide information.
 
 <Table
   data={[
     { field: "`tokenUrl`", type: "String", required: "✅", description: "The token URL to be used for this flow." },
     { field: "`refreshUrl`", type: "String", required: "", description: "The URL to be used for refreshing the token. No refresh URL means the token is not refreshable." },
     { field: "`scopes`", type: "Map[String, String]", required: "✅", description: "The available scopes for the OAuth 2 flow, with a description for each scope. Although the specification requires this field, it can be an empty object." },
-    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow Object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
   ]}
   columns={[
     { key: "field", header: "Field" },
@@ -110,10 +96,9 @@ components:
             write: Grants write access
 ```
 
-### Authorization Code Flow Object in OpenAPI
+### The Authorization Code flow
 
-The Authorization Code flow is generally used for server-side applications where
-the client secret can be securely stored.
+The Authorization Code flow is generally used for server-side applications that can safely store the client secret.
 
 <Table
   data={[
@@ -121,7 +106,7 @@ the client secret can be securely stored.
     { field: "`tokenUrl`", type: "String", required: "✅", description: "The token URL to be used for this flow." },
     { field: "`refreshUrl`", type: "String", required: "", description: "The URL to be used for refreshing the token. No refresh URL means the token is not refreshable." },
     { field: "`scopes`", type: "Map[String, String]", required: "✅", description: "The available scopes for the OAuth 2 flow, with a description for each scope. Although the specification requires this field, it can be an empty object." },
-    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow Object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
   ]}
   columns={[
     { key: "field", header: "Field" },
@@ -131,7 +116,7 @@ the client secret can be securely stored.
   ]}
 />
 
-The example below shows an OAuth 2 security scheme using the `authorizationCode` flow:
+The following example shows an OAuth 2 security scheme using the `authorizationCode` flow:
 
 ```yaml
 components:
@@ -148,19 +133,16 @@ components:
             write: Grants write access
 ```
 
+### The Password flow
 
-
-### Password Flow Object in OpenAPI
-
-The Password flow is generally used for trusted first-party clients that can
-securely store the client secret.
+The Password flow is generally used for trusted first-party clients that can securely store the client secret.
 
 <Table
   data={[
     { field: "`tokenUrl`", type: "String", required: "✅", description: "The token URL to be used for this flow." },
     { field: "`refreshUrl`", type: "String", required: "", description: "The URL to be used for refreshing the token. No refresh URL means the token is not refreshable." },
     { field: "`scopes`", type: "Map[String, String]", required: "✅", description: "The available scopes for the OAuth 2 flow, with a description for each scope. Although the specification requires this field, it can be an empty object." },
-    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow Object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
   ]}
   columns={[
     { key: "field", header: "Field" },
@@ -170,7 +152,7 @@ securely store the client secret.
   ]}
 />
 
-The example below shows an OAuth 2 security scheme using the `password` flow:
+The following example shows an OAuth 2 security scheme using the `password` flow:
 
 ```yaml
 components:
@@ -186,20 +168,16 @@ components:
             write: Grants write access
 ```
 
-### Implicit Flow Object in OpenAPI
+### The Implicit flow 
 
-The Implicit flow is generally used for browser/client-side applications that
-can't keep a client secret, as in a browser all code and data is available to
-the user. This was popular for a while, but IETF's OAuth working group
-recommends **not using the implicit grant** anymore. Read more about why
-[here](https://medium.com/oauth-2/why-you-should-stop-using-the-oauth-implicit-grant-2436ced1c926).
+The Implicit flow is generally used for browser or client-side applications that can't keep a client secret because, in a browser, all code and data are available to the user. Although it was popular for a while, the IETF's OAuth working group [recommends **not using the implicit grant** anymore](https://medium.com/oauth-2/why-you-should-stop-using-the-oauth-implicit-grant-2436ced1c926).
 
 <Table
   data={[
     { field: "`authorizationUrl`", type: "String", required: "✅", description: "The authorization URL to be used for this flow." },
     { field: "`refreshUrl`", type: "String", required: "", description: "The URL to be used for refreshing the token. No refresh URL means the token is not refreshable." },
     { field: "`scopes`", type: "Map[String, String]", required: "✅", description: "The available scopes for the OAuth 2 flow, with a description for each scope. Although the specification requires this field, it can be an empty object." },
-    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow Object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
   ]}
   columns={[
     { key: "field", header: "Field" },
@@ -209,7 +187,7 @@ recommends **not using the implicit grant** anymore. Read more about why
   ]}
 />
 
-The example below shows an OAuth 2 security scheme using the `implicit` flow:
+The following example shows an OAuth 2 security scheme using the `implicit` flow:
 
 ```yaml
 components:
@@ -225,11 +203,11 @@ components:
             write: Grants write access
 ```
 
-## OAuth 2 Security Scheme With Multiple Flows in OpenAPI
+## Using OAuth 2 with multiple flows
 
-If an API needs multiple OAuth 2 flows then that's absolutely fine. To do this,
-describe each of the flows in the `flows` object. Here's an example using the
-`authorizationCode` and `clientCredentials` flows:
+If needed, you can use multiple OAuth 2 flows in a single API by describing each of the flows in the OAuth Flows Object.
+
+Consider the following example, which uses both the `authorizationCode` flow and the `clientCredentials` flow:
 
 ```yaml
 components:
@@ -254,10 +232,9 @@ security:
   - oauth2: []
 ```
 
-If different endpoints supported different flows, then they would be split into
-different `securitySchemes`. In this example, the whole API is secured by
-`clientCredentials`, except for the `/profile` endpoint, which requires
-`authorizationCode`.
+If you have an API in which different endpoints support different flows, split the endpoints into different `securitySchemes`.
+
+Consider this example, where the whole API is secured by `clientCredentials` except for the `/profile` endpoint, which requires `authorizationCode`:
 
 ```yaml
 security:
@@ -293,19 +270,17 @@ components:
 
 ```
 
-## Scopes in OAuth 2 in OpenAPI
+## Scopes in OAuth 2
 
-Scopes are used to define more granular permissions or access controls.
+In an API, scopes define more granular permissions or access controls. APIs can use very generic scopes, like `read` and `write`.
 
-Sometimes this is very generic like `read` and `write`. 
-
-Some APIs focus on different resources:
+Other APIs focus on different resources:
 
 - `invoices`
 - `customers`
 - `orders`
 
-Some go even further and break scopes into resources and actions: 
+Some go even further and break scopes into resources and actions:
 
 - `invoices:read`
 - `invoices:write`
@@ -317,12 +292,11 @@ Some go even further and break scopes into resources and actions:
 - `orders:write`
 - `orders:delete`
 
-This not only makes sure people are not seeing things they should not be seeing,
-but limits accidental data loss when misconfigured applications go rogue.
+You can use detailed scopes not only to ensure that users don't see anything they shouldn't, but to limit accidental data loss when misconfigured applications go rogue.
 
-The scopes are defined in the `scopes` object of the OAuth flow object, and the
-scopes required for a specific operation are defined in the `security` object of
-the operation.
+Scopes are defined in the `scopes` field of the OAuth Flow Object, and the
+scopes required for a specific operation are defined in the Security Requirement Object (the `security` field) for
+that operation:
 
 ```yaml
 components:
@@ -347,9 +321,9 @@ paths:
             - drinks:read
 ```
 
-### No scopes
+### Using OAuth 2 without scopes
 
-Scopes are optional, and an API may not use them at all. If that is the case the scopes can be defined as an empty object `{}`, and an empty list of scopes `[]` as the security requirement.
+Scopes are optional, and an API may not use them at all. To create an API without scopes, define `scopes` as an empty object `{}` and define the security requirement (for example, `oauth2` below) as an empty list of scopes `[]`.
 
 ```yaml
 components:
@@ -366,13 +340,12 @@ security:
   - oauth2: []
 ```
 
-## What about OAuth 2.1 and Device Authorization?
+## OAuth 2.1 and Device Authorization
 
-OAuth 2.1 is a simplified version of OAuth 2 that combines the best practices and
-removes the less secure flows. There are not many changes which are directly related to OpenAPI, the existing structure works fine.
+OAuth 2.1 is a simplified version of OAuth 2 that combines its best practices and removes the less secure flows. There aren't many changes directly related to OpenAPI, so the existing structure works fine for both versions.
 
-For more information on OAuth 2.1, you can refer to the [OAuth 2.1 specification](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13) to understand the changes and improvements made in this version. 
+For more information on the changes and improvements made in OAuth 2.1, refer to [the OAuth 2.1 specification](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13).
 
-There is a new OAuth flow called Device Authorization, which is not yet supported in OpenAPI v3.1. This will be added in OpenAPI v3.2, which is currently in development.
+**Device Authorization** is a new OAuth flow (also called a grant) that is not yet supported in the OpenAPI Specification 3.1. It will be added in the OpenAPI Specification 3.2, which is currently in development.
 
-For more information on the Device Authorization flow, take a look at the [OAuth 2 Device Authorization Grant specification](https://datatracker.ietf.org/doc/html/rfc8628).
+For more information on the Device Authorization grant, take a look at the specification for the [OAuth 2.0 Device Authorization grant](https://datatracker.ietf.org/doc/html/rfc8628).

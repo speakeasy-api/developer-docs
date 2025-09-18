@@ -1,44 +1,46 @@
 ---
-title: API Key in OpenAPI best practices
-description: "Implement API key authentication using Security Schemes in your OpenAPI specification for better security, developer experience, and seamless integration."
+title: "API Key in OpenAPI"
+description: "Implement API key authentication using security schemes in your OpenAPI document."
 ---
 import { Table } from "@/mdx/components";
 
-# API Key Security Scheme in OpenAPI
+# The API Key security scheme in OpenAPI
 
 
-An API Key security scheme is the most common form of authentication for machine-to-machine APIs and supports passing a pre-shared secret in several ways. The secret can be passed either via the Authorization header (or another custom header), as a query parameter, or via a cookie.
+An API Key security scheme is the most common form of authentication for machine-to-machine APIs. It supports passing a pre-shared secret via the Authorization header (or another custom header), via a cookie,  or as a query parameter.
 
 
-Here's an example of an API key being passed in the query string.
+The following examples demonstrate the three methods for passing an API key.
 
-```http
-GET /drinks?api_key=abcdef12345
-```
+- As a query string:
 
-or as a request header:
+    ```http
+    GET /drinks?api_key=abcdef12345
+    ```
 
-```http
-GET /something HTTP/1.1
+- As a request header:
 
-Speakeasy-API-Key: abcdef12345
-```
+    ```http
+    GET /something HTTP/1.1
+    
+    Speakeasy-API-Key: abcdef12345
+    ```
 
-or as a cookie:
+- As a cookie:
 
-```http
-GET /something HTTP/1.1
+    ```http
+    GET /something HTTP/1.1
+    
+    Cookie: X-API-KEY=abcdef12345
+    ```
 
-Cookie: X-API-KEY=abcdef12345
-```
+Although the API Key security scheme is one of the most commonly used mechanisms, its security depends on the type of key used and how it was generated. Passing an API key via a header or cookie is often more secure than passing it via a query parameter, because logging mechanisms often store query param information.
 
-API Keys are one of the most commonly used mechanism, but depending on what that key is and how its generated it may not well be very secure. This is especially true if the key is passed outside of headers or cookies (that is, via query params, as various logging mechanisms normally store query param information).
+The biggest security flaw is that most preshared secrets are long-lived, and if intercepted, can be used until they expire (generally in months or years) or are revoked. This risk is usually tolerated for machine-to-machine applications, as the chance of interception (especially when using private VPCs/TLS and other mechanisms) is relatively low compared to that of a key from a user's device traveling on a public network.
 
-The biggest security flaw is that most pre-shared secrets are long-lived and if intercepted, can be used until they are either revoked or expire (generally in months or years). This risk is normally tolerated for machine-to-machine applications as the chance of interception (especially when using private VPCs/TLS and other mechanisms) is relatively low compared to a key from a user's device traveling on a public network.
+Regardless of which method you use, using HTTPS or TLS is highly recommended.
 
-Regardless of which method you use, HTTPS/TLS is highly recommended.
-
-## API Key Object
+## Defining the API Key security scheme
 
 The fields for an API Key security scheme are as follows:
 
@@ -48,7 +50,7 @@ The fields for an API Key security scheme are as follows:
     { field: "`description`", type: "String", required: "", description: "Human-readable information. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description." },
     { field: "`in`", type: "String", required: "✅", description: "The location of the API key in the request. Valid values are `query`, `header`, or `cookie`." },
     { field: "`name`", type: "String", required: "✅", description: "The name of the key parameter in the location." },
-    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the security scheme object to be used by tooling and vendors." }
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the Security Scheme Object to be used by tooling and vendors." }
   ]}
   columns={[
     { key: "field", header: "Field" },
@@ -58,7 +60,7 @@ The fields for an API Key security scheme are as follows:
   ]}
 />
 
-To describe an API key, create an object in `securitySchemes` with a name of whatever you like. Perhaps it's just called `ApiKey` but it could be called `anythingYOULikeAuth`. So long as its easy to remember and a valid YAML string. Then the object defines `type: apiKey` and the name of the header/query/cookie parameter as it should show up in the HTTP request.
+To describe an API key, first create an object in `securitySchemes` with a name of your choosing. You can use `ApiKey` or even `anythingYOULikeAuth`, as long as it's easy to remember and a valid YAML string. Then, define the object `type` as `apiKey` and define the name of the header, query, or cookie parameter as it should appear in the HTTP request:
 
 ```yaml
 components:
@@ -71,11 +73,11 @@ security:
   - ApiKey: []
 ```
 
-A description can be added to let API users know where to go to find an API key, or an email address to request one.
+You can add a description to let API users know where to find an API key or which email address to contact to request one.
 
-## Multiple API keys
+## Using multiple API keys
 
-Some APIs require two API keys to be used at once, like an app ID and an app Key. In this case, it's possible to define both keys as `securitySchemes` then reference them both in the same [security requirement object](/openapi/security).
+Some APIs require two API keys to be used at once. For example, users may need to use an app ID and an app key simultaneously. In such cases, define both keys as `securitySchemes`, then reference them both in the same [Security Requirement Object](/openapi/security).
 
 ```yaml
 security:

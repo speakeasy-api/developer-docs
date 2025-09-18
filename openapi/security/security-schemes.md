@@ -1,13 +1,13 @@
 ---
 title: "Security Schemes in OpenAPI"
-description: "Describe API authentication and authorization in OpenAPI using Security Schemes."
+description: "Describe API authentication and authorization in OpenAPI using security schemes."
 ---
 
 # Security schemes in OpenAPI
 
-Most APIs have some form of authorization and/or authentication, from simple API keys to scope-based OAuth 2 tokens on a tight rotation. APIs might support multiple methods in various combinations, so describing what goes where can become a bit of a challenge. OpenAPI helps by supporting a wide array of authorization and authentication methods, all of which can described under the larger umbrella of Security Schemes.
+Most APIs have some form of authorization and authentication, from simple API keys to scope-based OAuth 2 tokens on a tight rotation. APIs might support multiple methods in various combinations, so describing what goes where can become a bit of a challenge. OpenAPI helps by supporting a wide array of authorization and authentication methods, all of which you can describe under the larger umbrella of security schemes.
 
-Security scheme objects are defined in the [Components Object](/openapi/components) in the `securitySchemes` section, and the `security` field references them. The `security` field is an array of security requirement objects, which are maps of security scheme names to scopes.
+Security Scheme Objects are defined in the [Components Object](/openapi/components) in the `securitySchemes` section, and the `security` field references them. The `security` field is an array of Security Requirement Objects, which are maps of security scheme names to scopes.
 
 ```yaml
 paths:
@@ -22,21 +22,21 @@ components:
       scheme: basic
 ```
 
-Each security scheme has a unique name in the `securitySchemes` map, and the `type` field specifies which authentication or authorization method will be used from a predefined list of supported types.
+Each security scheme has a unique name in the `securitySchemes` map. The `type` field specifies which authentication or authorization method (from a predefined list of supported types) is used.
 
 ## Security types
 
-The following authorization/authentication types are supported by OpenAPI as of v3.1:
+The following authorization and authentication types are supported by the OpenAPI Specification 3.1:
 
 - [API Key](/openapi/security/security-schemes/security-api-key)
-- [HTTP Authorization](/openapi/security/security-schemes/security-http) (E.g: Basic, Digest, Bearer, and more)
+- [HTTP Authorization](/openapi/security/security-schemes/security-http) (such as Basic, Digest, and Bearer)
 - [OAuth 2.0](/openapi/security/security-schemes/security-oauth2)
 - [OpenID Connect](/openapi/security/security-schemes/security-openid)
 - [Mutual TLS](/openapi/security/security-schemes/security-mutualtls)
 
-## OpenAPI example security scheme schema
+## Example security scheme schema
 
-Here's an example security schemes object with the sort of values likely to be used. The names are arbitrary and just used for clarity, but could be whatever you want.
+Here's an example Security Schemes Object with the sort of values likely to be used. The names are arbitrary and just used for clarity. You can use any names you want.
 
 ```yaml
 components:
@@ -111,10 +111,10 @@ components:
           refreshUrl: https://example.org/oauth/refresh
 ```
 
-To learn more about different types of security schemes, take a look at the guides for [API Key](/openapi/security/security-schemes/security-api-key), [HTTP Authorization](/openapi/security/security-schemes/security-http) (Basic, Digest, Bearer, and more), [OAuth 2.0](/openapi/security/security-schemes/security-oauth2), [OpenID Connect](/openapi/security/security-schemes/security-openid), or [Mutual TLS](/openapi/security/security-schemes/security-mutualtls).
+To learn more about the different types, take a look at the guides for the [API Key](/openapi/security/security-schemes/security-api-key), [HTTP Authorization](/openapi/security/security-schemes/security-http) (including Basic, Digest, and Bearer), [OAuth 2.0](/openapi/security/security-schemes/security-oauth2), [OpenID Connect](/openapi/security/security-schemes/security-openid), and [Mutual TLS](/openapi/security/security-schemes/security-mutualtls) security schemes.
 
 ## Security requirements
 
-Once these security schemes are defined, they can be referenced by the `security` keyword.
+Once these security schemes have been defined, they can be referenced by the `security` keyword.
 
-**Learn more about security requirements in the [Security Requirements](/openapi/security) section.**
+Learn more about security in the [security requirements](/openapi/security) documentation.
