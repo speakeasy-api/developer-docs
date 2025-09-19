@@ -22,7 +22,7 @@ The core Python SDK features include:
 - Fully type-annotated classes and methods with full Pydantic models and associated TypedDicts.
 - Async and Sync methods for all endpoints.
 - Support for streaming uploads and downloads.
-- Support for Server-Sent Events (SSE).
+- Support for Server-Sent Events (SSE) with automatic method overloads for enhanced type safety.
 - Authentication support for OAuth flows and support for standard security mechanisms (HTTP Basic, application tokens, etc.).
 - Optional pagination support for supported APIs.
 - Optional support for retries in every operation.
@@ -124,6 +124,28 @@ res = s.orders.create_order(drinks=[
     ),
 ])
 ```
+
+## Server-Sent Events (SSE) with type safety
+
+Python SDKs automatically generate method overloads for Server-Sent Events operations when the `inferSSEOverload` configuration is enabled (default: `true`). This feature provides enhanced type safety by creating separate method signatures for streaming and non-streaming responses.
+
+When an operation meets the following criteria, Speakeasy will generate overloaded methods:
+- The operation has a required request body
+- The request body contains a `stream` field (boolean type)
+- The operation has exactly two responses: one `text/event-stream` and one `application/json`
+
+```python
+# Non-streaming method - returns JSON response object
+response = s.chat.create(prompt="Hello world", stream=False)
+print(response.content)  # Fully typed ChatResponse
+
+# Streaming method - returns SSE event iterator
+stream = s.chat.create(prompt="Hello world", stream=True)
+for event in stream:
+    print(event.data)  # Fully typed ChatEvent
+```
+
+This eliminates the need for runtime type checking and provides better IDE support with accurate type hints for both streaming and non-streaming use cases.
 
 ## Async vs Sync Methods
 

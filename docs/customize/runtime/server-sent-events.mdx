@@ -287,8 +287,75 @@ for await (const event of response.chatStream) {
 }
 ```
 
+#### Alternative: Single method with Python overloads
+
+Instead of using URL fragments to create separate methods, you can define a single endpoint that supports both response types. Since `inferSSEOverload` defaults to `true` in your `gen.yaml`, Python SDKs will automatically generate a single overloaded method that provides type safety based on the `stream` parameter value:
+
 <Callout title="Note" type="info">
-  Accross all of these examples, the schema for the events only ever specifies
+  The `inferSSEOverload` feature is currently Python-specific, with support for other languages planned for future releases.
+</Callout>
+
+```yaml
+paths:
+  /chat:
+    post:
+      summary: Create a chat completion from a prompt
+      operationId: create
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: Chat completion response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ChatStream"
+components:
+  schemas:
+    ChatRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+        stream:
+          type: boolean
+          description: Whether to stream the response
+          # The presence of this boolean 'stream' field in the request body
+          # is critical for inferSSEOverload to generate method overloads
+    ChatResponse:
+      # JSON response schema
+    ChatStream:
+      # SSE event schema
+```
+
+This generates type-safe Python methods:
+
+```python
+from myapi import SDK
+
+sdk = SDK()
+
+# Non-streaming - returns ChatResponse
+response = sdk.chat.create(prompt="Hello", stream=False)
+print(response.content)
+
+# Streaming - returns Iterator[ChatStream]
+stream = sdk.chat.create(prompt="Hello", stream=True)
+for event in stream:
+    print(event.data)
+```
+
+<Callout title="Note" type="info">
+  Across all of these examples, the schema for the events only ever specifies
   one or more of the four recognized fields. Adding other fields will trigger a
   validation error when generating an SDK with the Speakeasy CLI or GitHub
   action.
