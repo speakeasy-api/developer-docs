@@ -1,15 +1,13 @@
 ---
-title: "Configure Custom API Contract Tests"
-description: "Learn how to generate contract and end-to-end tests for APIs and SDKs using the Arazzo Specification."
+title: "Configure Custom Contract Tests"
+description: "Learn how to generate custom contracttests using the Arazzo Specification."
 ---
 
 import { Callout, CodeWithTabs } from "@/mdx/components";
 
-<Callout title="Early access" type="warning">
+<Callout title="Beta" type="warning">
 
-We highly recommend fully setting up SDK tests in all your SDK repositories before exploring custom API contract tests.
-
-The ability to run custom end-to-end API contract tests against live APIs is in an early feature set stage.
+We highly recommend fully setting up [SDK tests](/docs/sdk-contract-testing) in all your SDK repositories before exploring custom contract tests.
 
 </Callout>
 
@@ -37,7 +35,7 @@ When a `.speakeasy/tests.arazzo.yaml` file is found in your SDK repo, the Arazzo
 
 ## Prerequisites
 
-Before generating tests, ensure that you meet the [testing feature prerequisites](/docs/sdk-testing#prerequisites).
+Before generating tests, ensure that you meet the [testing feature prerequisites](/docs/sdk-contract-testing#prerequisites).
 
 ## Writing custom end-to-end tests
 
@@ -770,6 +768,7 @@ x-speakeasy-test-server:
 The `TEST_SERVER_URL` environment variable is reserved for use by Speakeasy's mock server. When running tests via `speakeasy test`, if the mock server is generated and enabled, `TEST_SERVER_URL` is automatically set to the URL of the running mock server and overwrites any existing value for that environment variable while running.
 
 If you want to use a custom test server instead of the mock server, you can:
+
 - Use the `--disable-mockserver` flag when running `speakeasy test` to prevent the automatic setting of `TEST_SERVER_URL`
 - Use a different environment variable name (like `CUSTOM_API_URL` in the examples above) for your custom server configuration
 
@@ -794,6 +793,7 @@ The `x-speakeasy-test-security` extension allows static values, values pulled fr
 **Important:** The keys under `value` must exactly match the names of the `securitySchemes` defined in your OpenAPI document's `components.securitySchemes` section.
 
 For example, if your OpenAPI document defines:
+
 ```yaml
 components:
   securitySchemes:
@@ -876,7 +876,11 @@ workflows:
         workflowId: authenticate
         requestBody:
           contentType: application/json
-          payload: {"username": "trystan.crooks@example.com", "password": "x-env: TEST_PASSWORD"}
+          payload:
+            {
+              "username": "trystan.crooks@example.com",
+              "password": "x-env: TEST_PASSWORD",
+            }
         successCriteria:
           - condition: $steps.authenticate.outputs.token != ""
         outputs:
@@ -885,7 +889,22 @@ workflows:
         operationId: createUser
         requestBody:
           contentType: application/json
-          payload: {"email": "Trystan_Crooks@hotmail.com", "first_name": "Trystan", "last_name": "Crooks", "age": 32, "postal_code": 94110, "metadata": {"allergies": "none", "color": "red", "height": 182, "weight": 77, "is_smoking": true}}
+          payload:
+            {
+              "email": "Trystan_Crooks@hotmail.com",
+              "first_name": "Trystan",
+              "last_name": "Crooks",
+              "age": 32,
+              "postal_code": 94110,
+              "metadata":
+                {
+                  "allergies": "none",
+                  "color": "red",
+                  "height": 182,
+                  "weight": 77,
+                  "is_smoking": true,
+                },
+            }
         successCriteria:
           - condition: $statusCode == 200
           - condition: $response.header.Content-Type == "application/json"
@@ -910,6 +929,7 @@ workflows:
 ```
 
 In this example:
+
 - The workflow defines `x-speakeasy-test-security` at the workflow level with `apiKey: $steps.authenticate.outputs.token`
 - The first step (`authenticate`) calls an authentication workflow and captures the token in its outputs
 - All subsequent steps in the workflow will use this dynamically obtained token for authentication
@@ -936,19 +956,20 @@ workflows:
         requestBody:
           contentType: application/json
           payload: {
-            "email": "x-env: TEST_EMAIL; default", # Provide an environment variable and an optional default value if that env variable is not present.
-            "first_name": "Trystan",
-            "last_name": "Crooks",
-            "age": 32,
-            "postal_code": 94110,
-            "metadata": {
-              "allergies": "none",
-              "color": "red",
-              "height": 182,
-              "weight": 77,
-              "is_smoking": true
+              "email": "x-env: TEST_EMAIL; default", # Provide an environment variable and an optional default value if that env variable is not present.
+              "first_name": "Trystan",
+              "last_name": "Crooks",
+              "age": 32,
+              "postal_code": 94110,
+              "metadata":
+                {
+                  "allergies": "none",
+                  "color": "red",
+                  "height": 182,
+                  "weight": 77,
+                  "is_smoking": true,
+                },
             }
-          }
         successCriteria:
           - condition: $statusCode == 200
 ```
