@@ -328,3 +328,74 @@ components:
 In this case, the `BackgroundColor` enum will be generated as a native enum in
 the target language, while the rest of the enums will be generated as a union of
 values.
+
+## Enum value descriptions
+
+Use the `x-speakeasy-enum-descriptions` extension to add descriptions to enum values that will appear as documentation in the generated SDK code. This is particularly useful for providing context about each enum option to SDK users through IDE hints and generated documentation.
+
+The extension supports two formats:
+
+### Array format
+
+Provide descriptions as an array that corresponds to the enum values in order:
+
+```yaml
+components:
+  schemas:
+    ProgrammingLanguage:
+      description: Programming language environment for the generated code.
+      type: string
+      x-speakeasy-enum-descriptions:
+        - Python >= 3.10, with numpy and simpy available.
+        - TypeScript >= 4.0
+      enum:
+        - PYTHON
+        - TYPESCRIPT
+```
+
+A lint rule ensures that the `x-speakeasy-enum-descriptions` array must be the same length as the `enum` array.
+
+### Map format
+
+Alternatively, use a map format where keys are enum values:
+
+```yaml
+components:
+  schemas:
+    ProgrammingLanguage:
+      description: Programming language environment for the generated code.
+      type: string
+      x-speakeasy-enum-descriptions:
+        PYTHON: Python >= 3.10, with numpy and simpy available.
+        TYPESCRIPT: TypeScript >= 4.0
+      enum:
+        - PYTHON
+        - TYPESCRIPT
+```
+
+<Callout title="Note" type="info">
+  The map format is the preferred method when using overlays. If a new enum member is added to the OpenAPI specification that isn't in the `x-speakeasy-enum-descriptions` map, it will only cause a lint warning rather than a lint failure during generation.
+</Callout>
+
+Both formats generate the same output with JSDoc comments:
+
+```typescript
+/**
+ * Programming language environment for the generated code.
+ */
+export enum ProgrammingLanguage {
+    /**
+     * Python >= 3.10, with numpy and simpy available.
+     */
+    PYTHON = "PYTHON",
+
+    /**
+     * TypeScript >= 4.0
+     */
+    TYPESCRIPT = "TYPESCRIPT",
+}
+```
+
+<Callout title="Note" type="info">
+  This feature works primarily with `enumFormat: enum`. When using native enum types, the descriptions will be rendered as JSDoc comments that provide IDE hints and appear in generated documentation. When rendered into literal unions, whilst the description is available above the literal value in source-code, our testing implied most language servers / IDEs will not automatically present it to the user.
+</Callout>
