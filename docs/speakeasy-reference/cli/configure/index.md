@@ -48,6 +48,7 @@ speakeasy configure [flags]
 ### Sub Commands
 
 * [speakeasy configure github](/docs/speakeasy-reference/cli/configure/github)	 - Configure Speakeasy for github.
+* [speakeasy configure local-workflow](/docs/speakeasy-reference/cli/configure/local-workflow)	 - Create a local workflow configuration file.
 * [speakeasy configure publishing](/docs/speakeasy-reference/cli/configure/publishing)	 - Configure Speakeasy for publishing.
 * [speakeasy configure sources](/docs/speakeasy-reference/cli/configure/sources)	 - Configure new or existing sources.
 * [speakeasy configure targets](/docs/speakeasy-reference/cli/configure/targets)	 - Configure new target.
