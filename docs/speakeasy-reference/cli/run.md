@@ -1,22 +1,24 @@
-# run  
-`speakeasy run`  
+# run
 
+`speakeasy run`
 
-Run all the workflows defined in your workflow.yaml file. This can include multiple SDK generations from different OpenAPI sources  
+Run all the workflows defined in your workflow.yaml file. This can include multiple SDK generations from different OpenAPI sources
 
 ## Details
 
-# Run 
- Execute the workflow(s) defined in your `.speakeasy/workflow.yaml` file.
+# Run
+
+Execute the workflow(s) defined in your `.speakeasy/workflow.yaml` file.
 
 A workflow can consist of multiple targets that define a source OpenAPI document that can be downloaded from a URL, exist as a local file, or be created via merging multiple OpenAPI documents together and/or overlaying them with an OpenAPI overlay document.
 
 A full workflow is capable of running the following:
-  - Downloading source OpenAPI documents from a URL
-  - Merging multiple OpenAPI documents together
-  - Overlaying OpenAPI documents with an OpenAPI overlay document
-  - Generating one or many SDKs from the resulting OpenAPI document
-  - Compiling the generated SDKs
+
+- Downloading source OpenAPI documents from a URL
+- Merging multiple OpenAPI documents together
+- Overlaying OpenAPI documents with an OpenAPI overlay document
+- Generating one or many SDKs from the resulting OpenAPI document
+- Compiling the generated SDKs
 
 If `speakeasy run` is run without any arguments it will run either the first target in the workflow or the first source in the workflow if there are no other targets or sources, otherwise it will prompt you to select a target or source to run.
 
@@ -36,7 +38,7 @@ speakeasy run [flags]
   -i, --installationURL string    the language specific installation URL for installation instructions if the SDK is not published to a package manager
       --installationURLs string   a map from target ID to installation URL for installation instructions if the SDK is not published to a package manager (default "null")
       --minimal                   only run the steps that are strictly necessary to generate the SDK
-  -o, --output string             What to output while running (default "summary")
+  -o, --output string             What to output while running (available options: [summary, console, mermaid]) (default "summary")
       --registry-tags strings     tags to apply to the speakeasy registry bundle (comma-separated list)
   -r, --repo string               the repository URL for the SDK, if the published (-p) flag isn't used this will be used to generate installation instructions
   -b, --repo-subdir string        the subdirectory of the repository where the SDK is located in the repo, helps with documentation generation
@@ -60,4 +62,4 @@ speakeasy run [flags]
 
 ### Parent Command
 
-* [speakeasy](/docs/speakeasy-reference/cli/getting-started)	 - The Speakeasy CLI tool provides access to the Speakeasy.com platform
+- [speakeasy](/docs/speakeasy-reference/cli/getting-started) - The Speakeasy CLI tool provides access to the Speakeasy.com platform
