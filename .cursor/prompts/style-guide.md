@@ -330,3 +330,10 @@ Always write "frontend" and "backend" as single words.
 #### Internet
 
 Don't give "internet" an initial capital unless it appears at the start of a sentence.
+
+#### npm
+
+Always write "npm" in lowercase. Never capitalize as "NPM" or treat it as an acronym. See [npm branding guidelines](https://docs.npmjs.com/policies/logos-and-usage).
+
+- ❌ NPM package
+- ✅ npm package
