@@ -36,7 +36,7 @@ speakeasy run [flags]
   -i, --installationURL string    the language specific installation URL for installation instructions if the SDK is not published to a package manager
       --installationURLs string   a map from target ID to installation URL for installation instructions if the SDK is not published to a package manager (default "null")
       --minimal                   only run the steps that are strictly necessary to generate the SDK
-  -o, --output string             What to output while running (default "summary")
+  -o, --output string             What to output while running (summary: visual workflow summary, mermaid: Mermaid diagram of workflow, console: basic console output) (default "summary")
       --registry-tags strings     tags to apply to the speakeasy registry bundle (comma-separated list)
   -r, --repo string               the repository URL for the SDK, if the published (-p) flag isn't used this will be used to generate installation instructions
   -b, --repo-subdir string        the subdirectory of the repository where the SDK is located in the repo, helps with documentation generation
