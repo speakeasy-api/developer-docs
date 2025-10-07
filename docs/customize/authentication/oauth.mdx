@@ -1129,7 +1129,7 @@ security:
   - apiKey: []
 ```
 
-```ts
+```typescript
 import { SDK } from "speakeasy";
 
 const sdk = new SDK();
@@ -1142,12 +1142,12 @@ const result = await sdk.viewOrder({
 });
 ```
 
-### Per-operation OAuth 2.0 scopes
+### Operation level OAuth 2.0 scopes
 
-In the following example:
+Scopes defined in the root-level security section apply globally but can be overridden on a per-operation basis. In the following example:
 
-- the `read` scope is applied globally as it is defined in the root-level `security` section.
-- the `write` scope is required for the `updateOrder` operation.
+- the `read` scope is requested by default as it is defined in the root-level `security` section.
+- the `write` scope will be requested for the `updateOrder` operation only.
 - the `admin` scope is available in the `scopes` property but not actually used by any operation.
 
 ```yaml
@@ -1182,11 +1182,43 @@ security:
   - clientCredentials: [read]
 ```
 
-<Callout type="warning" title="Per-operation scopes">
-  When making a token Request to the `tokenUrl`, all operation-specific scopes
-  used in the specification will be requested alongside globally required
-  scopes. This means that in the example above, all API calls that use the
-  `clientCredentials` security scheme will request both the `read` and `write`
-  scopes. Please ensure that your authorization server can handle this behavior
-  appropriately or contact us for further assistance.
+### User-defined OAuth 2.0 scopes
+
+By enabling the `x-speakeasy-overridable-scopes` extension, end users can override the list of scopes sent to the authorization server for each token request.
+
+<Callout type="warning" title="x-speakeasy-overridable-scopes">
+  The `x-speakeasy-overridable-scopes` extension is currently only supported for the `clientCredentials` flow.
 </Callout>
+
+First, add `x-speakeasy-overridable-scopes: true` to the `clientCredentials` flow definition:
+
+```yaml
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth2/token/
+          x-speakeasy-overridable-scopes: true
+          scopes:
+            read: Grants read access
+            write: Grants write access
+            admin: Grants admin access
+security:
+  - clientCredentials: [read, write]
+```
+
+Users can then specify a custom list of scopes at runtime by setting the `scopes` field when instantiating the security object. When provided, these scopes will take precedence over the ones defined in the OpenAPI specification.
+
+```typescript
+async function run() {
+  const sdk = new SDK({
+    security: {
+      clientID: "<YOUR_CLIENT_ID_HERE>",
+      clientSecret: "<YOUR_CLIENT_SECRET_HERE>",
+      scopes: ["user:read", "user:write"],
+    },
+  });
+}
+```
