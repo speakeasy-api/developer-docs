@@ -7,7 +7,6 @@ import GramCallout from "../.partials/gram-callout.mdx";
 
 <GramCallout />
 
-
 If your team lives in Slack, HubSpot, and an internal ops portal, every task turns into tool-switching: copy a link from Slack, search for the right record in HubSpot, then re-enter the same details into an internal system. It's slow, error-prone, and breaks the flow of work.
 The problem is that often you need both external systems (Slack and HubSpot) and internal tools (often bespoke and hard to change) to move deals forward. Connecting them reliably is a challenge, and getting dev time to polish internal workflows can be difficult.
 
@@ -27,7 +26,6 @@ You'll set up three MCP servers:
 - An internal API MCP server to create small, auditable SalesOps requests
 
 ![Before after diagram](assets/before-after-diagram.png)
-
 
 ## Prerequisites
 
@@ -52,7 +50,7 @@ Let's imagine that your team shares lead updates in a Slack channel called `#lea
 Ask Claude:
 
 ```txt
-In the #leads Slack channel, find the messages marked with :bangbang: emoji reactions. Use the HubSpot tool to add a note to those contacts that I should call them ASAP.
+In the #leads Slack channel, find the messages marked with :bangbang: emoji reactions. Use the HubSpot tool to add a note to those contacts advising me to call them ASAP.
 ```
 
 Claude will:
@@ -66,7 +64,7 @@ Claude will:
 
 The contacts in HubSpot will now have a "schedule call ASAP" note added to their records.
 
-![A screenshot of the HubSpot contact record with the "schedule call ASAP" note](assets/hubspot-note-urgent.png)
+![A screenshot of the HubSpot contact record with the "URGENT: Call ASAP" note](assets/hubspot-note-urgent.png)
 
 Now at this point, you could stop here and manually make account changes for each customer. However, we can take this a step further and use [Gram](https://getgram.ai) to create a SalesOps MCP server that can be used to let Claude interact with our internal account management system.
 
@@ -76,9 +74,9 @@ Once Slack and HubSpot are working smoothly, you can bring your internal tool in
 
 ### Install and run SalesOps Bridge (locally)
 
-You can run the example service included in our example repository.You can find it at `https://github.com/ritza-co/salesops-taskmaster-tooll`.
+You can run the example service included in our example repository. You can find it at `https://github.com/ritza-co/salesops-taskmaster-tool`.
 
-After cloning the repo, navigate to the `internal-taskmaster-tool` directory and run the following commands:
+After cloning the repo, navigate to the `salesops-taskmaster-tool` directory and run the following commands:
 
 ```bash
 cp .env.template .env
@@ -95,23 +93,53 @@ curl http://localhost:3080/health
 
 The API exposes an OpenAPI document at `openapi.yaml` within the repository which we'll use to generate an MCP server on Gram.
 
+### Expose your local service with ngrok
+
+If you want to test in the Gram playground, you'll need to expose your local service using ngrok.
+
+1. Install ngrok:
+
+```bash
+brew install ngrok
+```
+
+Or download from [ngrok.com](https://ngrok.com/download).
+
+2. In a new terminal window, start ngrok to expose port 3080:
+
+```bash
+ngrok http 3080
+```
+
+3. Copy the HTTPS forwarding URL from the ngrok output (it will look like `https://abcd1234.ngrok.app`).
+
+4. Update the server URL in `openapi.yaml`. Open the file and replace the placeholder on line 9 with your ngrok URL:
+
+```yaml
+servers:
+  - url: https://YOUR-NGROK-URL.ngrok.app
+```
+
+Keep the ngrok terminal running while you test with Gram.
+
 ### Create the MCP server on Gram
 
 Let's walk through the process of creating an MCP server on Gram. You can watch the video below for a quick walkthrough. Alternatively, for a more detailed walkthrough, see the [Gram docs](https://docs.getgram.ai/gram-quickstart).
 
-![assets/gram-salesops-internal.mp4](assets/gram-salesops-internal.mp4)
+![A video walkthrough of creating an MCP server on Gram using the SalesOps API](assets/gram-salesops-internal.mp4)
 
 
 1. Import your OpenAPI spec into Gram and generate a toolset.
 2. Fill in your environment variables in the toolset.
 3. You can test the toolset within the Gram Playground.
 
-
 ### Install the MCP server in Claude Desktop
 
-In your SalesOps toolset's MCP tab in Gram, copy the managed auth configuration.
+First, create a Gram API key. In Gram, navigate to **Settings** in the sidebar, click **NEW API KEY**, select the consumer option, then click **CREATE**. Copy the API key.
 
-![assets/copy-managed-auth.png](assets/copy-managed-auth.png)
+Next, get your MCP configuration. Navigate to **Toolsets** in the sidebar, select your SalesOps toolset, then go to the **MCP** tab. Click the **ENABLE** button, scroll down to the managed authentication section, and copy that configuration.
+
+![Screenshot of Gram interface showing MCP installation configurations for pass-through and managed authentication options](assets/copy-managed-auth.png)
 
 In Claude Desktop, go to **Settings → Developer → Edit Config** and add an entry. Replace placeholders with your Gram server slug and API key. (`GET /requests` does not require auth, so Claude can read the dashboard without prompting for approval, while write actions will still require the bearer token you provide.)
 
@@ -178,7 +206,7 @@ Your `claude_desktop_config.json` might look like this:
 }
 ```
 
-To test the complete workflow, open Claude Desktop and send:
+To test the complete workflow, open Claude Desktop and send an example prompt like:
 
 ```txt
 Find the :bangbang: thread in #leads about Acme. Summarize who asked, what's needed, and timing with the Slack link. Then use HubSpot to add a note and a task due tomorrow at 10:00. Finally, create an internal upgrade request via SalesOps Bridge for +10 seats effective the first of next month, including the Slack thread URL and HubSpot ID.
@@ -189,7 +217,6 @@ Find the :bangbang: thread in #leads about Acme. Summarize who asked, what's nee
 After Claude confirms the request ID, you can verify it by visiting the SalesOps Bridge dashboard at `http://localhost:3080/`.
 
 ![A screenshot of the SalesOps Bridge dashboard](assets/taskmaster-salesops.png)
-
 
 ## Final thoughts
 
