@@ -3,7 +3,7 @@ title: What are MCP resources?
 description: Learn how MCP resources function as context objects in the MCP protocol and help LLMs understand the world without causing side effects.
 ---
 
-import GramCallout from "../../.partials/gram-callout.mdx";
+import GramCallout from "../.partials/gram-callout.mdx";
 
 <GramCallout />
 
@@ -242,3 +242,79 @@ MCP resources are **read-only** and addressable via URIs like `note://xyz` or `s
 MCP tools are **actionable** and invoked by the client with parameters to perform an action like writing a file, placing an order, or creating a task.
 
 To avoid decision paralysis, define resources according to **what the client should know** and tools according to **what the client can do**.
+
+## Practical implementation example
+
+In a WhatsApp MCP server, you could expose all image attachments that the server downloads as resources. This way, the MCP client can access the images without having to call a tool every time. The MCP client can simply request the resource by its URL, and the MCP server will return the image data.
+
+Here's how to implement a resource using the TypeScript SDK:
+
+```typescript
+import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { MediaRegistry } from "whatsapp";
+
+mcpServer.resource(
+  "media",
+  new ResourceTemplate("media://{messageId}", {
+    list: () => {
+      const allMedia = mediaRegistry.getAllMediaItems();
+      const resources = [];
+      for (const { mediaItems } of allMedia) {
+        for (const mediaItem of mediaItems) {
+          resources.push({
+            uri: `media://${mediaItem.messageId}`,
+            name: mediaItem.name,
+            description: mediaItem.description,
+            mimeType:
+              mediaItem.mimetype !== "unknown" ? mediaItem.mimetype : undefined,
+          });
+        }
+      }
+      return { resources };
+    },
+  }),
+  async (uri: URL, { messageId }) => {
+    const messageIdRaw = Array.isArray(messageId) ? messageId[0] : messageId;
+    const messageIdString = decodeURIComponent(messageIdRaw);
+    const mediaData =
+      await messageService.downloadMessageMedia(messageIdString);
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          blob: mediaData.data,
+          mimeType: mediaData.mimetype,
+        },
+      ],
+    };
+  },
+);
+```
+
+This code defines a resource called `media` that can be accessed by the MCP client. The resource has a `list` method that returns a list of all media items. The MCP client can then request a specific media item by its URI, and the MCP server will return the media data.
+
+### Notifying clients about resource changes
+
+The MCP server can send a `notifications/resources/list_changed` message to notify the MCP client that the list of resources has changed:
+
+```typescript
+import { MediaItem, MediaRegistry } from "whatsapp";
+
+// When the MCP server detects that a new media item has been added
+mediaRegistry.onMediaListChanged((mediaItems: MediaItem[]) => {
+  mcpServer.sendResourceListChanged();
+});
+```
+
+You can also send a notification when a specific resource has changed:
+
+```typescript
+mediaRegistry.onMediaItemChanged((mediaItem: MediaItem) => {
+  void mcpServer.server.sendResourceUpdated({
+    uri: resourceUri,
+  });
+});
+```
+
+How the LLM client handles resources is up to the client implementation. The MCP server just needs to expose the resources and notify the client when they change.

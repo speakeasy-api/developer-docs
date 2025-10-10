@@ -1,0 +1,102 @@
+---
+title: "Completables: Autocomplete for MCP arguments"
+description: "How to provide autocomplete suggestions for prompt and resource arguments in MCP"
+---
+
+import GramCallout from "../.partials/gram-callout.mdx";
+
+<GramCallout />
+
+# Completables: Autocomplete for MCP arguments
+
+Completables are an advanced MCP feature that provides autocomplete functionality for prompt and resource arguments. When you register a prompt or resource that requires user input, you can make the arguments **completable**, allowing the MCP client to provide suggestions by querying the server for available options.
+
+This feature has not been widely adopted yet, but the TypeScript SDK supports it. Currently, it's primarily implemented in the `@modelcontextprotocol/inspector` client.
+
+## How completables work
+
+When you register a completable argument, the MCP client can send partial input to the server and receive a list of matching suggestions. This is useful for arguments like:
+
+- Chat or conversation names
+- File paths
+- User names
+- Project identifiers
+- Any other values that can be looked up or filtered
+
+## Implementing completables
+
+Here's how to register a completable for a prompt that requires a chat name:
+
+```typescript
+import { Completable } from "@modelcontextprotocol/sdk/server/completable.js";
+
+mcpServer.prompt(
+  "whatsapp_chat_summarizer",
+  "Summarize WhatsApp chat and provide insights",
+  {
+    chatName: Completable.create(z.string(), {
+      complete: async (partial) => {
+        return await chatService.filterChatsBySubstring(partial);
+      },
+    }).describe("Name of the WhatsApp chat to summarize"),
+  },
+  async (args) => {
+    const { chatName = "" } = args;
+
+    // Find the chat by name
+    const targetChat = await chatService.findChatByName(chatName);
+
+    // Get recent messages for analysis
+    const messages = await messageService.getMessages(targetChat.id);
+
+    const promptText = `Analyze this WhatsApp chat data for insights:
+
+Chat Information:
+- Chat Name: ${targetChat.name}
+- Chat Type: ${targetChat.isGroup ? "Group Chat" : "Individual Chat"}
+
+Recent Messages (${messages.length} messages):
+${messages.map((msg) => msg._serializedContent).join("\n")}
+
+Please provide a detailed summary.`;
+
+    return {
+      description: `Summary of WhatsApp chat: ${targetChat.name}`,
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: promptText,
+          },
+        },
+      ],
+    };
+  },
+);
+```
+
+## The autocomplete flow
+
+When a user types into an argument field:
+
+1. The MCP client sends a `completion/complete` request with the partial input
+2. The MCP server calls the `complete` function with the partial string
+3. The server returns matching suggestions
+4. The client displays the suggestions to the user
+5. The user selects a suggestion or continues typing
+
+## Use cases for completables
+
+Completables are particularly valuable for:
+
+- **Large datasets**: When there are too many options to display in a dropdown
+- **Fuzzy matching**: When users might not know the exact spelling
+- **Dynamic data**: When the available options change based on external state
+- **Performance**: When loading all options upfront would be slow
+
+## Current limitations
+
+While completables are part of the MCP specification and supported by the TypeScript SDK, client support is limited. Most MCP clients don't yet implement the `completion/complete` request handling required for this feature to work.
+
+As the MCP ecosystem matures, we expect to see broader adoption of completables across different clients, making them a more practical option for improving the user experience of argument-heavy prompts and resources.

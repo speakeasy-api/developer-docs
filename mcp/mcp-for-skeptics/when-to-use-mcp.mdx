@@ -1,0 +1,190 @@
+---
+title: "When to Use MCP (And When Not To)"
+description: "Understanding when MCP's benefits outweigh its complexity and when simpler alternatives are better"
+---
+
+import GramCallout from "../.partials/gram-callout.mdx";
+
+<GramCallout />
+
+# When to Use MCP (And When Not To)
+
+MCP's complexity is negligible with the right tools and SDKs. It is only a matter of time before the ecosystem matures enough that complexity becomes a non-issue entirely. But you may need to build tools for agents today, without the luxury of waiting for the ecosystem to catch up. So let's look at some scenarios where MCP's benefits outweigh the complexity _today_.
+
+## MCP is useful when you need dynamic tool discovery
+
+If you expect tools to change frequently, or if you want to allow LLMs to discover tools at runtime, MCP's dynamic tool discovery sets it apart from alternatives like function calls.
+
+With MCP, the LLM client can query the MCP server for available tools at any time, and the MCP server can dynamically add or remove tools without requiring client changes.
+
+With the TypeScript MCP SDK, notifying a client of tool changes is as simple as calling `mcpServer.registerTool()`, `tool.enable()`, or `tool.disable()`.
+
+Here's an example of how you might implement dynamic tool discovery in an MCP server:
+
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const mcpServer = new McpServer({
+  name: "Example WhatsApp MCP Server",
+  description: "A Model Context Protocol server for WhatsApp",
+  version: "1.0.0",
+});
+
+const authenticateTool = mcpServer.registerTool("authenticate", {
+  description: "Call this tool to get a QR code to authenticate with WhatsApp",
+  // Tool implementation goes here
+});
+
+const sendChatTool = mcpServer
+  .registerTool("sendChat", {
+    description: "Call this tool to send a chat message on WhatsApp",
+    // Tool implementation goes here
+  })
+  .disable(); // Initially disable the sendChat tool
+
+whatsAppService.on("authenticated", () => {
+  // When the user authenticates
+  sendChatTool.enable(); // Enable the sendChat tool
+  authenticateTool.disable(); // Disable the authenticate tool
+
+  // The SDK automatically notifies the MCP client of the tool changes by sending a
+  // `notifications/tools/list_changed` message.
+
+  // The LLM client can then call `tools/list` to get the updated list of tools
+  // and update the context on the next LLM call.
+});
+
+mcpServer.connect(new StdioServerTransport());
+```
+
+Implementing dynamic tool discovery with MCP is straightforward. The MCP server can add or remove tools at runtime, and the MCP client can discover these changes without needing to reconnect or reinitialize.
+
+Doing the same with function calls would require a custom implementation that tracks available functions and updates the LLM client whenever they change. This is possible, but it adds significant complexity to both the LLM client and custom function codebases.
+
+## MCP is useful when you need stateful interactions
+
+Many real-world AI interactions aren't one-shot operations - they're conversations that build on previous context. This is where MCP's stateful architecture shines.
+
+Consider a data analysis workflow. An analyst asks their AI assistant to:
+
+1. Connect to the production database
+2. Run exploratory queries to understand the schema
+3. Identify anomalies in recent transactions
+4. Generate visualizations of the findings
+5. Create a report with recommendations
+
+With function calling, each step is isolated. The LLM would need to keep all the results in its context window.
+
+With MCP, the MCP server can maintain state across multiple tool calls, allowing for an asyncchronous, multi-step workflow that builds on previous interactions. The LLM can focus on reasoning and analysis, while the MCP server handles the underlying state management.
+
+Here's a concrete example with our WhatsApp MCP server. Imagine implementing a "conversation summary" feature:
+
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const mcpServer = new McpServer({
+  name: "WhatsApp MCP Server",
+  description: "A Model Context Protocol server for WhatsApp",
+  version: "1.0.0",
+});
+
+const getWhatsAppChatById = mcpServer.registerTool("getWhatsAppChatById", {
+  description: "Get a specific WhatsApp chat by its ID",
+  // Define input and output schemas
+});
+
+const getWhatsAppChatSummary = mcpServer.registerTool(
+  "getWhatsAppChatSummary",
+  {
+    description: "Get a summary of a WhatsApp chat",
+    // Define input and output schemas
+  },
+  async (args) => {
+    const chat = await getWhatsAppChatById(args.chatId);
+    // Perform analysis on the chat data
+    const analysisId = whatsAppService.queueAnalyzeChat(chat);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Chat summary for ${args.chatId}: ${chat.summary}`,
+        },
+      ],
+    };
+  },
+);
+
+whatsAppService.on("analysisComplete", (analysisId, result) => {
+  // Register the analysis result as a resource
+  mcpServer.resource({
+    uri: `whatsapp://${analysisId}`,
+    name: `WhatsApp Chat Analysis ${analysisId}`,
+    // implement the resource details to return results
+  });
+
+  // The LLM client can then react to this notification, for example by
+  // including a message in the next LLM call:
+  // "New resource available: WhatsApp Chat Analysis 12345 with URL whatsapp://12345"
+});
+
+mcpServer.connect(new StdioServerTransport());
+```
+
+This statefulness becomes even more powerful with tools like the Playwright MCP server, which maintains a browser session across interactions. The AI can navigate to a page, fill out a form, handle authentication, and scrape results - all while maintaining cookies, session state, and page context. Try doing that with stateless function calls!
+
+## MCP is useful when you need to support multiple LLM APIs
+
+The fragmentation in LLM function calling is painfully subtle. As we showed earlier, each provider has its own format, quirks, and limitations. If you're building tools that need to work across multiple LLMs - or if you just want to avoid vendor lock-in - MCP provides a standardized interface.
+
+With MCP, you write your tool once as a server, and it works identically whether accessed from:
+
+- Claude Desktop
+- ChatGPT (with the upcoming MCP support)
+- Open source LLMs via frameworks that support MCP
+- Your custom application using any LLM provider
+
+## MCP is useful when you need bidirectional communication
+
+Traditional function calling is a one-way street: the LLM calls a function and gets a response. But real-world systems often need to push updates to the AI, and this is where MCP's bidirectional communication shines.
+
+MCP servers can send notifications to clients about:
+
+- New data becoming available
+- System state changes
+- Authentication requirements
+- Progress updates for long-running operations
+
+We included an example of this in the previous section, where the WhatsApp MCP server notifies the LLM client when a chat analysis is complete. The LLM client can then react to this notification, for example by including a message in the next LLM call.
+
+This bidirectional flow enables truly reactive AI systems that respond to changing conditions, rather than just answering queries.
+
+## MCP comes with a pre-defined authorization model
+
+The MCP specification includes OAuth 2.1 support. This allows you to implement secure, standardized authorization flows for your MCP servers.
+
+The tooling is ready to use. The TypeScript MCP SDK provides a dead-simple `ProxyOAuthServerProvider` class for servers that need to implement OAuth 2.1 authorization. On the MCP client side, the SDK provides a `OAuthClientProvider` interface that handles the OAuth 2.1 flow for client developers.
+
+If you need authorization for function calls, you'll need to implement it yourself. This is often straightforward, but as we all know: Never roll your own authentication. Using the standardized OAuth 2.1 flow provided by MCP is a much safer bet.
+
+## MCP is useful when you need composable, reusable tools
+
+One underappreciated benefit of MCP is how it encourages building composable, reusable tools. Because MCP servers are independent processes with standardized interfaces, they naturally become building blocks that different teams can share and combine.
+
+We're seeing this play out in the ecosystem:
+
+- Teams share MCP servers internally like libraries
+- Open source MCP servers are proliferating (we've lost count)
+
+This composability means you can mix and match capabilities:
+
+```text
+AI Assistant =
+  Database MCP Server +
+  Slack MCP Server +
+  GitHub MCP Server +
+  Custom Analytics MCP Server
+```
+
+Each server is maintained independently, tested separately, and can be updated without affecting others. This modular approach is much cleaner than cramming all functionality into a monolithic set of function calls.

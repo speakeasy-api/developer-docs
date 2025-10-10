@@ -3,7 +3,7 @@ title: What are MCP prompts?
 description: Learn how to define, expose, and use prompts in MCP servers.
 ---
 
-import GramCallout from "../../.partials/gram-callout.mdx";
+import GramCallout from "../.partials/gram-callout.mdx";
 
 <GramCallout />
 
@@ -186,3 +186,67 @@ The table below compares the three core primitives in MCP:
 | **Side effects** | None                                  | Yes (I/O, API calls, mutations)    | None                               |
 | **Composition**  | Can embed arguments and resources     | Accepts structured input           | URI-scoped, optionally templated   |
 | **Use cases**    | Summarization, Q&A, message templates | File writing, API calls, workflows | Logs, config files, external data  |
+
+## Practical implementation example
+
+MCP prompts are a powerful way to define reusable templates that combine context from your application with instructions for the LLM. Here's how to implement a prompt using the TypeScript SDK.
+
+This example creates a WhatsApp chat summarization prompt that retrieves chat data and formats it for the LLM:
+
+```typescript
+mcpServer.prompt(
+  "whatsapp_chat_summarizer",
+  "Summarize WhatsApp chat and provide insights",
+  {
+    chatName: z.string().describe("Name of the WhatsApp chat to summarize"),
+  },
+  async (args) => {
+    const { chatName = "" } = args;
+
+    // Find the chat by name
+    // A real implementation would be more robust
+    const targetChat = await chatService.findChatByName(chatName);
+
+    // Get recent messages for analysis
+    const messages = await messageService.getMessages(targetChat.id);
+
+    const promptText = `Analyze this WhatsApp chat data for insights:
+
+Chat Information:
+- Chat Name: ${targetChat.name}
+- Chat Type: ${targetChat.isGroup ? "Group Chat" : "Individual Chat"}
+- Analysis Type: summary
+
+Analysis Focus:
+Provide a comprehensive overview including key topics, sentiment, and notable patterns.
+
+Recent Messages (${messages.length} messages):
+${messages.map((msg) => msg._serializedContent).join("\n")}
+
+Please provide a detailed summary.`;
+
+    return {
+      description: `Summary of WhatsApp chat: ${targetChat.name}`,
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: promptText,
+          },
+        },
+      ],
+    };
+  },
+);
+```
+
+This defines a prompt called `whatsapp_chat_summarizer` that takes a `chatName` argument and generates a formatted prompt with the chat data.
+
+### How prompts work in practice
+
+The LLM client presents a list of available prompts to the user, who can then select one to use. When the user selects a prompt with arguments, the client should display a modal or form allowing the user to fill in the required arguments.
+
+Once the user submits the form, the MCP client sends a `prompts/get` request to the MCP server with the selected prompt and its arguments. The MCP server adds the relevant context to the prompt (in this case, the WhatsApp chat data) and returns the formatted messages to the MCP client. The client can then send these messages to the LLM for processing.
+
+This is especially useful for repetitive tasks where a user needs to combine tool call results with a complex prompt. If you can anticipate the user's needs, you can define a prompt that combines the necessary context and tool calls into a single reusable template.

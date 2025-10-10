@@ -1,0 +1,55 @@
+---
+title: "Dynamic tool discovery in MCP"
+description: "How MCP servers can dynamically add or remove tools at runtime"
+---
+
+import GramCallout from "../.partials/gram-callout.mdx";
+
+<GramCallout />
+
+# Dynamic tool discovery in MCP
+
+Say your WhatsApp MCP server's WhatsApp authentication expires, and you need to re-authenticate. We want to hide the `getWhatsAppChatById` tool until the user re-authenticates. MCP allows you to dynamically change the list of available tools at runtime.
+
+When the MCP server detects that the authentication has expired, it can send a `notifications/tools/list_changed` message to notify the MCP client that the list of tools has changed. The MCP client can then call `tools/list` to get the updated list of tools.
+
+MCP allows you to send a `notifications/tools/list_changed` message **from the MCP server to the MCP client** to notify it that the list of available tools has changed. This is useful for dynamic tool discovery, where the MCP server can add or remove tools at runtime.
+
+```json
+{
+  "method": "notifications/tools/list_changed"
+}
+```
+
+The MCP client can then call `tools/list` to get the updated list of tools. This allows the MCP server to dynamically change its capabilities without requiring the MCP client to reconnect or reinitialize.
+
+Here's what that would look like in our WhatsApp MCP server:
+
+```typescript
+// When the MCP server detects that the authentication has expired, it can send a notification
+
+const authenticationExpiredListener = () => {
+  getWhatsAppChatById.disable(); // Disable the tool
+};
+```
+
+That's it! The TypeScript SDK handles the `notifications/tools/list_changed` message for you, so you don't need to worry about the details. You just call `disable()` on the tool, and the LLM client will automatically update its list of available tools.
+
+When the user re-authenticates, you can re-enable the tool by calling `enable()`:
+
+```typescript
+const reAuthenticatedListener = () => {
+  getWhatsAppChatById.enable(); // Re-enable the tool
+};
+```
+
+## Use cases for dynamic tool discovery
+
+Dynamic tool discovery is particularly useful in scenarios where:
+
+- **Authentication state changes**: Hide tools that require authentication when credentials expire
+- **Feature availability varies**: Show different tools based on user permissions or subscription tiers
+- **Resource availability changes**: Hide tools that depend on external services when those services are unavailable
+- **Context-dependent tools**: Show tools that are only relevant in certain contexts (e.g., only show file operations when a project is open)
+
+By dynamically adjusting the available tools, you can provide a cleaner, more intuitive experience for users without cluttering their tool list with unavailable options.
