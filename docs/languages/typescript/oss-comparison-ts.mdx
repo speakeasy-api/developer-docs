@@ -62,6 +62,12 @@ Here's the summary of how the different generators compare:
       oazapfts: "❌",
     },
     {
+      name: "OpenAPI v3.1 support",
+      speakeasy: "✅",
+      openapiGen: "⚠️ Beta",
+      oazapfts: "❌",
+    },
+    {
       name: "Union types/polymorphism",
       speakeasy: "✅",
       tsFetch: "✅",
@@ -175,7 +181,7 @@ For a detailed comparison, read on.
 
 Although generator installation does not impact the resulting SDKs, your team will install the generator on each new development environment. We believe an emphasis on usability starts at home, and your internal tools should reflect this.
 
-Install the Speakeasy CLI by running the following in the terminal:
+Install the Speakeasy CLI by running the Homebrew install command for macOS, or see the [installation instructions](/docs/speakeasy-reference/cli/getting-started) for other platforms:
 
 ```bash
 brew install speakeasy-api/tap/speakeasy
@@ -187,19 +193,19 @@ Installing `openapi-generator` using Homebrew installs `openjdk@11` and its nume
 brew install openapi-generator
 ```
 
-To install oazapfts, add it to an NPM package a dependency:
+Installing oazapfts is easiest done as an Node.js module with NPM or similar:
 
 ```bash
 # Install oazapfts as a dependency
 npm install oazapfts --save
 ```
 
-Before we run our generators, we'll need an OpenAPI document to feed in. A common OpenAPI document used for testing OpenAPI SDK generators is the [Swagger Petstore](https://petstore3.swagger.io/). 
+These generators will need an OpenAPI document to work with. A common OpenAPI document used for testing all sorts of OpenAPI tooling is the [Train Travel API](https://github.com/bump-sh-examples/train-travel-api).
 
-Start by downloading the YAML from  <https://petstore3.swagger.io/api/v3/openapi.yaml> to the working directory.
+Start by downloading the YAML from  <https://raw.githubusercontent.com/bump-sh-examples/train-travel-api/refs/heads/main/openapi.yaml> to the working directory.
 
 ```bash
-wget https://petstore3.swagger.io/api/v3/openapi.yaml
+wget https://raw.githubusercontent.com/bump-sh-examples/train-travel-api/refs/heads/main/openapi.yaml
 ```
 
 ## Document validation
@@ -212,14 +218,11 @@ To validate `openapi.yaml` using OpenAPI Generator, run the following in the ter
 openapi-generator validate -i openapi.yaml
 ```
 
-The OpenAPI Generator returns two warnings:
+The OpenAPI Generator validator returns the following output:
 
 ```
-Warnings:
-	- Unused model: Address
-	- Unused model: Customer
-
-[info] Spec has 2 recommendation(s).
+Validating spec (openapi.yaml)
+No validation issues detected.
 ```
 
 ### Validation using Speakeasy
@@ -230,17 +233,9 @@ We'll validate the spec with Speakeasy by running the following in the terminal:
 speakeasy validate openapi -s openapi.yaml
 ```
 
-The Speakeasy validator returns ten warnings, seven hints that some methods don't specify return values, and three unused components. Each warning includes a detailed, structured error with line numbers to help us fix validation errors.
+The Speakeasy validator returns one warning, and some hints reminding the author to add examples. Each warning or hint includes a detailed, structured error with line numbers to help us fix anything that needs fixing.
 
-Since both validators validated the spec with only warnings, we can assume that all our generators will generate SDKs without issues.
-
-The Speakeasy validator includes an option to get hints on how to improve our schema. Use the `--output-hints` argument to activate this feature:
-
-```bash
-speakeasy validate openapi --output-hints -s openapi.yaml
-```
-
-This provides a detailed list of hints, all of which would improve SDK users' experience.
+Since the Speakeasy validator produced only a warning and hints, we can assume that all our generators will generate SDKs without issues.
 
 Here's how the generators' validation features compare:
 
@@ -259,7 +254,7 @@ Here's how the generators' validation features compare:
       oazapfts: "❌",
     },
     {
-      name: "Schema hints",
+      name: "Helpful hints beyond validation",
       speakeasy: "✅",
       openapiGen: "❌",
       oazapfts: "❌",
@@ -275,315 +270,686 @@ Here's how the generators' validation features compare:
 
 ## Generating SDKs
 
-Now that we know our OpenAPI spec is valid, we can start generating and comparing SDKs. First, we'll create an SDK using Speakeasy and take a brief look at its structure. Then we'll generate SDKs using the open-source generators and compare the generated code to the Speakeasy SDK.
+Now that the OpenAPI document has been confirmed valid, it's time to start generating and comparing SDKs. First, create an SDK using Speakeasy, and take a brief look at its structure. Then generate SDKs using the other generators, and compare the generated code to the Speakeasy SDK.
 
 ### Generating an SDK using Speakeasy
 
 To create a TypeScript SDK using the Speakeasy CLI, run the following in the terminal:
 
 ```bash
-# Create Petstore SDK using Speakeasy TypeScript generator
 speakeasy quickstart
 ```
 
-The command above creates a new directory called `petstore-sdk-speakeasy`, with the following structure:
+It will ask a few questions about the SDK we want to create, including the OpenAPI document (`openapi.yaml`), the name of the SDK (`TrainTravel`), the language/framework which will be TypeScript, and a package name for publishing to NPM (`train-travel-sdk`). Then pick an output directory for the SDK, for example `train-travel-sdk`.
 
-```
-./
+That's it! The Speakeasy CLI generates the SDK, turns it into a Git repository if requested, and creates the following file structure:
+
+├── CONTRIBUTING.md
+├── FUNCTIONS.md
 ├── README.md
+├── RUNTIMES.md
 ├── USAGE.md
-├── docs/
-│   ├── models/
-│   └── sdks/
-├── files.gen
-├── gen.yaml*
-├── package-lock.json
-├── package.json
-├── src/
+├── dist
+│   ├── commonjs
+│   ├── esm
+│   └── node_modules
+├── docs
+│   ├── lib
+│   ├── models
+│   └── sdks
+├── eslint.config.mjs
+├── examples
+│   ├── node_modules
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── README.md
+│   └── stationsGetStations.example.ts
+├── src
+│   ├── core.ts
+│   ├── funcs
+│   ├── hooks
 │   ├── index.ts
-│   ├── lib/
-│   ├── models/
-│   ├── sdk/
-│   └── types/
+│   ├── lib
+│   ├── models
+│   ├── sdk
+│   └── types
 └── tsconfig.json
-```
 
-At a glance, we can see that Speakeasy creates documentation for each model in our schema and that it creates a full-featured npm package. Code is split between internal tools and the SDK code.
+At a glance, we can see that Speakeasy creates documentation for each model in the API description. It also creates a full-featured NPM package, with all the Markdown files you'd expect to see in any open-source project. 
 
-We'll look at the generated code in more detail in our comparisons below, starting with OpenAPI Generator.
+Code is split between internal tools and the SDK code, and comes packaged ready for distribution to NPM with support for CommonJS and ES Modules.
+
+We'll start poking around the code to get a feel for how it all works, but first, let's generate SDKs using the other generators.
 
 ### Generating SDKs using OpenAPI Generator
 
 OpenAPI Generator is an open-source collection of community-maintained generators. It features generators for a wide variety of client languages, and for some languages, there are multiple generators. TypeScript tops this list of languages with multiple generators, with 11 options to choose from.
 
-The two TypeScript SDK generators from OpenAPI Generator we tried are [typescript-fetch](https://openapi-generator.tech/docs/generators/typescript-fetch/) and [typescript-node](https://openapi-generator.tech/docs/generators/typescript-node/).
+The two TypeScript SDK generators from OpenAPI Generator covered here are [typescript-fetch](https://openapi-generator.tech/docs/generators/typescript-fetch/) and [typescript-node](https://openapi-generator.tech/docs/generators/typescript-node/). Both generators are very similar, but the `typescript-fetch` generator creates SDKs that work in both browser and Node.js environments, while the `typescript-node` generator creates SDKs optimized for Node.js environments.
 
-Usage is the same for both generators, but we'll specify a unique output directory, generator name, and npm project name for each.
-
-We'll generate an SDK for each by running the following in the terminal:
+There is no interactive CLI for OpenAPI Generator, so there are no prompts to guide you on the way. Instead you'll do the whole thing with command line arguments:
 
 ```bash
-# Generate Petstore SDK using typescript-fetch generator
+# Generate Train Travel SDK using typescript-fetch generator
 openapi-generator generate \
   --input-spec openapi.yaml \
   --generator-name typescript-fetch \
-  --output ./petstore-sdk-typescript-fetch \
-  --additional-properties=npmName=petstore-sdk-typescript-fetch
+  --output ./train-travel-sdk-typescript-fetch \
+  --additional-properties=npmName=train-travel-sdk-typescript-fetch
 
-# Generate Petstore SDK using typescript-node generator
+# Generate Train Travel SDK using typescript-node generator
 openapi-generator generate \
   --input-spec openapi.yaml \
   --generator-name typescript-node \
-  --output ./petstore-sdk-typescript-node \
-  --additional-properties=npmName=petstore-sdk-typescript-node
+  --output ./train-travel-sdk-typescript-node \
+  --additional-properties=npmName=train-travel-sdk-typescript-node
 ```
 
-Each command will output a list of files generated and create a unique directory. We specified an npm package name as a configuration argument, `npmName`, for each generator. This argument is required for the generators to create full packages.
+Once run there will be lots of output as OpenAPI Generator churns through the document and generates the SDK, with warnings and output about unsafe access to caffeine... but that's just Java being Java. Ignore all that and look for something like: 
+
+```
+# Thanks for using OpenAPI Generator.
+# We appreciate your support!
+```
+
+If they both worked there will be a list of files generated in each output directory. Let's take a look at the file structure of each generated SDK.
+
+
+The `typescript-fetch` generator creates the following file structure. There is no documentation or examples included, nor contributing guides or other supporting internal Markdown files. Only a README and the code itself are included.
+
+```
+# train-travel-sdk-typescript-fetch
+├── package.json
+├── README.md
+├── src
+│   ├── apis
+│   ├── index.ts
+│   ├── models
+│   └── runtime.ts
+└── tsconfig.json
+```
+
+The `typescript-node` generator a much flatter structure, with no `src/` directory, just an `api` and `model` directory. Similar to the `typescript-fetch` generator, there is no documentation or examples of any sort, and not even a README.
+
+```
+# train-travel-sdk-typescript-node
+├── api
+├── api.ts
+├── model
+├── package.json
+└── tsconfig.json
+```
+
+The code structure is quite different between the two generators, but looking through that comes a little later. There's one more generator to try out.
 
 ### Generating an SDK with oazapfts
 
-To run oazapfts, we'll either need to run it from the local JavaScript project bin folder or install it globally. We opted to run it from the bin folder.
+Oazapfts is essentially a thin wrapper around [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) with TypeScript type definitions. The SDK is generated as a single file, with no documentation, no examples, no package structure at all, so it's all super minimalistic.
 
-Navigate to the local JavaScript project we created for `petstore-sdk-oazapfts` and run the following:
+When oazapfts has been added to a project with `npm install`, it can be called with `npm exec`. This will take the OpenAPI document as one argument and the output `.ts` file as a second argument.
 
 ```bash
-$(npm bin)/oazapfts ../openapi.yaml index.ts
+npm exec oazapfts openapi.yaml index.ts
 ```
 
-Oazapfts runs without any output and generates a single TypeScript file, `index.ts`. Remember that we had to install `oazapfts` as a runtime dependency. Let's see what gets called from the dependency:
+The output TypeScript file `index.ts` will rely on `oazapfts` as a runtime dependency, which provides the necessary functionality for the SDK.
 
-```typescript
+```ts
 import * as Oazapfts from "oazapfts/lib/runtime";
 import * as QS from "oazapfts/lib/runtime/query";
 ```
 
-Code generated by oazapfts excludes the HTTP client code, error handling, and serialization. We can look at the runtime dependencies from `Oazapfts` itself, to get an idea of the dependency graph:
+Code generated by oazapfts excludes the HTTP client code, error handling, and serialization. This means that oazapfts relies on the runtime library to provide these features. This keeps the generated code small, but it also means that the SDK cannot be used without the runtime library and its dependencies.
 
-This is an excerpt from the oazapfts `package.json` file:
+## Comparing generated code
 
-```json
-{
-  "dependencies": {
-    "@apidevtools/swagger-parser": "^10.1.0",
-    "lodash": "^4.17.21",
-    "minimist": "^1.2.8",
-    "swagger2openapi": "^7.0.8",
-    "typescript": "^5.2.2"
-  }
-}
-```
+Let's take a look at how each of the SDK generators handles the same OpenAPI document, and seeing as this is TypeScript lets start with type definitions. To keep things interesting the example we'll focus on is a polymorphic model. Polymorphism is about representing different types that share a common interface. In OpenAPI, [polymorphic objects](/openapi/schemas/objects/polymorphism) are represented using `oneOf` sub-schemas and sometimes the `discriminator` object.
 
-Some of these dependencies clearly relate to the generator itself. For example, we can assume that no SDK client would need access to `swagger-parser` at runtime.
-
-## Polymorphism
-
-The Petstore schema does not include examples of polymorphism in OpenAPI, so we'll add two new schemas for `Dog` and `Cat`, and use them as input and output in the `updatePet` operation.
-
-Add the following to the component schemas in `openapi.yaml`:
+Here's a slightly trimmed down example from the Train Travel API:
 
 ```yaml
-components:
-  schemas:
-    Dog:
-      allOf:
-        - $ref: "#/components/schemas/Pet"
-        - type: object
-          properties:
-            petType:
-              type: string
-              example: Dog
-            bark:
-              type: string
-      xml:
-        name: dog
-    Cat:
-      allOf:
-        - $ref: "#/components/schemas/Pet"
-        - type: object
-          properties:
-            petType:
-              type: string
-              example: Cat
-            hunts:
-              type: boolean
-            age:
-              type: integer
-              format: int32
-      xml:
-        name: cat
+# components.schemas.
+  BookingPayment:
+    type: object
+    properties:
+      amount:
+        type: number
+        description: Amount intended to be collected by this payment. A positive decimal figure describing the amount to be collected.
+      currency:
+        $ref: '#/components/schemas/Currency'
+        description: Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase.
+      source:
+        oneOf:
+          - title: Card
+            type: object
+            properties:
+              object:
+                type: string
+                const: card
+              name:
+                type: string
+              number:
+                type: string
+              cvc:
+                type: string
+                writeOnly: true
+              exp_month:
+                type: integer
+                format: int64
+              exp_year:
+                type: integer
+                format: int64
+              address_post_code:
+                type: string
+            required:
+              - name
+              - number
+              - cvc
+              - exp_month
+              - exp_year
+          - title: Bank Account
+            type: object
+            properties:
+              object:
+                const: bank_account
+                type: string
+              name:
+                type: string
+              number:
+                type: string
+              sort_code:
+                type: string
+              bank_name:
+                type: string
+            required:
+              - name
+              - number
+              - bank_name
 ```
 
-Then add [discriminated unions](https://swagger.io/docs/specification/data-models/inheritance-and-polymorphism/) to the `updatePet` operation:
+How will each generator handle this polymorphic object? Let's find out! 
 
-```yaml
-paths:
-  /pet:
-    put:
-      requestBody:
-        content:
-          application/json:
-            schema:
-              discriminator:
-                propertyName: petType
-                mapping:
-                  dog: "#/components/schemas/Dog"
-                  cat: "#/components/schemas/Cat"
-              oneOf:
-                - $ref: "#/components/schemas/Cat"
-                - $ref: "#/components/schemas/Dog"
-      responses:
-        "200":
-          application/json:
-            schema:
-              discriminator:
-                propertyName: petType
-                mapping:
-                  dog: "#/components/schemas/Dog"
-                  cat: "#/components/schemas/Cat"
-              oneOf:
-                - $ref: "#/components/schemas/Cat"
-                - $ref: "#/components/schemas/Dog"
-```
+### Speakeasy type definitions
 
-After regenerating the SDKs, let's inspect each SDK's `updatePet` method.
+Speakeasy will generate union types for polymorphic objects, and use the discriminator to add runtime type casting for input and output objects. The following code is a snippet of types generated for the `BookingPayment` schema:
 
-We see that oazapfts generates a method that type casts the input and output objects based on the discriminating field `petType`:
+```ts
+/**
+ * Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase.
+ */
+export const Currency = {
+  Bam: "bam",
+  Bgn: "bgn",
+  Chf: "chf",
+  Eur: "eur",
+  Gbp: "gbp",
+  Nok: "nok",
+  Sek: "sek",
+  Try: "try",
+} as const;
+/**
+ * Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase.
+ */
+export type Currency = ClosedEnum<typeof Currency>;
 
-```typescript
-export function updatePet(
-  body:
-    | ({
-        petType: "dog";
-      } & Dog)
-    | ({
-        petType: "cat";
-      } & Cat),
-  opts?: Oazapfts.RequestOpts,
-) {
-  return oazapfts.fetchJson<
-    | {
-        status: 200;
-        data:
-          | ({
-              petType: "dog";
-            } & Dog)
-          | ({
-              petType: "cat";
-            } & Cat);
-      }
-    | {
-        status: 400;
-      }
-    | {
-        status: 404;
-      }
-    | {
-        status: 405;
-      }
-  >(
-    "/pet",
-    oazapfts.json({
-      ...opts,
-      method: "PUT",
-      body,
-    }),
-  );
-}
-```
-
-The SDK generated by typescript-fetch is slightly more verbose, and uses switch statements to derive the types for input and output objects:
-
-```typescript
-export type UpdatePetRequest =
-  | ({ petType: "cat" } & Cat)
-  | ({ petType: "dog" } & Dog);
-
-export function UpdatePetRequestFromJSON(json: any): UpdatePetRequest {
-  return UpdatePetRequestFromJSONTyped(json, false);
-}
-
-export function UpdatePetRequestFromJSONTyped(
-  json: any,
-  ignoreDiscriminator: boolean,
-): UpdatePetRequest {
-  if (json === undefined || json === null) {
-    return json;
-  }
-  switch (json["petType"]) {
-    case "cat":
-      return { ...CatFromJSONTyped(json, true), petType: "cat" };
-    case "dog":
-      return { ...DogFromJSONTyped(json, true), petType: "dog" };
-    default:
-      throw new Error(
-        `No variant of UpdatePetRequest exists with 'petType=${json["petType"]}'`,
-      );
-  }
-}
-
-export function UpdatePetRequestToJSON(value?: UpdatePetRequest | null): any {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (value === null) {
-    return null;
-  }
-  switch (value["petType"]) {
-    case "cat":
-      return CatToJSON(value);
-    case "dog":
-      return DogToJSON(value);
-    default:
-      throw new Error(
-        `No variant of UpdatePetRequest exists with 'petType=${value["petType"]}'`,
-      );
-  }
-}
-```
-
-OpenAPI Codegen adds a union for `Cat` and `Dog` on both input and output, but does not use the discriminator to add runtime type casting:
-
-```typescript
-export class PetService {
-  public static updatePet(
-    requestBody: Cat | Dog,
-  ): CancelablePromise<Cat | Dog> {
-    return __request(OpenAPI, {
-      method: "PUT",
-      url: "/pet",
-      body: requestBody,
-      mediaType: "application/json",
-      errors: {
-        400: `Invalid ID supplied`,
-        404: `Pet not found`,
-        405: `Validation exception`,
-      },
-    });
-  }
-}
-```
-
-The typescript-node generator does not make use of types for unions in OpenAPI:
-
-```typescript
-export class UpdatePetRequest {
-  "id"?: number;
-  "name": string;
-  "category"?: Category;
-  "photoUrls": Array<string>;
-  "tags"?: Array<Tag>;
+/**
+ * A bank account to take payment from. Must be able to make payments in the currency specified in the payment.
+ */
+export type BankAccount = {
+  object?: "bank_account" | undefined;
+  name: string;
   /**
-   * pet status in the store
+   * The account number for the bank account, in string form. Must be a current account.
    */
-  "status"?: UpdatePetRequest.StatusEnum;
-  "petType"?: string;
-  "hunts"?: boolean;
-  "age"?: number;
-  "bark"?: string;
+  number: string;
+  /**
+   * The sort code for the bank account, in string form. Must be a six-digit number.
+   */
+  sortCode?: string | undefined;
+  /**
+   * The name of the bank associated with the routing number.
+   */
+  bankName: string;
+};
 
-  // ...
+/**
+ * A card (debit or credit) to take payment from.
+ */
+export type Card = {
+  object?: "card" | undefined;
+  /**
+   * Cardholder's full name as it appears on the card.
+   */
+  name: string;
+  /**
+   * The card number, as a string without any separators. On read all but the last four digits will be masked for security.
+   */
+  number: string;
+  /**
+   * Card security code, 3 or 4 digits usually found on the back of the card.
+   */
+  cvc: string;
+  /**
+   * Two-digit number representing the card's expiration month.
+   */
+  expMonth: number;
+  /**
+   * Four-digit number representing the card's expiration year.
+   */
+  expYear: number;
+  /**
+   * Postal code associated with the card's billing address.
+   */
+  addressPostCode?: string | undefined;
+};
+
+/**
+ * The payment source to take the payment from. This can be a card or a bank account. Some of these properties will be hidden on read to protect PII leaking.
+ */
+export type Source = Card | BankAccount;
+
+/**
+ * A payment for a booking.
+ */
+export type BookingPayment = {
+  /**
+   * Amount intended to be collected by this payment. A positive decimal figure describing the amount to be collected.
+   */
+  amount?: number | undefined;
+  /**
+   * Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase.
+   */
+  currency?: Currency | undefined;
+  /**
+   * The payment source to take the payment from. This can be a card or a bank account. Some of these properties will be hidden on read to protect PII leaking.
+   */
+  source?: Card | BankAccount | undefined;
+};
+```
+
+Reusing the descriptions as comments means the code is nicely decorated for anyone who goes prodding around, and by using docblock syntax it will be read by JS/TS documentation generators too.
+
+The types are also defined and exported so they can be used in runtime code easily, instead of defined inline as many of the other generators do. This helps reuse throughout the rest of the SDK for request/responses, and allow for the most complex of scenarios to be handles easily. 
+
+```ts
+export type CreateBookingPaymentResponseBody$Outbound = {
+  id?: string | undefined;
+  amount?: number | undefined;
+  currency?: string | undefined;
+  source?: Card$Outbound | BankAccount$Outbound | undefined;
+  status?: string | undefined;
+  links?: models.LinksBooking$Outbound | undefined;
+};
+```
+
+### Oazapfts type definition
+
+Over to oazapfts, which sticks to its minimalist approach and generates one type for the request and one type for the response, with anything inside that being defined in line. If there are lots of shared parameters between requests and responses then these will be repeated, and that makes documentation and code suffer, but it keeps things simple. As for polymorphism, oazapfts handles union types with runtime type casting.
+
+```ts
+export type BookingPaymentRead = {
+    /** Unique identifier for the payment. This will be a unique identifier for the payment, and is used to reference the payment in other objects. */
+    id?: string;
+    /** Amount intended to be collected by this payment. A positive decimal figure describing the amount to be collected. */
+    amount?: number;
+    /** Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase. */
+    currency?: "bam" | "bgn" | "chf" | "eur" | "gbp" | "nok" | "sek" | "try";
+    /** The status of the payment, one of `pending`, `succeeded`, or `failed`. */
+    status?: "pending" | "succeeded" | "failed";
+};
+export type BookingPaymentWrite = {
+    /** Amount intended to be collected by this payment. A positive decimal figure describing the amount to be collected. */
+    amount?: number;
+    /** Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase. */
+    currency?: "bam" | "bgn" | "chf" | "eur" | "gbp" | "nok" | "sek" | "try";
+    /** The payment source to take the payment from. This can be a card or a bank account. Some of these properties will be hidden on read to protect PII leaking. */
+    source?: {
+        "object"?: "card";
+        /** Cardholder's full name as it appears on the card. */
+        name: string;
+        /** The card number, as a string without any separators. On read all but the last four digits will be masked for security. */
+        "number": string;
+        /** Card security code, 3 or 4 digits usually found on the back of the card. */
+        cvc: string;
+        /** Two-digit number representing the card's expiration month. */
+        exp_month: number;
+        /** Four-digit number representing the card's expiration year. */
+        exp_year: number;
+        /** The postal code associated with the card's billing address. */
+        address_post_code?: string;
+    } | {
+        "object"?: "bank_account";
+        name: string;
+        /** The account number for the bank account, in string form. Must be a current account. */
+        "number": string;
+        /** The sort code for the bank account, in string form. Must be a six-digit number. */
+        sort_code?: string;
+        /** The name of the bank associated with the routing number. */
+        bank_name: string;
+    };
+};
+```
+
+The verbosity of these types can be improved with the `--mergeReadWriteOnly` to combine the read and write models into one, but similar models with shared parameters will still be defining everything over again.
+
+### OpenAPI Generated typescript-fetch type definitions
+
+OpenAPI Generated's generated typescript-fetch SDK is much more verbose their either Speakeasy or Oazapfts. It does not seem too familiar with TypeScript and uses it rather loosely with a whole lot of if statements, and the bank account vs card payment logic really seems awkward.
+
+```ts
+/**
+ * A card (debit or credit) to take payment from.
+ * @export
+ * @interface Card
+ */
+export interface Card {
+    /**
+     * 
+     * @type {string}
+     * @memberof Card
+     */
+    object?: CardObjectEnum;
+    /**
+     * Cardholder's full name as it appears on the card.
+     * @type {string}
+     * @memberof Card
+     */
+    name: string;
+    /**
+     * The card number, as a string without any separators. On read all but the last four digits will be masked for security.
+     * @type {string}
+     * @memberof Card
+     */
+    number: string;
+    /**
+     * Card security code, 3 or 4 digits usually found on the back of the card.
+     * @type {string}
+     * @memberof Card
+     */
+    cvc: string;
+    /**
+     * Two-digit number representing the card's expiration month.
+     * @type {number}
+     * @memberof Card
+     */
+    expMonth: number;
+    /**
+     * Four-digit number representing the card's expiration year.
+     * @type {number}
+     * @memberof Card
+     */
+    expYear: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof Card
+     */
+    addressPostCode?: string;
+}
+
+/**
+ * @export
+ */
+export const CardObjectEnum = {
+    Card: 'card'
+} as const;
+export type CardObjectEnum = typeof CardObjectEnum[keyof typeof CardObjectEnum];
+
+
+/**
+ * Check if a given object implements the Card interface.
+ */
+export function instanceOfCard(value: object): value is Card {
+    if (!('name' in value) || value['name'] === undefined) return false;
+    if (!('number' in value) || value['number'] === undefined) return false;
+    if (!('cvc' in value) || value['cvc'] === undefined) return false;
+    if (!('expMonth' in value) || value['expMonth'] === undefined) return false;
+    if (!('expYear' in value) || value['expYear'] === undefined) return false;
+    return true;
+}
+
+export function CardFromJSON(json: any): Card {
+    return CardFromJSONTyped(json, false);
+}
+
+export function CardFromJSONTyped(json: any, ignoreDiscriminator: boolean): Card {
+    if (json == null) {
+        return json;
+    }
+    return {
+        'object': json['object'] == null ? undefined : json['object'],
+        'name': json['name'],
+        'number': json['number'],
+        'cvc': json['cvc'],
+        'expMonth': json['exp_month'],
+        'expYear': json['exp_year'],
+        'addressPostCode': json['address_post_code'] == null ? undefined : json['address_post_code'],
+    };
+}
+
+export function CardToJSON(json: any): Card {
+    return CardToJSONTyped(json, false);
+}
+
+export function CardToJSONTyped(value?: Card | null, ignoreDiscriminator: boolean = false): any {
+    if (value == null) {
+        return value;
+    }
+
+    return {
+        'object': value['object'],
+        'name': value['name'],
+        'number': value['number'],
+        'cvc': value['cvc'],
+        'exp_month': value['expMonth'],
+        'exp_year': value['expYear'],
+        'address_post_code': value['addressPostCode'],
+    };
 }
 ```
+
+It's even managed to output some syntax errors and import some dependencies that were not used. Was it meant to use those imports somewhere, or is it bringing in unnecessary dependencies? Unclear. 
+
+![](./assets/openapi-generator-ts-errors.png)
+
+### OpenAPI Generator typescript-node type definitions
+
+Finally, how about this OpenAPI Generator typescript-node template?
+
+The typescript-node generator starts off looking simple enough, with a single type for any given payload:
+
+```ts
+/**
+* A payment for a booking.
+*/
+export class BookingPayment {
+    /**
+    * Unique identifier for the payment. This will be a unique identifier for the payment, and is used to reference the payment in other objects.
+    */
+    'id'?: string;
+    /**
+    * Amount intended to be collected by this payment. A positive decimal figure describing the amount to be collected.
+    */
+    'amount'?: number;
+    /**
+    * Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase.
+    */
+    'currency'?: BookingPayment.CurrencyEnum;
+    'source'?: BookingPaymentSource;
+    /**
+    * The status of the payment, one of `pending`, `succeeded`, or `failed`.
+    */
+    'status'?: BookingPayment.StatusEnum;
+
+    static discriminator: string | undefined = undefined;
+
+    static attributeTypeMap: Array<{name: string, baseName: string, type: string}> = [
+        {
+            "name": "id",
+            "baseName": "id",
+            "type": "string"
+        },
+        {
+            "name": "amount",
+            "baseName": "amount",
+            "type": "number"
+        },
+        {
+            "name": "currency",
+            "baseName": "currency",
+            "type": "BookingPayment.CurrencyEnum"
+        },
+        {
+            "name": "source",
+            "baseName": "source",
+            "type": "BookingPaymentSource"
+        },
+        {
+            "name": "status",
+            "baseName": "status",
+            "type": "BookingPayment.StatusEnum"
+        }    ];
+
+    static getAttributeTypeMap() {
+        return BookingPayment.attributeTypeMap;
+    }
+}
+
+export namespace BookingPayment {
+    export enum CurrencyEnum {
+        Bam = <any> 'bam',
+        Bgn = <any> 'bgn',
+        Chf = <any> 'chf',
+        Eur = <any> 'eur',
+        Gbp = <any> 'gbp',
+        Nok = <any> 'nok',
+        Sek = <any> 'sek',
+        Try = <any> 'try'
+    }
+    export enum StatusEnum {
+        Pending = <any> 'pending',
+        Succeeded = <any> 'succeeded',
+        Failed = <any> 'failed'
+    }
+}
+```
+
+It's hoisted some of the properties up into enums, and namespaced them which is nice. The polymorphic `source` property is defined as a separate type `BookingPaymentSource` in its own file, and here is how that looks:
+
+```ts
+import { RequestFile } from './models';
+import { BankAccount } from './bankAccount';
+import { Card } from './card';
+
+/**
+* The payment source to take the payment from. This can be a card or a bank account. Some of these properties will be hidden on read to protect PII leaking.
+*/
+export class BookingPaymentSource {
+    'object'?: BookingPaymentSource.ObjectEnum;
+    'name': string;
+    /**
+    * The account number for the bank account, in string form. Must be a current account.
+    */
+    'number': string;
+    /**
+    * Card security code, 3 or 4 digits usually found on the back of the card.
+    */
+    'cvc': string;
+    /**
+    * Two-digit number representing the card\'s expiration month.
+    */
+    'expMonth': number;
+    /**
+    * Four-digit number representing the card\'s expiration year.
+    */
+    'expYear': number;
+    'addressPostCode'?: string;
+    /**
+    * The sort code for the bank account, in string form. Must be a six-digit number.
+    */
+    'sortCode'?: string;
+    /**
+    * The name of the bank associated with the routing number.
+    */
+    'bankName': string;
+
+    static discriminator: string | undefined = undefined;
+
+    static attributeTypeMap: Array<{name: string, baseName: string, type: string}> = [
+        {
+            "name": "object",
+            "baseName": "object",
+            "type": "BookingPaymentSource.ObjectEnum"
+        },
+        {
+            "name": "name",
+            "baseName": "name",
+            "type": "string"
+        },
+        {
+            "name": "number",
+            "baseName": "number",
+            "type": "string"
+        },
+        {
+            "name": "cvc",
+            "baseName": "cvc",
+            "type": "string"
+        },
+        {
+            "name": "expMonth",
+            "baseName": "exp_month",
+            "type": "number"
+        },
+        {
+            "name": "expYear",
+            "baseName": "exp_year",
+            "type": "number"
+        },
+        {
+            "name": "addressPostCode",
+            "baseName": "address_post_code",
+            "type": "string"
+        },
+        {
+            "name": "sortCode",
+            "baseName": "sort_code",
+            "type": "string"
+        },
+        {
+            "name": "bankName",
+            "baseName": "bank_name",
+            "type": "string"
+        }    ];
+
+    static getAttributeTypeMap() {
+        return BookingPaymentSource.attributeTypeMap;
+    }
+}
+
+export namespace BookingPaymentSource {
+    export enum ObjectEnum {
+        BankAccount = <any> 'bank_account'
+    }
+}
+```
+
+This is completely incorrect, as the `oneOf` for `Card` and `BankAccount` has been flattened into a single class with all the properties of both types. This means that when creating a `BookingPaymentSource` object, all properties from both `Card` and `BankAccount` are available, which is not the intended behavior at all.
+
+Some older generators require the optional `discriminator` property in the OpenAPI document to handle scenarios that a `oneOf` should otherwise handle by itself, but even adding that doesn't help here.
+
+```yaml
+source:
+  oneOf:
+    - $ref: '#/components/schemas/Card'
+    - $ref: '#/components/schemas/BankAccount'
+  discriminator:
+    propertyName: object
+```
+
+It still produces the exact same output.
+
+### Type generation summary
 
 Here's a summary of how each generator handles OpenAPI polymorphism:
 
@@ -592,36 +958,32 @@ Here's a summary of how each generator handles OpenAPI polymorphism:
     {
       name: "Adds union types",
       speakeasy: "✅",
-      node: "❌",
-      fetch: "✅",
+      "og-fetch": "✅",
+      "og-node": "❌",
       oazapfts: "✅",
     },
     {
-      name: "Uses discriminator",
+      name: "Supports discriminator",
       speakeasy: "✅",
-      node: "❌",
-      fetch: "✅",
+      "og-fetch": "✅",
+      "og-node": "❌",
       oazapfts: "✅",
     },
   ]}
   columns={[
     { key: "name", header: "" },
     { key: "speakeasy", header: "Speakeasy" },
-    { key: "node", header: "Node" },
-    { key: "fetch", header: "Fetch" },
+    { key: "og-fetch", header: "OG Fetch" },
+    { key: "og-node", header: "OG Node" },
     { key: "oazapfts", header: "Oazapfts" },
   ]}
 />
 
 ## Retries
 
-The SDK managed by Speakeasy can automatically retry failed network requests or retry requests based on specific error responses.
+The SDK managed by Speakeasy can automatically retry failed network requests or retry requests based on specific error responses, providing a straightforward developer experience for an otherwise complicated topic.
 
-This provides a straightforward developer experience for error handling.
-
-To enable this feature, we use the Speakeasy `x-speakeasy-retries` extension in the OpenAPI spec. We'll update the OpenAPI spec to add retries to the `addPet` operation as a test.
-
-Edit `openapi.yaml` and add the following to the `addPet` operation:
+To enable this feature use the Speakeasy `x-speakeasy-retries` extension in the OpenAPI document. Here is an example updating `openapi.yaml` to add retries to the `create-booking` operation.
 
 ```yaml
 x-speakeasy-retries:
@@ -638,11 +1000,11 @@ Add this snippet to the operation:
 ```yaml
 #...
 paths:
-  /pet:
+  /bookings:
     # ...
     post:
       #...
-      operationId: addPet
+      operationId: create-booking
       x-speakeasy-retries:
         strategy: backoff
         backoff:
@@ -652,7 +1014,9 @@ paths:
           exponent: 1.5
 ```
 
-Now we'll rerun the Speakeasy generator to enable retries for failed network requests when creating a new pet. It is also possible to enable retries for the SDK as a whole by adding a global `x-speakeasy-retries` at the root of the OpenAPI spec.
+Now we'll rerun the Speakeasy generator to enable retries, and the SDK will automatically attempt to retry failed network requests when booking a trip. 
+
+It is also possible to enable retries for the SDK as a whole by adding a global `x-speakeasy-retries` at the root of the OpenAPI document instead of per operation.
 
 ## React Hooks
 
@@ -660,7 +1024,7 @@ Now we'll rerun the Speakeasy generator to enable retries for failed network req
 
 Speakeasy generates built-in React Hooks using [TanStack Query](https://tanstack.com/query/latest). These hooks provide features like intelligent caching, type safety, pagination, and seamless integration with modern React patterns such as SSR and Suspense.
 
-```typescript example/booksView.tsx
+```ts example/booksView.tsx
 import { useQuery } from "@tanstack/react-query";
 
 function BookShelf() { // loads books from an API
@@ -714,22 +1078,22 @@ For an in-depth look at how Speakeasy uses React Hooks, see our [official releas
 
 SDKs managed by Speakeasy include optional [pagination for OpenAPI operations](/docs/customize/runtime/pagination).
 
-We'll update our pet store schema to add an `x-speakeasy-pagination` extension and an `offset` query parameter:
+We'll update our pet store schema to add an `x-speakeasy-pagination` extension and a `page` query parameter:
 
 ```yaml
 paths:
-  /store/inventory:
+  /stations:
     get:
       x-speakeasy-pagination:
         type: offsetLimit
         inputs:
-          - name: offset # This offset refers to the value called `offset`
-            in: parameters # In this case, offset is an operation parameter (header, query, or path)
-            type: offset # The offset parameter will be used as the offset, which will be incremented by the length of the `output.results` array
+          - name: page 
+            in: parameters 
+            type: page
         outputs:
-          results: $.data.resultArray # The length of data.resultsArray value of the response will be added to the `offset` value to determine the new offset
+          results: $
       parameters:
-        - name: offset
+        - name: page
           in: query
           description: The offset to start from
           required: false
@@ -738,36 +1102,31 @@ paths:
             default: 0
 ```
 
-After regenerating the SDK with Speakeasy, the `getInventory` operation includes pagination:
+After regenerating the SDK with Speakeasy, the `get-stations` operation is automatically paginated, and can be iterated through with async/await until the clients needs are met.
 
-```typescript
-import { SDK } from "openapi";
-import { GetInventorySecurity } from "openapi/models/operations";
+```ts
+import { TrainTravel } from "train-travel-sdk";
+
+const trainTravel = new TrainTravel({
+  oAuth2: process.env["TRAINTRAVEL_O_AUTH2"] ?? "",
+});
 
 async function run() {
-  const sdk = new SDK();
+  const result = await trainTravel.stations.get({
+    coordinates: "52.5200,13.4050",
+    search: "Milano Centrale",
+    country: "DE",
+  });
 
-  const offset = 20;
-  const operationSecurity: GetInventorySecurity = "<YOUR_API_KEY_HERE>";
-
-  const res = await sdk.store.getInventory(operationSecurity, offset);
-
-  if (res?.statusCode !== 200) {
-    throw new Error("Unexpected status code: " + res?.statusCode || "-");
-  }
-
-  let items: typeof res | null = res;
-  while (items != null) {
-    // handle items
-
-    items = await items.next();
+  for await (const page of result) {
+    console.log(page);
   }
 }
 
 run();
 ```
 
-None of the other generators include pagination as a feature.
+None of the other generators include pagination as a feature, leaving it all to the API client developers to figure out.
 
 <Table
   data={[
@@ -782,155 +1141,148 @@ None of the other generators include pagination as a feature.
   columns={[
     { key: "name", header: "" },
     { key: "speakeasy", header: "Speakeasy" },
-    { key: "node", header: "Node" },
-    { key: "fetch", header: "Fetch" },
+    { key: "og-node", header: "OG Node" },
+    { key: "og-fetch", header: "OG Fetch" },
     { key: "oazapfts", header: "Oazapfts" },
   ]}
 />
 
-## Auto-pagination
+## Streaming files & data
 
-Speakeasy's React Hooks also enable auto-pagination, which automatically fetches more data when the user scrolls to the bottom of the page. This feature is useful for infinite scrolling in social media feeds or search results.
+All the generators in our comparison generate SDKs that use the [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API), which enables streaming for large uploads or downloads. Speakeasy makes this clear by providing documentation showing how to use streaming for file uploads in the README. It's important to show developer-users how to take advantage of this streaming, and helping them handle large file uploads in different runtimes will cut down on support interactions.
 
-```typescript example/booksView.tsx
-import { useInView } from "react-intersection-observer";
+```typescript example/train-travel-sdk/README.md mark=7:13
+import { TrainTravel } from "train-travel-sdk";
 
-import { useBooksInfinite } from "@speakeasy-api/books/react-query";
+const trainTravel = new TrainTravel({
+  oAuth2: process.env["TRAINTRAVEL_O_AUTH2"] ?? "",
+});
 
-export function BooksView() {
-  const { data, fetchNextPage, hasNextPage } = useBooksInfinite();
-
-  const { ref } = useInView({
-    rootMargin: "50px",
-    onChange(inView) {
-      if (inView) { fetchNextPage(); }
-    },
-  });
-
-  return (
-    <div>
-      <ul>
-        {data?.pages.flatMap((page) => {
-          return page.books.map((book) => (
-            <li key={book.id}>{book.title}</li>
-          ));
-        })}
-      </ul>
-      {hasNextPage ? <div ref={ref} /> : null}
-    </div>
+async function run() {
+  const result = await trainTravel.bookings.createRaw(
+    bytesToStream(
+      new TextEncoder().encode(
+        "{\"trip_id\":\"4f4e4e1-c824-4d63-b37a-d8d698862f1d\",\"passenger_name\":\"John Doe\"}",
+      ),
+    ),
   );
+
+  console.log(result);
 }
+
+run();
 ```
 
-None of the other generators include auto-pagination as a feature.
+Beyond simply uploading and download files with streaming, Speakeasy SDKs also support JSON streaming for large JSON payloads using standards and conventions like [JSONL](https://jsonlines.org/) or [ND-JSON](https://ndjson.org/). This is particularly useful when dealing with large datasets that may not fit into memory all at once. Speakeasy provides built-in support for JSON streaming, allowing developers to process JSON data in chunks as it is received.
 
-<Table
-  data={[
-    {
-      name: "Adds auto-pagination",
-      speakeasy: "✅",
-      node: "❌",
-      fetch: "❌",
-      oazapfts: "❌",
-    },
-  ]}
-  columns={[
-    { key: "name", header: "" },
-    { key: "speakeasy", header: "Speakeasy" },
-    { key: "node", header: "Node" },
-    { key: "fetch", header: "Fetch" },
-    { key: "oazapfts", header: "Oazapfts" },
-  ]}
-/>
+```typescript !!tabs TypeScript
+import { SDK } from '@speakeasy/sdk';
 
-## Data streaming
+const sdk = new SDK();
 
-All the generators in our comparison generate SDKs that use the `Fetch` API, which enables streaming for large uploads or downloads.
+async function streamLogs() {
+  const result = await sdk.logs.fetch_logs();
+
+  for await (const event of result) {
+    // Each event is a parsed JSON object from the stream
+    console.log(`[${event.timestamp}] ${event.message}`);
+  }
+}
+
+streamLogs().catch(error => {
+  console.error('Error streaming logs:', error);
+});
+```
+
+OpenAPI Generator and Oazapfts do not support JSON streaming in their generated SDKs, which limits their ability to handle large JSON payloads efficiently. 
+
+There's an extra issue with OpenAPI Generator's typescript-node SDK, in that its content negotiation strategy (looking at `Accept` and `Content-Type` headers) is overly simplistic. It checks if the content type includes `application/json` with the line `if (produces.indexOf('application/json') >= 0) {` which is too broad, because `application/jsonl` will match that condition. If an API returns `application/jsonl` it will try to parse the response as a single JSON object instead of a stream of JSON objects, which will lead to runtime errors and frustrated developer-users.
 
 <Table
   data={[
     {
       name: "Stream uploads",
       speakeasy: "✅",
-      node: "✅",
-      fetch: "✅",
+      "og-node": "✅",
+      "og-fetch": "✅",
       oazapfts: "✅",
+    },
+    {
+      name: "JSON streaming",
+      speakeasy: "✅",
+      "og-node": "❌",
+      "og-fetch": "❌",
+      oazapfts: "❌",
+    },
+    {
+      name: "Documentation for streaming",
+      speakeasy: "✅",
+      "og-node": "❌",
+      "og-fetch": "❌",
+      oazapfts: "❌",
     },
   ]}
   columns={[
     { key: "name", header: "" },
     { key: "speakeasy", header: "Speakeasy" },
-    { key: "node", header: "Node" },
-    { key: "fetch", header: "Fetch" },
+    { key: "og-node", header: "OG Node" },
+    { key: "og-fetch", header: "OG Fetch" },
     { key: "oazapfts", header: "Oazapfts" },
   ]}
 />
 
-Speakeasy creates detailed documentation as part of the SDK, detailing how to open large files on different runtimes to help your developer-users take advantage of streaming.
 
 ## Generated documentation
 
-Of all the generators tested, Speakeasy was the only one to generate documentation and usage examples for its SDK. We see documentation generation as a crucial feature if you plan to publish your SDK to npm for others to use.
-
-Here's how the generators add documentation:
+Of all the generators tested, Speakeasy was the only one to generate documentation and usage examples for SDKs. Speakeasy considers documentation generation as a crucial feature to enable rapid adoption and ease of use when an SDK can be published to NPM, and not something that should be left to the API team to produce from scratch.
 
 <Table
   data={[
     {
       name: "Adds documentation",
       speakeasy: "✅",
-      node: "❌",
-      fetch: "❌",
+      "og-node": "❌",
+      "og-fetch": "❌",
       oazapfts: "❌",
     },
     {
       name: "Adds usage examples",
       speakeasy: "✅",
-      node: "❌",
-      fetch: "❌",
+      "og-node": "❌",
+      "og-fetch": "❌",
       oazapfts: "❌",
     },
   ]}
   columns={[
     { key: "name", header: "" },
     { key: "speakeasy", header: "Speakeasy" },
-    { key: "node", header: "Node" },
-    { key: "fetch", header: "Fetch" },
+    { key: "og-node", header: "OG Node" },
+    { key: "og-fetch", header: "OG Fetch" },
     { key: "oazapfts", header: "Oazapfts" },
   ]}
 />
 
-Speakeasy generates a `README.md` at the root of the SDK, [which you can customize](/docs/sdk-docs/edit-readme) to add branding, support links, a code of conduct, and any other information your developer-users might find helpful.
+Speakeasy generates a `README.md` generated at the root of the SDK, [which you can customize](/docs/sdk-docs/edit-readme) to add branding, support links, a code of conduct, and any other information your developer-users might find helpful.
 
-The Speakeasy SDK also includes working usage examples for all operations, complete with imports and appropriately formatted string examples. For instance, if a type is formatted as `email` in our OpenAPI spec, Speakeasy generates usage examples with strings that look like email addresses. Types formatted as `uri` will generate examples that look like URLs. This makes example code clear and scannable.
+The Speakeasy SDK also includes working usage examples for all operations, complete with imports and appropriately formatted examples from the OpenAPI description. This is a huge help to developers getting started with the SDK, as they can copy and paste working code snippets directly into their applications. Here's an example of an operation from the Train Travel SDK's `README.md`:
 
-Here's the usage example managed by Speakeasy after we update `openapi.yaml` to format the string items in `photoUrls` as `uri`:
+```ts example/train-travel-sdk/README.md mark=8:12
+import { TrainTravel } from "train-travel-sdk";
 
-```typescript docs/sdks/pet/README.md mark=16:18
-import { SDK } from "openapi";
-import { Status } from "openapi/models/components";
+const trainTravel = new TrainTravel({
+  oAuth2: process.env["TRAINTRAVEL_O_AUTH2"] ?? "",
+});
 
 async function run() {
-  const sdk = new SDK({
-    petstoreAuth: "Bearer <YOUR_ACCESS_TOKEN_HERE>",
+  const result = await trainTravel.stations.get({
+    coordinates: "52.5200,13.4050",
+    search: "Milano Centrale",
+    country: "DE",
   });
 
-  const res = await sdk.pet.addPetForm({
-    id: 10,
-    name: "doggie",
-    category: {
-      id: 1,
-      name: "Dogs",
-    },
-    photoUrls: ["http://celebrated-surprise.org"],
-    tags: [{}],
-  });
-
-  if (res?.statusCode !== 200) {
-    throw new Error("Unexpected status code: " + res?.statusCode || "-");
+  for await (const page of result) {
+    console.log(page);
   }
-
-  // handle response
 }
 
 run();
@@ -938,11 +1290,11 @@ run();
 
 ## Bundling applications for the browser
 
-Speakeasy creates SDKs that are tree-shakable and can be bundled for the browser using tools like Webpack, Rollup, or esbuild.
+Speakeasy creates SDKs that are [tree-shakable](https://webpack.js.org/guides/tree-shaking/) and can be bundled for the browser using tools like Webpack, Rollup, or esbuild.
 
 Because Speakeasy supports a wider range of OpenAPI features, Speakeasy-created SDKs are likely to be slightly larger than those generated by other tools. Speakeasy also limits abstraction, which can lead to larger SDKs. This does not translate to a larger bundle size, as the SDK can be tree-shaken to remove unused code.
 
-Any SDK that supports runtime type checking or validation will have a larger bundle size, but the benefits of type checking and validation far outweigh the cost of a slightly larger bundle. If you use Zod elsewhere in your application, you can exclude it from the SDK bundle to reduce its size.
+Any SDK that supports runtime type checking or validation will have a larger bundle size, but the benefits of type checking and validation far outweigh the cost of a slightly larger bundle. If you use the popular validation library [Zod](https://zod.dev/) in your application already, you can exclude it from the SDK bundle to reduce its size.
 
 Here's an example of how to exclude Zod from the SDK bundle:
 
@@ -955,10 +1307,6 @@ npx esbuild src/speakeasy-app.ts \
   --outfile=dist/speakeasy-app.js \
   --external:zod
 ```
-
-## Automation
-
-This comparison focuses on the installation and usage of command line generators, but the Speakeasy generator can also run as part of a CI workflow, for instance as a [GitHub Action](https://github.com/speakeasy-api/sdk-generation-action), to make sure your SDK is always up to date when your API spec changes.
 
 ## A live example: Vessel API Node SDK
 
