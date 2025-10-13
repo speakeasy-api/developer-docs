@@ -1,0 +1,149 @@
+---
+title: "Intercom"
+description: Connect Intercom to Claude Desktop to analyze customer conversations and monitor customer health.
+---
+
+# Use Intercom from your MCP Client
+
+[Intercom](https://www.intercom.com) is a customer messaging platform that helps teams manage support conversations and customer relationships.
+
+Using the Intercom MCP Server, you can analyze customer conversations through Claude Desktop, identifying churn risks and sentiment patterns by describing your needs in natural language.
+
+![Intercom inbox showing multiple conversations with varying customer health signals](/assets/mcp/using-mcp/intercom/intercom-inbox-demo.png)
+
+At the end of this guide, you'll know how to connect the Intercom MCP Server to Claude Desktop.
+
+## Prerequisites
+
+Before we begin, make sure you have:
+
+- [Claude Desktop](https://claude.ai/download) installed
+- An [Intercom workspace](https://www.intercom.com/) with admin access or permission to create integrations
+- A few sample conversations in Intercom (we'll show you how to set this up)
+
+## Set up demo data in Intercom
+
+For this guide, we need realistic customer data to analyze. We'll use the Intercom Messenger chat widget to create sample conversations.
+
+### Install the Intercom Messenger component
+
+We can't create conversations directly in Intercom, so we need to use the Messenger widget component.
+
+![Intercom Messenger installation page showing code snippet options](/assets/mcp/using-mcp/intercom/intercom-messenger-install.png)
+
+Navigate to **Settings** > **Channels** > **Messenger** in your Intercom workspace. Under **Install** you'll see installation options for different platforms including React, Angular, Vue, WordPress, and others. Choose the option that matches your application and follow the instructions to install the widget.
+
+### Create sample customer conversations
+
+Using the Messenger widget, create several conversations that represent different customer health scenarios, ranging from satisfied customers asking feature questions to frustrated users reporting technical issues and requesting cancellations.
+
+Here's an example of what one of these messages might look like:
+
+![Example conversation showing a customer requesting subscription cancellation](/assets/mcp/using-mcp/intercom/intercom-inbox-demo.png)
+
+James Wilson is a customer who is actively seeking to cancel his subscription due to poor ROI. This is a critical churn signal that needs immediate attention.
+
+Create a few more messages with varying sentiment levels to build a realistic representation of what a messy inbox.
+
+Once you've created these messages, your Intercom inbox should look like this:
+
+![Intercom inbox with multiple customer conversations showing various sentiment levels](/assets/mcp/using-mcp/intercom/intercom-final-inbox.png)
+
+## Install and configure the Intercom MCP server
+
+We'll use the Intercom MCP server to connect your Intercom data to Claude Desktop.
+
+### Get your Intercom access token
+
+First, create an Intercom app to access your data:
+
+- In Intercom, go to **Settings** > **Integrations** > **Developer Hub**.
+
+   ![Navigating to developer hub](/assets/mcp/using-mcp/intercom/intercom-developer-hub-navigation.png)
+
+- Click the **New app** button and create an internal integration.
+
+- Name it `Customer Health Monitor` and click **Create App**.
+
+- Under **Permissions**, enable the following:
+
+   - **Read conversations:** To view conversations
+   - **Read one user and one company:** To list and view a single user and company
+   - **Read events:** To list all events belonging to a single user
+   - **Write events:** To submit events (user activity)
+
+- If that's not the case, click the **Edit** button to enable the permissions above.
+
+- Copy your **Access Token** from the authentication section.
+
+   ![Copying the Access token](/assets/mcp/using-mcp/intercom/intercom-access-token-copy.png)
+
+### Configure Intercom MCP server in Claude Desktop
+
+Update your Claude Desktop configuration to include the MCP server. In **Settings**, go to **Developer** > **Edit Config**.
+
+![Claude Desktop configuration](/assets/mcp/using-mcp/intercom/claude-desktop-config-settings.png)
+
+In the `claude_desktop_config.json` file that opens, add the Intercom MCP Server configuration:
+
+```json
+{
+  "mcpServers": {
+    "intercom": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.intercom.com/mcp",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer YOUR_INTERCOM_ACCESS_TOKEN"
+      }
+    }
+  }
+}
+```
+
+Replace `YOUR_INTERCOM_ACCESS_TOKEN` with the access token you copied from the Intercom authentication page in the previous step.
+
+Restart Claude Desktop. When you first try to use the Intercom tools, Claude requests permission to access them. Click **Allow always** or **Allow once** to proceed.
+
+## Testing the connection
+
+With the Intercom MCP server configured, you can now ask Claude to analyze your customer conversations. Test the integration with the following prompt:
+
+```
+List my recent Intercom conversations and identify any customer health signals. Summarize and give me a list of customers that are at risk of churning.
+```
+
+<video
+  controls={false}
+  loop={true}
+  autoPlay={true}
+  muted={true}
+  width="100%"
+  className="mx-auto my-10 max-w-6xl"
+>
+  <source src="/assets/mcp/using-mcp/intercom/intercom-claude-desktop.mp4" type="video/mp4" />
+</video>
+
+Claude will use the Intercom MCP server to get the list of conversations, identify the conversations that are at risk of churning, and summarize the conversations.
+
+## Automate your workflow
+
+Once you've gotten the hang of it, you can automate your workflow by:
+
+- **Creating a weekly reminder** to run the health check.
+- **Setting up templates** for common outreach scenarios.
+- **Building a simple dashboard** to track health score trends over time.
+
+Ask Claude:
+
+```
+Create a follow-up workflow for next week. Set a reminder to run this analysis again and track how our outreach has affected the health scores.
+```
+
+## Conclusion
+
+Now that you can analyze customer conversations in Claude Desktop using the Intercom MCP Server, try combining this functionality with other MCP servers. For example, you could use the [Slack integration](/mcp/using-mcp/mcp-server-providers/slack) to automatically notify your customer success team about urgent cases.

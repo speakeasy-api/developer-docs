@@ -1,0 +1,157 @@
+---
+title: "Zendesk"
+description: Learn how to connect the open-source Zendesk MCP Server to Claude Desktop.
+---
+
+# Use Zendesk from your MCP Client
+
+This guide demonstrates how to connect your Zendesk workspace to Claude Desktop using the Model Context Protocol (MCP). Once connected, you can analyze support tickets, track customer satisfaction trends, and generate response templates without leaving the Claude interface.
+
+As Zendesk doesn't provide an official MCP server, this guide uses the open-source [`zendesk-mcp-server`](https://github.com/reminia/zendesk-mcp-server) that bridges your Zendesk workspace and Claude Desktop.
+
+![Zendesk MCP architecture](/assets/mcp/using-mcp/zendesk/zendesk-mcp-architecture.png)
+
+Here's what the connection looks like in action:
+
+<video src="/assets/mcp/using-mcp/zendesk/zendesk-mcp-demo.mp4" controls=""></video>
+
+## Prerequisites
+
+Before we begin, make sure you have:
+
+- [Claude Desktop](https://claude.ai/download) installed
+- A [Zendesk account](https://www.zendesk.com/) with admin access or API permissions
+- The [uv](https://docs.astral.sh/uv/) Python package manager
+
+## Setting up a Zendesk application
+
+In your Zendesk dashboard, click the **Settings** icon in the sidebar.
+
+![Navigating to settings](/assets/mcp/using-mcp/zendesk/zendesk-settings-navigation.png)
+
+On the Settings page, click **Apps and integrations**. Then, click **API tokens** in the left navigation menu and click the **Add API token** button.
+
+![Click on Add API token](/assets/mcp/using-mcp/zendesk/zendesk-add-api-token.png)
+
+Zendesk then displays the API token creation form. Enter `Zendesk MCP token` in the **Description** field and click **Save**.
+
+![Copy API token](/assets/mcp/using-mcp/zendesk/zendesk-copy-token.png)
+
+Copy the generated token immediately and save it securely. You won't be able to view this token again. You'll need this token to configure the Claude Desktop connection in the next step.
+
+![API token created](/assets/mcp/using-mcp/zendesk/zendesk-api-token-created.png)
+
+To make sure you can make API requests to the Zendesk API with the token, navigate to the **API configuration** page and select the **Allow API token access** option displayed there.
+
+![Claude Desktop configuration](/assets/mcp/using-mcp/zendesk/allow-api.png)
+
+## Installing the Zendesk MCP server in Claude
+
+To install the Zendesk MCP server, you need uv installed on your machine.
+
+**For macOS users (recommended):**
+```bash
+# Install with Homebrew (ensures Claude Desktop can find uv)
+brew install uv
+```
+
+**For other platforms:**
+```bash
+# For Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# For Windows
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Note:** If you install uv using the script method and Claude Desktop can't find the `uv` command, you may need to use the full path in your configuration: `/Users/YOUR_USERNAME/.local/bin/uv` instead of just `uv`.
+
+Once it's done, clone the `zendesk-mcp-server` project.
+
+```bash
+git clone https://github.com/reminia/zendesk-mcp-server.git
+```
+
+Then, navigate to the newly cloned project.
+
+```bash
+cd zendesk-mcp-server
+```
+
+Install the project dependencies and the project itself:
+
+```bash
+uv sync
+uv pip install -e .
+```
+
+Inside the project, create a file named `.env`. Add your Zendesk credentials to this file:
+
+- `ZENDESK_SUBDOMAIN`: Add the subdomain part of your Zendesk URL. For example, if your Zendesk URL is `https://mycompany-123.zendesk.com`, then use `mycompany-123`.
+- `ZENDESK_EMAIL`: Add the email address associated with the account you used to create the API token.
+- `ZENDESK_API_KEY` : Add the API token you created earlier.
+
+The file should look like this:
+
+```txt
+ZENDESK_SUBDOMAIN=xxx
+ZENDESK_EMAIL=xxx
+ZENDESK_API_KEY=xxx
+```
+
+Now, update your Claude Desktop configuration to include the MCP server.
+
+In **Settings**, go to **Developer** > **Edit Config**.
+
+![Claude Desktop configuration](/assets/mcp/using-mcp/zendesk/claude-desktop-config-settings.png)
+
+In the `claude_desktop_config.json` file that opens, add the Zendesk MCP Server configuration:
+
+```json
+{
+  "mcpServers": {
+    "zendesk": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "PATH_TO_MCP_SERVER/zendesk-mcp-server",
+        "run",
+        "zendesk"
+      ]
+    }
+  }
+}
+
+```
+
+Replace `PATH_TO_MCP_SERVER` with the absolute path to your cloned `zendesk-mcp-server` directory.
+
+Restart Claude Desktop to load the server.
+
+## Testing the connection
+
+Test that the Zendesk MCP server has been installed correctly by entering the following prompt:
+
+```txt
+Hi Claude. Please list the current tickets I have on Zendesk.
+```
+
+You should receive a similar reply to the following:
+
+![Claude showing current tickets](/assets/mcp/using-mcp/zendesk/claude-showing-tickets.png)
+
+Then, ask Claude to add comments to the tickets to show they're being addressed. For example:
+
+```txt
+Please add comments to these tickets to indicate that they are currently being addressed.
+```
+
+![Claude adding comment to Zendesk ticket](/assets/mcp/using-mcp/zendesk/claude-adding-comment.png)
+
+You should see the comment added in your Zendesk dashboard.
+
+![Showing added comment](/assets/mcp/using-mcp/zendesk/zendesk-comment-added.png)
+
+## Conclusion
+
+Now that you can access your Zendesk workspace through Claude Desktop, try combining this functionality with other MCP servers. For example, you could use the [Slack integration](/mcp/using-mcp/slack-mcp-quickstart) to automatically notify your support team about urgent tickets, or connect with your CRM to update customer records based on ticket resolutions.
