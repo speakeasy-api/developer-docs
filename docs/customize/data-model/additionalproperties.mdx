@@ -1,0 +1,95 @@
+---
+title: Additional properties
+description: "How Speakeasy-generated SDKs handle additionalProperties."
+---
+
+# Additional properties
+
+When OpenAPI schemas use the [`additionalProperties`](https://json-schema.org/understanding-json-schema/reference/object#additional-properties) keyword, Speakeasy generates SDKs that handle these flexible object types automatically.
+
+## Using `additionalProperties` in SDKs
+
+**Important**: `additionalProperties` is an internal implementation detail. Pass objects with all properties directly - the SDK handles serialization and validation automatically.
+
+## The Speakeasy approach
+
+Speakeasy sets `additionalProperties` to `false` by default unless explicitly defined otherwise. This encourages fully-typed objects with clear documentation. Most developers prefer closed objects by default, but setting `additionalProperties: false` in every schema would be tedious. Most backend frameworks that generate OpenAPI schemas don't add `additionalProperties: false`, even when that's the intended behavior.
+
+## Using `additionalProperties: true`
+
+Set `additionalProperties: true` to accept arbitrary fields beyond the defined properties. This is useful for accepting unpredictable fields or allowing future extensions without schema updates.
+
+```yaml openapi.yaml
+components:
+  schemas:
+    FlexibleObject:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+      additionalProperties: true
+```
+
+### Generated type structure
+
+```typescript
+export type FlexibleObject = {
+    title: string;
+    description: string;
+    additionalProperties: Record<string, any>;  // Internal field - do not interact directly
+}
+```
+
+### Usage
+
+```typescript
+await sdk.items.create({
+  title: "My Item",
+  description: "A flexible item",
+  customField: "custom value",
+  anotherField: 123,
+  metadata: { key: "value" }
+});
+```
+
+## Using typed `additionalProperties`
+
+Constrain additional properties to a specific type:
+
+```yaml openapi.yaml
+components:
+  schemas:
+    StringOnlyObject:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+      additionalProperties:
+        type: string
+```
+
+### Generated type structure
+
+```typescript
+export type StringOnlyObject = {
+    title: string;
+    description: string;
+    additionalProperties: Record<string, string>;  // Internal field - do not interact directly
+};
+```
+
+### Usage
+
+```typescript
+await sdk.items.create({
+  title: "My Item",
+  description: "A typed item",
+  category: "electronics",
+  brand: "Acme",
+  sku: "ABC-123"
+});
+```
