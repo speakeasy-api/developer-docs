@@ -14,6 +14,4 @@ Specifically we provide detailed instructions on:
 * Using MCP programmatically through APIs such as [Using OpenAI API with Gram-hosted MCP servers](/docs/gram/api-clients/using-openai-api-with-gram-mcp-servers).
 * Building example applications like [Add AI chat to an existing app](/docs/gram/examples/adding-ai-chat-to-your-app).
 
-See the full list in the sidebar. Is there something you want added? Feel free to [open an issue](https://github.com/speakeasy-api/gram-docs/issues)!
-
-
+<!-- See the full list in the sidebar. Is there something you want added? Feel free to [open an issue](https://github.com/speakeasy-api/gram-docs/issues)! -->

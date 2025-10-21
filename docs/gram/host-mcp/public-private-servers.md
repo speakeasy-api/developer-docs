@@ -10,6 +10,7 @@ Gram allows you to manage settings that control how users access your Gram-hoste
 ![Four MCP server configuration options showing combinations of public/private and passthrough/managed authentication](/assets/docs/gram/img/guides/mcp-server-four-options.png)
 
 Common use cases for each combination:
+
 - **Public + Pass-through**: Production APIs where customers already have their own API keys
 - **Public + Managed**: Free trials or demos where you provide temporary access without exposing your API keys
 - **Private + Pass-through**: Internal tools where team members use their individual API credentials
@@ -21,14 +22,13 @@ Public servers are the easiest way to use Gram and are typically what you'd use 
 
 ![Example of a Gram-hosted MCP documentation page showing available tools and endpoints](/assets/docs/gram/img/guides/gram-example-public-docs.png)
 
-Public servers also support [MCP Managed OAuth](/docs/gram/build-mcp/adding-oauth) for simplified authentication.
+Public servers also support [MCP Managed OAuth](/docs/gram/host-mcp/adding-oauth) for simplified authentication.
 
 ## Private Servers
 
 Private servers require users to have a valid Gram API Key to access the MCP server. This is ideal for internal tools, development environments, or when you want to control who can discover and use your server. Private servers give you complete control over access while still benefiting from Gram's hosting and management features.
 
 With private servers, you cannot make the documentation page public. To grant access, create a Gram API key in your account settings and share it with the users who should have access to your server.
-
 
 # Pass-through Authentication vs. Managed Authentication
 
