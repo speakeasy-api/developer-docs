@@ -1,0 +1,296 @@
+---
+title: Secure your MCP server
+description: Understand MCP security threats and implement controls to protect your server from prompt injection, unauthorized access, and credential theft.
+asIndexPage: true
+---
+
+# Secure your MCP server
+
+MCP servers handle requests from LLM agents, not users. When a user calls your API, you have a good idea of what they're requesting. When an LLM agent calls your MCP server, you're trusting the agent's interpretation of what the user wanted.
+
+This creates new attack vectors. An attacker doesn't need to compromise your server directly. They could inject malicious instructions into content the LLM reads, and the LLM would execute those instructions, thinking it's following the user's intent.
+
+This guide explains the threats facing MCP servers and shows you which security controls to implement and why, covering authentication and authorization, credential protection, prompt‑injection defenses, encrypted transport, and monitoring.
+
+## Understanding MCP security threats
+
+MCP servers face unique threats because LLM agents sit between users and your tools. Attackers can exploit this intermediary to bypass traditional security controls.
+
+### Prompt injection attacks
+
+In a prompt injection attack, an attacker uses malicious prompts to manipulate an LLM into performing harmful acts. They can do this in two ways:
+
+- **In a direct prompt injection,** the attacker delivers prompts through input fields in the AI application.
+- **In an indirect prompt injection,** the attacker hides malicious prompts in content that LLMs consume, such as images and PDF documents.
+
+Many prompt injection methods don't require any specialist knowledge or even coding ability. Attackers need only a basic understanding of how LLMs function, what their vulnerabilities are, and where to insert malicious prompts effectively. For example, an attacker could execute a prompt injection as follows:
+
+- The attacker poisons the document.
+- The MCP server retrieves the document.
+- The LLM reads the malicious prompt.
+- The LLM calls an unauthorized tool.
+- Data is exfiltrated.
+
+![Prompt injection via document](/assets/mcp/securing-your-mcp-server/prompt-injection-attack.png)
+
+### Unauthorized access
+
+Without proper authentication, anyone can connect to your MCP server and call your tools. Attackers can gain access to your MCP server as a result of:
+
+- **Missing authentication:** Your server accepts tool calls from any clients without verifying their identities.
+- **Weak authentication:** API keys passed through prompts can be intercepted or leaked through logs.
+- **Credential theft:** Attackers steal valid tokens and impersonate legitimate users.
+
+### Data exfiltration
+
+Compromised agents can extract sensitive data through legitimate tool calls using:
+
+- **High-frequency queries:** An agent makes thousands of database queries in minutes, extracting customer records.
+- **Unauthorized tool access:** A support agent's session unexpectedly initiates calls to admin-only tools to access restricted data.
+- **Prompt-triggered exfiltration:** Malicious instructions in retrieved content tell the LLM to send data to external URLs.
+
+With these threats in mind, a robust authentication and authorization system is the first control you should put in place.
+
+## Implement authentication and authorization
+
+Authentication controls who can access your server, and authorization controls what they can do once they have connected.
+
+### Use OAuth 2.1 for authentication
+
+MCP servers connect users to external APIs. You could accept API keys directly, but this creates three problems:
+
+- **Tokens in prompts are vulnerable:** Attackers intercept credentials through man-in-the-middle attacks. When tokens leak through logs, your server becomes a tool for credential theft.
+- **Users struggle to manage scopes correctly:** Users don't know which permissions your tools require and either grant excessive permissions, creating a security risk, or grant insufficient permissions, causing tools to break.
+- **API keys are long-lived:** If compromised, attackers have access to the server until the key is manually revoked.
+
+OAuth 2.1 fixes all three issues:
+
+- **Vulnerable tokens in prompts:** Authentication no longer occurs within the LLM context. Instead, users authenticate directly with your OAuth provider (for example, Auth0, Okta, or FusionAuth).
+- **User scope management errors:** You now define the required scopes, not your users.
+- **Long-lived API keys:** Tokens are now short-lived and expire automatically, and you can revoke access to your server without requiring users to regenerate their keys.
+
+MCP integrates with standard OAuth 2.1. The high‑level flow in an MCP context looks like this:
+
+- The MCP client (the AI) requests a protected tool, and your MCP server returns `401` with an OAuth authorization URL, triggering the authentication flow.
+- The user completes the OAuth flow, authenticating with your OAuth provider (for example, Auth0 or Okta) and granting permissions for specific scopes.
+- The MCP client receives an access token.
+- The MCP client securely stores the token and includes it in subsequent requests as a Bearer token.
+- On each tool call, your MCP server validates the token against the OAuth provider using token introspection.
+- Your MCP server uses the validated user information to call the tool with the appropriate user context (permissions and attribution).
+
+The key way OAuth 2.1 differs from traditional OAuth is that, instead of the user manually initiating login flows, the AI model triggers the authentication flow when it needs to access protected tools.
+
+![OAuth 2.1 flow](/assets/mcp/securing-your-mcp-server/oauth-flow.png)
+
+Learn how to add OAuth 2.1 to your MCP server in the Gram guide to [building MCP servers with external OAuth](https://docs.getgram.ai/examples/oauth-external-server).
+
+### Encrypt communications with mutual TLS
+
+Standard TLS (HTTPS) authenticates only the server. The client knows it's talking to the real server, but the server doesn't know who the client is.
+
+Mutual TLS (mTLS) authenticates both the server and the client. They both present certificates and verify each other's identity before exchanging data. This prevents unauthorized clients from connecting to your MCP server and prevents man-in-the-middle attacks.
+
+| Without mTLS                                                     | With mTLS                                                  |
+| ---------------------------------------------------------------- | ---------------------------------------------------------- |
+| Anyone can attempt to connect to your server                     | Only clients with valid certificates can connect           |
+| Client identity verified at application level (API keys, tokens) | Client identity verified at transport layer (certificates) |
+| API keys can be stolen and reused                                | Certificates require both public cert and private key      |
+| No cryptographic proof of client identity                        | Cryptographic verification of both parties                 |
+| Logging shows IP addresses                                       | Logging shows verified client identities                   |
+
+You can set up mTLS for a Python MCP server using uvicorn:
+
+```python
+import ssl
+import uvicorn
+
+# Create SSL context
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+
+# Load server certificate and private key
+ssl_context.load_cert_chain("server.crt", "server.key")
+
+# Load CA certificate to verify clients
+ssl_context.load_verify_locations("client_ca.crt")
+
+# Require client certificates
+ssl_context.verify_mode = ssl.CERT_REQUIRED
+
+# Run server with mTLS
+uvicorn.run("app:app", ssl_context=ssl_context)
+```
+
+For optimal protection, combine mTLS with OAuth 2.1:
+
+- **mTLS** operates at the transport layer, ensuring the identities of the client and the server and establishing a secure channel between them.
+- **OAuth 2.1** operates at the application layer, providing granular, policy-driven authorization and delegation of access.
+
+By combining them, you can build a more secure MCP server that protects against a broader range of threats, such as token replay and man-in-the-middle attacks.
+
+### Choose your authentication model
+
+Your authentication approach depends on your use case.
+
+#### Pass-through authentication
+
+In pass-through authentication, users provide their own API keys or credentials directly to your MCP server. The server uses these credentials to access external services on behalf of the user.
+Never accept credentials through prompts. If you build an MCP server that accepts API tokens directly from LLM prompts, you create multiple attack vectors:
+
+- Man-in-the-middle attacks can intercept credentials in transit.
+- Credentials can leak through logging or monitoring systems.
+- Your server can become an explicit attack tool for credential theft.
+
+If you use pass-through authentication, accept credentials only through:
+
+- Environment variables
+- Secure configuration files outside the MCP context
+- OAuth flows (recommended)
+
+#### Managed authentication
+
+In managed authentication, you handle user credentials on the server side. Users don't provide their own API keys; you manage access control and use your own service accounts to perform actions on their behalf.
+
+This works best for:
+
+- Internal enterprise tools, where you control who has access
+- Situations where you strictly control the actions that users can perform
+- APIs that don't require individual user credentials aren't necessary
+
+## Apply foundational security controls
+
+Before exploring specific practices to address specific threats, it is essential to establish foundational controls that work together to mitigate the impacts when attacks succeed.
+
+### Grant minimum necessary permissions
+
+Excessive permissions expand your attack surface. A compromised search tool with write access can modify or delete data it should only read. Grant each tool only the permissions required for its function. A customer search tool needs read access, not the ability to modify or delete customer records.
+
+A customer search tool should request, for example, only `customers:read` permissions:
+
+```json
+{
+  "name": "search_customers",
+  "description": "Search customer database",
+  "permissions": ["customers:read"]
+}
+```
+
+It shouldn't request full CRUD access:
+
+```json
+{
+  "name": "search_customers",
+  "description": "Search customer database",
+  "permissions": [
+    "customers:read",
+    "customers:write",
+    "customers:delete",
+    "billing:read"
+  ]
+}
+```
+
+To apply the principle of least privilege on your MCP server, you need to:
+
+- Determine the minimum access each tool needs to function
+- Strip away any extra permissions
+- Review and adjust permissions on a regular basis
+
+### Restrict tool access by client role
+
+Limit which tools each client can use based on their role. A customer support agent doesn't need access to billing modification or database deletion tools.
+
+### Mask sensitive data
+
+When attackers exfiltrate data through prompt injection, masked values protect your credentials and customer information. Replace sensitive data (such as social security numbers, API keys, and passwords) with substitutes before transmission.
+
+For example, data may look like this before masking:
+
+```json
+{
+  "customer": {
+    "name": "John Smith",
+    "ssn": "123-45-6789",
+    "email": "john.smith@email.com",
+    "api_key": "sk_live_abc123xyz456"
+  }
+}
+```
+
+The same data should look like this after masking:
+
+```json
+{
+  "customer": {
+    "name": "John Smith",
+    "ssn": "XXX-XX-6789",
+    "email": "j***@email.com",
+    "api_key": "[REDACTED]"
+  }
+}
+```
+
+### Never expose secrets in LLM-readable content
+
+How you handle credentials determines whether your MCP server is a security asset or a liability. The first rule is to **never put secrets where LLMs can read them,** such as in:
+
+- Tool descriptions and metadata
+- Tool output messages
+- Error messages
+- Documentation strings
+- Example parameters
+- Configuration files that are returned to clients
+
+## Defend against prompt injection
+
+To defend against prompt injection, you should:
+
+- **Apply input filtering:** Strip or flag suspicious patterns in user-supplied text before it reaches your model. For example, you can filter inputs in Python as follows:
+
+  ```python
+  def sanitize_input(user_input: str) -> str:
+      suspicious_patterns = [
+          'ignore previous instructions',
+          'disregard your rules',
+          'system prompt'
+      ]
+
+      for pattern in suspicious_patterns:
+          if pattern in user_input.lower():
+              raise SecurityException("Suspicious input detected")
+
+      return user_input
+  ```
+
+- **Scan retrieved content:** Check all data from MCP servers for obvious payloads like script tags, tool command patterns, SQL queries, or suspicious phrases.
+
+- **Monitor for unusual behavior:** Watch out for agents attempting to access or share restricted data.
+
+## Monitor and detect threats
+
+Without monitoring, attackers can operate in your system undetected. Monitoring helps you catch attacks in progress.
+
+Log every tool call with structured data, including the invocation ID, timestamp, client ID, tool name, and parameters, so that you can watch for:
+
+- Unusual tool access patterns, such as a support agent suddenly using admin tools
+- High-frequency API calls suggesting data exfiltration
+- Failed authentication attempts
+- Tools being called with unexpected parameter patterns
+
+To learn more about performance metrics, alerting strategies, and setting up production monitoring, see our guide to [monitoring MCP servers](/mcp/monitoring-mcp-servers).
+
+## Final thoughts
+
+In addition to foundational security controls like data masking and least privilege, you should protect MCP servers in production with OAuth 2.1 (and mTLS for enterprise deployments), credential management, and prompt injection defenses.
+
+Use the following checklist to put these recommendations into action:
+
+- Implement OAuth 2.1 for authentication and scope management.
+- Enforce mutual TLS (mTLS) where you need strong client authentication.
+- Apply the principle of least privilege using minimal tool permissions and role‑based access.
+- Never expose secrets to LLM‑readable content; use managed secrets and masking.
+- Add prompt‑injection defenses to inputs and retrieved content.
+- Log all tool calls and monitor them for anomalies.
+
+Securing your MCP server isn't a one-off task. Threats evolve as attackers discover new techniques targeting LLM-based systems, so [monitoring](/mcp/monitoring-mcp-servers) your MCP server is crucial for identifying threats and taking defensive measures as quickly as possible.
+
+Looking for a platform that hosts MCP servers with built-in SOC 2 compliance? [Gram](https://getgram.ai/) provides managed MCP infrastructure, allowing you to focus on curating tools instead of managing security.

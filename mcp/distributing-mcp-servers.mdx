@@ -1,0 +1,383 @@
+---
+title: Distribute your MCP server
+description: Choose the right distribution method for your MCP server based on your users and resources.
+---
+
+# Distribute your MCP server
+
+Once you've built an MCP server, you need to decide how to distribute it to users. The four most common ways to expose an MCP server are:
+
+- As an open-source project
+- As an npm package
+- As an installable MCPB file
+- As a remote server
+
+Which of these methods you select depends on two factors:
+
+- **Your users:** Are they technical developers or non-technical business users?
+- **Your resources:** Can you maintain and pay for a hosted service?
+
+If your users are technical, distribute your MCP server as an open-source project that developers can build themselves or as an npm package for easier installation.
+
+Open-source projects require you to provide build instructions and are best suited for technical users.
+
+MCP servers built using JavaScript or TypeScript can be packaged with npm. For users, this is more convenient than building a project locally but still requires writing some configuration.
+
+If your users are non-technical, and you can't maintain a hosted server, use MCPB packaging. MCPB (previously called DXT) creates a desktop installer that users can install in Claude Desktop with minimal steps.
+
+If you have the financial and developer resources for hosting, deploy your MCP server remotely. Although remote servers cost more, the minimal configuration for users and easy integration for developers building automated systems means that they provide the best user experience.
+
+![Flowchart for selecting an option](/assets/mcp/distributing-your-mcp-server/mcp-distribution-flowchart.png)
+
+Choosing the right distribution method is critical to the successful adoption of your MCP server. This guide explores when best to use each method and demonstrates how to implement it using an example Echo MCP server.
+
+## Prerequisites
+
+To follow this tutorial, you need:
+
+- A working understanding of [MCP transports](/mcp/building-servers/protocol-reference/transports) and how the MCP server receives inputs and sends outputs
+- Node.js 22 or later
+- A clone of the simple MCP Echo server, which demonstrates all distribution methods without complex dependencies
+
+Install the MCP Echo server as follows:
+
+```bash
+git clone https://github.com/speakeasy-api/examples.git
+cd mcp-echo-input-server
+```
+
+## Distribute your MCP server as an open-source project
+
+The simplest option is to release your MCP server as an open-source project and provide build and installation instructions in a README. This works when:
+
+- Your users are technical developers comfortable with command-line tools
+- You don't have resources for maintaining a remote server
+- You're starting out and would benefit from community input and contributions
+
+Once the project matures, consider deploying your MCP server as an npm package or MCPB extension so that you can reach non-technical users.
+
+### Upload your MCP server to an open-source repository
+
+First, upload your project to an artifact repository platform like [GitHub](https://github.com/).
+
+Then, create a README that provides your users with build steps and configuration details for their AI tools, similar to the instructions in the example Echo MCP server README below.
+
+Note that the `mcp-echo-input-server` project uses plain JavaScript, so no build step is needed. If your project uses TypeScript, add a build step before installing the dependencies. For example:
+
+> Build the project with the following command:
+>
+> ```bash
+> npm run build
+> ```
+
+### Example README for the Echo MCP server
+
+Install all the project dependencies:
+
+```bash
+npm install
+```
+
+The entry point file is `index.js`.
+
+Add the following MCP server configuration to Claude Desktop, via **Settings -> Developer -> Edit Config**, after replacing `<USERNAME>` and `<PATH-TO-PROJECT>` with your actual username and the absolute path to the project:
+
+```json
+{
+  "mcpServers": {
+    "echo-server-local-build": {
+      "command": "node",
+      "args": ["<PATH-TO-PROJECT>/mcp-echo-input-server/index.js"],
+      "env": {
+        "USER_NAME": "<USERNAME>"
+      }
+    }
+  }
+}
+```
+
+Reload Claude Desktop, open a new conversation and enter the following prompt:
+
+```txt
+Hi Claude. Use the MCP Echo server to echo this: "This is a working MCP server as a local build package"
+
+```
+
+You will receive an output similar to the following:
+
+![Testing local build](/assets/mcp/distributing-your-mcp-server/local-build-test-result.png)
+
+## Distribute your MCP server as an npm package
+
+If you built your MCP project with JavaScript or TypeScript, you can publish your MCP server as an npm package. This works when:
+
+- Your users are technical developers who can handle npm installations
+- You don't have the resources to host and maintain a remote server
+
+If you're creating an MCP server that exposes API capabilities and you have an OpenAPI document, you can use [Speakeasy](/docs/standalone-mcp/build-server) to generate a TypeScript MCP server ready for deployment and distribution.
+
+### Prepare your MCP server for packaging
+
+Install the project dependencies:
+
+```bash
+npm install
+```
+
+Next, make sure the `package.json` file is ready for packaging. Add a name, description, author name, author email address, keywords, entry point (main), and the CLI command `bin` to run the project:
+
+```json
+{
+  "name": "mcp-echo-input-server",
+
+  // ...
+  "description": "A simple Model Context Protocol (MCP) server with an echo tool that returns user input with customizable user name",
+  "main": "index.js",
+  "bin": {
+    "mcp-echo-server": "./index.js"
+  },
+
+  // ...
+  "keywords": ["mcp", "model-context-protocol"],
+  "author": {
+    "name": "<your-name>",
+    "email": "<your-mail-address>"
+  }
+  // ...
+}
+```
+
+### Check that your package name is available
+
+The npm registry requires unique package names. You need to check whether your package name is available before publishing.
+
+First, ensure that you're logged in:
+
+```bash
+npm login
+```
+
+Then run the following command with the name of your project in the `package.json` file.
+
+```bash
+npm view <project-name>
+```
+
+If it returns a `404` error, proceed with the rest of the commands. Otherwise, try other combinations until you find an unused name, then update the name in the `package.json` file, and proceed.
+
+### Publish your MCP server as an npm package
+
+Package and publish your npm package:
+
+```bash
+npm publish
+```
+
+When you publish the package, include documentation that provides users with the instructions for installing the MCP server in Claude Desktop and the configuration code they need to add to their `claude_desktop_config.json` files.
+
+### Example documentation for the Echo MCP server
+
+Add the following configuration to your `claude_desktop_config.json` file:
+
+```json
+{
+  "mcpServers": {
+    "echo-server": {
+      "command": "npx",
+      "args": ["-y", "<mcp-npm-package-name>"],
+      "env": {
+        "USER_NAME": "<YOUR-NAME>"
+      }
+    }
+  }
+}
+```
+
+Reload Claude Desktop. You should now see the MCP server in the chat. Enable it using the toggle button next to **echo-server**.
+
+![Selecting NPM built package](/assets/mcp/distributing-your-mcp-server/npm-package-selection.png)
+
+Enter the following prompt to test the MCP server functionality:
+
+```txt
+Hi Claude. Use the MCP Echo server to echo this: "This is a working MCP server as an npm package."
+```
+
+Claude should return a similar response to the following:
+
+![Test results](/assets/mcp/distributing-your-mcp-server/npm-package-test-result.png)
+
+### Automate releases
+
+To make release and distribution easier, consider using CI/CD tools, such as [this GitHub Action](https://github.com/speakeasy-api/examples/tree/main/mcp-echo-input-server/.github/workflows/npm-release.yml), to automate the npm release process.
+
+## Distribute your MCP server as an MCPB file
+
+[MCP Bundles (MCPB)](https://github.com/anthropics/mcpb), formerly known as Desktop Extensions (DXT), is a zip archive extension developed by Anthropic to make MCP server installation easier with one click. An MCPB package contains the local MCP server and a `manifest.json` file describing its capabilities.
+
+> **Note:**
+> If you previously used DXT, consult the migration instructions in the MCPB repository [README](https://github.com/anthropics/mcpb/blob/main/README.md).
+
+MCPB is useful when:
+
+- **You're targeting non-technical users who need your MCP server but shouldn't have to handle npm installations or dependency management:** For example, business users, marketing teams, or domain experts
+- **You want distribution without infrastructure costs:** Local installation means no hosting, scaling, or maintenance overhead on your end, while still providing a professional installation experience
+- **You're building cross-platform tools:** MCPB packages work across operating systems and can bundle servers written in any language (such as Python, Node.js, or Go), as long as they implement the MCP protocol
+
+### Package your MCP server as an MCPB file
+
+First, install the project dependencies:
+
+```bash
+npm install
+```
+
+Then install the `@anthropic-ai/mcpb` package, which contains a CLI that helps with the creation of both the `manifest.json` and the final `.mcpb` file:
+
+```bash
+npm install --dev @anthropic-ai/mcpb
+```
+
+Although the MCPB documentation suggests installing `@anthropic-ai/mcpb` globally, you can install it as a dev dependency in your projects to maintain consistent versions.
+
+Create a `manifest.json` file by running the following interactive command and answering the configuration prompts that it returns:
+
+```bash
+npx @anthropic-ai/mcpb init
+```
+
+When prompted, enter values for fields such as the author name, package name, and description, and add the following user-configurable options, which you'll use for the `USER_NAME` environment variable:
+
+![Configuring the Manifest file](/assets/mcp/distributing-your-mcp-server/mcpb-manifest-configuration.png)
+
+At the time of writing, a bug prevents Claude from recognizing the `manifest_version` key in the `manifest.json` file. Resolve this issue by replacing `manifest_version` with `dxt_version` in the generated `manifest.json` file:
+
+```diff
+{
+-    "manifest_version": "0.1",
++    "dxt_version": "0.1",
+  ...
+}
+```
+
+In the same `manifest.json` file, edit the `USER_NAME` variable to point to the `userName` user-configurable option:
+
+```json
+{
+  "server": {
+    // ...
+    "env": {
+      "USER_NAME": "${user_config.userName}"
+    }
+  }
+}
+```
+
+Next, create the distributable MCP file by running the `pack` command:
+
+```bash
+npx @anthropic-ai/mcpb pack
+```
+
+### Test the MCPB file
+
+Find the generated `mcp-echo-input-server.mcpb` file in the project directory. Let's open the file with Claude and install the MCP server.
+
+Navigate to the Claude Desktop **Settings**, open the **Extensions** screen, and click the **Advanced settings** button.
+
+![Advanced settings button](/assets/mcp/distributing-your-mcp-server/claude-advanced-settings.png)
+
+In the advanced settings for **All extensions**, scroll to the bottom of the page and click the **Install Extension...** button. Browse for and select the `mcp-echo-input-server.mcpb` file.
+
+When Claude displays a modal with the extension description, confirm the installation by clicking **Install**.
+
+![Adding the MCP server in Claude](/assets/mcp/distributing-your-mcp-server/mcpb-installation-modal.png)
+
+In the **Configure** dialog, enter a username value, such as your name, to be used as an environment variable for the project.
+
+![Username input dialog](/assets/mcp/distributing-your-mcp-server/mcpb-username-input.png)
+
+**Save** the changes and enable the extension using the toggle button.
+
+![Enable extension](/assets/mcp/distributing-your-mcp-server/toggle-enabled.png)
+
+Open a new conversation in Claude, ensuring that the MCP server is activated.
+
+![Selecting MCP Echo input server](/assets/mcp/distributing-your-mcp-server/mcpb-server-selection.png)
+
+Test the MCP server by prompting Claude to use it:
+
+```txt
+Hi Claude. Use the MCP Echo server to echo this. "This is a working MCPB server".
+```
+
+You should receive a similar output to the following:
+
+![Testing the MCP server](/assets/mcp/distributing-your-mcp-server/mcpb-test-result.png)
+
+> **Note:**
+> You may encounter Claude alerts about typing issues. Ignore them by clicking the **X** button or prevent them by typing your projects appropriately.
+
+### Upload the MCPB file
+
+You now have a working `.mcpb` file. Upload it to an artifact repository so that users can download and install your MCP server.
+
+You can also add it to your CI/CD pipeline using [this GitHub Action](https://github.com/speakeasy-api/examples/tree/main/mcp-echo-input-server/.github/workflows/mcpb-release.yml), which automatically builds and publishes your `.mcpb` file to the GitHub repository when there is a new release.
+
+## Distribute your MCP server remotely
+
+If you have the resources to maintain a remote server, distributing your MCP server remotely offers the best solution from both technical and business perspectives.
+
+### Benefits of remote distribution
+
+Remote distribution allows you to do the following:
+
+- Monitor, log, and track tool calls, authentication, and user activity.
+- Implement business models for monetizing your MCP server.
+- Maintain control over data in sensitive fields.
+- Simplify installation for Claude Desktop users who can add remote servers via Claude Connectors.
+
+  ![Connectors](/assets/mcp/distributing-your-mcp-server/claude-connectors.png)
+
+  If your server requires authentication and your users are technical, provide them with the necessary documentation for entering OAuth configurations. If your users aren't technical, use the **Connect** button to redirect them to an OAuth authorization page that grants them access to your API or services.
+
+- Provide integration options for developers building automated workflows with the Anthropic SDK and OpenAI Agents SDK.
+
+### Build the server
+
+If you're exposing your API capabilities through MCP tools, you have two options:
+
+- Build the infrastructure yourself and handle architecture and maintenance.
+- Use [Gram](/product/gram), the platform we developed for creating, hosting, and distributing MCP servers with just an OpenAPI document.
+
+### Choose your hosting platform
+
+You can use traditional cloud servers, such as AWS, GCP, and Azure, to deploy your MCP server remotely. However, this option requires you to handle server setup, configure SSL certificates, and manage server configuration yourself.
+
+If you've created your server using [Gram](https://docs.getgram.ai/host-mcp/deploy-mcp-server), we recommend hosting it there for a more streamlined experience.
+
+Other MCP server creation platforms have similar hosting and deployment solutions, such as [FastMCP Cloud](https://gofastmcp.com/deployment/fastmcp-cloud).
+
+### Set up OAuth authentication
+
+Implement OAuth 2.1 to secure your remote MCP server:
+
+- For Gram-hosted servers, follow the guide to [OAuth implementation with Gram](https://docs.getgram.ai/examples/oauth-external-server).
+- For self-hosted servers, follow the guide to [general OAuth implementation for MCP](https://docs.getgram.ai/host-mcp/adding-oauth).
+
+### Distribute to users
+
+Based on your security requirements, decide whether your server will be public or private:
+
+- **Private servers** work best for APIs used by enterprise teams, such as for internal marketing tools. You handle user configuration variables on the server side and tightly control access.
+- **Public servers** work best for APIs requiring broader distribution, such as for SaaS, but they require solid OAuth authentication. Although users set their own configuration variables, secure authorization flows are still necessary.
+
+## Final thoughts
+
+In this guide, we've explored how to distribute your MCP server with different distribution options.
+
+MCP server distribution strategies depend on target users and available resources. Follow the recommendations below according to your use case:
+
+- **For local installations**, provide multiple distribution options like MCPB, local build, and npm packages. This gives developers alternatives if they encounter issues with any single method. MCPB is well-maintained, so non-technical users will rarely have problems.
+- **In your documentation**, provide configuration examples for popular AI agents like Claude, Cline, Cursor, and VS Code.
+- **Publish your MCP server** on the official Anthropic MCP registry. If you're using Gram, consult our guide to referencing your MCP server in the registry.
