@@ -22,15 +22,13 @@ Speakeasy uses sentence case for titles and section headings globally.
 
 #### **Code blocks**
 
-Speakeasy documentation uses [Code Hike](https://codehike.org/) for code blocks.
-
 - Prefer code blocks to inline code for code snippets.
 - Prefer YAML to JSON for code snippets where possible to improve readability. For example, use YAML for all OpenAPI document examples.
 - Try to add a language to all code blocks. This helps with syntax highlighting.
 - Use the `bash` language for shell commands.
 - Terminal output can be highlighted by copying the output with control sequences (copy using iTerm2), then pasting the output to a code block and selecting the `ansi` language. This will render the output with the correct colors and formatting.
-- The `ansi` language isn’t rendered as a Code Hike component. If you need to use the `ansi` language, use a standard code block.
-- The `mermaid` language is used for diagrams. This language is excluded from Code Hike rendering.
+- The `ansi` language renders as a plain code block without additional styling—use it only when the color information is necessary.
+- The `mermaid` language is used for diagrams and renders via the built-in renderer (no extra wrapper needed).
 
 #### **UI element labels**
 
