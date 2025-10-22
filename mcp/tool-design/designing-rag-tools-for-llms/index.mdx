@@ -3,11 +3,11 @@ title: Designing RAG tools for LLMs
 description: Learn how to design RAG tools using MCP for LLMs.
 ---
 
-RAG and MCP are often positioned as alternatives: RAG enables semantic searches while MCP allows API actions. However, they can be complementary:  RAG searches your knowledge base efficiently, MCP standardizes how LLMs access that search. 
+RAG and MCP are often positioned as alternatives: RAG enables semantic searches while MCP allows API actions. However, they can be complementary:  RAG can search your knowledge base efficiently, and MCP standardizes how LLMs access that search. 
 
-This guide shows you how to design RAG tools specifically for MCP: the input patterns that work, the output structures LLMs need, and the design choices that make the difference.
+This guide shows you how to design RAG tools specifically for LLMs: the input patterns that work, the output structures LLMs need, and the design choices that make the difference.
 
-## What is RAG?
+## What is RAG
 
 RAG or Retrieval-Augmented Generation is an architecture pattern for semantic search. It combines information retrieval with text generation, allowing LLMs to search external databases or sources for relevant context before generating an answer.
 
@@ -15,21 +15,21 @@ This usually works by embedding documents into vectors, storing them in a databa
 
 ## Why should MCP servers have a RAG tool
 
-MCP servers provide tools that LLMs interact with to perform actions—searching databases, calling APIs, and updating records. RAG gives agents a better context by searching your knowledge base semantically. MCP gives agents capabilities by connecting them to your systems.
+MCP servers provide tools that LLMs interact with to perform actions such as searching databases, calling APIs, and updating records. RAG gives LLMs a better context by searching the knowledge base semantically. MCP gives LLMs capabilities by connecting them to a system.
 
-For example, a RAG tool might power your enterprise AI chatbot to answer questions from your user guides and documentation. In contrast, MCP tools let your customer support agent retrieve a user's license information or create a new support ticket. In that example, RAG handles knowledge retrieval, and MCP handles your system actions.
+For example, a RAG tool might power your enterprise AI chatbot to answer questions from your user guides and documentation. In contrast, MCP tools can help customer support agents retrieve a [user's license information](/mcp/use-cases/mcp-for-customer-service) or create a new support ticket. In that example, RAG handles knowledge retrieval, and MCP handles your system actions.
 
 ### The problem with MCP Resources
 
-But MCP servers provide three primitives: tools, resources, and prompts. MCP Resources are designed to give context to LLMs. These resources can be images, guides, or PDFs. For documentation search, MCP resources seem like the natural choice: expose your docs and let the LLM read them.
+MCP servers provide three primitives: tools, resources, and prompts. [MCP resources](/mcp/core-concepts/resources) are designed to give context to LLMs. These resources can be images, guides, or PDFs. For documentation search, MCP resources seem like the natural choice: expose your docs and let the LLM access them.
 
-The problem is scale. MCP Resources dumps entire documents into the context window with no processing. Your 100-page product guide will be dumped into the LLM context, potentially bloating it and immediately hitting context limits, which can cause timeouts, refusals, or hallucinations. Also, most LLM clients like Claude Desktop or ChatGPT don't index resources from MCP servers because of these rate limits and context window issues.
+But the problem is scale. MCP resources dump the entire collection or document into the context window with no processing. A 100-page product guide will be dumped into the LLM context, potentially bloating it and immediately hitting context limits, which can cause timeouts, refusals, or hallucinations. Also, most LLM clients, such as Claude Desktop and ChatGPT, don't index resources from MCP servers due to rate limits and context window issues.
+
+In our [MCP vs. RAG](/blog/rag-vs-mcp) blog, we compared an RAG implementation to an MCP implementation for searching Django documentation. The RAG implementation used around 9,798 tokens and found the answer. The MCP implementation used 32,189 tokens, 4x more, and still missed the answer because the relevant content was beyond the first 50 pages it could send within context limits.
 
 ### How RAG tools solve this
 
-This is where RAG tools come in handy: instead of the LLM loading resources and searching through them, it calls a tool with a natural language query. The tool handles embedding, vector search, and relevance filtering and returns only the most relevant chunks. The LLM gets precisely what it needs without managing the search infrastructure.
-
-In our RAG vs. MCP guide, we compared a RAG implementation to an MCP implementation for searching Django documentation. The RAG implementation used 9,798 tokens and found the answer. The MCP implementation used 32,189 tokens, 4x more, and still missed the answer because the relevant content was beyond the first 50 pages it could send within context limits.
+This is where RAG tools come in handy: instead of the LLM loading resources and searching through them, it calls a tool with a natural language query. The tool handles embedding, vector search, and relevance filtering, and returns only the most relevant chunks. The LLM gets precisely what it needs without managing the search infrastructure.
 
 RAG tools also enable features impossible with static resources: relevance scoring (LLM can request more context if scores are low), metadata filtering (search specific versions or sections), and context management (automatic token budgeting). The LLM uses a single tool with natural language instead of managing dozens of resources.
 
@@ -43,11 +43,9 @@ A well-designed RAG tool needs three types of parameters: the search query itsel
 
 ### The query parameter
 
-The query parameter should actually be a natural language query, not a list of keywords. A RAG system uses embeddings for semantic search. The embedding models (`all-MiniLM-L6-v2`  or `text-embedding-3-small` for OpenAI) are trained on natural language sentences, not keyword lists. When a user asks, "How do I work with curved geometries in Django's GIS module?", the LLM has already parsed the intent (implementation guidance), identified the domain (Django GIS geometry handling), and understood the context (a how-to question)
+The query parameter should actually be a natural language query, not a list of keywords. A RAG system uses embeddings for semantic search. The embedding models (`all-MiniLM-L6-v2`  or `text-embedding-3-small` for OpenAI) are trained on natural language sentences, not keyword lists. When a user asks, "How do I work with curved geometries in Django's GIS module?", the LLM has already parsed the intent (implementation guidance), identified the domain (Django GIS geometry handling), and understood the context (a how-to question).
 
 Forcing the LLM to translate that into structured keywords like `["django", "gis", "curve"]` with filters `{"type": "tutorial"}` throws away semantic understanding. The LLM must decide which words are keywords versus context, map natural language to your filter taxonomy, and lose the semantic relationships that make embeddings work. This gives you worse search results and wastes tokens.
-
-When the LLM translates "How do I work with curved geometries in Django's GIS module?" into keywords `["django", "gis", "curve"]`, your vector database retrieves pages containing those exact words—installation guides, general geometry tutorials, curve plotting—because keyword matching doesn't understand "curved geometries" means MultiCurve support. The LLM makes 2-3 attempts at $0.12+ versus one natural language query that retrieves the right results for $0.03."
 
 ### Result count control
 
@@ -55,17 +53,19 @@ LLMs understand and manage their context windows. In the tool parameters, let th
 
 ### Quality filtering
 
-Not all search results are equally relevant, and because of that, you should allow the LLM to filter by quality. 
+Not all search results are equally relevant, so you should allow the LLM to filter by quality. 
 
-For example, when you query a vector database like ChromaDB, it returns results ranked by **cosine similarity**, a score measuring how close the query embedding is to each document embedding. A score of **1.0** means identical semantic meaning, **0.5** means somewhat related, and 0.0 means unrelated.
+For example, when you query a vector database like [ChromaDB](https://docs.trychroma.com/docs/overview/getting-started?lang=typescript#next-steps), it returns results ranked by cosine similarity, a score measuring how close the query embedding is to each document embedding. A score of 1.0 means identical semantic meaning, 0.5 means somewhat related, and 0.0 means unrelated.
 
-This keeps low-quality results out of the LLM's context window entirely. When Claude asks for `min_score=0.7`, it's saying "only give me results that are at least **70%** semantically similar to my query", the RAG tool enforces this at retrieval time, and the LLM never sees the irrelevant chunks. If it gets back two results with scores of **0.72** and **0.71**, it knows the match is marginal and might lower the threshold to `min_score=0.6` for a broader search. If it gets **10** results all above **0.9**, it knows the search is highly targeted.
+This keeps low-quality results out of the LLM's context window entirely. When Claude asks for `min_score=0.7`, the RAG tool enforces this at retrieval time and filters out anything below that threshold.
 
-## How should the tool be designed
+The LLM uses these scores to adjust its strategy. If it gets back two results with scores of 0.72 and 0.71, it knows the match is marginal and might lower the threshold to `min_score=0.6` for a broader search. If it gets 10 results all above 0.9, it knows the search is highly targeted.
 
-If you're exposing RAG capabilities behind an endpoint, use a single endpoint instead of multiple ones. If you have numerous guides or documentation sets to index, separate tools are tempting. But if you're designing RAG for an enterprise with dozens of products and documentation sets, many tools exposed to the LLM can create a tool explosion problem. The LLM faces decision paralysis, leading to wrong tool choices or hallucinations.
+## How to design a RAG tool
 
-Instead, use one flexible search tool, and add a parameter to redirect to the correct user guide, for example.
+If you're exposing RAG capabilities behind an endpoint, use a single endpoint instead of multiple ones. If you have numerous guides or documentation sets to index, separate tools/endpoints are tempting. But if you're designing RAG for an enterprise with dozens of products and documentation sets, many tools exposed to the LLM can create a tool explosion problem, which leads to context bloating. The LLM can face decision paralysis, leading to wrong tool choices or hallucinations.
+
+Instead, use one search tool with a `collection` parameter like `collection="user-guide"` or `collection="api-reference"` to specify which documentation set to search.
 
 ### Response format
 
@@ -92,15 +92,15 @@ LLMs need results in a format they can immediately use. Here's what works:
 
 The response format will vary depending on your case, but here are some best practices to follow: 
 
-1. Flat result array: Don't nest results in complex structures. The LLM iterates through them sequentially—make that easy.
+1. Flat result array: Don't nest results in complex structures because LLM iterates through them sequentially.
 
-2. Content first: Put the actual text in `content`, not `text` or `document` or `chunk`. Be consistent and obvious.
+2. Content first: Put the actual text in `content`, not `text` or `document` or `chunk`.
 
 3. Include sources: The LLM needs to cite where information came from. URLs, page numbers, or document IDs work.
 
 4. Expose scores: Let the LLM judge result quality. If all scores are below 0.6, it knows the search was weak and might rephrase the query.
 
-5. Token estimates: Critical for context management. The LLM needs to determine if it can fit these results, along with its reasoning, in the context window. Divide total characters by 4 for a rough estimate (works well for English documentation).
+5. Token estimates: This is critical for context management. The LLM needs to determine if it can fit these results, along with its reasoning, in the context window. Divide the total characters by 4 for a rough estimate (works well for English documentation).
 
 6. Avoid returning too much data to the LLM.
 
@@ -155,8 +155,8 @@ You can find the complete project [here](#). Clone it and follow along, or build
 Clone and install the dependencies:
 
 ```bash
-git clone [repo-url] django-rag-api
-cd django-rag-api
+git clone https://github.com/ritza-co/speakeasy-examples.git
+cd speakeasy-examples/rag-mcp-example
 uv sync
 ```
 
@@ -304,7 +304,7 @@ With Gram, you will upload the OpenAPI document from the cloned project, configu
 
 ### Connecting to Claude Desktop
 
-In your Docs-Api-Rag toolset's MCP tab, click on the **View** button under the MCP installation section to be redirected to the MCP installation page details.
+In your Docs-Api-Rag toolset's MCP tab, click on the **View** button under the **MCP Installation** section to be redirected to the MCP installation page details.
 
 Copy the raw configuration details. 
 
@@ -314,7 +314,32 @@ Open the Claude Desktop application, navigate to **Settings -> Developer**, and 
 
 ![Claude Desktop edit config](./assets/claude-desktop-edit-config.png)
 
-Open the `claude_desktop_config.json` file, copy the raw configuration from Gram, and replace the value of `GRAM_ENVIRONMENT` with `default` or the name of the environment you are storing the environment variables, and `GRAM_KEY` with the Gram key.
+Open the `claude_desktop_config.json` file, copy the raw configuration from Gram.
+
+```json
+{
+  "mcpServers": {
+    "DocsRagServer": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://app.getgram.ai/mcp/rxxxx",
+        "--header",
+        "Gram-Environment:${GRAM_ENVIRONMENT}",
+        "--header",
+        "Authorization:${GRAM_KEY}"
+      ],
+      "env": {
+        "GRAM_ENVIRONMENT": "default",
+        "GRAM_KEY": "gram_live_xxxxxxx"
+      }
+    }
+  }
+}
+
+```
+
+Replace the value of `GRAM_ENVIRONMENT` with `default` or the name of the environment you are storing the environment variables, and `GRAM_KEY` with the Gram key.
 
 ### Testing with Claude
 
@@ -334,11 +359,11 @@ Disable both the RAG tool and Claude's web search feature, then ask the same que
 
 ## Further Exploration
 
-Now that you've built a RAG tool for documentation search, consider what else becomes possible when you combine RAG with other MCP tools:
+Now that you've built a RAG tool for documentation search, consider what else becomes possible when you combine RAG with your MCP tools or other MCP tools:
 
-- You can design a customer support agent. Combine a RAG tool for your product documentation with the Zendesk MCP server, for example, or any CRM tools, support tickets, and analytics. The agent learns product context from documentation and then pulls customer data to provide personalized support responses.
-- You can power a code assistant. Build a RAG tool for your SDK documentation and code examples, paired with MCP tools that interact with your sandbox API. The LLM searches for implementation patterns, retrieves example code, and tests it against your sandbox environment.
-- You can build an account management assistant. Create a RAG tool that searches your company's sales playbooks and account management guides. Pair it with the HubSpot MCP server. When a sales rep asks "update this client's status to renewal stage and log our last conversation", the LLM uses RAG to check your renewal protocols, then updates the contact record and creates the activity log in your CRM following those guidelines.
+- You can design a [customer support agent](/mcp/using-mcp/use-cases/customer-support) for your customer. Combine a RAG tool for your product documentation with the [Zendesk MCP](/using-mcp/mcp-server-providers/zendesk) server, for example, or any CRM tools, support tickets, and analytics. The agent learns product context from documentation and then pulls customer data to provide personalized support responses.
+- You can power a code assistant for developers. Build a RAG tool for your SDK documentation and code examples, paired with MCP tools that interact with your sandbox API. The LLM searches for implementation patterns, retrieves example code, and tests it against your sandbox environment.
+- You can build an [account management](/mcp/using-mcp/use-cases/account-management) assistant for your sales team. Create a RAG tool that searches your company's sales playbooks and account management guides. Pair it with the [HubSpot MCP](/mcp/using-mcp/mcp-server-providers/hubspot) server. When a sales agent asks "update this client's status to renewal stage and log our last conversation", the LLM uses RAG to check your renewal protocols, then updates the contact record and creates the activity log in your CRM following those guidelines.
 
 ## Final thoughts
 
