@@ -1,0 +1,101 @@
+---
+title: "Filtering large MCP tool responses with jq"
+description: "Learn how jq filters solve the problem of large API responses consuming LLM context windows"
+---
+
+# Filtering large MCP tool responses with jq
+
+Large API responses consume valuable LLM context. When an API returns hundreds of user records, the LLM must process every field of every record, even when only a few specific details are needed. This wastes context space and slows down response generation.
+
+## The context window problem
+
+Consider a contact management API. A tool that calls `GET /contacts` might return 100 contacts, each with 20 fields (name, email, phone, address, company, etc.). That's 2,000 fields of data loaded into the LLM's context, when the user might only need email addresses.
+
+Traditional solutions involve manually filtering response data in the MCP server code. This creates a tradeoff: Either include all data (wasting context) or exclude fields (making data inaccessible when needed).
+
+## What is jq?
+
+jq is a lightweight command-line JSON processor. Like `sed` for JSON data, jq slices, filters, and transforms structured data with minimal syntax. It's particularly effective for extracting specific values from complex API responses.
+
+## Dynamic response filtering in MCP
+
+Response filtering allows the LLM to apply jq syntax to transform API responses based on the response schema. The LLM dynamically selects only the information needed to answer each query.
+
+## Implementation with FastMCP
+
+Here's how to implement jq filtering in a FastMCP tool:
+
+```python
+import subprocess
+import json
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("Contact Manager")
+
+@mcp.tool()
+def get_contacts(jq_filter: str | None = None) -> str:
+    """Retrieve contact information.
+
+    Args:
+        jq_filter: Optional jq syntax to filter the response
+    """
+    # Fetch contacts from your API
+    response = fetch_contacts_from_api()
+
+    # Apply jq filter if provided
+    if jq_filter:
+        response = apply_jq_filter(response, jq_filter)
+
+    return json.dumps(response)
+
+def apply_jq_filter(data: dict, filter_expr: str) -> dict:
+    """Apply a jq filter to JSON data."""
+    try:
+        # Convert data to JSON string
+        json_input = json.dumps(data)
+
+        # Run jq command
+        result = subprocess.run(
+            ['jq', filter_expr],
+            input=json_input,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        return json.loads(result.stdout)
+    except subprocess.CalledProcessError as e:
+        return {"error": f"Invalid jq filter: {e.stderr}"}
+    except json.JSONDecodeError:
+        return {"error": "Failed to parse jq output"}
+```
+
+With this implementation, the LLM can apply jq filters dynamically:
+
+```python
+# Extract only name and email fields
+get_contacts(jq_filter='.contacts[] | {name, email}')
+
+# Filter for active users only
+get_contacts(jq_filter='.data[] | select(.status == "active")')
+
+# Transform arrays of objects
+get_contacts(jq_filter='.results | map({id, company_name})')
+```
+
+## How it works
+
+By adding an optional `jq_filter` parameter to your tool, the LLM can provide jq syntax to filter the response before processing it.
+
+For example, when asked "What are the email addresses of active customers?", the LLM can:
+
+1. Call `get_contacts` with `jq_filter='.contacts[] | select(.status == "active") | .email'`
+2. The tool applies the filter using the `jq` command-line tool
+3. Only the filtered results are returned to the LLM
+4. The LLM processes a fraction of the original response size
+
+This approach maintains full API access while dramatically reducing context consumption. The LLM chooses what data to retrieve based on each specific query.
+
+## Related reading
+
+For more strategies to optimize MCP tools, see [Why less is more for MCP](/mcp/tool-design/less-is-more).
