@@ -381,6 +381,26 @@ const meta = {
           },
           typescript: {
             title: "TypeScript",
+            items: {
+              "additional-index-exports": {
+                title: "Additional index exports",
+              },
+              "configuring-module-format": {
+                title: "Configuring Module Format",
+              },
+              "disabling-barrel-files": {
+                title: "Disabling Barrel Files",
+              },
+              "model-validation-and-serialization": {
+                title: "Model validation and serialization",
+              },
+              "property-naming": {
+                title: "Control property casing: snake, camel",
+              },
+              "react-hooks": {
+                title: "Generating React Hooks from OpenAPI",
+              },
+            },
           },
         },
       },
