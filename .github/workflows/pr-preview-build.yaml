@@ -1,73 +1,191 @@
 name: Site build preview
 
 on:
-    pull_request:
-        types: [opened, synchronize]
-        branches:
-            - main
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
 
 env:
-    SYNC_REPO: ${{ secrets.SYNC_REPO }}
-    SYNC_DIRS: "api-design docs guides mcp openapi"
-    BRANCH_NAME: docs-preview/pr-${{ github.event.pull_request.number }}
+  SYNC_REPO: ${{ secrets.SYNC_REPO }}
+  SYNC_DIRS: "api-design docs guides mcp openapi"
+  BRANCH_NAME: docs-preview/pr-${{ github.event.pull_request.number }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_PROJECT_NAME: ${{ secrets.VERCEL_PROJECT_NAME }}
+  VERCEL_GIT_REPO_ID: ${{ secrets.VERCEL_GIT_REPO_ID }}
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-    preview-sync:
-        runs-on: ubuntu-latest
+  preview-sync:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
 
-        steps:
-            - name: Checkout developer-docs PR
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
+    steps:
+      - name: Checkout developer-docs PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
-            - name: Clone marketing-site preview branch
-              env:
-                  TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
-              run: |
-                  git clone https://x-access-token:${TOKEN}@github.com/${SYNC_REPO}.git private-repo
-                  cd private-repo
-                  git checkout -B $BRANCH_NAME
+      - name: Clone marketing-site preview branch
+        env:
+          TOKEN: ${{ secrets.SERVICE_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${TOKEN}@github.com/${SYNC_REPO}.git" private-repo
+          cd private-repo
+          git checkout -B "$BRANCH_NAME"
 
-            - name: Sync content folders to preview branch
-              run: |
-                  set -euo pipefail
-                  for dir in $SYNC_DIRS; do
-                    src_dir="$dir"
-                    dest_dir="private-repo/src/content/$dir"
-                    if [ -d "$src_dir" ]; then
-                      echo "Syncing $src_dir → $dest_dir"
-                      rsync -a --delete "$src_dir/" "$dest_dir/"
-                    else
-                      echo "Warning: $src_dir does not exist, skipping..."
-                    fi
-                  done
+      - name: Prepare destination dirs
+        run: |
+          set -euo pipefail
+          for dir in $SYNC_DIRS; do
+            mkdir -p "private-repo/src/content/$dir"
+          done
 
-            - name: Commit and push preview branch
-              run: |
-                  set -euo pipefail
-                  cd private-repo
-                  git config user.name "Beezy the bot"
-                  git config user.email "marketing@speakeasy.com"
-                  git add .
-                  if git diff --cached --quiet; then
-                    echo "No changes to sync for preview"
-                    exit 0
-                  fi
-                  git commit -m "🔍 Preview sync from developer-docs PR #${{ github.event.pull_request.number }}"
-                  git push origin $BRANCH_NAME --force
+      - name: Sync content folders to preview branch
+        run: |
+          set -euo pipefail
+          for dir in $SYNC_DIRS; do
+            src_dir="$dir"
+            dest_dir="private-repo/src/content/$dir"
+            if [ -d "$src_dir" ]; then
+              echo "Syncing $src_dir → $dest_dir"
+              rsync -a --delete "$src_dir/" "$dest_dir/"
+            else
+              echo "Warning: $src_dir does not exist, skipping..."
+            fi
+          done
 
-    comment-vercel-preview:
-        needs: preview-sync
-        runs-on: ubuntu-latest
+      - name: Commit and push preview branch
+        id: diff
+        run: |
+          set -euo pipefail
+          cd private-repo
+          git config user.name "Beezy the bot"
+          git config user.email "marketing@speakeasy.com"
+          git add .
 
-        steps:
-            - name: Comment with Predicted Vercel URL
-              uses: marocchino/sticky-pull-request-comment@v2
-              with:
-                  number: ${{ github.event.pull_request.number }}
-                  header: VercelPreview
-                  message: |
-                      🔗 **Preview your changes**  
-                      [https://speakeasycom-git-docs-preview-pr-${{ github.event.pull_request.number }}-speakeasyapi.vercel.app](https://speakeasycom-git-docs-preview-pr-${{ github.event.pull_request.number }}-speakeasyapi.vercel.app)  
-                      _(The preview may still be building. Check back at this link in a few minutes.)_
+          if git diff --cached --quiet; then
+            echo "No changes to sync for preview"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "🔍 Preview sync from developer-docs PR #${{ github.event.pull_request.number }}"
+          git push origin "$BRANCH_NAME" --force
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  create-vercel-deployment:
+    needs: preview-sync
+    if: needs.preview-sync.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      deployment_url: ${{ steps.trigger.outputs.deployment_url }}
+
+    steps:
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Trigger Vercel deployment
+        id: trigger
+        env:
+          SYNC_REPO: ${{ env.SYNC_REPO }}
+          BRANCH_NAME: ${{ env.BRANCH_NAME }}
+          VERCEL_TOKEN: ${{ env.VERCEL_TOKEN }}
+          VERCEL_TEAM_ID: ${{ env.VERCEL_TEAM_ID }}
+          VERCEL_PROJECT_ID: ${{ env.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_NAME: ${{ env.VERCEL_PROJECT_NAME }}
+          VERCEL_GIT_REPO_ID: ${{ env.VERCEL_GIT_REPO_ID }}
+        run: |
+          set -euo pipefail
+
+          required=(VERCEL_TOKEN VERCEL_PROJECT_ID VERCEL_PROJECT_NAME)
+          for var in "${required[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "Missing required secret: $var" >&2
+              exit 1
+            fi
+          done
+
+          if [[ -z "${SYNC_REPO:-}" || "$SYNC_REPO" != */* ]]; then
+            echo "Invalid SYNC_REPO value: ${SYNC_REPO:-<empty>}" >&2
+            exit 1
+          fi
+
+          org="${SYNC_REPO%%/*}"
+          repo="${SYNC_REPO#*/}"
+
+          payload=$(jq -n \
+            --arg name "$VERCEL_PROJECT_NAME" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg org "$org" \
+            --arg repo "$repo" \
+            --arg ref "$BRANCH_NAME" \
+            '{
+              name: $name,
+              project: $project,
+              target: "preview",
+              gitSource: {
+                type: "github",
+                org: $org,
+                repo: $repo,
+                ref: $ref
+              }
+            }')
+
+          if [ -n "${VERCEL_GIT_REPO_ID:-}" ]; then
+            payload=$(printf '%s' "$payload" | jq --arg repoId "$VERCEL_GIT_REPO_ID" '.gitSource.repoId = $repoId')
+          fi
+
+          api_url="https://api.vercel.com/v13/deployments"
+          if [ -n "${VERCEL_TEAM_ID:-}" ]; then
+            api_url="${api_url}?teamId=${VERCEL_TEAM_ID}"
+          fi
+
+          response=$(curl -sS -X POST "$api_url" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+
+          if echo "$response" | jq -e '.error' >/dev/null; then
+            echo "Vercel API error:" >&2
+            echo "$response" | jq -r '.error.message // .' >&2
+            exit 1
+          fi
+
+          url=$(echo "$response" | jq -r '.url // empty')
+          if [ -z "$url" ]; then
+            echo "Vercel API response did not include a deployment URL." >&2
+            echo "$response" >&2
+            exit 1
+          fi
+
+          echo "deployment_url=$url" >> "$GITHUB_OUTPUT"
+
+  comment-vercel-preview:
+    needs: [preview-sync, create-vercel-deployment]
+    if: needs.preview-sync.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment with Vercel preview URL
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          number: ${{ github.event.pull_request.number }}
+          header: VercelPreview
+          message: |
+            🔗 **Preview your changes**  
+            [${{ needs.create-vercel-deployment.outputs.deployment_url }}](${{ needs.create-vercel-deployment.outputs.deployment_url }})  
+            _(The preview may still be building. Check back at this link in a few minutes.)_
