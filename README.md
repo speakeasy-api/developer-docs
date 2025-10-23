@@ -11,6 +11,7 @@ The documentation is organized into several content hubs:
 - [`guides/`](https://www.speakeasy.com/guides) - Step-by-step product guides
 - [`mcp/`](https://www.speakeasy.com/mcp) - MCP hub
 - [`openapi/`](https://www.speakeasy.com/openapi) - OpenAPI hub
+- `public/` - Shared static assets (images, downloads, etc.) served on the site
 
 ## ✍️ How to Edit Content
 
@@ -33,6 +34,8 @@ For example:
 - Follow our quick style guide below
 - Include proper meta descriptions for SEO
 - Optimize images using Next.js Image component
+- Store any public/static assets in `public/`
+- Update `_meta.global.tsx` to adjust sidebar ordering where needed
 
 ### 3. Submit Your Changes
 
