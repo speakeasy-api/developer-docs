@@ -37,10 +37,10 @@ const meta = {
       */
       "managed-mcp-section": {
         type: "separator",
-        title: <SidebarSeparator>{"Gram (Hosted MCP)"}</SidebarSeparator>,
+        title: <SidebarSeparator>{"Gram (MCP Cloud)"}</SidebarSeparator>,
       },
       gram: {
-        title: "Gram (hosted MCP platform)",
+        title: "Gram (MCP Cloud)",
         display: "children",
         items: {
           introduction: {
@@ -136,7 +136,7 @@ const meta = {
             },
           },
           clients: {
-            title: "Integration guides",
+            title: "MCP Clients",
             items: {
               "using-chatgpt-developer-mode-with-gram": {
                 title: "ChatGPT Developer mode",
