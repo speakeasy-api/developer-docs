@@ -1,83 +1,74 @@
 ---
-title: "Adding OAuth to an MCP Server"
-description: "Learn how to add OAuth to your MCP server"
+title: "Add OAuth to an MCP Server"
+description: "Learn how to add OAuth to your MCP server."
 ---
 
 import { Callout } from "@/mdx/components";
 
-# Adding OAuth to an MCP Server
+# Add OAuth to an MCP server
 
-> Configure authentication for MCP servers using different OAuth methods
+This guide demonstrates how to configure authentication for MCP servers using different OAuth methods.
 
 <Callout title="Implementation Support" type="tip">
-    For assistance with OAuth implementation, including proxy setup and DCR compliance, [reach out to Gram support](https://calendly.com/sagar-speakeasy/30min) for white-glove service.
+    For assistance with OAuth implementation, including proxy setup and DCR compliance, [reach out to Gram Support](https://calendly.com/sagar-speakeasy/30min) for white-glove service.
 </Callout>
 
-Starting March 2025, the MCP specification recommends OAuth-based authentication, but most existing OAuth implementations don't meet MCP's specific requirements. The specification calls for OAuth 2.1 and support for Dynamic Client Registration (DCR), which most major OAuth providers—including Google, GitHub, and Microsoft Azure AD—don't support. This mismatch between MCP's vision and existing OAuth infrastructure creates a common implementation barrier for enterprise adoption.
+From March 2025, the MCP specification began recommending OAuth-based authentication. However, most existing OAuth implementations don't meet [MCP requirements](https://modelcontextprotocol.io/specification/draft/basic/authorization#protocol-requirements). The specification calls for OAuth 2.1 and support for Dynamic Client Registration (DCR), which most major OAuth providers — including Google, GitHub, and Microsoft Azure AD — don't support. This mismatch between MCP's vision and existing OAuth infrastructure creates a common implementation barrier for enterprise adoption.
 
-The requirements for OAuth 2.1 in MCP can be found [here].(https://modelcontextprotocol.io/specification/draft/basic/authorization#protocol-requirements)
+Gram bridges this gap by supporting multiple authentication approaches, from simple token-based methods to complex OAuth proxy solutions. How you set up authentication depends on the OAuth capabilities of your underlying API and the intended purpose of your MCP server. Understanding these different approaches and their trade-offs is essential for selecting the right authentication strategy.
 
-Gram bridges this gap by supporting multiple authentication approaches, from simple token-based methods to complex OAuth proxy solutions. How you set up authentication depends on the OAuth capabilities of the underlying API and the intended purpose of your MCP server. Understanding these different approaches and their trade-offs is essential for selecting the right authentication strategy.
+## Using the Authorization Code Flow
 
-
-## Authorization Code Flow
-
-Authorization code flow enables user-interactive OAuth with proper consent screens. However, it requires OAuth providers to support specific MCP requirements.
+The Authorization Code Flow enables user-interactive OAuth with proper consent screens. However, it requires OAuth providers to support specific MCP requirements.
 
 ### With DCR
 
-**When should you use it**: If you want to host an MCP server for large-scale use by external developers, you should plan to built out support for DCR.
+If you want to host an MCP server for large-scale use by external developers, you should plan to build out support for DCR.
 
-**Examples**: [Stripe](https://docs.stripe.com/mcp) & [Asana](https://developers.asana.com/docs/integrating-with-asanas-mcp-server) both have added support for DCR to their APIs to accomodate MCP.
+For example,[Stripe](https://docs.stripe.com/mcp) and [Asana](https://developers.asana.com/docs/integrating-with-asanas-mcp-server) have both added support for DCR to their APIs to accommodate MCP.
 
-#### Implementation in Gram
+If the API is already configured to support DCR, enabling the Authorization Code Flow on Gram is simple:
 
-If the API is already configured to support DCR, enabling the authorization flow on Gram is simple:
-
-1. Create a manifest file for the OAuth server in Gram.
-2. Attach the manifest to your toolset.
+- Create a manifest file for the OAuth server in Gram.
+- Attach the manifest to your toolset.
 
 ### Without DCR
 
-**When should you use it**: Most APIs don't support DCR, so Gram offers an OAuth proxy that translates between MCP requirements and standard OAuth implementations. The proxy will use a specific client id and secret to access the API on behalf of the users of the MCP server.
+Because most APIs don't support DCR, Gram offers an OAuth proxy that translates between MCP requirements and standard OAuth implementations. The proxy uses a specific client ID and secret to access the API on behalf of the MCP server end users.
 
-This is useful for MCP servers that won't be exposed to the public, or in cases where a server acting as a single client_id is acceptable.
+This is useful for MCP servers that won't be exposed to the public, or in cases where a server acting as a single `client_id` is acceptable.
 
-**Examples**: [Cloudflare OAuth Proxy](https://blog.cloudflare.com/remote-model-context-protocol-servers-mcp/#workers-oauth-provider-an-oauth-2-1-provider-library-for-cloudflare-workers)
+For example, the [Cloudflare OAuth proxy](https://blog.cloudflare.com/remote-model-context-protocol-servers-mcp/#workers-oauth-provider-an-oauth-2-1-provider-library-for-cloudflare-workers) doesn't support DCR.
 
-#### How the OAuth proxy works
+The OAuth proxy works using the following mechanisms:
 
-1. **Proxy Registration**: Proxy exposes DCR-compliant endpoints to MCP clients
-2. **Token Translation**: Converts between proxy tokens and a set of real provider tokens
-3. **Flow Management**: Handles OAuth dance between client and actual provider
-4. **State Storage**: Maintains token mappings and authorization state
+- **Proxy registration:** The proxy exposes DCR-compliant endpoints to MCP clients.
+- **Token translation:** It converts proxy tokens to a set of real provider tokens.
+- **Flow management:** It handles the OAuth dance between the client and the actual provider.
+- **State storage:** It maintains token mappings and authorization state.
 
-#### Implementation in Gram
+If you want to implement an OAuth proxy in Gram, please [book time with our team](https://calendly.com/sagar-speakeasy/30min). We'll get you up and running.
 
-If you want to implement OAuth proxy in Gram, please [book in time with our team](https://calendly.com/sagar-speakeasy/30min). We'll get you up and running.
+## Using the Client Credentials grant
 
-## Client Credentials Flow
+The Client Credentials grant is a simpler authentication method. The server exchanges a client ID and secret for access tokens. Gram handles the token exchange process automatically.
 
-Client credentials flow is a simpler authentication method. The server exchanges a client ID and secret for access tokens. Gram handles the token exchange process automatically.
+Implement the Client Credentials grant in Gram as follows:
 
-#### Implementation in Gram
+- Upload the OpenAPI document to Gram
+- Navigate to the **Environments** tab
+- Add the `CLIENT_ID` (application client identifier) and `CLIENT_SECRET` (application client secret) environment variables.
+- Attach the environment to your toolset.
 
-1. Upload the OpenAPI specification to Gram
-2. Navigate to **Environments** tab
-3. Add environment variables:
-   - `CLIENT_ID`: Application client identifier
-   - `CLIENT_SECRET`: Application client secret
-4. Attach environment to toolset
-
-## Access Token Authentication
+## Using access token authentication
 
 Access token authentication allows passing pre-obtained tokens directly to the MCP server. This method works with any OAuth provider, regardless of DCR support.
 
-#### Implementation in Gram
+Implement access token authentication in Gram as follows:
 
-1. Obtain access token from the OAuth provider
-2. Navigate to **Environments** tab
-3. Add `ACCESS_TOKEN` environment variable
-4. Attach environment to toolset
+- Obtain the access token from your OAuth provider.
+- Navigate to the **Environments** tab.
+- Add the `ACCESS_TOKEN` environment variable.
+- Attach the environment to your toolset.
 
 Popular services like GitHub use this approach. While technically OAuth-based, no OAuth flow occurs through the MCP client.
