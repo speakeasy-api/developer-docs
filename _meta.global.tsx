@@ -44,13 +44,21 @@ const meta = {
         display: "children",
         items: {
           introduction: {
-            title: "Intro",
+            title: "Introduction",
           },
-          "gram-quickstart": {
-            title: "Quickstart",
+          "mcp-installation-guides": {
+            title: "MCP Installation Guides",
           },
-          guides: {
-            title: "Guides",
+          "getting-started": {
+            title: "Getting Started",
+            items: {
+              typescript: {
+                title: "Use TypeScript",
+              },
+              openapi: {
+                title: "Use an OpenAPI Spec",
+              },
+            },
           },
           concepts: {
             title: "Concepts",
