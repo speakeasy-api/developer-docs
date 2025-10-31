@@ -171,11 +171,119 @@ try (EventStream<JsonEvent> events = response.events()) {
 
 ### Error Handling
 
-Check the status code of the response. If it's an error response, the `error` field contains the decoded error value.
+The SDK throws typed unchecked exceptions for all errors, organized in a hierarchy:
 
-<Callout title="Coming Soon" type="info">
-  Support for throwing unsuccessful status codes as exceptions is coming soon.
-</Callout>
+```
+Base SDK Error
+├── Default SDK Error (for network/IO errors and untyped API errors)
+├── Default Async SDK Error (for async-specific errors)
+└── Custom Errors (for typed error responses defined in OpenAPI spec)
+```
+
+Error class names can be customized via `gen.yaml` flags; if not specified, they're inferred from the SDK name.
+
+#### Base SDK Error
+
+All exceptions extend `RuntimeException` and encapsulate the raw HTTP response with accessors for:
+- **Status code**: `statusCode()`
+- **Headers**: `headers()`
+- **Body**: `body()` returns `Optional<byte[]>` and `bodyAsString()` returns `Optional<String>` (accounts for cases where the body couldn't be read due to `IOException`)
+
+#### Default SDK Error
+
+The default SDK error is thrown during:
+- **Network/IO errors**: Connection failures, timeouts, and other transport-level issues
+- **Untyped API errors**: HTTP error responses without custom error schemas defined in the OpenAPI spec
+
+#### Custom Error Responses
+
+For operations with error responses defined in the OpenAPI spec, the SDK generates typed exception classes that encapsulate the error schema.
+
+**Example OpenAPI spec:**
+```yaml
+paths:
+  /users/{userId}:
+    get:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserError'
+components:
+  schemas:
+    UserError:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [NotFound, Unauthorized]
+        reason:
+          type: string
+```
+
+**Generated exception class:**
+```java
+public class UserError extends BaseSdkError {
+    // Error schema as nested static class
+    public static class Data {
+        // Generated enum from OpenAPI spec
+        public enum Code {
+            NOT_FOUND("NotFound"),
+            UNAUTHORIZED("Unauthorized");
+
+            private final String value;
+            Code(String value) { this.value = value; }
+            public String value() { return value; }
+        }
+
+        private Code code;
+        private String reason;
+        // Getters and setters...
+    }
+
+    // Hoisted field accessors for convenience
+    public Optional<Data.Code> code() { ... }
+    public Optional<String> reason() { ... }
+
+    // Full error object accessor
+    public Optional<Data> data() { ... }
+
+    // Available if deserialization failed
+    public Optional<IOException> deserializationError() { ... }
+}
+```
+
+All accessors return `Optional` to handle cases where the response body couldn't be deserialized.
+
+**Usage:**
+```java
+try {
+    User user = sdk.getUser("user-123");
+} catch (UserError e) {
+    // Handle typed error with field access
+    e.code().ifPresent(code ->
+        System.err.println("Error Code: " + code));
+    e.reason().ifPresent(reason ->
+        System.err.println("Reason: " + reason));
+
+    // Check for deserialization issues
+    if (e.deserializationError().isPresent()) {
+        System.err.println("Failed to parse error response");
+    }
+} catch (SDKError e) {
+    // Handle default SDK errors (network issues, untyped errors)
+    System.err.println("Request failed: " + e.getMessage());
+    System.err.println("Status: " + e.statusCode());
+}
+```
 
 ## Asynchronous Methods
 

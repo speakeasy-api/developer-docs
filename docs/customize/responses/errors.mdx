@@ -12,9 +12,11 @@ Below is a structured guide on how to configure and customize error handling in 
 
 By default, Speakeasy SDKs handle errors as follows:
 
-1. **Validation Errors**: If the server response doesn't match the SDK's expected data schema, validation errors will be raised.
-2. **4XX and 5XX Status Codes**: Responses with these status codes are treated as errors.
-3. **Connection Errors**: If the SDK fails to connect to the server (DNS, timeouts, TLS errors), it raises a connection-related error/exception.
+1. **Non-2xx Status Codes**: When receiving an HTTP error response, the SDK throws either:
+   - A **custom SDK error** with typed error schemas (hoisted properties for convenient access)
+   - A **default SDK error** that encapsulates the raw response when no custom error schema is defined
+2. **Validation Errors**: If error response parsing fails or doesn't match the expected schema, validation errors are thrown.
+3. **Network/IO Errors**: Connection failures, timeouts, DNS errors, and TLS errors are escalated verbatim.
 
 <details>
   <summary>Example OpenAPI file</summary>
@@ -69,7 +71,16 @@ async function run() {
     result = await drinks.listDrinks();
     console.log(result);
   } catch (err) {
-    // 1. Validation Errors: Server response didn't match the SDK's expected data schema
+    // 1. Default SDK Errors: Non-2xx responses without custom error schemas
+    // Use `typescript.defaultErrorName` to change the name of `SDKError` in `gen.yaml`
+    if (err instanceof SDKError) {
+      console.error(err.statusCode);
+      console.error(err.message);
+      console.error(err.body); // Raw response body as string
+      return;
+    }
+
+    // 2. Validation Errors: Error response parsing failed
     if (err instanceof SDKValidationError) {
       // Raw value will be type `unknown`
       console.error(err.rawValue);
@@ -78,18 +89,11 @@ async function run() {
       return;
     }
 
-    // 2. 4XX and 5XX Status Codes: Server returned an error code an unexpected content type
-    // Use `typescript.defaultErrorName` to change the name of `SDKError` in `gen.yaml`
-    if (err instanceof SDKError) {
-      console.error(err.statusCode);
-      console.error(err.rawResponse.body);
-      return;
-    }
-
-    // 3. Connection Errors: The SDK didn't even get a response from the server
+    // 3. Network/IO Errors: Connection failures, timeouts, DNS errors (escalated verbatim)
     if (err instanceof HTTPClientError) {
       console.error(err.name);
       console.error(err.message);
+      return;
     }
 
     throw err;
@@ -101,7 +105,7 @@ async function run() {
 
 ## Recommended Configuration
 
-To improve the DX for the end user of the SDK, it is recommended to have named error classes for certain types of errors eg `UnauthorizedError`, `NotFoundError`, etc. It is also common for APIs to return structured JSON errors for 4XX responses. Here is an example of how to configure this in an OpenAPI document:
+To improve the DX for the end user of the SDK, it is recommended to have named error classes with structured schemas for specific error types (e.g., `BadRequestError`, `UnauthorizedError`, `NotFoundError`). APIs commonly return structured JSON errors for 4XX responses. Here is an example of how to configure this in an OpenAPI document:
 
 ```yaml
 openapi: 3.1.0
@@ -124,26 +128,24 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Drink"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestError"
         "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/UnauthorizedError"
-        "403":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ForbiddenError"
         "404":
+          description: Not Found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/NotFoundError"
-        "429":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TooManyRequestsError"
 components:
   schemas:
     Drink:
@@ -152,6 +154,25 @@ components:
       properties:
         name:
           type: string
+    BadRequestError:
+      type: object
+      title: BadRequestError
+      properties:
+        statusCode:
+          type: integer
+        error:
+          type: string
+        typeName:
+          type: string
+        message:
+          type: string
+          x-speakeasy-error-message: true
+        detail:
+          oneOf:
+            - type: string
+            - type: object
+        ref:
+          type: string
     UnauthorizedError:
       type: object
       title: UnauthorizedError
@@ -159,13 +180,8 @@ components:
         message:
           type: string
           x-speakeasy-error-message: true
-    ForbiddenError:
-      type: object
-      title: ForbiddenError
-      properties:
-        message:
+        code:
           type: string
-          x-speakeasy-error-message: true
     NotFoundError:
       type: object
       title: NotFoundError
@@ -173,13 +189,10 @@ components:
         message:
           type: string
           x-speakeasy-error-message: true
-    TooManyRequestsError:
-      type: object
-      title: TooManyRequestsError
-      properties:
-        message:
+        resource:
           type: string
-          x-speakeasy-error-message: true
+        resourceId:
+          type: string
 ```
 
 Note, defining 5XX responses is generally not recommended as the server is not always in control of the response. If a JSON schema is specified for a 5XX response and the response doesn't match the schema, the SDK will raise a `SDKValidationError`.
@@ -187,7 +200,7 @@ Note, defining 5XX responses is generally not recommended as the server is not a
 Note the use of `x-speakeasy-error-message: true` to configure the error message to be used by the SDK, which will be propagated to `err.message` in the SDK.
 
 <details open>
-<summary>TypeScript SDK Default Error Handling</summary>
+<summary>TypeScript SDK Custom Error Handling</summary>
 
 ```typescript
 import { Drinks } from "drinks";
@@ -195,10 +208,9 @@ import {
   SDKValidationError,
   SDKError,
   HTTPClientError,
+  BadRequestError,
   UnauthorizedError,
-  ForbiddenError,
   NotFoundError,
-  TooManyRequestsError,
 } from "drinks/models/errors/index.js";
 
 const drinks = new Drinks();
@@ -209,51 +221,54 @@ async function run() {
     result = await drinks.listDrinks();
     console.log(result);
   } catch (err) {
-    // Unauthorized
+    // Custom typed errors with structured schemas and hoisted properties
+    if (err instanceof BadRequestError) {
+      // Access hoisted properties directly
+      console.error(err.message);
+      console.error(err.typeName);
+      console.error(err.detail);
+      console.error(err.ref);
+
+      // Or access the full error data object
+      console.error(err.data$);
+      return;
+    }
+
     if (err instanceof UnauthorizedError) {
+      // Access structured error fields
       console.error(err.message);
+      console.error(err.code);
       return;
     }
 
-    // Forbidden
-    if (err instanceof ForbiddenError) {
-      console.error(err.message);
-      return;
-    }
-
-    // Not Found
     if (err instanceof NotFoundError) {
+      // Access resource-specific error details
       console.error(err.message);
+      console.error(err.resource);
+      console.error(err.resourceId);
       return;
     }
 
-    // Too Many Requests
-    if (err instanceof TooManyRequestsError) {
+    // Default SDK Errors: Non-2xx responses without custom error schemas
+    if (err instanceof SDKError) {
+      console.error(err.statusCode);
       console.error(err.message);
+      console.error(err.body);
       return;
     }
 
-    // 1. Validation Errors: Server response didn't match the SDK's expected data schema
+    // Validation Errors: Error response parsing failed
     if (err instanceof SDKValidationError) {
-      // Raw value will be type `string`
       console.error(err.rawValue);
-      // Validation errors can be pretty-printed
       console.error(err.pretty());
       return;
     }
 
-    // 2. 4XX and 5XX Status Codes: Server returned an error code an unexpected content type
-    // Use `typescript.defaultErrorName` to change the name of `SDKError` in `gen.yaml`
-    if (err instanceof SDKError) {
-      console.error(err.statusCode);
-      console.error(err.rawResponse.body);
-      return;
-    }
-
-    // 3. Connection Errors: The SDK didn't even get a response from the server
+    // Network/IO Errors: Connection failures (escalated verbatim)
     if (err instanceof HTTPClientError) {
       console.error(err.name);
       console.error(err.message);
+      return;
     }
 
     throw err;
