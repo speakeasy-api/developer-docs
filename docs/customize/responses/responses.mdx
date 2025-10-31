@@ -81,39 +81,46 @@ The flat response format is the simplest and most ergonomic option, as it avoids
 
 When `responseFormat: flat` is enabled, the generated SDK code will return the `Payment` type directly with no indirection:
 
-<CodeWithTabs>
-    ```typescript !!tabs TypeScript
-    export class SDK extends ClientSDK {
-      async getPayment(id: string, options?: RequestOptions): Promise<components.Payment> {}
-    }
-    ```
-
-```python !!tabs Python
-    class SDK:
-        def get_payment(self, id: str) -> components.Payment:
-    ```
-
-```go !!tabs Go
-    func (s *SDK) GetPayment(ctx context.Context, id string) (*components.Payment, error) {}
-    ```
-
-```csharp !!tabs C#
-    public async Task<Payment> GetPaymentAsync(string id){}
-    ```
-
-```php !!tabs PHP
-    public function getPayment(string $id, ?Options $options = null): Payment
-    ```
-
-```ruby !!tabs ruby
-    sig { params(id: ::String).returns(Payment) }
-    def get_payment(id:)
-  ```
-
-</CodeWithTabs>
+<CodeWithTabs
+  tabs={[
+    {
+      label: "TypeScript",
+      language: "typescript",
+      code: `export class SDK extends ClientSDK {
+    async getPayment(id: string, options?: RequestOptions): Promise<components.Payment> {}
+  }`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      code: `class SDK:
+    def get_payment(self, id: str) -> components.Payment:`,
+    },
+    {
+      label: "Go",
+      language: "go",
+      code: `func (s *SDK) GetPayment(ctx context.Context, id string) (*components.Payment, error) {}`,
+    },
+    {
+      label: "C#",
+      language: "csharp",
+      code: `public async Task<Payment> GetPaymentAsync(string id){}`,
+    },
+    {
+      label: "PHP",
+      language: "php",
+      code: `public function getPayment(string $id, ?Options $options = null): Payment`,
+    },
+    {
+      label: "Ruby",
+      language: "ruby",
+      code: `sig { params(id: ::String).returns(Payment) }
+def get_payment(id:)`,
+    },
+  ]}
+/>
 
 To debug HTTP metadata, users can pass a [custom client](/docs/customize-sdks/custom-http-client) to the SDK instance.
-
 
 ### `responseFormat: envelope-http`
 
@@ -121,199 +128,208 @@ The `envelope-http` format builds response types with a wrapper that holds the r
 
 When `envelope-http` is enabled, the generated SDK code will produce the response types below:
 
-<CodeWithTabs>
-    ```typescript !!tabs TypeScript
-    class SDK extends ClientSDK {
-        async getPayment(id: string, options?: RequestOptions): Promise<operations.GetPaymentResponse> {}
-    }
+<CodeWithTabs
+  tabs={[
+    {
+      label: "TypeScript",
+      language: "typescript",
+      code: `class SDK extends ClientSDK {
+      async getPayment(id: string, options?: RequestOptions): Promise<operations.GetPaymentResponse> {}
+  }
 
-    /*--------------------------------*/
+  /*--------------------------------*/
 
-    export type GetPaymentResponse = {
-        httpMeta: components.HTTPMetadata;
+  export type GetPaymentResponse = {
+      httpMeta: components.HTTPMetadata;
 
-        /**
-         * Details about a payment
-         */
-        payment?: components.Payment | undefined;
-    };
+      /**
+        * Details about a payment
+        */
+      payment?: components.Payment | undefined;
+  };
 
-    /*--------------------------------*/
+  /*--------------------------------*/
 
-    export type HTTPMetadata = {
+  export type HTTPMetadata = {
+    /**
+      * Raw HTTP response; suitable for custom response parsing
+      */
+    response: Response;
+    /**
+      * Raw HTTP request; suitable for debugging
+      */
+    request: Request;
+  };`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      code: `class SDK:
+      def get_payment(self, id: str) -> operations.GetPaymentResponse:
+
+  ####################################
+
+  @dataclasses.dataclass
+  class GetPaymentResponse:
+      http_meta: components_httpmetadata.HTTPMetadata = dataclasses.field()
+
+      payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
+      r"""Details about a payment"""
+
+  ####################################
+
+  @dataclass_json(undefined=Undefined.EXCLUDE)
+  @dataclasses.dataclass
+  class HTTPMetadata:
+      response: requests.Response = dataclasses.field(metadata={'dataclasses_json': { 'exclude': lambda f: True }})
+      r"""Raw HTTP response; suitable for custom response parsing"""
+      request: requests.Request = dataclasses.field(metadata={'dataclasses_json': { 'exclude': lambda f: True }})
+      r"""Raw HTTP request; suitable for debugging"""`,
+      },
+    {
+      label: "Go",
+      language: "go",
+        code: `func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
+
+  /*--------------------------------*/
+
+  type GetPaymentResponse struct {
+    HTTPMeta components.HTTPMetadata
+
+    // Details about a payment
+    Payment *components.Payment
+  }
+
+  /*--------------------------------*/
+
+  type HTTPMetadata struct {
+    // Raw HTTP response; suitable for custom response parsing
+    Response *http.Response \`json:"-"\`
+    // Raw HTTP request; suitable for debugging
+    Request *http.Request \`json:"-"\`
+  }`,
+    },
+    {
+      label: "C#",
+      language: "csharp",
+      code: `Task<GetPaymentResponse> GetPaymentAsync(string id);
+
+  /*--------------------------------*/
+
+  public class GetPaymentResponse
+  {
+      public HTTPMetadata HttpMeta { get; set; } = default!;
+      // Details about a payment
+      public Payment? Payment { get; set; } = default!;
+  }
+
+  /*--------------------------------*/
+
+  public class HTTPMetadata
+  {
+
+      /// <summary>
+      /// Raw HTTP response; suitable for custom response parsing
+      /// </summary>
+      [JsonProperty("-")]
+      public HttpResponseMessage Response { get; set; } = default!;
+
+      /// <summary>
+      /// Raw HTTP request; suitable for debugging
+      /// </summary>
+      [JsonProperty("-")]
+      public HttpRequestMessage Request { get; set; } = default!;
+  }`,
+    },
+    {
+      label: "PHP",
+      language: "php",
+      code: ` class SDK
+  {
+      public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
+  }
+
+  /*--------------------------------*/
+
+  class GetPaymentResponse
+  {
+      /**
+       *
+       * @var Shared\\HTTPMetadata $httpMeta
+       */
+      #[\\Speakeasy\\Serializer\\Annotation\\Exclude]
+
+      public ?Shared\\HTTPMetadata $httpMeta;
+
+      /**
+      * Details about a payment
+      *
+      * @var ?Payment $payment
+      */
+      public Payment? Payment { get; set; } = default!;
+
+  }
+
+  /*--------------------------------*/
+
+  class HTTPMetadata
+  {
       /**
        * Raw HTTP response; suitable for custom response parsing
+       *
+       * @var \\Psr\\Http\\Message\\ResponseInterface $response
        */
-      response: Response;
+      #[\\Speakeasy\\Serializer\\Annotation\\Exclude]
+
+      public \\Psr\\Http\\Message\\ResponseInterface $response;
+
       /**
        * Raw HTTP request; suitable for debugging
+       *
+       * @var \\Psr\\Http\\Message\\RequestInterface $request
        */
-      request: Request;
-    };
-    ```
+      #[\\Speakeasy\\Serializer\\Annotation\\Exclude]
 
-    ```python !!tabs Python
-    class SDK:
-        def get_payment(self, id: str) -> operations.GetPaymentResponse:
+      public \\Psr\\Http\\Message\\RequestInterface $request;
 
-    ####################################
-
-    @dataclasses.dataclass
-    class GetPaymentResponse:
-        http_meta: components_httpmetadata.HTTPMetadata = dataclasses.field()
-
-        payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
-        r"""Details about a payment"""
-
-    ####################################
-
-    @dataclass_json(undefined=Undefined.EXCLUDE)
-    @dataclasses.dataclass
-    class HTTPMetadata:
-        response: requests.Response = dataclasses.field(metadata={'dataclasses_json': { 'exclude': lambda f: True }})
-        r"""Raw HTTP response; suitable for custom response parsing"""
-        request: requests.Request = dataclasses.field(metadata={'dataclasses_json': { 'exclude': lambda f: True }})
-        r"""Raw HTTP request; suitable for debugging"""
-    ```
-
-
-    ```go !!tabs Go
-    func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
-
-    /*--------------------------------*/
-
-    type GetPaymentResponse struct {
-      HTTPMeta components.HTTPMetadata
-
-      // Details about a payment
-      Payment *components.Payment
-    }
-
-    /*--------------------------------*/
-
-    type HTTPMetadata struct {
-      // Raw HTTP response; suitable for custom response parsing
-      Response *http.Response `json:"-"`
-      // Raw HTTP request; suitable for debugging
-      Request *http.Request `json:"-"`
-    }
-    ```
-
-    ```csharp !!tabs C#
-    Task<GetPaymentResponse> GetPaymentAsync(string id);
-
-    /*--------------------------------*/
-
-    public class GetPaymentResponse
+  }`,
+    },
     {
-        public HTTPMetadata HttpMeta { get; set; } = default!;
-        // Details about a payment
-        public Payment? Payment { get; set; } = default!;
-    }
+      label: "Ruby",
+      language: "ruby",
+      code: `class SDK
+    # @param id String
+    # @return GetPaymentResponse
+    def get_payment(string id) end
+  end
 
-    /*--------------------------------*/
+  #####################################
 
-    public class HTTPMetadata
-    {
+  class GetPaymentResponse
+    include Crystalline::MetadataFields
 
-        /// <summary>
-        /// Raw HTTP response; suitable for custom response parsing
-        /// </summary>
-        [JsonProperty("-")]
-        public HttpResponseMessage Response { get; set; } = default!;
+    field :http_meta, Models::Shared::HTTPMetadata, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
 
-        /// <summary>
-        /// Raw HTTP request; suitable for debugging
-        /// </summary>
-        [JsonProperty("-")]
-        public HttpRequestMessage Request { get; set; } = default!;
-    }
-    ```
+    field :payment, Crystalline::Nilable.new(Shared::Payment)
 
-    ```php !!tabs PHP
-    class SDK
-    {
-        public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
-    }
+  end
 
-    /*--------------------------------*/
-
-    class GetPaymentResponse
-    {
-        /**
-        *
-        * @var Shared\HTTPMetadata $httpMeta
-        */
-        #[\Speakeasy\Serializer\Annotation\Exclude]
-
-        public ?Shared\HTTPMetadata $httpMeta;
-
-        /**
-        * Details about a payment
-        *
-        * @var ?Payment $payment
-        */
-        public Payment? Payment { get; set; } = default!;
-
-    }
-
-    /*--------------------------------*/
-
-    class HTTPMetadata
-    {
-        /**
-        * Raw HTTP response; suitable for custom response parsing
-        *
-        * @var \Psr\Http\Message\ResponseInterface $response
-        */
-        #[\Speakeasy\Serializer\Annotation\Exclude]
-
-        public \Psr\Http\Message\ResponseInterface $response;
-
-        /**
-        * Raw HTTP request; suitable for debugging
-        *
-        * @var \Psr\Http\Message\RequestInterface $request
-        */
-        #[\Speakeasy\Serializer\Annotation\Exclude]
-
-        public \Psr\Http\Message\RequestInterface $request;
-
-    }
-    ```
-
-    ``` ruby !!tabs ruby
-    class SDK
-      # @param id String
-      # @return GetPaymentResponse
-      def get_payment(string id) end
-    end
-
-    #####################################
-
-    class GetPaymentResponse
-      include Crystalline::MetadataFields
-
-      field :http_meta, Models::Shared::HTTPMetadata, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
-
-      field :payment, Crystalline::Nilable.new(Shared::Payment)
-
-    end
-
-    #####################################
+  #####################################
 
 
-    class HTTPMetadata
-      extend T::Sig
-      include Crystalline::MetadataFields
+  class HTTPMetadata
+    extend T::Sig
+    include Crystalline::MetadataFields
 
-      # Raw HTTP response; suitable for custom response parsing
-      field :response, ::Faraday::Response, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
-      # Raw HTTP request; suitable for debugging
-      field :request, ::Faraday::Request, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
-    end
-    ```
-</CodeWithTabs>
+    # Raw HTTP response; suitable for custom response parsing
+    field :response, ::Faraday::Response, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
+    # Raw HTTP request; suitable for debugging
+    field :request, ::Faraday::Request, { 'format_json': { 'letter_case': ::OpenApiSDK::Utils.field_name('-'), required: true } }
+  end`
+}
+
+]}
+/>
 
 Built-in HTTP metadata is included in both custom and built-in error types that are thrown or returned from the SDK.
 
@@ -330,7 +346,7 @@ const { data } = useEmployeesGetSuspense({
   per: itemsPerPage,
 });
 
-console.log(data.httpMeta.response.headers.get('x-total-count'));
+console.log(data.httpMeta.response.headers.get("x-total-count"));
 ```
 
 #### Headers in SDKs
@@ -352,175 +368,182 @@ The `responseFormat: envelope` format builds response types with a wrapper that 
 
 When `responseFormat: envelope` is enabled, the generated SDK code will produce the response types below:
 
-  <CodeWithTabs>
+  <CodeWithTabs
+    tabs={[
+      {
+        label: "TypeScript",
+        language: "typescript",
+        code: `class SDK extends ClientSDK {
+      async getPayment(id: string, options?: RequestOptions): Promise<operations.GetPaymentResponse> {}
+  }
 
-    ```typescript !!tabs TypeScript
-    class SDK extends ClientSDK {
-        async getPayment(id: string, options?: RequestOptions): Promise<operations.GetPaymentResponse> {}
-    }
+  /*--------------------------------*/
 
-    /*--------------------------------*/
+  export type GetPaymentResponse = {
+    /**
+      * HTTP response content type for this operation
+      */
+    contentType: string;
+    /**
+      * HTTP response status code for this operation
+      */
+    statusCode: number;
+    /**
+      * Raw HTTP response; suitable for custom response parsing
+      */
+    rawResponse: Response;
+    /**
+      * Details about a payment
+      */
+    payment?: components.Payment | undefined;
+  };`,
+      },
+      {
+        label: "Python",
+        language: "python",
+        code: `class SDK:
+      def get_payment(self, id: str) -> operations.GetPaymentResponse:
 
-    export type GetPaymentResponse = {
+  ####################################
+
+  @dataclasses.dataclass
+  class GetPaymentResponse:
+      http_meta: components_httpmetadata.HTTPMetadata = dataclasses.field()
+
+      payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
+      r"""Details about a payment"""
+
+  ####################################
+
+  @dataclasses.dataclass
+  class GetPaymentResponse:
+      content_type: str = dataclasses.field()
+      r"""HTTP response content type for this operation"""
+      status_code: int = dataclasses.field()
+      r"""HTTP response status code for this operation"""
+      raw_response: requests_http.Response = dataclasses.field()
+      r"""Raw HTTP response; suitable for custom response parsing"""
+      payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
+      r"""Details about a payment"""`,
+      },
+      {
+        label: "Go",
+        language: "go",
+        code: `func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
+
+  /*--------------------------------*/
+
+  type GetPaymentResponse struct {
+    // HTTP response content type for this operation
+    ContentType string
+    // HTTP response status code for this operation
+    StatusCode int
+    // Raw HTTP response; suitable for custom response parsing
+    RawResponse *http.Response
+    // Details about a payment
+    Payment *components.Payment
+  }`,
+      },
+      {
+        label: "C#",
+        language: "csharp",
+        code: `Task<GetPaymentResponse> GetPaymentAsync(string id);
+
+  /*--------------------------------*/
+
+  public class GetPaymentResponse
+  {
+
+      /// <summary>
+      /// HTTP response content type for this operation
+      /// </summary>
+      public string? ContentType { get; set; } = default!;
+
+      /// <summary>
+      /// HTTP response status code for this operation
+      /// </summary>
+      public int StatusCode { get; set; } = default!;
+
+      /// <summary>
+      /// Raw HTTP response; suitable for custom response parsing
+      /// </summary>
+      public HttpResponseMessage RawResponse { get; set; } = default!;
+
+      /// <summary>
+      /// OK
+      /// </summary>
+      public Payment? Res { get; set; }
+  }`,
+      },
+      {
+        label: "PHP",
+        language: "php",
+        code: `class SDK
+  {
+      public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
+  }
+
+  /*--------------------------------*/
+
+  class GetPaymentResponse
+  {
       /**
        * HTTP response content type for this operation
+       *
+       * @var string $contentType
        */
-      contentType: string;
+      public string $contentType;
+
       /**
        * HTTP response status code for this operation
+       *
+       * @var int $statusCode
        */
-      statusCode: number;
+      public int $statusCode;
+
       /**
        * Raw HTTP response; suitable for custom response parsing
+       *
+       * @var \\Psr\\Http\\Message\\ResponseInterface $rawResponse
        */
-      rawResponse: Response;
+      public \\Psr\\Http\\Message\\ResponseInterface $rawResponse;
+
       /**
        * Details about a payment
+       *
+       * @var ?Payment $payment
        */
-      payment?: components.Payment | undefined;
-    };
-    ```
+      public ?Payment $payment = null;
 
-    ```python !!tabs Python
-    class SDK:
-        def get_payment(self, id: str) -> operations.GetPaymentResponse:
+  }`,
+      },
+      {
+        label: "Ruby",
+        language: "ruby",
+        code: `class SDK
+      # @params id ::String
+      # @return GetPaymentReponse
+      def get_payment(id) end
+  end
 
-    ####################################
+  #######################################
 
-    @dataclasses.dataclass
-    class GetPaymentResponse:
-        http_meta: components_httpmetadata.HTTPMetadata = dataclasses.field()
+  class GetPaymentResponse
+    include Crystalline::MetadataFields
 
-        payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
-        r"""Details about a payment"""
+    # HTTP response content type for this operation
+    field content_type ::String
 
-    ####################################
+    # HTTP response status code for this operation
+    field status_code ::Integer
 
-    @dataclasses.dataclass
-    class GetPaymentResponse:
-        content_type: str = dataclasses.field()
-        r"""HTTP response content type for this operation"""
-        status_code: int = dataclasses.field()
-        r"""HTTP response status code for this operation"""
-        raw_response: requests_http.Response = dataclasses.field()
-        r"""Raw HTTP response; suitable for custom response parsing"""
-        payment: Optional[components_payment.Payment] = dataclasses.field(default=None)
-        r"""Details about a payment"""
-    ```
+    # Raw HTTP response; suitable for custom response parsing
+    field raw_response ::Faraday::Response
 
-    ```go !!tabs Go
-    func (s *SDK) GetPayment(ctx context.Context, id string) (*operations.GetPaymentResponse, error) {}
+    # Details about a payment
+    field payment Crystalline::Nilable.new(Models::PaymentPublic)
+  end`
+}
+]}
 
-    /*--------------------------------*/
-
-    type GetPaymentResponse struct {
-      // HTTP response content type for this operation
-      ContentType string
-      // HTTP response status code for this operation
-      StatusCode int
-      // Raw HTTP response; suitable for custom response parsing
-      RawResponse *http.Response
-      // Details about a payment
-      Payment *components.Payment
-    }
-    ```
-
-    ```csharp !!tabs C#
-    Task<GetPaymentResponse> GetPaymentAsync(string id);
-
-    /*--------------------------------*/
-
-    public class GetPaymentResponse
-    {
-
-        /// <summary>
-        /// HTTP response content type for this operation
-        /// </summary>
-        public string? ContentType { get; set; } = default!;
-
-        /// <summary>
-        /// HTTP response status code for this operation
-        /// </summary>
-        public int StatusCode { get; set; } = default!;
-
-        /// <summary>
-        /// Raw HTTP response; suitable for custom response parsing
-        /// </summary>
-        public HttpResponseMessage RawResponse { get; set; } = default!;
-
-        /// <summary>
-        /// OK
-        /// </summary>
-        public Payment? Res { get; set; }
-    }
-    ```
-
-    ```php !!tabs PHP
-    class SDK
-    {
-        public function getPayment(string $id, ?Options $options = null): GetPaymentResponse
-    }
-
-    /*--------------------------------*/
-
-    class GetPaymentResponse
-    {
-        /**
-        * HTTP response content type for this operation
-        *
-        * @var string $contentType
-        */
-        public string $contentType;
-
-        /**
-        * HTTP response status code for this operation
-        *
-        * @var int $statusCode
-        */
-        public int $statusCode;
-
-        /**
-        * Raw HTTP response; suitable for custom response parsing
-        *
-        * @var \Psr\Http\Message\ResponseInterface $rawResponse
-        */
-        public \Psr\Http\Message\ResponseInterface $rawResponse;
-
-        /**
-        * Details about a payment
-        *
-        * @var ?Payment $payment
-        */
-        public ?Payment $payment = null;
-
-    }
-    ```
-
-    ``` ruby !!tabs ruby
-    class SDK
-        # @params id ::String
-        # @return GetPaymentReponse
-        def get_payment(id) end
-    end
-
-    #######################################
-
-    class GetPaymentResponse
-      include Crystalline::MetadataFields
-
-      # HTTP response content type for this operation
-      field content_type ::String
-
-      # HTTP response status code for this operation
-      field status_code ::Integer
-
-      # Raw HTTP response; suitable for custom response parsing
-      field raw_response ::Faraday::Response
-
-      # Details about a payment
-      field payment Crystalline::Nilable.new(Models::PaymentPublic)
-    end
-
-    ```
-
-  </CodeWithTabs>
+/>

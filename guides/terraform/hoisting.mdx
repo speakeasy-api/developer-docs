@@ -81,13 +81,11 @@ The JSON Schemas for `Drink`, `Drink`, and `{ drinkType: $DrinkType }` will be e
 
 However, this is not always desired. Consider this alternative response:
 
-
 ## Original
 
 In the original API design, the request and response body are structured equivalently, without nested elements. This approach is straightforward but might not always suit complex data relationships or requirements.
 
 ```yaml openapi.yaml
-# !focus(18:23)
 /drinks:
   post:
     x-speakeasy-entity-operation: Drink#create
@@ -122,7 +120,6 @@ In the original API design, the request and response body are structured equival
 The alternate approach introduces a nested `data` property in the API response, which can encapsulate the drink information more distinctly, albeit adding a layer of complexity in data access.
 
 ```yaml openapi.yaml
-# !focus(18:26)
 /drinks:
   post:
     x-speakeasy-entity-operation: Drink#create
@@ -196,7 +193,6 @@ func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 When generated, the provider schema would look like this: not understanding that `data` was a nested object, and instead treating it as a root of the schema.
 
 ```go drink_resource.go
-// !focus(25:40)
 func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
   resp.Schema = schema.Schema{
     MarkdownDescription: "Drink Resource",
@@ -249,62 +245,61 @@ func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 By applying the [`x-speakeasy-entity` annotation](/docs/terraform/extensions#the-x-speakeasy-entity-annotation), we direct the schema generation process to consider the `Drink` schema as the root of the type schema, effectively flattening the response structure for easier access.
 
 ```yaml openapi.yaml
-# !focus(34)
-  /drinks:
-    post:
-      x-speakeasy-entity-operation: Drink#create
-      parameters:
-        - name: type
-          in: query
-          description: The type of drink
-          required: false
-          deprecated: true
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    parameters:
+      - name: type
+        in: query
+        description: The type of drink
+        required: false
+        deprecated: true
+        schema:
+          $ref: "#/components/schemas/DrinkType"
+    requestBody:
+      required: true
+      content:
+        application/json:
           schema:
-            $ref: "#/components/schemas/DrinkType"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Drink"
-    responses:
-      "200":
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                data:
-                  $ref: "#/components/schemas/Drink"
-        "5XX":
-          $ref: "#/components/responses/APIError"
-        default:
-          $ref: "#/components/responses/UnknownError"
-  components:
-    schemas:
-      Drink:
-        x-speakeasy-entity: Drink
-        type: object
-        properties:
-          name:
-            description: The name of the drink.
-            type: string
-            examples:
-              - Old Fashioned
-              - Manhattan
-              - Negroni
-          type:
-            $ref: "#/components/schemas/DrinkType"
-          price:
-            description: The price of one unit of the drink in US cents.
-            type: number
-            examples:
-              - 1000 # $10.00
-              - 1200 # $12.00
-              - 1500 # $15.00
-        required:
-          - name
-          - price
+            $ref: "#/components/schemas/Drink"
+  responses:
+    "200":
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "#/components/schemas/Drink"
+      "5XX":
+        $ref: "#/components/responses/APIError"
+      default:
+        $ref: "#/components/responses/UnknownError"
+components:
+  schemas:
+    Drink:
+      x-speakeasy-entity: Drink
+      type: object
+      properties:
+        name:
+          description: The name of the drink.
+          type: string
+          examples:
+            - Old Fashioned
+            - Manhattan
+            - Negroni
+        type:
+          $ref: "#/components/schemas/DrinkType"
+        price:
+          description: The price of one unit of the drink in US cents.
+          type: number
+          examples:
+            - 1000 # $10.00
+            - 1200 # $12.00
+            - 1500 # $15.00
+      required:
+        - name
+        - price
 ```
 
 ## Finalized Schema: Simplified Access

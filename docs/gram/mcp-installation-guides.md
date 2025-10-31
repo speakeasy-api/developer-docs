@@ -1,11 +1,12 @@
 ---
-title: Guides
+title: MCP Installation Guides 
 description: Learn how to integrate MCP with different tools and platforms
 sidebar:
   order: 0
 ---
 
-Here you'll find detailed guides on how to quickly get connected to your Gram MCP servers in different ways.
+Here you'll find detailed guides on how to quickly get connected to your Gram
+MCP servers in different ways.
 
 Specifically we provide detailed instructions on:
 

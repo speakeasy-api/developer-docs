@@ -45,7 +45,6 @@ components:
 Some APIs use signatures to authenticate and verify requests. Here's how to document a signature-based scheme:
 
 ```yaml
-#!focus(3:6)
 components:
   securitySchemes:
     signatureAuth:
@@ -105,7 +104,6 @@ Use extensions to document:
 - SDK implementation requirements
 - Rate limits and resource access rules
 
-
 ## Tips for Custom Authentication
 
 ### 1. Provide detailed implementation steps
@@ -116,7 +114,6 @@ Clearly document:
 - **Required headers**: All headers needed and their formats.
 - **Validation steps**: How servers validate the authentication.
 - **Error handling**: Specific errors and how to resolve them.
-
 
 ### 2. Include practical examples
 
