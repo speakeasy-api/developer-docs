@@ -288,6 +288,9 @@ const meta = {
               "oneof-schemas": {
                 title: "OneOf",
               },
+              "allof-schemas": {
+                title: "AllOf",
+              },
               "complex-numbers": {
                 title: "Complex Numbers",
               },

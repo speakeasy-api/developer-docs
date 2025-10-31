@@ -1,0 +1,196 @@
+---
+title: "OpenAPI: AllOf schemas"
+description: "Configure how `allOf` constructs are merged with deep or shallow merge strategies."
+slug: "/customize-sdks/allof-schemas/"
+---
+
+import { Callout } from "@/mdx/components";
+
+# The `allOf` keyword
+
+The OpenAPI `allOf` keyword enables schema composition by merging multiple schema definitions into a single schema. Speakeasy provides two strategies for handling `allOf` merging: shallow merge and deep merge.
+
+## Merge strategies
+
+The `schemas.allOfMergeStrategy` configuration option in `gen.yaml` controls how Speakeasy merges `allOf` schemas. This setting is located under the `generation` section of the configuration file.
+
+```yaml
+generation:
+  schemas:
+    allOfMergeStrategy: deepMerge # or shallowMerge
+```
+
+### Available strategies
+
+**`deepMerge` (default for new SDKs)**: Recursively merges nested properties within objects, preserving properties from all schemas in the `allOf` array.
+
+**`shallowMerge` (legacy behavior)**: Replaces entire property blocks when merging, which can result in lost properties from earlier schemas.
+
+<Callout title="Default behavior" type="info">
+New SDKs default to `deepMerge`. Existing SDKs continue to use `shallowMerge` unless explicitly changed. Switching from `shallowMerge` to `deepMerge` may be a breaking change for existing SDKs.
+</Callout>
+
+## Deep merge behavior
+
+With `deepMerge` enabled, nested properties are recursively combined rather than replaced. This is particularly useful when extending base schemas with additional nested properties.
+
+Consider this OpenAPI definition:
+
+```yaml
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        id:
+          type: string
+        metadata:
+          type: object
+          properties:
+            createdAt:
+              type: string
+            updatedAt:
+              type: string
+    Extended:
+      allOf:
+        - $ref: '#/components/schemas/Base'
+        - type: object
+          properties:
+            name:
+              type: string
+            metadata:
+              type: object
+              properties:
+                deletedAt:
+                  type: string
+```
+
+With `deepMerge`, the resulting merged schema preserves all metadata properties:
+
+```yaml
+components:
+  schemas:
+    Extended:
+      type: object
+      properties:
+        id:
+          type: string
+        metadata:
+          type: object
+          properties:
+            createdAt:
+              type: string
+            updatedAt:
+              type: string
+            deletedAt:
+              type: string
+        name:
+          type: string
+```
+
+The `metadata` object includes all three timestamp properties: `createdAt`, `updatedAt`, and `deletedAt`.
+
+## Shallow merge behavior
+
+With `shallowMerge`, entire property blocks are replaced during merging. When the same property name appears in multiple schemas, only the last occurrence is retained.
+
+Using the same example from above with `shallowMerge`:
+
+```yaml
+components:
+  schemas:
+    Extended:
+      type: object
+      properties:
+        id:
+          type: string
+        metadata:
+          type: object
+          properties:
+            deletedAt:
+              type: string
+        name:
+          type: string
+```
+
+The `metadata` properties `createdAt` and `updatedAt` from the `Base` schema are lost because the entire `metadata` properties block was replaced by the one in the `Extended` schema.
+
+## Configuration
+
+To configure the merge strategy, add the `schemas.allOfMergeStrategy` option to the `generation` section of the `gen.yaml` file:
+
+```yaml
+generation:
+  schemas:
+    allOfMergeStrategy: deepMerge
+```
+
+### Switching strategies
+
+Changing from `shallowMerge` to `deepMerge` may affect the generated SDK's type definitions and could be a breaking change. Review the impact on existing generated code before making this change in production SDKs.
+
+To explicitly use the legacy behavior:
+
+```yaml
+generation:
+  schemas:
+    allOfMergeStrategy: shallowMerge
+```
+
+## Use cases
+
+### Deep merge use cases
+
+Deep merge is beneficial when:
+
+- Extending base schemas with additional nested properties
+- Combining request and response schemas with shared metadata objects
+- Working with APIs that use `allOf` to compose complex nested structures
+- Maintaining all properties across schema inheritance hierarchies
+
+### Shallow merge use cases
+
+Shallow merge may be appropriate when:
+
+- Maintaining backward compatibility with existing SDKs
+- Intentionally replacing entire nested objects from base schemas
+- Working with simple schema compositions without nested property conflicts
+
+## Advanced example
+
+This pattern is common in APIs that separate shared components from operation-specific requirements and examples:
+
+```yaml
+paths:
+  /clusters:
+    post:
+      operationId: createCluster
+      requestBody:
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/Cluster'
+                - type: object
+                  required:
+                    - spec
+                  properties:
+                    spec:
+                      type: object
+                      required:
+                        - displayName
+                        - availability
+                - type: object
+                  properties:
+                    spec:
+                      type: object
+                      properties:
+                        environment:
+                          example: { id: 'env-00000' }
+                        network:
+                          example: { id: 'n-00000' }
+```
+
+With `deepMerge`, the final `spec` object combines the required fields from the second schema with the examples from the third schema, while preserving all properties from the referenced `Cluster` component.
+
+With `shallowMerge`, the `spec` properties from the second schema would be lost entirely, replaced by only the example properties from the third schema.
