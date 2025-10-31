@@ -28,8 +28,6 @@ Consider a scenario where managing a `drink` resource requires setting a `visibi
 Identify the API endpoints involved in the operation. For instance, creating a `drink` and setting its visibility involves two distinct endpoints:
 
 ```yaml openapi.yaml
-# !focus(1:2)
-# !focus(27:28)
 /drinks:
   post:
     requestBody:
@@ -80,8 +78,6 @@ Identify the API endpoints involved in the operation. For instance, creating a `
 Mark both operations with annotations. For the operation requiring the `id` parameter, assign an `order` property value greater than the first operation to reflect its dependency on the `id` attribute.
 
 ```yaml openapi.yaml
-# !focus(3)
-# !focus(30)
 /drinks:
   post:
     x-speakeasy-entity-operation: Drink#create
@@ -134,9 +130,6 @@ Mark both operations with annotations. For the operation requiring the `id` para
 Use `x-speakeasy-entity` annotations to simplify response handling by hoisting, avoiding nested data wrapping.
 
 ```yaml openapi.yaml
-# !focus(9)
-# !focus(24)
-# !focus(39)
 /drinks:
   post:
     x-speakeasy-entity-operation: Drink#create
@@ -196,68 +189,67 @@ When an [x-speakeasy-entity-operation](/docs/terraform/extensions#the-x-speakeas
 Adding a `x-speakeasy-entity-operation: Drink#create` annotation marks the `POST /drinks` operation as CREATING a `drink` resource.
 
 ```yaml openapi.yaml
-# !focus(3)
-  /drinks:
-    post:
-      x-speakeasy-entity-operation: Drink#create
-      parameters:
-        - name: type
-          in: query
-          description: The type of drink
-          required: false
-          deprecated: true
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    parameters:
+      - name: type
+        in: query
+        description: The type of drink
+        required: false
+        deprecated: true
+        schema:
+          $ref: "#/components/schemas/DrinkType"
+    requestBody:
+      required: true
+      content:
+        application/json:
           schema:
-            $ref: "#/components/schemas/DrinkType"
-      requestBody:
-        required: true
+            $ref: "#/components/schemas/Drink"
+    responses:
+      "200":
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/Drink"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Drink"
-        "5XX":
-          $ref: "#/components/responses/APIError"
-        default:
-          $ref: "#/components/responses/UnknownError"
-  components:
-    schemas:
-      Drink:
-        type: object
-        properties:
-          name:
-            description: The name of the drink.
-            type: string
-            examples:
-              - Old Fashioned
-              - Manhattan
-              - Negroni
-          type:
-            $ref: "#/components/schemas/DrinkType"
-          price:
-            description: The price of one unit of the drink in US cents.
-            type: number
-            examples:
-              - 1000 # $10.00
-              - 1200 # $12.00
-              - 1500 # $15.00
-        required:
-          - name
-          - price
-      DrinkType:
-        description: The type of drink.
-        type: string
-        enum:
-          - cocktail
-          - non-alcoholic
-          - beer
-          - wine
-          - spirit
-          - other
+      "5XX":
+        $ref: "#/components/responses/APIError"
+      default:
+        $ref: "#/components/responses/UnknownError"
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        name:
+          description: The name of the drink.
+          type: string
+          examples:
+            - Old Fashioned
+            - Manhattan
+            - Negroni
+        type:
+          $ref: "#/components/schemas/DrinkType"
+        price:
+          description: The price of one unit of the drink in US cents.
+          type: number
+          examples:
+            - 1000 # $10.00
+            - 1200 # $12.00
+            - 1500 # $15.00
+      required:
+        - name
+        - price
+    DrinkType:
+      description: The type of drink.
+      type: string
+      enum:
+        - cocktail
+        - non-alcoholic
+        - beer
+        - wine
+        - spirit
+        - other
 ```
 
 ## Step 2:
@@ -265,71 +257,67 @@ Adding a `x-speakeasy-entity-operation: Drink#create` annotation marks the `POST
 Parameters, Request Bodies, and Response Bodies (associated with a 2XX status code) are each considered roots of the Terraform Type Schema
 
 ```yaml openapi.yaml
-# !focus(4)
-# !focus(11)
-# !focus(15:17)
-# !focus(21:23)
-  /drinks:
-    post:
-      x-speakeasy-entity-operation: Drink#create
-      parameters:
-        - name: type
-          in: query
-          description: The type of drink
-          required: false
-          deprecated: true
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    parameters:
+      - name: type
+        in: query
+        description: The type of drink
+        required: false
+        deprecated: true
+        schema:
+          $ref: "#/components/schemas/DrinkType"
+    requestBody:
+      required: true
+      content:
+        application/json:
           schema:
-            $ref: "#/components/schemas/DrinkType"
-      requestBody:
-        required: true
+            $ref: "#/components/schemas/Drink"
+    responses:
+      "200":
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/Drink"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Drink"
-        "5XX":
-          $ref: "#/components/responses/APIError"
-        default:
-          $ref: "#/components/responses/UnknownError"
-  components:
-    schemas:
-      Drink:
-        type: object
-        properties:
-          name:
-            description: The name of the drink.
-            type: string
-            examples:
-              - Old Fashioned
-              - Manhattan
-              - Negroni
-          type:
-            $ref: "#/components/schemas/DrinkType"
-          price:
-            description: The price of one unit of the drink in US cents.
-            type: number
-            examples:
-              - 1000 # $10.00
-              - 1200 # $12.00
-              - 1500 # $15.00
-        required:
-          - name
-          - price
-      DrinkType:
-        description: The type of drink.
-        type: string
-        enum:
-          - cocktail
-          - non-alcoholic
-          - beer
-          - wine
-          - spirit
-          - other
+      "5XX":
+        $ref: "#/components/responses/APIError"
+      default:
+        $ref: "#/components/responses/UnknownError"
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        name:
+          description: The name of the drink.
+          type: string
+          examples:
+            - Old Fashioned
+            - Manhattan
+            - Negroni
+        type:
+          $ref: "#/components/schemas/DrinkType"
+        price:
+          description: The price of one unit of the drink in US cents.
+          type: number
+          examples:
+            - 1000 # $10.00
+            - 1200 # $12.00
+            - 1500 # $15.00
+      required:
+        - name
+        - price
+    DrinkType:
+      description: The type of drink.
+      type: string
+      enum:
+        - cocktail
+        - non-alcoholic
+        - beer
+        - wine
+        - spirit
+        - other
 ```
 
 ## Step 3
@@ -465,7 +453,6 @@ First, the `type` is taken from the OpenAPI `type`. It is `Optional: true` becau
 The description is taken from the OpenAPI `description`. The `examples` will be used to generate an example for the documentation
 
 ```go drink_resource.go
-// !focus(6:9)
 func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
   resp.Schema = schema.Schema{
     MarkdownDescription: "Drink Resource",
@@ -489,7 +476,6 @@ It is `Optional: true` because it was not a member of the OpenAPI `requiredPrope
 A plan validator is added with each of the enum values. This will be used to validate the plan at plan-time.
 
 ```go drink_resource.go
-// !focus(10:21)
 func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
   resp.Schema = schema.Schema{
     MarkdownDescription: "Drink Resource",
@@ -522,7 +508,6 @@ func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 The other parameters are also pulled in from the request body. Both of them are required, with their type being derived from the equivalent Terraform primitive to their OpenAPI type.
 
 ```go drink_resource.go
-// !focus(22:30)
 func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
   resp.Schema = schema.Schema{
     MarkdownDescription: "Drink Resource",

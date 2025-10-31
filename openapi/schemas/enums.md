@@ -297,7 +297,6 @@ paths:
 In OpenAPI v3.0 you can use the `nullable` keyword to specify `null` as an accepted value in an enum. In the example below, a client can order a drink with one of three cup sizes or no cup size specified at all:
 
 ```yaml
-# !focus(6)
 components:
   schemas:
     CupSize:
@@ -315,7 +314,6 @@ components:
 OpenAPI v3.1 more closely aligns with the JSON Schema standard. As a result, the way to specify nullable types differs from OpenAPI 3.0. Instead of using the `nullable` attribute, OpenAPI v3.1 uses the JSON Schema approach with an array of types - including the `null` type. Here's the same example adapted for OpenAPI v3.1:
 
 ```yaml
-# !focus(5,10)
 components:
   schemas:
     CupSize:
@@ -335,7 +333,6 @@ Traditionally enums are closed, meaning that only the values listed in the enum 
 OpenAPI 3.x currently does not natively support the description open enums directly. However, check if your tooling supports `x-` extension attributes. For example, [the Speakeasy extension `x-speakeasy-unknown-values`](/docs/customize-sdks/enums#open-vs-closed-enums) lets you define an enum with additional values beyond those listed.
 
 ```yaml
-# !focus(6)
 components:
   schemas:
     CupSize:

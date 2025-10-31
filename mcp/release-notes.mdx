@@ -105,161 +105,164 @@ The new [structured tool output](https://modelcontextprotocol.io/specification/2
 
 **What you need to change:** Update your tool definitions to specify `Tool.outputSchema` and return `CallToolResult.structuredContent` in your tool implementations.
 
-<CodeWithTabs>
+<CodeWithTabs
+  tabs={[
+    {
+      label: "Python",
+      language: "python",
+      code: `# Using official Python SDK - mcp package
+  from mcp.server import Server
+  from mcp.types import (
+      CallToolRequestSchema,
+      ListToolsRequestSchema,
+      Tool,
+      CallToolResult,
+  )
 
-```python !!tabs Python
-# Using official Python SDK - mcp package
-from mcp.server import Server
-from mcp.types import (
+  server = Server("example-server")
+
+  # Define tool with outputSchema
+  @mcp.tool()
+  def get_user_info(user_id: str) -> CallToolResult:
+      """Get structured user information"""
+      user_data = {
+          "user": {
+              "id": user_id,
+              "name": "John Doe",
+              "email": "john@example.com",
+              "status": "active"
+          }
+      }
+
+      return CallToolResult(
+          content=[{"type": "text", "text": f"Retrieved user {user_id}"}],
+          # New: Use structuredContent for predictable data format
+          structuredContent=user_data
+      )
+
+  # Set the tool's outputSchema property
+  get_user_info.outputSchema = {
+      "type": "object",
+      "properties": {
+          "user": {
+              "type": "object",
+              "properties": {
+                  "id": {"type": "string"},
+                  "name": {"type": "string"},
+                  "email": {"type": "string"},
+                  "status": {"type": "string"}
+              }
+          }
+      }
+  }
+
+  # Register tool with outputSchema
+  @server.list_tools()
+  async def handle_list_tools() -> list[Tool]:
+      return [
+          Tool(
+              name="get_user_info",
+              description="Get structured user information",
+              inputSchema={
+                  "type": "object",
+                  "properties": {
+                      "user_id": {"type": "string"}
+                  },
+                  "required": ["user_id"]
+              },
+              # New: Add outputSchema to specify return format
+              outputSchema={
+                  "type": "object",
+                  "properties": {
+                      "user": {
+                          "type": "object",
+                          "properties": {
+                              "id": {"type": "string"},
+                              "name": {"type": "string"},
+                              "email": {"type": "string"},
+                              "status": {"type": "string"}
+                          }
+                      }
+                  }
+              }
+          )
+      ]`,
+    },
+    {
+      label: "TypeScript",
+      language: "typescript",
+      code: `// Using official TypeScript SDK - @modelcontextprotocol/sdk package
+  import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+  import {
     CallToolRequestSchema,
+    CallToolResult,
     ListToolsRequestSchema,
     Tool,
-    CallToolResult,
-)
+  } from "@modelcontextprotocol/sdk/types.js";
 
-server = Server("example-server")
+  const server = new Server(
+    { name: "example-server", version: "1.0.0" },
+    { capabilities: { tools: {} } },
+  );
 
-# Define tool with outputSchema
-@mcp.tool()
-def get_user_info(user_id: str) -> CallToolResult:
-    """Get structured user information"""
-    user_data = {
-        "user": {
-            "id": user_id,
-            "name": "John Doe",
-            "email": "john@example.com",
-            "status": "active"
-        }
-    }
+  // Handle tool calls with structured output
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
 
-    return CallToolResult(
-        content=[{"type": "text", "text": f"Retrieved user {user_id}"}],
-        # New: Use structuredContent for predictable data format
-        structuredContent=user_data
-    )
-
-# Set the tool's outputSchema property
-get_user_info.outputSchema = {
-    "type": "object",
-    "properties": {
-        "user": {
-            "type": "object",
-            "properties": {
-                "id": {"type": "string"},
-                "name": {"type": "string"},
-                "email": {"type": "string"},
-                "status": {"type": "string"}
-            }
-        }
-    }
-}
-
-# Register tool with outputSchema
-@server.list_tools()
-async def handle_list_tools() -> list[Tool]:
-    return [
-        Tool(
-            name="get_user_info",
-            description="Get structured user information",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "user_id": {"type": "string"}
-                },
-                "required": ["user_id"]
-            },
-            # New: Add outputSchema to specify return format
-            outputSchema={
-                "type": "object",
-                "properties": {
-                    "user": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "string"},
-                            "name": {"type": "string"},
-                            "email": {"type": "string"},
-                            "status": {"type": "string"}
-                        }
-                    }
-                }
-            }
-        )
-    ]
-```
-
-```typescript !!tabs TypeScript
-// Using official TypeScript SDK - @modelcontextprotocol/sdk package
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-  CallToolRequestSchema,
-  CallToolResult,
-  ListToolsRequestSchema,
-  Tool,
-} from "@modelcontextprotocol/sdk/types.js";
-
-const server = new Server(
-  { name: "example-server", version: "1.0.0" },
-  { capabilities: { tools: {} } },
-);
-
-// Handle tool calls with structured output
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  if (name === "get_user_info") {
-    const userData = {
-      user: {
-        id: args.user_id,
-        name: "John Doe",
-        email: "john@example.com",
-        status: "active",
-      },
-    };
-
-    return {
-      content: [{ type: "text", text: `Retrieved user ${args.user_id}` }],
-      // New: Use structuredContent for predictable data format
-      structuredContent: userData,
-    } as CallToolResult;
-  }
-});
-
-// Register tool with outputSchema
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "get_user_info",
-        description: "Get structured user information",
-        inputSchema: {
-          type: "object",
-          properties: {
-            user_id: { type: "string" },
-          },
-          required: ["user_id"],
+    if (name === "get_user_info") {
+      const userData = {
+        user: {
+          id: args.user_id,
+          name: "John Doe",
+          email: "john@example.com",
+          status: "active",
         },
-        // New: Add outputSchema to specify return format
-        outputSchema: {
-          type: "object",
-          properties: {
-            user: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                name: { type: "string" },
-                email: { type: "string" },
-                status: { type: "string" },
+      };
+
+      return {
+        content: [{ type: "text", text: \`Retrieved user \${args.user_id}\` }],
+        // New: Use structuredContent for predictable data format
+        structuredContent: userData,
+      } as CallToolResult;
+    }
+  });
+
+  // Register tool with outputSchema
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return {
+      tools: [
+        {
+          name: "get_user_info",
+          description: "Get structured user information",
+          inputSchema: {
+            type: "object",
+            properties: {
+              user_id: { type: "string" },
+            },
+            required: ["user_id"],
+          },
+          // New: Add outputSchema to specify return format
+          outputSchema: {
+            type: "object",
+            properties: {
+              user: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  name: { type: "string" },
+                  email: { type: "string" },
+                  status: { type: "string" },
+                },
               },
             },
           },
-        },
-      } as Tool,
-    ],
-  };
-});
-```
-
-</CodeWithTabs>
+        } as Tool,
+      ],
+    };
+  });`,
+}
+]}
+/>
 
 ### Enhanced OAuth Security
 
@@ -270,99 +273,103 @@ MCP servers are now classified as [OAuth Resource Servers](https://modelcontextp
 
 **What you need to change:** Update your server to expose authorization metadata and modify your client to include resource indicators in token requests.
 
-<CodeWithTabs>
+<CodeWithTabs
+  tabs={[
+    {
+      label: "Python Server",
+      language: "python",
+      code: `# Using official Python SDK - mcp package
+  from mcp.server.fastmcp import FastMCP
+  from mcp.server.auth.provider import TokenVerifier, TokenInfo
+  from mcp.server.auth.settings import AuthSettings
 
-```python !!tabs Python Server
-# Using official Python SDK - mcp package
-from mcp.server.fastmcp import FastMCP
-from mcp.server.auth.provider import TokenVerifier, TokenInfo
-from mcp.server.auth.settings import AuthSettings
+  class MyTokenVerifier(TokenVerifier):
+      async def verify_token(self, token: str) -> TokenInfo:
+          # MUST: Validate token is scoped to this resource
+          # Verify with your authorization server via token introspection
+          response = await introspect_token(token)
+          if not response.get("active"):
+              raise ValueError("Token is not active")
 
-class MyTokenVerifier(TokenVerifier):
-    async def verify_token(self, token: str) -> TokenInfo:
-        # MUST: Validate token is scoped to this resource
-        # Verify with your authorization server via token introspection
-        response = await introspect_token(token)
-        if not response.get("active"):
-            raise ValueError("Token is not active")
+          # Verify resource scope
+          if "https://api.example.com/" not in response.get("aud", []):
+              raise ValueError("Token not valid for this resource")
 
-        # Verify resource scope
-        if "https://api.example.com/" not in response.get("aud", []):
-            raise ValueError("Token not valid for this resource")
+          return TokenInfo(
+              sub=response["sub"],
+              scopes=response["scope"].split(),
+              expires_at=response["exp"]
+          )
 
-        return TokenInfo(
-            sub=response["sub"],
-            scopes=response["scope"].split(),
-            expires_at=response["exp"]
-        )
+  # Create server with OAuth Resource Server configuration
+  mcp = FastMCP(
+      "example-server",
+      token_verifier=MyTokenVerifier(),
+      auth=AuthSettings(
+          # MUST: Expose authorization server discovery metadata
+          issuer_url="https://auth.example.com",
+          resource_server_url="https://api.example.com/",
+          required_scopes=["read", "write"],
+      ),
+  )
 
-# Create server with OAuth Resource Server configuration
-mcp = FastMCP(
-    "example-server",
-    token_verifier=MyTokenVerifier(),
-    auth=AuthSettings(
-        # MUST: Expose authorization server discovery metadata
-        issuer_url="https://auth.example.com",
-        resource_server_url="https://api.example.com/",
-        required_scopes=["read", "write"],
-    ),
-)
+  async def introspect_token(token: str) -> dict:
+      # Your token introspection implementation
+      # Typically calls your authorization server's introspection endpoint
+      pass`,
+    },
+    {
+      label: "Python Client",
+      language: "python",
+      code: `# Using official Python SDK - mcp package
+  from mcp.client.auth import OAuthClientProvider, TokenStorage
+  from mcp.client.session import ClientSession
+  from mcp.client.streamable_http import streamablehttp_client
+  from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 
-async def introspect_token(token: str) -> dict:
-    # Your token introspection implementation
-    # Typically calls your authorization server's introspection endpoint
-    pass
-```
+  class SecureTokenStorage(TokenStorage):
+      async def get_tokens(self) -> OAuthToken | None:
+          # Load tokens from secure storage
+          pass
 
-```python !!tabs Python Client
-# Using official Python SDK - mcp package
-from mcp.client.auth import OAuthClientProvider, TokenStorage
-from mcp.client.session import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
-from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
+      async def set_tokens(self, tokens: OAuthToken) -> None:
+          # Save tokens to secure storage
+          pass
 
-class SecureTokenStorage(TokenStorage):
-    async def get_tokens(self) -> OAuthToken | None:
-        # Load tokens from secure storage
-        pass
+      async def get_client_info(self) -> OAuthClientInformationFull | None:
+          # Load client registration info
+          pass
 
-    async def set_tokens(self, tokens: OAuthToken) -> None:
-        # Save tokens to secure storage
-        pass
+      async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
+          # Save client registration info
+          pass
 
-    async def get_client_info(self) -> OAuthClientInformationFull | None:
-        # Load client registration info
-        pass
+  async def connect_to_protected_server():
+      # Set up OAuth authentication with Resource Indicators
+      oauth_auth = OAuthClientProvider(
+          server_url="https://api.example.com/",  # MUST: Specify target resource
+          client_metadata=OAuthClientMetadata(
+              client_name="My MCP Client",
+              redirect_uris=["http://localhost:3000/callback"],
+              grant_types=["authorization_code", "refresh_token"],
+              response_types=["code"],
+          ),
+          storage=SecureTokenStorage(),
+          redirect_handler=lambda url: print(f"Visit: {url}"),
+          callback_handler=lambda: ("auth_code", None),
+      )
 
-    async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
-        # Save client registration info
-        pass
+      # Connect with resource-scoped authentication
+      async with streamablehttp_client(
+          "https://api.example.com/mcp", auth=oauth_auth
+      ) as (read, write, _):
+          async with ClientSession(read, write) as session:
+              await session.initialize()
+              # Authenticated session ready with resource-scoped tokens`,
 
-async def connect_to_protected_server():
-    # Set up OAuth authentication with Resource Indicators
-    oauth_auth = OAuthClientProvider(
-        server_url="https://api.example.com/",  # MUST: Specify target resource
-        client_metadata=OAuthClientMetadata(
-            client_name="My MCP Client",
-            redirect_uris=["http://localhost:3000/callback"],
-            grant_types=["authorization_code", "refresh_token"],
-            response_types=["code"],
-        ),
-        storage=SecureTokenStorage(),
-        redirect_handler=lambda url: print(f"Visit: {url}"),
-        callback_handler=lambda: ("auth_code", None),
-    )
-
-    # Connect with resource-scoped authentication
-    async with streamablehttp_client(
-        "https://api.example.com/mcp", auth=oauth_auth
-    ) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            # Authenticated session ready with resource-scoped tokens
-```
-
-</CodeWithTabs>
+}
+]}
+/>
 
 ### Security Best Practices
 
@@ -376,120 +383,123 @@ Elicitation allows servers to pause tool execution and ask users for specific in
 
 **What you need to change:** Enable the `elicitation` capability and use `context.elicit()` to request user input when your tools need additional information.
 
-<CodeWithTabs>
+<CodeWithTabs
+  tabs={[
+    {
+      label: "Python",
+      language: "python",
+      code: `@server.call_tool()
+  async def handle_call_tool(
+      name: str, arguments: dict[str, Any] | None, context: RequestContext
+  ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+      if name == "book_flight":
+          departure = arguments.get("departure")
+          destination = arguments.get("destination")
 
-```python !!tabs Python
-@server.call_tool()
-async def handle_call_tool(
-    name: str, arguments: dict[str, Any] | None, context: RequestContext
-) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    if name == "book_flight":
-        departure = arguments.get("departure")
-        destination = arguments.get("destination")
+          # If departure city is missing, ask the user
+          if not departure:
+              result = await context.elicit(
+                  message="What city are you departing from?",
+                  schema={
+                      "type": "object",
+                      "properties": {
+                          "departure": {"type": "string", "description": "Departure city"}
+                      },
+                      "required": ["departure"]
+                  }
+              )
 
-        # If departure city is missing, ask the user
-        if not departure:
-            result = await context.elicit(
-                message="What city are you departing from?",
-                schema={
-                    "type": "object",
-                    "properties": {
-                        "departure": {"type": "string", "description": "Departure city"}
-                    },
-                    "required": ["departure"]
-                }
-            )
+              if result.action == "accept":
+                  departure = result.content["departure"]
+              else:
+                  return [types.TextContent(type="text", text="Flight booking cancelled")]
 
-            if result.action == "accept":
-                departure = result.content["departure"]
-            else:
-                return [types.TextContent(type="text", text="Flight booking cancelled")]
+          # Continue with booking...
+          return [types.TextContent(
+              type="text",
+              text=f"Booking flight from {departure} to {destination}"
+          )]`,
+      },
+    {
+      label: "TypeScript",
+      language: "typescript",
+        code: `server.setRequestHandler(CallToolRequestSchema, async (request, context) => {
+    const { name, arguments: args } = request.params;
 
-        # Continue with booking...
-        return [types.TextContent(
-            type="text",
-            text=f"Booking flight from {departure} to {destination}"
-        )]
-```
+    if (name === "book_restaurant") {
+      const restaurant = args.restaurant;
+      const date = args.date;
+      const partySize = args.partySize;
 
-```typescript !!tabs TypeScript
-server.setRequestHandler(CallToolRequestSchema, async (request, context) => {
-  const { name, arguments: args } = request.params;
+      // Check availability
+      const isAvailable = await checkAvailability(restaurant, date, partySize);
 
-  if (name === "book_restaurant") {
-    const restaurant = args.restaurant;
-    const date = args.date;
-    const partySize = args.partySize;
-
-    // Check availability
-    const isAvailable = await checkAvailability(restaurant, date, partySize);
-
-    if (!isAvailable) {
-      // Ask user if they want to check alternatives
-      const result = await context.elicit({
-        message: `No availability at ${restaurant} on ${date}. Would you like to check alternative dates?`,
-        requestedSchema: {
-          type: "object",
-          properties: {
-            checkAlternatives: {
-              type: "boolean",
-              title: "Check alternative dates",
-              description: "Would you like me to check other dates?",
+      if (!isAvailable) {
+        // Ask user if they want to check alternatives
+        const result = await context.elicit({
+          message: \`No availability at \${restaurant} on \${date}. Would you like to check alternative dates?\`,
+          requestedSchema: {
+            type: "object",
+            properties: {
+              checkAlternatives: {
+                type: "boolean",
+                title: "Check alternative dates",
+                description: "Would you like me to check other dates?",
+              },
+              flexibleDates: {
+                type: "string",
+                title: "Date flexibility",
+                description: "How flexible are your dates?",
+                enum: ["next_day", "same_week", "next_week"],
+                enumNames: ["Next day", "Same week", "Next week"],
+              },
             },
-            flexibleDates: {
-              type: "string",
-              title: "Date flexibility",
-              description: "How flexible are your dates?",
-              enum: ["next_day", "same_week", "next_week"],
-              enumNames: ["Next day", "Same week", "Next week"],
-            },
+            required: ["checkAlternatives"],
           },
-          required: ["checkAlternatives"],
-        },
-      });
+        });
 
-      if (result.action === "accept" && result.content?.checkAlternatives) {
-        const alternatives = await findAlternatives(
-          restaurant,
-          date,
-          partySize,
-          result.content.flexibleDates as string,
-        );
+        if (result.action === "accept" && result.content?.checkAlternatives) {
+          const alternatives = await findAlternatives(
+            restaurant,
+            date,
+            partySize,
+            result.content.flexibleDates as string,
+          );
+          return {
+            content: [
+              {
+                type: "text",
+                text: \`Found these alternatives: \${alternatives.join(", ")}\`,
+              },
+            ],
+          };
+        }
+
         return {
           content: [
             {
               type: "text",
-              text: `Found these alternatives: ${alternatives.join(", ")}`,
+              text: "No booking made. Original date not available.",
             },
           ],
         };
       }
 
+      // Book the table
+      await makeBooking(restaurant, date, partySize);
       return {
         content: [
           {
             type: "text",
-            text: "No booking made. Original date not available.",
+            text: \`Booked table for \${partySize} at \${restaurant} on \${date}\`,
           },
         ],
       };
     }
-
-    // Book the table
-    await makeBooking(restaurant, date, partySize);
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Booked table for ${partySize} at ${restaurant} on ${date}`,
-        },
-      ],
-    };
-  }
-});
-```
-
-</CodeWithTabs>
+  });`,
+}
+]}
+/>
 
 Key features:
 
@@ -608,7 +618,7 @@ async def initiate_transfer(amount: int, recipient: str, context):
     return {"status": result.status, "recipient": recipient, "amount": amount}
 ```
 
-Learn more about MCP authorization in the [MCP authorization documentation](/mcp/authorization).
+Learn more about MCP authorization in the [MCP authorization documentation](/mcp/securing-mcp-servers/authorizing-mcp-servers).
 
 ### Streamable HTTP transport
 
