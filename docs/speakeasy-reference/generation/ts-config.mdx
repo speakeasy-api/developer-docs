@@ -75,6 +75,75 @@ typescript:
   ]}
 />
 
+## Additional scripts
+
+```yml
+typescript:
+  additionalScripts:
+    format: "prettier --write src"
+    docs: "typedoc --out docs src"
+    custom-test: "vitest run --coverage"
+```
+
+<Table 
+  data={[
+    { name: "additionalScripts", required: "false", default: "{}", description: "Custom npm scripts to add to the `package.json` file. Scripts with the same name as default scripts will override them." }
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "required", header: "Required" },
+    { key: "default", header: "Default Value" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+### How scripts are merged
+
+The feature uses an override strategy where additional scripts take precedence over default scripts:
+
+1. **Default scripts** are generated automatically based on SDK configuration:
+
+```json
+{
+  "lint": "eslint --cache --max-warnings=0 src",
+  "build": "tsc",
+  "prepublishOnly": "npm run build"
+}
+```
+
+2. **Test scripts** are added if tests are enabled:
+
+```json
+{
+  "test": "vitest run src --reporter=junit --outputFile=.speakeasy/reports/tests.xml --reporter=default",
+  "check": "npm run test && npm run lint"
+}
+```
+
+3. **Additional scripts** override defaults if they have the same name:
+
+```yml
+typescript:
+  additionalScripts:
+    build: "custom-build-command"  # Replaces default "tsc" build
+    deploy: "npm publish"           # Adds new script
+```
+
+4. **Result** in `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "custom-build-command",  // Overridden
+    "check": "npm run test && npm run lint",
+    "deploy": "npm publish",           // Added
+    "lint": "eslint --cache --max-warnings=0 src",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run src --reporter=junit --outputFile=.speakeasy/reports/tests.xml --reporter=default"
+  }
+}
+```
+
 ## Method and parameter management
 
 ```yml
