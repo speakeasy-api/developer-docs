@@ -165,6 +165,28 @@ uv sync
 In the `app/main.py` file, you will first see the schemas defined. 
 
 ```python
+# app/main.py
+
+import logging
+from typing import List, Optional
+from pathlib import Path
+from pydantic import BaseModel, Field
+from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
+from sentence_transformers import SentenceTransformer
+import chromadb
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Configuration
+CHROMA_PATH = "./chroma_db"
+CHROMA_COLLECTION = "django_docs"
+DEFAULT_MAX_RESULTS = 3
+MAX_ALLOWED_RESULTS = 10
+DEFAULT_MIN_SCORE = 0.5
+
 class SearchRequest(BaseModel):
     query: str = Field(..., description="Natural language search query", example="What's new in django.contrib.gis?")
     max_results: Optional[int] = Field(default=3, ge=1, le=10, description="Maximum number of results")
@@ -192,6 +214,8 @@ For the response schema `SearchResponse`, it keeps results in a flat array for e
 The `RAGService` class handles the vector search:
 
 ```python
+# app/main.py
+
 class RAGService:
     def __init__(self):
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -237,6 +261,8 @@ The service retrieves `max_results * 3` candidates to ensure enough survive scor
 The FastAPI endpoint wires everything together:
 
 ```python
+# app/main.py
+
 app = FastAPI(
     title="Django Documentation RAG API",
     description="Semantic search over Django 5.2.8 documentation",
