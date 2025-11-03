@@ -5,156 +5,190 @@ description: "Learn how to create a Swagger/OpenAPI spec for your Laravel API."
 
 import { Callout, YouTube } from "@/mdx/components";
 
-# How To Generate a OpenAPI/Swagger Spec for your Laravel API
+# How To Generate a OpenAPI for Laravel
 
 <YouTube videoId="dn5U_pidRw0" />
 
-You're investing in your API, and that means finally creating an OpenAPI spec that accurately describes your API. Of course you could write the document by hand, or use a GUI tool to make it easier. Or with just a bit of upfront work, you can generate a complete OpenAPI specification directly from your Laravel application.
+You're investing in your API, and that means finally creating an OpenAPI document that accurately describes your API. With the rise in popularity of API-first design some APIs might have declared their OpenAPI before writing the code, but for many the code-first workflow is still fundamental for older APIs. If you're working with an existing Laravel application, you can generate a complete OpenAPI document directly from the API's source code.
 
-Back in the time of Swagger documents, BeyondCode had a well known package for performing spec generation. However, with the advent of OpenAPI, a new package, [Scribe](https://scribe.knuckles.wtf/laravel), has become the go to for generating an OpenAPI Spec from a Laravel API.
+A few excellent tools have come and gone over the years, but these days [Scribe](https://scribe.knuckles.wtf/laravel) is the go to for generating API documentation form Laravel source code, and it happily exports OpenAPI to be used in a variety of other tools: like Speakeasy.
 
-## An Overview of Scribe
+## What is Scribe all about
 
-Scribe is a robust documentation solution for PHP APIs. It helps you generate comprehensive human-readable documentation from your Laravel/Lumen/Dingo codebase. That includes HTML documentation, code samples, Postman Collections, and most importantly in our case, OpenAPI specifications.
+Scribe is a robust documentation solution for PHP APIs. It helps you generate comprehensive human-readable documentation from your Laravel/Lumen/Dingo codebase, without needing to add docblocks or annotations for **everything** like other tools have required in the past. 
 
-So let's start by installing the package using composer, and explore the options available.
+Scribe introspects the API source code itself, and without AI fudging the results it will accurately turn routing, controllers, Eloquent models, and all sorts of code into the best and most accurate API descriptions possible. Then it can be exported as OpenAPI, or Postman collections (if you're into that sort of thing.)
+
+The first step is to install a package, and explore the options available.
 
 ```bash
 composer require --dev knuckleswtf/scribe
 ```
 
-Once installed, we want to publish the package configuration so that we can make any changes in how we want this to work.
+Once installed, publish the package configuration to access the full variety of config options.
 
 ```bash
 php artisan vendor:publish --tag=scribe-config
 ```
 
-Let's take a quick look at the specific configuration options that will help us optimize this package to work with our Laravel API:
-
-- `routes` - this option allows us to configure how we want to detect the API routes, and prefix we may use and any routes we want to exclude by default.
-- `type` - we can choose between `static` (a static HTMI page) and `laravel` (a Blade view). We will get into more details on the differences later.
-- `openapi` \***\*- \*\***this section allows you to toggle OpenAPI generation on or off. We'll toggle it on.
-- `auth` - specify the API's authentication mechanism. This will be used to describe the `security` section of the OpenAPI document
-- `strategies` - this is where we configure how Scribe will interact with our application to get the data needed to create the specification and documentation.
-
-## Scribe's Default OpenAPI Output
-
-As mentioned above, the `type` config allows us to specify the type of output we get, and also where we want it to be outputted. The `static` option will generate HTMI documentation pages within our `public` directory. `laravel` we will generate this within the `storage` directory.
-
-Note, anything in the `storage` directory typically won't be committed to version control - so you would need to update the `.gitignore` file if you want to version this. For this article, we will keep the defaults as we want to focus on the OpenAPI Specification not the documentation.
-
-### Testing Generation
-
-When we first install and set up this package, we should run a test to make sure that everything is configured correctly and we aren't going to run into issues further on.
+There are a lot of [config options](https://scribe.knuckles.wtf/laravel/reference/config) available, and we'll look at some good ones later. For now let's see what a basic generation looks like.
 
 ```bash
 php artisan scribe:generate
 ```
 
-You should see a console output similar to the following:
-
-```bash
-❯ php artisan scribe:generate
-ⓘ Processing route: [GET] api/user
-✔ Processed route: [GET] api/user
-ⓘ Extracting intro and auth Markdown files to: .scribe
-✔ Extracted intro and auth Markdown files to: .scribe
-ⓘ Writing HTML docs...
-✔ Wrote HTML docs and assets to: public/docs/
-ⓘ Generating Postman collection
-✔ Wrote Postman collection to: public/docs/collection.json
-ⓘ Generating OpenAPI specification
-✔ Wrote OpenAPI specification to: public/docs/openapi.yaml
-Checking for any pending upgrades to your config file...
-
-✔ Visit your docs at http://localhost/docs
-```
-
-So, we can confirm that our package is working correctly with our application, let's take a look at the OpenAPI Specification that was generated and see what changes are required.
+The command above will generate both HTML documentation and an OpenAPI specification file. By default, the OpenAPI document will be saved in `storage/app/private/scribe/openapi.yaml`, but the command will let you know exactly where it's been saved.
 
 ```yaml
 openapi: 3.0.3
 info:
-  title: Laravel
-  description: ""
+  title: 'Laravel API Documentation'
+  description: ''
   version: 1.0.0
 servers:
-  - url: "http://localhost"
+  -
+    url: 'http://localhost'
+tags:
+  -
+    name: Endpoints
+    description: ''
 paths:
-  /api/user:
+  /api/health:
     get:
-      summary: ""
-      operationId: getApiUser
-      description: ""
-      parameters: []
+      summary: ''
+      operationId: getApiHealth
+      description: ''
       responses:
-        401:
-          description: ""
+        200:
+          description: ''
           content:
             application/json:
               schema:
                 type: object
-                example:
-                  message: Unauthenticated.
                 properties:
-                  message:
+                  status:
                     type: string
-                    example: Unauthenticated.
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
       tags:
         - Endpoints
       security: []
-tags:
-  - name: Endpoints
-    description: ""
-```
-
-This is our default setup in Laravel - we are using a project I have yet to add an API to. Let's add some endpoints so we can see something a little more fleshed out.
-
-## Our Example App: The Standup API
-
-We'll be working on an asynchronous stand-up application, it allows you to do your daily check-ins on one system, enables your manager to have a high level overview of team blockers and mood etc. You can follow along with the GitHub repository [here](https://github.com/speakeasy-api/guide-laravel-openapi).
-
-## Non-Optimized Example Output
-
-Now we got that out of the way, let's regenerate our OpenAPI Specification now that I have added BREAD (Browse, Read, Edit, Add, Delete) endpoints.
-
-```yaml
-openapi: 3.0.3
-info:
-  title: Laravel
-  description: ""
-  version: 1.0.0
-servers:
-  - url: "http://localhost"
-paths:
-  /api/standups:
+  /api/drivers:
     get:
-      summary: ""
-      operationId: getApiStandups
-      description: ""
-      parameters: []
+      summary: 'Display a listing of the resource.'
+      operationId: displayAListingOfTheResource
+      description: ''
       responses:
-        401:
-          description: ""
+        200:
+          description: ''
           content:
             application/json:
               schema:
                 type: object
-                example:
-                  message: Unauthenticated.
                 properties:
-                  message:
-                    type: string
-                    example: Unauthenticated.
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        code:
+                          type: string
+                        created_at:
+                          type: string
+                        updated_at:
+                          type: string
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+      tags:
+        - Endpoints
+      security: []
+  '/api/drivers/{id}':
+    get:
+      summary: 'Display the specified resource.'
+      operationId: displayTheSpecifiedResource
+      description: ''
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      code:
+                        type: string
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+      tags:
+        - Endpoints
+      security: []
+    parameters:
+      -
+        in: path
+        name: id
+        description: 'The ID of the driver.'
+        required: true
+        schema:
+          type: integer
+  /api/circuits:
+    get:
+      summary: 'Display a listing of the resource.'
+      operationId: displayAListingOfTheResource
+      description: ''
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        location:
+                          type: string
+                        created_at:
+                          type: string
+                        updated_at:
+                          type: string
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
       tags:
         - Endpoints
       security: []
     post:
-      summary: ""
-      operationId: postApiStandups
-      description: ""
-      parameters: []
-      responses: {}
+      summary: 'Store a newly created resource in storage.'
+      operationId: storeANewlyCreatedResourceInStorage
+      description: ''
+      responses: {  }
       tags:
         - Endpoints
       requestBody:
@@ -164,210 +198,194 @@ paths:
             schema:
               type: object
               properties:
-                mood:
+                name:
                   type: string
-                  description: ""
-                  example: excited
-                  enum:
-                    - happy
-                    - sad
-                    - excited
-                    - frustrated
-                    - tired
-                    - neutral
-                    - angry
-                    - anxious
-                    - optimistic
-                    - pensive
-                    - surprised
-                    - sick
-                    - confident
-                    - disappointed
-                    - amused
-                    - relieved
-                    - indifferent
-                    - grateful
-                    - inspired
-                    - confused
-                tasks:
+                  description: ''
+                  nullable: false
+                location:
                   type: string
-                  description: "Must be at least 2 characters."
-                  example: bhwfcupupgcgexmeiuzxvftnsxzwcvllulcenigndwkejgeqjalhsmrsseu
-                blockers:
-                  type: string
-                  description: "Must be at least 2 characters."
-                  example: cwtdgfoqgixwkwhlrwzapudsxtrtoiuldf
-                questions:
-                  type: string
-                  description: "Must be at least 2 characters."
-                  example: nqfytjwyyyxv
-                comments:
-                  type: string
-                  description: "Must be at least 2 characters."
-                  example: ynztxjgszeqzhdqamrfvtnsajozigaivnxbjsrvdujrchjnq
-                department:
-                  type: string
-                  description: ""
-                  example: quo
+                  description: ''
+                  nullable: false
               required:
-                - mood
-                - tasks
-                - department
+                - name
+                - location
       security: []
-  "/api/standups/{uuid}":
+  '/api/circuits/{id}':
     get:
-      summary: ""
-      operationId: getApiStandupsUuid
-      description: ""
-      parameters: []
+      summary: 'Display the specified resource.'
+      operationId: displayTheSpecifiedResource
+      description: ''
       responses:
-        401:
-          description: ""
+        200:
+          description: ''
           content:
             application/json:
               schema:
                 type: object
-                example:
-                  message: Unauthenticated.
                 properties:
-                  message:
-                    type: string
-                    example: Unauthenticated.
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      location:
+                        type: string
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
       tags:
         - Endpoints
       security: []
     parameters:
-      - in: path
-        name: uuid
-        description: ""
-        example: eb68e6e5-999a-3a67-a465-afa4b064af3d
+      -
+        in: path
+        name: id
+        description: 'The ID of the circuit.'
         required: true
         schema:
-          type: string
-  "/api/standups/{standUp_id}":
-    put:
-      summary: ""
-      operationId: putApiStandupsStandUp_id
-      description: ""
-      parameters: []
-      responses: {}
+          type: integer
+  /api/races:
+    get:
+      summary: 'Display a listing of the resource.'
+      operationId: displayAListingOfTheResource
+      description: ''
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        race_date:
+                          type: string
+                        season:
+                          type: string
+                        created_at:
+                          type: string
+                        updated_at:
+                          type: string
+                        links:
+                          type: object
+                          properties:
+                            self:
+                              type: string
+                            circuit:
+                              type: string
+                            drivers:
+                              type: string
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
       tags:
         - Endpoints
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                mood:
-                  type: string
-                  description: ""
-                  example: pensive
-                  enum:
-                    - happy
-                    - sad
-                    - excited
-                    - frustrated
-                    - tired
-                    - neutral
-                    - angry
-                    - anxious
-                    - optimistic
-                    - pensive
-                    - surprised
-                    - sick
-                    - confident
-                    - disappointed
-                    - amused
-                    - relieved
-                    - indifferent
-                    - grateful
-                    - inspired
-                    - confused
-                tasks:
-                  type: string
-                  description: "Must be at least 2 characters."
-                  example: zeovcuepgdsmjpzdjtycdvcbhkeoxvifmj
-                blockers:
-                  type: string
-                  description: "Must be at least 2 characters."
-                  example: eqursmzxxjivpjqphrlxhritykekqhgsunqbtgvwvypyumuyekvxgzvcviyqa
-                questions:
-                  type: string
-                  description: "Must be at least 2 characters."
-                  example: nwqwclebngkisgxklxnaqrncxpkpzicwplklzpstkrnltjiivjbgmvybbgctihycvwtveebvytrk
-                comments:
-                  type: string
-                  description: "Must be at least 2 characters."
-                  example: vjkatsczlriwefgtiovegcovtzxcngsbiirsyegkfsegwjaandugmbx
-                department:
-                  type: string
-                  description: ""
-                  example: optio
-              required:
-                - mood
-                - tasks
-                - department
       security: []
-    delete:
-      summary: ""
-      operationId: deleteApiStandupsStandUp_id
-      description: ""
-      parameters: []
-      responses: {}
+  '/api/races/{id}':
+    get:
+      summary: 'Display the specified resource.'
+      operationId: displayTheSpecifiedResource
+      description: ''
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      race_date:
+                        type: string
+                      season:
+                        type: string
+                      created_at:
+                        type: string
+                      updated_at:
+                        type: string
+                      links:
+                        type: object
+                        properties:
+                          self:
+                            type: string
+                          circuit:
+                            type: string
+                          drivers:
+                            type: string
       tags:
         - Endpoints
       security: []
     parameters:
-      - in: path
-        name: standUp_id
-        description: "The ID of the standUp."
-        example: a
+      -
+        in: path
+        name: id
+        description: 'The ID of the race.'
+        example: 1
         required: true
         schema:
-          type: string
-tags:
-  - name: Endpoints
-    description: ""
+          type: integer
 ```
 
-That was a lot to look through, so let's do a run through of each path - so we can understand what all this YAML actually means.
+A surprisingly good start for something that's had absolutely no work done so far. Beyond just outputting endpoints and models, Scribe was able to look through JSON resources (serializers) to figure out what the response payloads would look like, and describe them as JSON Schema objects.
 
-## Documenting all Response Codes
+Examples were also generated based on the data in the database, which is a great touch, but got a bit big for sharing in the above example. They are based on Laravel's [database seeders](https://laravel.com/docs/12.x/seeding), so they will be more realistic than most hand-written examples.
 
-Let's focus on the browse endpoint, accessed through `/api/standups` , which returns a collection of stand-ups that are part of the department you belong to.
+The biggest shortfall is the lack of human-written descriptions. Not only are we missing a lot of the "why" and "how" in this sea of "what", but we are also struggling with poor summaries for each operation which in turn is giving poor `operationId`s, and THAT will produce a bad SDK in Speakeasy.
 
-```yaml
-/api/standups:
-  get:
-    summary: ""
-    operationId: getApiStandups
-    description: ""
-    parameters: []
-    responses:
-      401:
-        description: ""
-        content:
-          application/json:
-            schema:
-              type: object
-              example:
-                message: Unauthenticated.
-              properties:
-                message:
-                  type: string
-                  example: Unauthenticated.
-    tags:
-      - Endpoints
-    security: []
+Let's look at some ways we can improve this output with quick config settings, and then by adding some attributes to the controllers to improve things further.
+
+## Configuring Scribe
+
+Open the `config/scribe.php` file that was published earlier, and look for the following options:
+
+```php
+  // The HTML <title> for the generated documentation.
+  'title' => 'F1 Race API',
+
+  // A short description of your API. Will be included in the docs webpage, Postman collection and OpenAPI spec.
+  'description' => '',
+
+  // Text to place in the "Introduction" section, right after the `description`. Markdown and HTML are supported.
+  'intro_text' => <<<INTRO
+      This documentation aims to provide all the information you need to work with our API.
+
+      <aside>As you scroll, you'll see code examples for working with the API in different programming languages in the dark area to the right (or as part of the content on mobile).
+      You can switch the language used with the tabs at the top right (or from the nav menu at the top left on mobile).</aside>
+  INTRO,
 ```
 
-You may have noticed that by default Scribe is only documenting the error responses of the API; it's missing how the API would respond successfully.
+Updating these options will help give some context to the API consumers about what this API is all about, which is the first and most fundamental point of any API documentation.
+
+There are lots of other options available, but some of the most important ones to consider when generating an OpenAPI document are:
+
+- `routes` - this option allows us to configure how we want to detect the API routes. Tweak the prefix, and exclude any routes that should not show up in the documentation.
+- `auth` - specify the API's authentication mechanism. This will be used to describe the `security` section of the OpenAPI document.
+- `strategies` - this is where we configure how Scribe will interact with our application to get the data needed to create the specification and documentation.
+
+Poke around if its of interest, but for now let's move onto improving the API description by learning a litte more about how Scribe is creating them.
 
 ### How Scribe Works
 
-This is a good opportunity to explain about how Scribe works under the hood. Scribe scans your application routes to identify which endpoints should be documented based on your configuration. It then extracts metadata from your routes, such as route names, URI patterns, HTTP methods, and any specific annotations or comments in the controller that might be relevant for documentation.
+Scribe scans your application routes to identify which endpoints should be described, based on your configuration. It then extracts metadata from the corresponding routes, such as route names, URI patterns, HTTP methods. It can do this by looking purely at the code, but extra information can be added using annotations and comments in the controller to expand on the "why" and "how" of the API.
 
 Scribe then uses the extracted metadata to perform request simulation on your API. It captures the responses that come back, including: status codes, headers, and body content. All this then get packaged into an internal representation of your API, which is how the OpenAPI spec is created.
 
@@ -375,36 +393,39 @@ In the example above, only the `401` is being documented because Scribe hasn't b
 
 ## Getting to 200
 
-Let's modify our Laravel code to get some useful information about our `200` responses.
+Let's modify the Laravel code to get some useful information about our `200` responses.
 
-To achieve this we will use PHP 8.0 Attributes to add additional information to our controllers, this will use the built in Laravel ecosystem to make a request, inspect the information, and write the specification for you. Let's have a look at our controller:
+To achieve this, [PHP Attributes](https://www.php.net/manual/en/language.attributes.overview.php) can be added to controllers.
+
+
 
 ### Adding tags
 
 In OpenAPI, `tags` are used to group related operations together. Typically, a good way to use tags is to have one tag per "resource" and then associate all the relevant operations that access and modify that resourc together. We'll add a group annotation to the top of the controller.
 
 ```php
-#[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
+// !focus(1)
+#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
 final readonly class IndexController
 {
     public function __construct(
         private AuthManager $auth,
-        private StandUpRepository $repository,
+        private RaceRepository $repository,
     ) {
     }
 
     #[Authenticated]
-    #[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
-    #[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
+    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
+    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
     public function __invoke(Request $request): CollectionResponse
     {
-        $standups = $this->repository->forTeam(
-            team: $this->auth->user()->current_team_id,
+        $races = $this->repository->forSeason(
+            season: $request->query('season', date('Y')),
         );
 
         return new CollectionResponse(
-            data: StandUpResource::collection(
-                resource: $standups->paginate(),
+            data: RaceResource::collection(
+                resource: $races->paginate(),
             ),
         );
     }
@@ -416,27 +437,32 @@ final readonly class IndexController
 Let's next focus on the `invoke` method that is what will be used to generate the path information. We use `#[Authenticated]` to let Scribe know that this endpoint needs to be authenticated
 
 ```php
+<<<<<<< HEAD
 #[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
+=======
+// !focus(10)
+#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
+>>>>>>> 70f8667 (docs: laravel guide update)
 final readonly class IndexController
 {
     public function __construct(
         private AuthManager $auth,
-        private StandUpRepository $repository,
+        private RaceRepository $repository,
     ) {
     }
 
     #[Authenticated]
-    #[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
-    #[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
+    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
+    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
     public function __invoke(Request $request): CollectionResponse
     {
-        $standups = $this->repository->forTeam(
-            team: $this->auth->user()->current_team_id,
+        $races = $this->repository->forSeason(
+            season: $request->query('season', date('Y')),
         );
 
         return new CollectionResponse(
-            data: StandUpResource::collection(
-                resource: $standups->paginate(),
+            data: RaceResource::collection(
+                resource: $races->paginate(),
             ),
         );
     }
@@ -448,27 +474,32 @@ final readonly class IndexController
 Use `#[Endpoint]` to add additional information about this endpoint; describing what it's function is.
 
 ```php
+<<<<<<< HEAD
 #[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
+=======
+// !focus(11)
+#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
+>>>>>>> 70f8667 (docs: laravel guide update)
 final readonly class IndexController
 {
     public function __construct(
         private AuthManager $auth,
-        private StandUpRepository $repository,
+        private RaceRepository $repository,
     ) {
     }
 
     #[Authenticated]
-    #[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
-    #[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
+    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
+    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
     public function __invoke(Request $request): CollectionResponse
     {
-        $standups = $this->repository->forTeam(
-            team: $this->auth->user()->current_team_id,
+        $races = $this->repository->forSeason(
+            season: $request->query('season', date('Y')),
         );
 
         return new CollectionResponse(
-            data: StandUpResource::collection(
-                resource: $standups->paginate(),
+            data: RaceResource::collection(
+                resource: $races->paginate(),
             ),
         );
     }
@@ -480,27 +511,32 @@ final readonly class IndexController
 Finally, we want to add `#[ResponseFromApiResource]` to let Scribe know how this API should respond, passing through the resource class and the model itself so Scribe can make a request in the background and inspect the types on the response payload. Also, we pass the boolean flag for whether or not this response should return a collection or not.
 
 ```php
+<<<<<<< HEAD
 #[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
+=======
+// !focus(12)
+#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
+>>>>>>> 70f8667 (docs: laravel guide update)
 final readonly class IndexController
 {
     public function __construct(
         private AuthManager $auth,
-        private StandUpRepository $repository,
+        private RaceRepository $repository,
     ) {
     }
 
     #[Authenticated]
-    #[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
-    #[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
+    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
+    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
     public function __invoke(Request $request): CollectionResponse
     {
-        $standups = $this->repository->forTeam(
-            team: $this->auth->user()->current_team_id,
+        $races = $this->repository->forSeason(
+            season: $request->query('season', date('Y')),
         );
 
         return new CollectionResponse(
-            data: StandUpResource::collection(
-                resource: $standups->paginate(),
+            data: RaceResource::collection(
+                resource: $races->paginate(),
             ),
         );
     }
@@ -510,12 +546,11 @@ final readonly class IndexController
 Now let's see the OpenAPI spec:
 
 ```yaml
-/api/standups:
+/api/races:
   get:
-    summary: "Browse Stand Ups"
-    operationId: browseStandUps
-    description: "Browse through the stand-ups that belong to your team, no matter what department you are in."
-    parameters: []
+    summary: "Browse Races"
+    operationId: browseRaces
+    description: "Browse through the F1 races for the season."
     responses:
       200:
         description: ""
@@ -526,26 +561,26 @@ Now let's see the OpenAPI spec:
               example:
                 data:
                   - id: ""
-                    type: standUps
+                    type: races
                     attributes:
-                      mood: angry
-                      tasks: 'WOULD always get into that lovely garden. First, however, she went slowly after it: ''I never saw one, or heard of "Uglification,"'' Alice ventured to ask. ''Suppose we change the subject. ''Go on with.'
-                      blockers: "I wonder what was the matter on, What would become of you? I gave her answer. 'They're done with a little girl or a worm. The question is, Who in the pool as it was all ridges and furrows; the balls."
-                      questions: "I to get dry again: they had to stop and untwist it. After a minute or two, they began moving about again, and put it into his cup of tea, and looked at it, and kept doubling itself up very sulkily."
-                      comments: "Alice, in a large canvas bag, which tied up at this moment the door with his knuckles. It was as much as she ran. 'How surprised he'll be when he sneezes; For he can EVEN finish, if he doesn't."
+                      name: Monaco Grand Prix
+                      race_date: '2024-05-26'
+                      season: '2024'
+                      circuit: Monte Carlo Circuit
+                      winner: Max Verstappen
                       created:
                         human: null
                         timestamp: null
                         string: null
                         local: null
                   - id: ""
-                    type: standUps
+                    type: races
                     attributes:
-                      mood: pensive
-                      tasks: "She was looking at the Lizard as she picked her way into a graceful zigzag, and was looking down at her for a good many little girls eat eggs quite as much as she couldn't answer either question, it."
-                      blockers: "Alice, 'it's very rude.' The Hatter opened his eyes were nearly out of sight, they were all ornamented with hearts. Next came the guests, mostly Kings and Queens, and among them Alice recognised the."
-                      questions: "After a while she was near enough to look over their slates; 'but it doesn't matter much,' thought Alice, 'shall I NEVER get any older than I am in the last few minutes that she had felt quite."
-                      comments: "An obstacle that came between Him, and ourselves, and it. Don't let him know she liked them best, For this must ever be A secret, kept from all the other was sitting on a little hot tea upon its."
+                      name: British Grand Prix
+                      race_date: '2024-07-07'
+                      season: '2024'
+                      circuit: Silverstone Circuit
+                      winner: Lewis Hamilton
                       created:
                         human: null
                         timestamp: null
@@ -556,26 +591,27 @@ Now let's see the OpenAPI spec:
                   type: array
                   example:
                     - id: ""
-                      type: standUps
+                      type: races
                       attributes:
-                        mood: angry
-                        tasks: 'WOULD always get into that lovely garden. First, however, she went slowly after it: ''I never saw one, or heard of "Uglification,"'' Alice ventured to ask. ''Suppose we change the subject. ''Go on with.'
-                        blockers: "I wonder what was the matter on, What would become of you? I gave her answer. 'They're done with a little girl or a worm. The question is, Who in the pool as it was all ridges and furrows; the balls."
-                        questions: "I to get dry again: they had to stop and untwist it. After a minute or two, they began moving about again, and put it into his cup of tea, and looked at it, and kept doubling itself up very sulkily."
-                        comments: "Alice, in a large canvas bag, which tied up at this moment the door with his knuckles. It was as much as she ran. 'How surprised he'll be when he sneezes; For he can EVEN finish, if he doesn't."
+                        name: Monaco Grand Prix
+                        race_date: '2024-05-26'
+                        season: '2024'
+                        circuit: Monte Carlo Circuit
+                        winner: Max Verstappen
                         created:
                           human: null
                           timestamp: null
                           string: null
                           local: null
                     - id: ""
-                      type: standUps
+                      type: races
                       attributes:
-                        mood: pensive
-                        tasks: "She was looking at the Lizard as she picked her way into a graceful zigzag, and was looking down at her for a good many little girls eat eggs quite as much as she couldn't answer either question, it."
-                        blockers: "Alice, 'it's very rude.' The Hatter opened his eyes were nearly out of sight, they were all ornamented with hearts. Next came the guests, mostly Kings and Queens, and among them Alice recognised the."
-                        questions: "After a while she was near enough to look over their slates; 'but it doesn't matter much,' thought Alice, 'shall I NEVER get any older than I am in the last few minutes that she had felt quite."
-                        comments: "An obstacle that came between Him, and ourselves, and it. Don't let him know she liked them best, For this must ever be A secret, kept from all the other was sitting on a little hot tea upon its."
+                        name: British Grand Prix
+                        race_date: '2024-07-07'
+                        season: '2024'
+                        circuit: Silverstone Circuit
+                        winner: Lewis Hamilton
+                        winner: Lewis Hamilton
                         created:
                           human: null
                           timestamp: null
@@ -589,25 +625,25 @@ Now let's see the OpenAPI spec:
                         example: ""
                       type:
                         type: string
-                        example: standUps
+                        example: races
                       attributes:
                         type: object
                         properties:
-                          mood:
+                          name:
                             type: string
-                            example: angry
-                          tasks:
+                            example: Monaco Grand Prix
+                          race_date:
                             type: string
-                            example: 'WOULD always get into that lovely garden. First, however, she went slowly after it: ''I never saw one, or heard of "Uglification,"'' Alice ventured to ask. ''Suppose we change the subject. ''Go on with.'
-                          blockers:
+                            example: '2024-05-26'
+                          season:
                             type: string
-                            example: "I wonder what was the matter on, What would become of you? I gave her answer. 'They're done with a little girl or a worm. The question is, Who in the pool as it was all ridges and furrows; the balls."
-                          questions:
+                            example: '2024'
+                          circuit:
                             type: string
-                            example: "I to get dry again: they had to stop and untwist it. After a minute or two, they began moving about again, and put it into his cup of tea, and looked at it, and kept doubling itself up very sulkily."
-                          comments:
+                            example: Monte Carlo Circuit
+                          winner:
                             type: string
-                            example: "Alice, in a large canvas bag, which tied up at this moment the door with his knuckles. It was as much as she ran. 'How surprised he'll be when he sneezes; For he can EVEN finish, if he doesn't."
+                            example: Max Verstappen
                           created:
                             type: object
                             properties:
@@ -624,7 +660,7 @@ Now let's see the OpenAPI spec:
                                 type: string
                                 example: null
     tags:
-      - "Stand Ups"
+      - "Races"
 ```
 
 ## Documenting Parameters
@@ -633,17 +669,17 @@ So far so good! However, this API example is limited. What if we add query param
 
 In terms of Laravel implementation, we recommend use the `spatie/laravel-query-builder` package to enable JSON:API style filtering on my API, as it ties directly into Eloquent ORM from the request parameters. Let's start adding some filters.
 
-Our controller code used our `StandUpRepository` which just leverages Eloquent to query our database through a shared abstraction. However, we want to lean on the package by Spatie, which has a slightly different approach. Let's rewrite this code to make it more flexible.
+Our controller code used our `RaceRepository` which just leverages Eloquent to query our database through a shared abstraction. However, we want to lean on the package by Spatie, which has a slightly different approach. Let's rewrite this code to make it more flexible.
 
 ```php
 #[Authenticated]
-#[Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')]
-#[ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true)]
+#[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
+#[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
 public function __invoke(Request $request): CollectionResponse
 {
-    $standups = QueryBuilder::for(
-			subject: $this->repository->forTeam(
-				team: $this->auth->user()->current_team_id,
+    $races = QueryBuilder::for(
+			subject: $this->repository->forSeason(
+				season: $request->query('season', date('Y')),
 			),
 		)->allowedFilters(
 			filters: $this->repository->filters(),
@@ -654,8 +690,8 @@ public function __invoke(Request $request): CollectionResponse
 		)->getEloquentBuilder();
 
     return new CollectionResponse(
-        data: StandUpResource::collection(
-            resource: $standups->paginate(),
+        data: RaceResource::collection(
+            resource: $races->paginate(),
         ),
     );
 }
@@ -677,29 +713,29 @@ final readonly class IndexController
 {
     public function __construct(
         private AuthManager $auth,
-        private StandUpRepository $repository,
+        private RaceRepository $repository,
     ) {
     }
 
     #[
       Authenticated,
-      QueryParam(name: 'filter[mood]', type: 'string', description: 'Filter the results by mood', required: false, example: 'filter[mood]=neutral', enum: Mood::class),
-      QueryParam(name: 'filter[name]', type: 'string', description: 'Filter the results by the users name', required: false, example: 'filter[mood]=Rumpelstiltskin'),
-      QueryParam(name: 'filter[department]', type: 'string', description: 'Filter the results by the department name', required: false, example: 'Engineering'),
-      QueryParam(name: 'include', type: 'string', description: 'A comma separated list of relationships to side-load', required: false, example: 'include=user,department.team'),
-      QueryParam(name: 'sort', type: 'string', description: 'Sort the results based on either the mood, or the created_at', required: false, example: 'sort=-mood'),
-      ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: true),
-      Endpoint(title: 'Browse Stand Ups', description: 'Browse through the stand-ups that belong to your team, no matter what department you are in.')
+      QueryParam(name: 'filter[season]', type: 'string', description: 'Filter the results by season year', required: false, example: 'filter[season]=2024'),
+      QueryParam(name: 'filter[circuit]', type: 'string', description: 'Filter the results by circuit name', required: false, example: 'filter[circuit]=Monaco'),
+      QueryParam(name: 'filter[winner]', type: 'string', description: 'Filter the results by the winning driver', required: false, example: 'filter[winner]=Verstappen'),
+      QueryParam(name: 'include', type: 'string', description: 'A comma separated list of relationships to side-load', required: false, example: 'include=circuit,drivers'),
+      QueryParam(name: 'sort', type: 'string', description: 'Sort the results based on either the race_date, or the season', required: false, example: 'sort=-race_date'),
+      ResponseFromApiResource(RaceResource::class, Race::class, collection: true),
+      Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')
     ]
     public function __invoke(Request $request): CollectionResponse
     {
-        $standups = $this->repository->forTeam(
-            team: $this->auth->user()->current_team_id,
+        $races = $this->repository->forSeason(
+            season: $request->query('season', date('Y')),
         );
 
         return new CollectionResponse(
-            data: StandUpResource::collection(
-                resource: $standups->paginate(),
+            data: RaceResource::collection(
+                resource: $races->paginate(),
             ),
         );
     }
@@ -716,86 +752,64 @@ The result of the above will be the following inside your OpenAPI specification:
 ```yaml
 parameters:
   - in: query
-    name: "filter[mood]"
-    description: "Filter the results by mood"
-    example: "filter[mood]=neutral"
+    name: "filter[season]"
+    description: "Filter the results by season year"
+    example: "filter[season]=2024"
     required: false
     schema:
       type: string
-      description: "Filter the results by mood"
-      example: "filter[mood]=neutral"
-      enum:
-        - happy
-        - sad
-        - excited
-        - frustrated
-        - tired
-        - neutral
-        - angry
-        - anxious
-        - optimistic
-        - pensive
-        - surprised
-        - sick
-        - confident
-        - disappointed
-        - amused
-        - relieved
-        - indifferent
-        - grateful
-        - inspired
-        - confused
+      description: "Filter the results by season year"
+      example: "filter[season]=2024"
   - in: query
-    name: "filter[name]"
-    description: "Filter the results by the users name"
-    example: "filter[mood]=Rumpelstiltskin"
+    name: "filter[circuit]"
+    description: "Filter the results by circuit name"
+    example: "filter[circuit]=Monaco"
     required: false
     schema:
       type: string
-      description: "Filter the results by the users name"
-      example: "filter[mood]=Rumpelstiltskin"
+      description: "Filter the results by circuit name"
+      example: "filter[circuit]=Monaco"
   - in: query
-    name: "filter[department]"
-    description: "Filter the results by the department name"
-    example: Engineering
+    name: "filter[winner]"
+    description: "Filter the results by the winning driver"
+    example: "filter[winner]=Verstappen"
     required: false
     schema:
       type: string
-      description: "Filter the results by the department name"
-      example: Engineering
+      description: "Filter the results by the winning driver"
+      example: "filter[winner]=Verstappen"
   - in: query
     name: include
     description: "A comma separated list of relationships to side-load"
-    example: "include=user,department.team"
+    example: "include=circuit,drivers"
     required: false
     schema:
       type: string
       description: "A comma separated list of relationships to side-load"
-      example: "include=user,department.team"
+      example: "include=circuit,drivers"
   - in: query
     name: sort
-    description: "Sort the results based on either the mood, or the created_at"
-    example: sort=-mood
+    description: "Sort the results based on either the race_date, or the season"
+    example: sort=-race_date
     required: false
     schema:
       type: string
-      description: "Sort the results based on either the mood, or the created_at"
-      example: sort=-mood
+      description: "Sort the results based on either the race_date, or the season"
+      example: sort=-race_date
 ```
 
 Quite convenient I am sure you can agree!
 
 ## A More Complex Endpoint
 
-Let's now move onto documenting our `store` endpoint which is what is used to create a new stand-up.
+Let's now move onto documenting our `store` endpoint which is what is used to create a new race.
 
 ```yaml
-/api/standups:
+/api/races:
   post:
     summary: ""
-    operationId: postApiStandups
+    operationId: postApiRaces
     description: ""
-    parameters: []
     responses: {}
     tags:
       - Endpoints
@@ -806,55 +820,27 @@ Let's now move onto documenting our `store` endpoint which is what is used to cr
           schema:
             type: object
             properties:
-              mood:
+              name:
                 type: string
                 description: ""
-                example: excited
-                enum:
-                  - happy
-                  - sad
-                  - excited
-                  - frustrated
-                  - tired
-                  - neutral
-                  - angry
-                  - anxious
-                  - optimistic
-                  - pensive
-                  - surprised
-                  - sick
-                  - confident
-                  - disappointed
-                  - amused
-                  - relieved
-                  - indifferent
-                  - grateful
-                  - inspired
-                  - confused
-              tasks:
+                example: "Monaco Grand Prix"
+              race_date:
                 type: string
-                description: "Must be at least 2 characters."
-                example: fsukiymcjmglqdyuuecbuhdlplot
-              blockers:
-                type: string
-                description: "Must be at least 2 characters."
-                example: xxqzeornblypfisimgvgucodtqracytnncacoqxqaeuzytrvmezydvztnqtmrmbgdebrfdmgkmjczytt
-              questions:
-                type: string
-                description: "Must be at least 2 characters."
-                example: ckmhwsbrdoryyfdxhidyrbugkaftcyiozxzsdtahbnsdivqferixcflplmadjarlyosbn
-              comments:
-                type: string
-                description: "Must be at least 2 characters."
-                example: kbczrybawedlzxhpzyhcorgzjmsgcdvdbgryjaqhwsbccxwyfkprfhnpogyqjuyyramuqrkzzsypaajoegiu
-              department:
+                description: "Must be a valid date."
+                example: "2024-05-26"
+              season:
                 type: string
                 description: ""
-                example: pariatur
+                example: "2024"
+              circuit_id:
+                type: string
+                description: ""
+                example: abc123
             required:
-              - mood
-              - tasks
-              - department
+              - name
+              - race_date
+              - season
+              - circuit_id
     security: []
 ```
 
@@ -862,9 +848,9 @@ For the most part, this has been documented quite well by leaning on the Laravel
 
 ```php
 #[
-	Group(name: 'Stand Ups', description: 'A series of endpoints that allow programmatic access to managing stand-ups.', authenticated: true),
+	Group(name: 'Races', description: 'A series of endpoints that allow programmatic access to managing F1 races.', authenticated: true),
 	Authenticated,
-	Endpoint(title: 'Create a new Stand Up', description: 'Create a new Stand Up for a specified department, will be assigned to whichever user is authenticated at the time.'),
+	Endpoint(title: 'Create a new Race', description: 'Create a new F1 race for a specified circuit and season.'),
 ]
 ```
 
@@ -872,13 +858,12 @@ This is similar to what we did on the `IndexController` but this time we are jum
 
 ```yaml
 post:
-  summary: "Create a new Stand Up"
-  operationId: createANewStandUp
-  description: "Create a new Stand Up for a specified department, will be assigned to whichever user is authenticated at the time."
-  parameters: []
+  summary: "Create a new Race"
+  operationId: createANewRace
+  description: "Create a new F1 race for a specified circuit and season."
   responses: {}
   tags:
-    - "Stand Ups"
+    - "Races"
   requestBody:
     required: true
     content:
@@ -889,17 +874,16 @@ As you can see, the information is starting to build up based on the information
 ```php
 #[
 	Authenticated,
-  Group(name: 'Stand Ups', description: 'A series of endpoints that allow programmatic access to managing stand-ups.', authenticated: true),
-  Endpoint(title: 'Create a new Stand Up', description: 'Create a new Stand Up for a specified department, will be assigned to whichever user is authenticated at the time.'),
+  Group(name: 'Races', description: 'A series of endpoints that allow programmatic access to managing F1 races.', authenticated: true),
+  Endpoint(title: 'Create a new Race', description: 'Create a new F1 race for a specified circuit and season.'),
 
-  BodyParam(name: 'mood', type: 'string', description: 'The mood of the user to be submitted to the stand-up.', required: true, example: 'neutral', enum: Mood::class),
-  BodyParam(name: 'tasks', type: 'string', description: 'The list of tasks the user is planning on working on today. Markdown is supported.', required: false, example: 'Today I will be working on the OpenAPI Specification.'),
-  BodyParam(name: 'blockers', type: 'string', description: 'A list of things that are blocking the user from progressing. Markdown is supported.', required: false, example: 'I am currently being blocked by front-end playing with crayons.'),
-  BodyParam(name: 'questions', type: 'string', description: 'A list of questions that the user wants information on, these could be anything. Markdown is supported.', required: false, example: 'How much wood, could a woodchuck chuck, if a woodchuck, could chuck wood.'),
-  BodyParam(name: 'comments', type: 'string', description: 'Any comments that the user wants to add to their stand-up that may be useful.', required: false, example: 'Going to the Dentist at 2pm, will make up hours later.'),
-  BodyParam(name: 'department', type: 'string', description: 'The Unique Identifier for the department that the user is adding their stand up to.', required: true, example: '1234-1234-1234-1234'),
+  BodyParam(name: 'name', type: 'string', description: 'The name of the race.', required: true, example: 'Monaco Grand Prix'),
+  BodyParam(name: 'race_date', type: 'string', description: 'The date when the race will take place.', required: true, example: '2024-05-26'),
+  BodyParam(name: 'season', type: 'string', description: 'The season year for this race.', required: true, example: '2024'),
+  BodyParam(name: 'circuit_id', type: 'string', description: 'The Unique Identifier for the circuit where the race will be held.', required: true, example: '1234-1234-1234-1234'),
+  BodyParam(name: 'winner', type: 'string', description: 'The driver who won the race (optional, can be added after the race).', required: false, example: 'Max Verstappen'),
 
-  ResponseFromApiResource(StandUpResource::class, StandUp::class, collection: false)
+  ResponseFromApiResource(RaceResource::class, Race::class, collection: false)
 ]
 ```
 
@@ -907,10 +891,9 @@ Now we have the body parameters for this request, as well as how the API is expe
 
 ```yaml
 post:
-  summary: "Create a new Stand Up"
-  operationId: createANewStandUp
-  description: "Create a new Stand Up for a specified department, will be assigned to whichever user is authenticated at the time."
-  parameters: []
+  summary: "Create a new Race"
+  operationId: createANewRace
+  description: "Create a new F1 race for a specified circuit and season."
   responses:
     200:
       description: ""
@@ -921,13 +904,13 @@ post:
             example:
               data:
                 id: 9bce14db-cdd1-4a8a-86cb-e05f9f918d20
-                type: standUps
+                type: races
                 attributes:
-                  mood: sick
-                  tasks: "Tortoise, if he were trying which word sounded best. Some of the deepest contempt. 'I've seen hatters before,' she said to Alice; and Alice looked all round the court and got behind him, and said."
-                  blockers: "Hatter with a soldier on each side, and opened their eyes and mouths so VERY remarkable in that; nor did Alice think it so quickly that the cause of this elegant thimble'; and, when it had made. 'He."
-                  questions: "Alice. 'Come on, then!' roared the Queen, 'and he shall tell you my adventures--beginning from this morning,' said Alice desperately: 'he's perfectly idiotic!' And she began again: 'Ou est ma."
-                  comments: 'Alice felt a little ledge of rock, and, as there was nothing else to say "HOW DOTH THE LITTLE BUSY BEE," but it was written to nobody, which isn''t usual, you know.'' Alice had never been so much.'
+                  name: "Monaco Grand Prix"
+                  race_date: "2024-05-26"
+                  season: "2024"
+                  circuit: "Monte Carlo Circuit"
+                  winner: null
                   created:
                     human: "0 seconds ago"
                     timestamp: 1713094155
@@ -942,25 +925,25 @@ post:
                     example: 9bce14db-cdd1-4a8a-86cb-e05f9f918d20
                   type:
                     type: string
-                    example: standUps
+                    example: races
                   attributes:
                     type: object
                     properties:
-                      mood:
+                      name:
                         type: string
-                        example: sick
-                      tasks:
+                        example: "Monaco Grand Prix"
+                      race_date:
                         type: string
-                        example: "Tortoise, if he were trying which word sounded best. Some of the deepest contempt. 'I've seen hatters before,' she said to Alice; and Alice looked all round the court and got behind him, and said."
-                      blockers:
+                        example: "2024-05-26"
+                      season:
                         type: string
-                        example: "Hatter with a soldier on each side, and opened their eyes and mouths so VERY remarkable in that; nor did Alice think it so quickly that the cause of this elegant thimble'; and, when it had made. 'He."
-                      questions:
+                        example: "2024"
+                      circuit:
                         type: string
-                        example: "Alice. 'Come on, then!' roared the Queen, 'and he shall tell you my adventures--beginning from this morning,' said Alice desperately: 'he's perfectly idiotic!' And she began again: 'Ou est ma."
-                      comments:
+                        example: "Monte Carlo Circuit"
+                      winner:
                         type: string
-                        example: 'Alice felt a little ledge of rock, and, as there was nothing else to say "HOW DOTH THE LITTLE BUSY BEE," but it was written to nobody, which isn''t usual, you know.'' Alice had never been so much.'
+                        example: null
                       created:
                         type: object
                         properties:
@@ -977,7 +960,7 @@ post:
                             type: string
                             example: "2024-04-14T11:29:15"
   tags:
-    - "Stand Ups"
+    - "Races"
   requestBody:
     required: true
     content:
@@ -985,54 +968,31 @@ post:
         schema:
           type: object
           properties:
-            mood:
+            name:
               type: string
-              description: "The mood of the user to be submitted to the stand-up."
-              example: neutral
-              enum:
-                - happy
-                - sad
-                - excited
-                - frustrated
-                - tired
-                - neutral
-                - angry
-                - anxious
-                - optimistic
-                - pensive
-                - surprised
-                - sick
-                - confident
-                - disappointed
-                - amused
-                - relieved
-                - indifferent
-                - grateful
-                - inspired
-                - confused
-            tasks:
+              description: "The name of the race."
+              example: "Monaco Grand Prix"
+            race_date:
               type: string
-              description: "The list of tasks the user is planning on working on today. Markdown is supported."
-              example: "Today I will be working on the OpenAPI Specification."
-            blockers:
+              description: "The date when the race will take place."
+              example: "2024-05-26"
+            season:
               type: string
-              description: "A list of things that are blocking the user from progressing. Markdown is supported."
-              example: "I am currently being blocked by front-end playing with crayons."
-            questions:
+              description: "The season year for this race."
+              example: "2024"
+            circuit_id:
               type: string
-              description: "A list of questions that the user wants information on, these could be anything. Markdown is supported."
-              example: "How much wood, could a woodchuck chuck, if a woodchuck, could chuck wood."
-            comments:
-              type: string
-              description: "Any comments that the user wants to add to their stand-up that may be useful."
-              example: "Going to the Dentist at 2pm, will make up hours later."
-            department:
-              type: string
-              description: "The Unique Identifier for the department that the user is adding their stand up to."
+              description: "The Unique Identifier for the circuit where the race will be held."
               example: 1234-1234-1234-1234
+            winner:
+              type: string
+              description: "The driver who won the race (optional, can be added after the race)."
+              example: "Max Verstappen"
           required:
-            - mood
-            - department
+            - name
+            - race_date
+            - season
+            - circuit_id
 ```
 
 As you can see, a lot more information is provided which will help anyone who wants to interact with this API.
@@ -1040,3 +1000,9 @@ As you can see, a lot more information is provided which will help anyone who wa
 ## Summary
 
 If we follow this approach throughout our API, we can generate a well documented OpenAPI Specification for our Laravel based API - utilizing modern PHP to add information to our code base. This not only aids in the OpenAPI generation, but it also adds a level of in-code documentation that will help onboard any new developer who needs to know what the purpose of an endpoint may be.
+
+
+
+
+
+{/* TODO add .scribe to gitignore */}
