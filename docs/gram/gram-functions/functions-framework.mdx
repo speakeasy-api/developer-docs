@@ -1,0 +1,70 @@
+---
+title: "Using the Functions Framework"
+description: "Learn how to use Gram's Functions Framework with TypeScript, including context objects and best practices."
+---
+
+## Overview
+
+The Gram Functions Framework provides a streamlined way to build MCP tools using TypeScript. It handles the MCP protocol implementation while letting you focus on your tool logic.
+
+![Choosing the Gram Framework](/assets/docs/gram/img/functions/npm_gram-framework.png)
+
+## Function structure
+
+Every Gram Function follows this basic structure:
+
+```typescript filename="gram.ts"
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+const gram = new Gram().tool({
+  name: "add",
+  description: "Add two numbers together",
+  inputSchema: { a: z.number(), b: z.number() },
+  async execute(ctx, input) {
+    return ctx.json({sum: input.a + input.b});
+  },
+});
+
+export default gram;
+```
+
+## Environment Variables
+
+With Gram functions you can specify credentials or envrionment variable values that will need to be provided to your tool runner.
+These can be provided either by end user set MCP headers or with stored Gram environments.
+
+```typescript
+const gram = new Gram({
+  envSchema: {
+    BASE_URL: z.string().check(z.url()),
+  },
+}).tool({
+  name: "api_call",
+  inputSchema: { endpoint: z.string() },
+  async execute(ctx, input) {
+    const baseURL = ctx.env?.["BASE_URL"];
+    // Use baseURL...
+  },
+});
+```
+
+
+## Using Fetch
+
+With Gram functions you can make requests to downstream APIs and respond with the result.
+
+```typescript
+const gram = new Gram()
+  .tool({
+    name: "spacex-ships",
+    description: "Get the latest SpaceX ship list",
+    inputSchema: {},
+    async execute(ctx) {
+      return fetch("https://api.spacexdata.com/v3/ships");
+    },
+  });
+```
+
+## Next steps
+- [Build and deploy](/docs/gram/gram-functions/build-deploy)

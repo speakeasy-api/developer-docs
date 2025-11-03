@@ -53,10 +53,10 @@ const meta = {
             title: "Getting Started",
             items: {
               typescript: {
-                title: "Use TypeScript",
+                title: "Use TypeScript (Gram Functions)",
               },
               openapi: {
-                title: "Use an OpenAPI Spec",
+                title: "Use an OpenAPI spec",
               },
             },
           },
@@ -86,14 +86,31 @@ const meta = {
               },
             },
           },
+          "gram-functions": {
+            title: "Gram Functions",
+            items: {
+              introduction: {
+                title: "Introduction",
+              },
+              "functions-framework": {
+                title: "Using the Functions Framework",
+              },
+              "mcp-sdk": {
+                title: "Using the MCP SDK",
+              },
+              "build-deploy": {
+                title: "Deploy as MCP",
+              },
+            },
+          },
           "build-mcp": {
             title: "Build MCP",
             items: {
-              "create-default-toolset": {
-                title: "Create a default toolset",
-              },
               "custom-toolsets": {
                 title: "Curate a custom toolset",
+              },
+              "create-default-toolset": {
+                title: "Create a default toolset",
               },
               "advanced-tool-curation": {
                 title: "Advanced tool curation",
