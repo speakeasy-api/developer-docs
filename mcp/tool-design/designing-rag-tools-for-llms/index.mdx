@@ -19,19 +19,19 @@ MCP servers provide tools that LLMs interact with to perform actions such as sea
 
 For example, a RAG tool might power your enterprise AI chatbot to answer questions from your user guides and documentation. In contrast, MCP tools can help customer support agents retrieve a [user's license information](/mcp/use-cases/mcp-for-customer-service) or create a new support ticket. In that example, RAG handles knowledge retrieval, and MCP handles your system actions.
 
-### The problem with MCP Resources
+### The problem with MCP resources
 
 MCP servers provide three primitives: tools, resources, and prompts. [MCP resources](/mcp/core-concepts/resources) are designed to give context to LLMs. These resources can be images, guides, or PDFs. For documentation search, MCP resources seem like the natural choice: expose your docs and let the LLM access them.
 
 But the problem is scale. MCP resources dump the entire collection or document into the context window with no processing. A 100-page product guide will be dumped into the LLM context, potentially bloating it and immediately hitting context limits, which can cause timeouts, refusals, or hallucinations. Also, most LLM clients, such as Claude Desktop and ChatGPT, don't index resources from MCP servers due to rate limits and context window issues.
 
-In our [MCP vs. RAG](/blog/rag-vs-mcp) blog, we compared an RAG implementation to an MCP implementation for searching Django documentation. The RAG implementation used around 9,798 tokens and found the answer. The MCP implementation used 32,189 tokens, 4x more, and still missed the answer because the relevant content was beyond the first 50 pages it could send within context limits.
+In our [MCP vs. RAG](/blog/rag-vs-mcp) blog, we compared an RAG implementation to an MCP implementation for searching Django documentation. RAG used 12,405 tokens and found the answer in 7.64 seconds. MCP used 2.4x more tokens (30,044) and took over 4x longer (33.28 seconds), but still failed to find the answer because the relevant content fell beyond the first 50 pages it could fit in the context window.
 
 ### How RAG tools solve this
 
-This is where RAG tools come in handy: instead of the LLM loading resources and searching through them, it calls a tool with a natural language query. The tool handles embedding, vector search, and relevance filtering, and returns only the most relevant chunks. The LLM gets precisely what it needs without managing the search infrastructure.
+This is where RAG tools come in handy: instead of the LLM loading resources and searching them, it calls a tool with a natural-language query. The tool handles embedding, vector search, and relevance filtering, and returns only the most relevant chunks. The LLM gets precisely what it needs without managing the search infrastructure.
 
-RAG tools also enable features impossible with static resources: relevance scoring (LLM can request more context if scores are low), metadata filtering (search specific versions or sections), and context management (automatic token budgeting). The LLM uses a single tool with natural language instead of managing dozens of resources.
+RAG tools also enable features that are impossible with static resources: relevance scoring (LLMs can request more context when scores are low), metadata filtering (search for specific versions or sections), and context management (automatic token budgeting). The LLM uses a single tool with natural language instead of managing dozens of resources.
 
 The diagram below shows how this architecture works in practice:
 
@@ -49,7 +49,7 @@ Forcing the LLM to translate that into structured keywords like `["django", "gis
 
 ### Result count control
 
-LLMs understand and manage their context windows. In the tool parameters, let the LLM specify how many results it needs. Cap results at 10 to prevent context overflow. Make this parameter optional with a documented default (3 results works well).
+LLMs understand and manage their context windows. In the tool parameters, let the LLM specify how many results it needs. Cap results at 10 to prevent context overflow. Make this parameter optional with a documented default (3 results work well).
 
 ### Quality filtering
 
@@ -63,7 +63,7 @@ The LLM uses these scores to adjust its strategy. If it gets back two results wi
 
 ## How to design a RAG tool
 
-If you're exposing RAG capabilities behind an endpoint, use a single endpoint instead of multiple ones. If you have numerous guides or documentation sets to index, separate tools/endpoints are tempting. But if you're designing RAG for an enterprise with dozens of products and documentation sets, many tools exposed to the LLM can create a tool explosion problem, which leads to context bloating. The LLM can face decision paralysis, leading to wrong tool choices or hallucinations.
+If you're exposing RAG capabilities via multiple endpoints, use a single endpoint instead. If you have numerous guides or documentation sets to index, separate tools/endpoints are tempting. But if you're designing RAG for an enterprise with dozens of products and documentation sets, many tools exposed to the LLM can lead to a tool explosion, causing context bloating. The LLM can face decision paralysis, leading to wrong tool choices or hallucinations.
 
 Instead, use one search tool with a `collection` parameter like `collection="user-guide"` or `collection="api-reference"` to specify which documentation set to search.
 
@@ -94,9 +94,9 @@ The response format will vary depending on your case, but here are some best pra
 
 1. Flat result array: Don't nest results in complex structures because LLM iterates through them sequentially.
 
-2. Content first: Put the actual text in `content`, not `text` or `document` or `chunk`.
+2. Content first: Put the actual text in `content`, not `text`, `document`, or `chunk`.
 
-3. Include sources: The LLM needs to cite where information came from. URLs, page numbers, or document IDs work.
+3. Include sources: The LLM needs to cite its sources. URLs, page numbers, or document IDs work.
 
 4. Expose scores: Let the LLM judge result quality. If all scores are below 0.6, it knows the search was weak and might rephrase the query.
 
@@ -123,7 +123,7 @@ The response format will vary depending on your case, but here are some best pra
    }
    ```
 
-### Error Responses for RAG Tools
+### Error responses for RAG tools
 
 When searches fail, LLMs need actionable errors. Compare these:
 
@@ -142,13 +142,13 @@ When searches fail, LLMs need actionable errors. Compare these:
 }
 ```
 
-The second version tells the LLM what went wrong (typo in "Django"), and echoes the query so the LLM can verify what was searched.
+The second version tells the LLM what went wrong (a typo in "Django") and echoes the query so the LLM can verify what was searched.
 
-## Building a Django Documentation RAG MCP server
+## Building a Django documentation RAG MCP server
 
 Let's build a Django documentation search API and expose it as an MCP tool through Gram. This example extends the RAG implementation from the RAG vs. MCP article by wrapping it in a REST API with proper input/output design for LLM consumption.
 
-You can find the complete project [here](#). Clone it and follow along.
+You can find the complete project [here](#) in the directory called `complete`. You can clone the project and use the code in the `base` folder to follow along with the instructions below.
 
 ### Setup
 
@@ -156,15 +156,15 @@ Clone and install the dependencies:
 
 ```bash
 git clone https://github.com/ritza-co/speakeasy-examples.git
-cd speakeasy-examples/rag-mcp-example
+cd speakeasy-examples/rag-mcp-example/base
 uv sync
 ```
 
-Download the [Django 5.2.8 documentation PDF](https://app.readthedocs.org/projects/django/downloads/pdf/5.2.x/) and place it in the `scripts` directory as `django.pdf`. Run the indexing script to build the ChromaDB collection:
+Download the [Django 5.2.8 documentation PDF](https://app.readthedocs.org/projects/django/downloads/pdf/5.2.x/) and place it in the `base` directory as `django.pdf`. Run the indexing script to build the ChromaDB collection:
 
 ```bash
 cd scripts
-uv run python build_rag_index.py
+uv run python scripts/build_rag_index.py
 ```
 
 ### Defining the search interface
@@ -194,6 +194,7 @@ DEFAULT_MAX_RESULTS = 3
 MAX_ALLOWED_RESULTS = 10
 DEFAULT_MIN_SCORE = 0.5
 
+# Models
 class SearchRequest(BaseModel):
     query: str = Field(..., description="Natural language search query", example="What's new in django.contrib.gis?")
     max_results: Optional[int] = Field(default=3, ge=1, le=10, description="Maximum number of results")
@@ -226,17 +227,20 @@ The `RAGService` class handles the vector search:
 class RAGService:
     def __init__(self):
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
-        self.client = chromadb.PersistentClient(path="./chroma_db")
-        self.collection = self.client.get_collection("django_docs")
+        self.client = chromadb.PersistentClient(path=CHROMA_PATH)
+        self.collection = self.client.get_collection(CHROMA_COLLECTION)
     
     def search(self, query: str, max_results: int, min_score: float):
+        # Generate query embedding
         query_embedding = self.model.encode(query).tolist()
         
+        # Query ChromaDB
         search_results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=min(max_results * 3, 50)
         )
         
+        # Convert results
         documents = search_results["documents"][0]
         distances = search_results["distances"][0]
         ids = search_results["ids"][0]
@@ -251,17 +255,19 @@ class RAGService:
                     score=round(score, 3)
                 ))
         
+        # Sort by score and limit
         results.sort(key=lambda x: x.score, reverse=True)
         total_found = len(results)
         filtered_results = results[:max_results]
         
-        total_chars = sum(len(r.content) for r in filtered_results)
+        # Estimate tokens (rough: 4 chars = 1 token)
+        total_chars = sum(len(result.content) for result in filtered_results)
         tokens_estimate = total_chars // 4
         
         return filtered_results, total_found, tokens_estimate
 ```
 
-The service retrieves `max_results * 3` candidates to ensure enough survive score filtering. ChromaDB returns distances, which get converted to 0-1 similarity scores using `1 / (1 + distance)`. Results are filtered by `min_score`, sorted by score descending, and limited to `max_results`.
+The service retrieves `max_results * 3` candidates to ensure enough survive score filtering. ChromaDB returns distances, which are converted to 0-1 similarity scores using `1 / (1 + distance)`. Results are filtered by `min_score`, sorted by score descending, and limited to `max_results`.
 
 ### Wiring up the search API
 
@@ -272,28 +278,38 @@ The FastAPI endpoint wires everything together:
 
 app = FastAPI(
     title="Django Documentation RAG API",
-    description="Semantic search over Django 5.2.8 documentation",
-    version="1.0.0"
+    description="Semantic search over Django 5.2.8 documentation using RAG (Retrieval-Augmented Generation)",
+    version="1.0.0",
+    openapi_tags=[
+        {
+            "name": "search",
+            "description": "Semantic search operations over Django documentation",
+        },
+    ],
 )
-
 rag_service = RAGService()
 
 @app.post(
     "/search",
     response_model=SearchResponse,
-    operation_id="search_django_docs",
-    summary="Search Django documentation semantically",
+    tags=["search"],
+    summary="Search Django documentation",
+    operation_id="search_documentation",
     description="""
-    Performs semantic search over Django 5.2.8 documentation.
-    Use natural language queries. Returns relevant documentation
-    chunks with similarity scores and sources for citation.
-    """
+    Perform semantic search over Django 5.2.8 documentation chunks.
+    Returns relevant documentation sections with similarity scores and token estimates.
+    """,
+    responses={
+        200: {"description": "Successful search with results"},
+        422: {"description": "Validation error"},
+    },
 )
 async def search_documentation(request: SearchRequest):
+    """Search Django documentation using semantic similarity"""
     results, total_found, tokens_estimate = rag_service.search(
         query=request.query,
-        max_results=request.max_results,
-        min_score=request.min_score
+        max_results=request.max_results or DEFAULT_MAX_RESULTS,
+        min_score=request.min_score or DEFAULT_MIN_SCORE
     )
     
     return SearchResponse(
@@ -305,7 +321,77 @@ async def search_documentation(request: SearchRequest):
 
 The `operation_id="search_django_docs"` becomes the MCP tool name that Claude will call. The description tells the LLM what this tool does and when to use it. FastAPI handles validation and serialization automatically.
 
+### Customizing the OpenAPI document
+
+The MCP server will use the API we will host on Gram, and Gram provides an OpenAPI [extension](/docs/gram/build-mcp/advanced-tool-curation#provide-rich-context) `x-gram` that helps LLMs understand better the tool they are going to call. 
+
+To customize the OpenAPI document, create a function to rewrite the attributes you want: 
+
+```python
+# app/main.py
+
+def custom_openapi():
+    """Customize OpenAPI Output with x-gram extensions for getgram MCP servers"""
+    
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+    )
+
+    # Add x-gram extensions to specific operations
+    x_gram_extensions = {
+        "search_documentation": {
+            "x-gram": {
+                "name": "search_django_docs",
+                "summary": "Search Django documentation using semantic similarity",
+                "description": """<context>
+                This tool performs semantic search over Django 5.2.8 documentation using RAG (Retrieval-Augmented Generation).
+                It returns relevant documentation chunks with similarity scores and token estimates for LLM context management.
+                Perfect for finding specific Django functionality, code examples, and best practices.
+                </context>
+
+                <prerequisites>
+                - Query should be natural language describing what you're looking for
+                - Results are ranked by semantic similarity (score 0-1, higher is better)
+                - Token estimates help manage LLM context windows
+                - Supports filtering by minimum relevance score and maximum result count
+                </prerequisites>""",
+                "responseFilterType": "jq",
+            }
+        },
+    }
+
+    # Apply x-gram extensions to paths
+    if "paths" in openapi_schema:
+        for path, path_item in openapi_schema["paths"].items():
+            for method, operation in path_item.items():
+                if method.lower() in ["get", "post", "put", "delete", "patch"]:
+                    operation_id = operation.get("operationId")
+                    if operation_id in x_gram_extensions:
+                        operation.update(x_gram_extensions[operation_id])
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+# Override the default OpenAPI function
+app.openapi = custom_openapi
+```
+
 ### Running the server
+
+Add the following lines at the end of the `app/main.py` file to run the server: 
+
+```python
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+```
 
 Start the server:
 
@@ -313,7 +399,7 @@ Start the server:
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Deploying the MCP Server with Gram
+### Deploying the MCP server with Gram
 
 Gram is a service that lets you create MCP servers from an OpenAPI document. Coding and building an MCP server from scratch is doable. You have tools like FastMCP to help, FastMCP cloud to host the server, and MCP SDKs to build MCP servers and expose them via HTTP streamable, for example. But at the end, you will: 
 
@@ -372,7 +458,7 @@ Open the `claude_desktop_config.json` file, copy the raw configuration from Gram
 
 ```
 
-Replace the value of `GRAM_ENVIRONMENT` with `default` or the name of the environment you are storing the environment variables, and `GRAM_KEY` with the Gram key.
+Replace the value of `GRAM_ENVIRONMENT` with `default` or the name of the environment you are storing the environment variables in, and `GRAM_KEY` with the Gram key.
 
 ### Testing with Claude
 
@@ -382,7 +468,7 @@ To test the RAG tool, open Claude Desktop and send the following prompt:
 Hi Claude. What's new in Django 5.2, mostly Django GIS? Are curved geometries supported?
 ```
 
-Claude will first use the MCP Rag tool to make a search and then reply. 
+Claude will first use the MCP Rag tool to run a search, then reply. 
 
 ![Claude RAG search result](./assets/claude-rag-search-result.png)
 
@@ -390,7 +476,7 @@ Disable both the RAG tool and Claude's web search feature, then ask the same que
 
 ![Claude knowledge cutoff response](./assets/claude-knowledge-cutoff-response.png)
 
-## Further Exploration
+## Further exploration
 
 Now that you've built a RAG tool for documentation search, consider what else becomes possible when you combine RAG with your MCP tools or other MCP tools:
 
