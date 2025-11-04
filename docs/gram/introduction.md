@@ -68,10 +68,9 @@ In addition, any page can be copied into markdown or opened into popular LLM cha
 
 ## Further Reading
 
-- [Building tools in TypeScript using Gram Functions](/docs/gram/typescript)
-- [Getting started with Gram using an API spec](/docs/gram/openapi)
+- [Building tools in TypeScript using Gram Functions](/docs/gram/getting-started/typescript)
+- [Getting started with Gram using an API spec](/docs/gram/getting-started/openapi)
 - [Bring an existing MCP server to Gram](/docs/gram/gram-functions/mcp-sdk)
-- [Advanced tool curation](/docs/advanced/art-of-tool-curation)
 - [For resources on MCP see our MCP hub](/mcp)
 - [Adding OAuth to your MCP server](/docs/gram/host-mcp/adding-oauth)
 - [CLI reference](/docs/gram/command-line/installation)

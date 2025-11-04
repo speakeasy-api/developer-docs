@@ -233,6 +233,9 @@ const meta = {
               "creating-taskmaster-mcp-server": {
                 title: "Create a Taskmaster MCP server",
               },
+              "consuming-external-apis": {
+                title: "Connect to External APIs",
+              },
             },
           },
         },
