@@ -109,31 +109,121 @@ const gram = new Gram({ lax: true }).tool({
 
 ## Environment variables
 
-Specify credentials or environment variable values that need to be provided to the tool runner. These can be provided either by end user set MCP headers or with stored Gram environments.
+Gram Functions support environment variables for managing credentials, API keys, and configuration values. These can be provided through [stored Gram environments](/docs/gram/concepts/environments) or via MCP client headers.
+
+### Declaring environment variables
+
+Environment variables must be declared using `envSchema` to be published in the tool manifest and made available in the Gram dashboard and MCP clients.
 
 ```typescript
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
 const gram = new Gram({
   envSchema: {
-    API_KEY: z.string().describe("API key for authentication"),
-    BASE_URL: z.string().url().describe("Base URL for API requests"),
+    API_KEY: z.string(),
+    BASE_URL: z.string().url(),
+    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
   },
 }).tool({
   name: "api_call",
   inputSchema: { endpoint: z.string() },
   async execute(ctx, input) {
-    const apiKey = ctx.env?.["API_KEY"];
-    const baseURL = ctx.env?.["BASE_URL"];
-
-    const response = await fetch(`${baseURL}${input.endpoint}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    return ctx.json(await response.json());
+    const baseUrl = ctx.env.BASE_URL;
+    const apiKey = ctx.env.API_KEY;
+    const expiresAt = ctx.env.EXPIRES_AT;
+    // Use validated and typed environment variables...
   },
 });
 ```
 
-For testing purposes, environment variables can be overridden via the `env` parameter. Otherwise, they default to `process.env`.
+### How environment variables work
+
+When a tool call is received, the Gram function runner spawns a new Node.js subprocess with environment variables set from the tool call request. This follows standard Node.js process forking behavior.
+
+#### Two ways to access environment variables
+
+Environment variables are accessible in two forms:
+
+**`process.env`** - Raw string values from the Node.js process environment:
+
+```typescript
+async execute(ctx) {
+  console.log(typeof process.env.EXPIRES_AT); // "string"
+  console.log(process.env.EXPIRES_AT); // "2026-03-01T06:15:00Z"
+}
+```
+
+**`ctx.env`** - Parsed and validated values according to `envSchema`:
+
+```typescript
+async execute(ctx) {
+  console.log(typeof ctx.env.EXPIRES_AT); // "object"
+  console.log(ctx.env.EXPIRES_AT instanceof Date); // true
+  console.log(ctx.env.EXPIRES_AT); // Date object: 2026-03-01T06:15:00.000Z
+}
+```
+
+The `ctx.env` object provides several benefits:
+
+- **Type safety**: TypeScript types are inferred from the Zod schema
+- **Validation**: Values are validated against the schema before execution
+- **Transformation**: Values can be transformed (for example, parsing dates, numbers, or custom formats)
+- **Better developer experience**: Access validated, typed values instead of raw strings
+
+### Example: Date transformation
+
+A common use case is parsing ISO datetime strings into Date objects:
+
+```typescript
+const gram = new Gram({
+  envSchema: {
+    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
+  }
+}).tool({
+  name: "check_expiration",
+  inputSchema: {},
+  async execute(ctx) {
+    // process.env.EXPIRES_AT is the raw string "2026-03-01T06:15:00Z"
+    // ctx.env.EXPIRES_AT is a Date object
+
+    const daysUntilExpiry = Math.floor(
+      (ctx.env.EXPIRES_AT.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+
+    return ctx.text(`Expires in ${daysUntilExpiry} days`);
+  },
+});
+```
+
+### Testing with environment variables
+
+When writing tests for Gram Functions, provide fake environment values using the `env` option instead of relying on `process.env`:
+
+```typescript
+const gram = new Gram({
+  env: {
+    API_KEY: "test-api-key",
+    BASE_URL: "https://test.example.com",
+    EXPIRES_AT: "2026-03-01T06:15:00Z",
+  },
+  envSchema: {
+    API_KEY: z.string(),
+    BASE_URL: z.string().url(),
+    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
+  }
+}).tool({
+  name: "test_tool",
+  inputSchema: {},
+  async execute(ctx) {
+    // ctx.env will use the fake values provided above
+    // process.env is not used to populate ctx.env in this case
+    return ctx.json({ apiKey: ctx.env.API_KEY });
+  },
+});
+```
+
+This approach ensures tests are isolated from the actual process environment and provides predictable, controlled values for testing.
 
 ## Using fetch
 
