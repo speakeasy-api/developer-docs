@@ -99,7 +99,7 @@ const meta = {
                 title: "Using the MCP SDK",
               },
               "build-deploy": {
-                title: "Deploy as MCP",
+                title: "Build and Deploy",
               },
             },
           },
