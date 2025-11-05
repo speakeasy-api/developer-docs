@@ -152,12 +152,13 @@ const meta = {
           "command-line": {
             title: "Command Line",
             items: {
-              installation: {
-                title: "Installation",
-              },
-              use: {
-                title: "Use the Gram CLI",
-              },
+              auth: {},
+              whoami: {},
+              stage: {},
+              "stage-function": {},
+              "stage-openapi": {},
+              push: {},
+              status: {},
             },
           },
           clients: {
