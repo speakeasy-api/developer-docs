@@ -31,7 +31,7 @@ By default, tsoa will use the configuration from the `tsoa.json` file with your 
 
 In our example app, the relevant `tsoa.json` config is as follows:
 
-```json tsoa.json
+```json filename="tsoa.json"
 {
   "spec": {
     "outputDirectory": "build",
@@ -78,7 +78,7 @@ As of August 2023, tsoa can generate OpenAPI version 2 and version 3 specificati
 
 To set the OpenAPI version, add `spec.specVersion=3` to your `tsoa.json` configuration file:
 
-```json tsoa.json
+```json filename="tsoa.json"
 {
   "spec": {
     "specVersion": 3
@@ -99,7 +99,7 @@ When generating an OpenAPI spec, tsoa tries to guess your API's title, descripti
 
 Take this snippet from our example app's `package.json` file:
 
-```json package.json
+```json filename="package.json"
 {
   "name": "speakeasy-bar-tsoa",
   "version": "1.0.0",
@@ -111,7 +111,7 @@ Take this snippet from our example app's `package.json` file:
 
 By default, tsoa will generate the following spec based on the values above:
 
-```yaml build/swagger.yaml
+```yaml filename="build/swagger.yaml"
 info:
   title: speakeasy-bar-tsoa
   version: 1.0.0
@@ -129,7 +129,7 @@ tsoa uses the package author as the contact person by default, extracting the au
 
 To manually configure your OpenAPI info section, configure tsoa using the `tsoa.json` file:
 
-```json tsoa.json
+```json filename="tsoa.json"
 {
   "spec": {
     "name": "Custom API Name",
@@ -153,7 +153,7 @@ Let's see how we can help tsoa generate separate and reusable component schemas 
 
 Consider the following drink model:
 
-```typescript src/drinks/drink.ts
+```typescript filename="src/drinks/drink.ts"
 /**
  * The type of drink.
  */
@@ -208,7 +208,7 @@ We'd like to write a controller that updates the `name` and `price` fields. The 
 
 We'll start with the example controller below. Note how the body parameters `drinkName` and `price` are defined by passing the `@BodyProp` decorator to the controller function multiple times.
 
-```typescript src/drinks/drinksController.ts mark=6:7
+```typescript filename="src/drinks/drinksController.ts" mark=6:7
 @Route("drink")
 export class DrinkController extends Controller {
   @Put("{productCode}")
@@ -230,7 +230,7 @@ export class DrinkController extends Controller {
 
 This would generate inline parameters without documentation for the `UpdateDrink` operation in OpenAPI, as shown in the snippet below:
 
-```yaml build/swagger.yaml
+```yaml filename="build/swagger.yaml"
 requestBody:
   required: true
   content:
@@ -248,14 +248,14 @@ While perfectly valid, this schema is not reusable and excludes the documentatio
 
 We recommend picking fields from the model interface directly and exporting a new interface. We could use the TypeScript utility types `Pick` and `Partial` to pick the `name` and `price` fields and make both optional:
 
-```typescript src/drinks/drinksService.ts
+```typescript filename="src/drinks/drinksService.ts"
 export interface DrinkUpdateParams
   extends Partial<Pick<Drink, "name" | "price">> {}
 ```
 
 In our controller, we can now use `DrinkUpdateParams` as follows:
 
-```typescript src/drinks/drinksController.ts mark=6
+```typescript filename="src/drinks/drinksController.ts" mark=6
 @Route("drink")
 export class DrinkController extends Controller {
   @Put("{productCode}")
@@ -286,7 +286,7 @@ The most straightforward way to customize the `operationId` is to add the `@Oper
 
 In the example below, the custom `operationId` is `updateDrinkNameOrPrice`:
 
-```typescript src/drinks/drinksController.ts mark=7
+```typescript filename="src/drinks/drinksController.ts" mark=7
 @Route("drink")
 export class DrinkController extends Controller {
   @OperationId("updateDrinkNameOrPrice")
@@ -316,7 +316,7 @@ To create a custom `operationId` for all operations without the `@OperationId` d
 
 The following custom `operationId` template prepends the controller name and removes underscores from the method name:
 
-```json tsoa.json
+```json filename="tsoa.json"
 {
   "spec": {
     "operationIdTemplate": "{{controllerName}}-{{replace method.name '_' ''}}"
@@ -332,7 +332,7 @@ At Speakeasy, whether you're building a big application or only have a handful o
 
 tsoa provides the `@Tags()` decorator for controllers and controller methods. The decorator accepts one or more strings as input.
 
-```typescript src/drinks/drinksController.ts mark=6
+```typescript filename="src/drinks/drinksController.ts" mark=6
 @Route("drink")
 @Tags("drinks", "bar")
 export class DrinkController extends Controller {
@@ -356,7 +356,7 @@ Contrary to the illustrative example above, we recommend adding a single tag per
 
 To add metadata to tags, add a `tags` object to your `tsoa.json`:
 
-```json tsoa.json
+```json filename="tsoa.json"
 {
   "spec": {
     "tags": [
@@ -387,7 +387,7 @@ Sometimes OpenAPI's vocabulary is insufficient for your generation needs. For th
 
 To add these custom extensions to your OpenAPI spec, you can make use of tsoa's `@Extension()` decorator:
 
-```typescript src/drinks/drinksController.ts mark=5
+```typescript filename="src/drinks/drinksController.ts" mark=5
 @Route("drink")
 @Tags("drinks", "bar")
 export class DrinkController extends Controller {
@@ -416,7 +416,7 @@ Add retries to SDKs generated by Speakeasy by adding a top-level `x-speakeasy-re
 
 To add a top-level retries extension to your OpenAPI spec, add a new `spec` schema to the `spec` configuration in `tsoa.json`:
 
-```json tsoa.json
+```json filename="tsoa.json"
 {
   "spec": {
     "spec": {
@@ -442,7 +442,7 @@ To add retries to individual methods, use the tsoa `@Extension` decorator.
 
 In the example below, we add `x-speakeasy-retries` to the `updateDrink` method:
 
-```typescript src/drinks/drinksController.ts mark=4:14
+```typescript filename="src/drinks/drinksController.ts" mark=4:14
 @Route("drink")
 export class DrinkController extends Controller {
   @Put("{productCode}")
