@@ -1,0 +1,309 @@
+---
+title: Connecting to External APIs with Gram Functions
+description: "Learn how to build Gram Functions that consume external APIs and manage secrets securely"
+---
+
+import { Callout } from "@/mdx/components";
+
+When building AI agents, you often need to integrate with external APIs to provide real-world functionality.
+This guide shows you how to build Gram Functions that consume external APIs while managing API keys and secrets
+using Gram's environment system.
+
+We'll build a weather service that demonstrates key patterns for external API integration.
+
+## What we'll build
+
+In this guide, we'll:
+
+- Create Gram Functions that call external APIs
+- Configure environment variables for API keys
+
+## Setting up the project
+
+First, create a new Gram Functions project. Follow the instructions in the [Getting Started](/docs/gram/getting-started) guide for more details.
+
+```bash
+npm create gram-functions@latest
+```
+
+## Building a tool that uses the OpenWeatherMap API
+
+Let's create a tool that uses the OpenWeatherMap API. Edit `src/gram.ts`:
+
+```typescript filename=="src/gram.ts"
+import { Gram } from "@gram-ai/functions";
+import { z } from "zod";
+
+const gram = new Gram({
+  envSchema: {
+    OPENWEATHER_API_KEY: z.string(),
+  },
+}).tool({
+  name: "get_current_weather",
+  description: "Get current weather conditions for a specific city",
+  inputSchema: {
+    city: z.string().describe("The city name (e.g., 'London', 'New York')"),
+    country: z
+      .string()
+      .optional()
+      .describe("Optional 2-letter country code (e.g., 'US', 'GB')"),
+  },
+  async execute(ctx, input) {
+    const query =
+      input.country != null ? `${input.city},${input.country}` : input.city;
+
+    const url = new URL("https://api.openweathermap.org/data/2.5/weather");
+    url.searchParams.append("q", query);
+    url.searchParams.append("appid", ctx.env.OPENWEATHER_API_KEY);
+
+    // Gram Functions handle Response objects natively, so no need to process the response at all
+    return await fetch(url.toString());
+  },
+});
+
+export default gram;
+```
+
+## Breaking down the implementation
+
+### Environment schema definition
+
+```typescript
+const gram = new Gram({
+  envSchema: {
+    OPENWEATHER_API_KEY: z.string(),
+  },
+});
+```
+
+The `envSchema` defines what environment variables your function expects.
+Gram makes them available via `ctx.env` in your execute functions. The Gram dashboard will help you manage these variables.
+
+### Tool input schemas
+
+```typescript
+inputSchema: {
+  city: z.string().describe("The city name (e.g., 'London', 'New York')"),
+  country: z.string().optional().describe("Optional 2-letter country code"),
+  units: z.enum(["metric", "imperial", "standard"]).default("metric"),
+}
+```
+
+Input schemas define what parameters the AI agent can provide. Using `.describe()` helps the AI understand when and how to use each parameter.
+
+### Accessing environment variables
+
+```typescript
+url.searchParams.append("appid", ctx.env.OPENWEATHER_API_KEY);
+```
+
+Environment variables are accessed through `ctx.env`, which is type-safe based on your `envSchema`.
+
+Environment variables are also available through the standard `process.env` object, but will not be type-safe. This will be populated with the "raw" environment variable values.
+
+### Returning the response
+
+```typescript
+return await fetch(url.toString());
+```
+
+Gram Functions handle Response objects natively, so no need to process the response at all. Alternatively,
+you can `await` the reponse and extract the data you need.
+
+```typescript
+const response = await fetch(url.toString());
+const data = await response.json();
+return ctx.json({ temperature: data.main.temp });
+```
+
+## Deploying your functions
+
+Build and push your functions to Gram.
+
+```bash
+gram build
+gram push
+```
+
+You should now see your functions as a "source" in your Gram project. When creating a new toolset (or updating an existing one) you'll see the tools you've defined as options.
+
+## Setting up the environment variable
+
+Gram Functions provide a type-safe way to manage environment variables using Zod schemas. This ensures your functions have access to required secrets at runtime while keeping them secure.
+
+<Callout title="Providing environment variables" type="info">
+  You'll need to provide the environment variable in the Gram dashboard. After
+  adding the `get_current_weather` tool to a toolset, you'll see the
+  OPENWEATHER_API_KEY environment variable show up in the `Auth` tab. Set the
+  value and save.
+</Callout>
+
+![Gram dashboard with the OPENWEATHER_API_KEY environment variable](/assets/docs/gram/img/functions/auth_tab.png)
+
+## Testing your functions
+
+Once deployed, you can test your functions in the Gram playground or in your Gram MCP server.
+Simply add the tool to any toolset and ask about the weather in a city.
+
+## Chaining API calls
+
+Gram Functions put the power of TypeScript at your fingertips. You can chain API calls together to create more complex tools.
+
+```typescript filename="src/gram.ts"
+.tool({
+  name: "compare_weather_between_cities",
+  description:
+    "Compare weather conditions between multiple cities and provide analysis",
+  inputSchema: {
+    cities: z
+      .array(z.string())
+      .min(2)
+      .max(5)
+      .describe(
+        "Array of city names to compare (between 2 and 5 cities, e.g., ['London', 'Paris', 'Berlin'])"
+      ),
+    units: z
+      .enum(["metric", "imperial", "standard"])
+      .default("metric")
+      .describe("Units of measurement for all cities"),
+  },
+  async execute(ctx, input) {
+    // Fetch weather for all cities in parallel
+    const weatherPromises = input.cities.map(async (city) => {
+      const url = new URL("https://api.openweathermap.org/data/2.5/weather");
+      url.searchParams.append("q", city);
+      url.searchParams.append("appid", ctx.env.OPENWEATHER_API_KEY);
+      url.searchParams.append("units", input.units);
+
+      try {
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+          return { city, error: "City not found or API error" };
+        }
+        const data: any = await response.json();
+        return {
+          city: data.name,
+          country: data.sys.country,
+          temperature: data.main.temp,
+          feels_like: data.main.feels_like,
+          humidity: data.main.humidity,
+          description: data.weather[0].description,
+          wind_speed: data.wind.speed,
+        };
+      } catch (error) {
+        return { city, error: "Failed to fetch weather" };
+      }
+    });
+
+    const results = await Promise.all(weatherPromises);
+
+    // Filter out errors
+    const validResults = results.filter((r) => !("error" in r));
+    const errors = results.filter((r) => "error" in r);
+
+    if (validResults.length === 0) {
+      return ctx.json({
+        error: "Could not fetch weather for any cities",
+        errors,
+      });
+    }
+
+    // Calculate comparison statistics
+    const temperatures = validResults.map((r) => r.temperature);
+    const warmest = validResults.reduce((prev, current) =>
+      prev.temperature > current.temperature ? prev : current
+    );
+    const coldest = validResults.reduce((prev, current) =>
+      prev.temperature < current.temperature ? prev : current
+    );
+    const avgTemp =
+      temperatures.reduce((sum, temp) => sum + temp, 0) / temperatures.length;
+
+    // Find cities with similar conditions
+    const conditionGroups = validResults.reduce((groups, result) => {
+      const desc = result.description;
+      if (!groups[desc]) groups[desc] = [];
+      groups[desc].push(result.city);
+      return groups;
+    }, {} as Record<string, string[]>);
+
+    return ctx.json({
+      comparison: validResults,
+      analysis: {
+        warmest_city: {
+          city: warmest.city,
+          temperature: warmest.temperature,
+        },
+        coldest_city: {
+          city: coldest.city,
+          temperature: coldest.temperature,
+        },
+        temperature_range: warmest.temperature - coldest.temperature,
+        average_temperature: Math.round(avgTemp * 10) / 10,
+        condition_groups: conditionGroups,
+      },
+      errors: errors.length > 0 ? errors : undefined,
+      units: input.units,
+    });
+  },
+});
+```
+
+## Best practices for external API integration
+
+### 1. Use descriptive tool names
+
+Choose names that clearly indicate what the tool does:
+
+- ✅ `get_current_weather`
+- ❌ `weather` or `fetch`
+
+### 2. Provide detailed descriptions
+
+Help the AI agent understand when to use each tool:
+
+```typescript
+description: "Get current weather conditions for a specific city";
+```
+
+### 3. Transform API responses
+
+Return only the data the AI agent needs:
+
+```typescript
+// Good: Clean, focused response
+return ctx.json({
+  city: data.name,
+  temperature: data.main.temp,
+  description: data.weather[0].description,
+});
+
+// Avoid: Raw API response with unnecessary fields
+return ctx.json(data);
+```
+
+### 4. Use environment variables for all secrets
+
+Never hardcode API keys or credentials:
+
+```typescript
+// ✅ Good
+ctx.env.OPENWEATHER_API_KEY;
+
+// ❌ Bad
+const API_KEY = "abc123...";
+```
+
+## Next steps
+
+Now that you understand how to consume external APIs with Gram Functions, explore these related guides:
+
+- [Build MCP servers with external OAuth](/docs/gram/examples/oauth-external-server)
+- [Creating an MCP server for Taskmaster](/docs/gram/examples/creating-taskmaster-mcp-server)
+- [Deploy from GitHub Actions](/docs/gram/examples/deploy-from-github-actions)
+
+## Additional resources
+
+- [OpenWeatherMap API Documentation](https://openweathermap.org/api)
+- [Gram Functions API Reference](/docs/gram/gram-functions/introduction)
+- [Zod Schema Validation](https://zod.dev)

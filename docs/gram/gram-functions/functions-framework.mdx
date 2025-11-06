@@ -1,0 +1,267 @@
+---
+title: "Using the Functions Framework"
+description: "Learn how to use Gram's Functions Framework with TypeScript, including context objects and best practices."
+---
+
+## Overview
+
+The Gram Functions Framework provides a streamlined way to build MCP tools using TypeScript. It handles the MCP protocol implementation while letting you focus on your tool logic.
+
+![Choosing the Gram Framework](/assets/docs/gram/img/functions/npm_gram-framework.png)
+
+## Function structure
+
+Every Gram Function follows this basic structure:
+
+```typescript filename="gram.ts"
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+const gram = new Gram().tool({
+  name: "add",
+  description: "Add two numbers together",
+  inputSchema: { a: z.number(), b: z.number() },
+  async execute(ctx, input) {
+    return ctx.json({sum: input.a + input.b});
+  },
+});
+
+export default gram;
+```
+
+## Tool definition
+
+Each tool requires the following properties:
+
+- **name**: Unique identifier for the tool
+- **description** (optional): Human-readable explanation of what the tool does
+- **inputSchema**: Zod schema defining the expected input parameters
+- **execute**: Async function that implements the tool logic
+
+## Context object
+
+The execute function receives a context object with several helper methods for handling responses and accessing configuration:
+
+### Response methods
+
+- **ctx.json(data)**: Returns a JSON response
+- **ctx.text(data)**: Returns a plain text response
+- **ctx.html(data)**: Returns an HTML response
+- **ctx.fail(data, options?)**: Throws an error response
+
+```typescript
+const gram = new Gram().tool({
+  name: "format_data",
+  inputSchema: { format: z.enum(["json", "text", "html"]), data: z.string() },
+  async execute(ctx, input) {
+    if (input.format === "json") {
+      return ctx.json({ data: input.data });
+    } else if (input.format === "text") {
+      return ctx.text(input.data);
+    } else {
+      return ctx.html(`<div>${input.data}</div>`);
+    }
+  },
+});
+```
+
+### Additional context properties
+
+- **ctx.signal**: AbortSignal for handling cancellation
+- **ctx.env**: Access to parsed environment variables
+
+```typescript
+const gram = new Gram().tool({
+  name: "long_running_task",
+  inputSchema: { url: z.string() },
+  async execute(ctx, input) {
+    try {
+      const response = await fetch(input.url, { signal: ctx.signal });
+      return ctx.json(await response.json());
+    } catch (error) {
+      if (error.name === "AbortError") {
+        return ctx.fail("Request was cancelled");
+      }
+      throw error;
+    }
+  },
+});
+```
+
+## Input validation
+
+The framework validates inputs against the provided Zod schema by default. For strict validation, inputs that don't match the schema will be rejected.
+
+### Lax mode
+
+To allow unvalidated inputs, enable lax mode:
+
+```typescript
+const gram = new Gram({ lax: true }).tool({
+  name: "flexible_tool",
+  inputSchema: { required: z.string() },
+  async execute(ctx, input) {
+    // input may contain additional properties not in the schema
+    return ctx.json({ received: input });
+  },
+});
+```
+
+## Environment variables
+
+Gram Functions support environment variables for managing credentials, API keys, and configuration values. These can be provided through [stored Gram environments](/docs/gram/concepts/environments) or via MCP client headers.
+
+### Declaring environment variables
+
+Environment variables must be declared using `envSchema` to be published in the tool manifest and made available in the Gram dashboard and MCP clients.
+
+```typescript
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+const gram = new Gram({
+  envSchema: {
+    API_KEY: z.string(),
+    BASE_URL: z.string().url(),
+    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
+  },
+}).tool({
+  name: "api_call",
+  inputSchema: { endpoint: z.string() },
+  async execute(ctx, input) {
+    const baseUrl = ctx.env.BASE_URL;
+    const apiKey = ctx.env.API_KEY;
+    const expiresAt = ctx.env.EXPIRES_AT;
+    // Use validated and typed environment variables...
+  },
+});
+```
+
+### How environment variables work
+
+When a tool call is received, the Gram function runner spawns a new Node.js subprocess with environment variables set from the tool call request. This follows standard Node.js process forking behavior.
+
+#### Two ways to access environment variables
+
+Environment variables are accessible in two forms:
+
+**`process.env`** - Raw string values from the Node.js process environment:
+
+```typescript
+async execute(ctx) {
+  console.log(typeof process.env.EXPIRES_AT); // "string"
+  console.log(process.env.EXPIRES_AT); // "2026-03-01T06:15:00Z"
+}
+```
+
+**`ctx.env`** - Parsed and validated values according to `envSchema`:
+
+```typescript
+async execute(ctx) {
+  console.log(typeof ctx.env.EXPIRES_AT); // "object"
+  console.log(ctx.env.EXPIRES_AT instanceof Date); // true
+  console.log(ctx.env.EXPIRES_AT); // Date object: 2026-03-01T06:15:00.000Z
+}
+```
+
+The `ctx.env` object provides several benefits:
+
+- **Type safety**: TypeScript types are inferred from the Zod schema
+- **Validation**: Values are validated against the schema before execution
+- **Transformation**: Values can be transformed (for example, parsing dates, numbers, or custom formats)
+- **Better developer experience**: Access validated, typed values instead of raw strings
+
+### Example: Date transformation
+
+A common use case is parsing ISO datetime strings into Date objects:
+
+```typescript
+const gram = new Gram({
+  envSchema: {
+    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
+  }
+}).tool({
+  name: "check_expiration",
+  inputSchema: {},
+  async execute(ctx) {
+    // process.env.EXPIRES_AT is the raw string "2026-03-01T06:15:00Z"
+    // ctx.env.EXPIRES_AT is a Date object
+
+    const daysUntilExpiry = Math.floor(
+      (ctx.env.EXPIRES_AT.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+
+    return ctx.text(`Expires in ${daysUntilExpiry} days`);
+  },
+});
+```
+
+### Testing with environment variables
+
+When writing tests for Gram Functions, provide fake environment values using the `env` option instead of relying on `process.env`:
+
+```typescript
+const gram = new Gram({
+  env: {
+    API_KEY: "test-api-key",
+    BASE_URL: "https://test.example.com",
+    EXPIRES_AT: "2026-03-01T06:15:00Z",
+  },
+  envSchema: {
+    API_KEY: z.string(),
+    BASE_URL: z.string().url(),
+    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
+  }
+}).tool({
+  name: "test_tool",
+  inputSchema: {},
+  async execute(ctx) {
+    // ctx.env will use the fake values provided above
+    // process.env is not used to populate ctx.env in this case
+    return ctx.json({ apiKey: ctx.env.API_KEY });
+  },
+});
+```
+
+This approach ensures tests are isolated from the actual process environment and provides predictable, controlled values for testing.
+
+## Using fetch
+
+Tools can make requests to downstream APIs and respond with the result:
+
+```typescript
+const gram = new Gram().tool({
+  name: "spacex-ships",
+  description: "Get the latest SpaceX ship list",
+  inputSchema: {},
+  async execute(ctx) {
+    const response = await fetch("https://api.spacexdata.com/v3/ships");
+    return ctx.json(await response.json());
+  },
+});
+```
+
+## Response flexibility
+
+Tools can return responses in multiple formats:
+
+- JSON responses via `ctx.json()`
+- Plain text via `ctx.text()`
+- HTML content via `ctx.html()`
+- Custom Web API Response objects with specific headers and status codes
+
+```typescript
+const gram = new Gram().tool({
+  name: "custom_response",
+  inputSchema: { code: z.number() },
+  async execute(ctx, input) {
+    return new Response("Custom response", {
+      status: input.code,
+      headers: { "X-Custom-Header": "value" },
+    });
+  },
+});
+```
+
+## Next steps
+- [Build and deploy](/docs/gram/gram-functions/build-deploy)
