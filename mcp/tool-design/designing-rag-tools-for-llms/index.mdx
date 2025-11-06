@@ -3,7 +3,7 @@ title: Designing RAG tools for LLMs
 description: Learn how to design RAG tools using MCP for LLMs.
 ---
 
-RAG and MCP are often positioned as alternatives: RAG enables semantic searches while MCP allows API actions. However, they can be complementary:  RAG can search your knowledge base efficiently, and MCP standardizes how LLMs access that search. 
+RAG and MCP are often positioned as alternatives: RAG enables semantic searches while MCP allows API actions. However, they can be complementary:  RAG can search your knowledge base efficiently, and MCP standardizes how LLMs access that search.
 
 This guide shows you how to design RAG tools specifically for LLMs: the input patterns that work, the output structures LLMs need, and the design choices that make the difference.
 
@@ -17,7 +17,7 @@ This usually works by embedding documents into vectors, storing them in a databa
 
 MCP servers provide tools that LLMs interact with to perform actions such as searching databases, calling APIs, and updating records. RAG gives LLMs a better context by searching the knowledge base semantically. MCP gives LLMs capabilities by connecting them to a system.
 
-For example, a RAG tool might power your enterprise AI chatbot to answer questions from your user guides and documentation. In contrast, MCP tools can help customer support agents retrieve a [user's license information](/mcp/use-cases/mcp-for-customer-service) or create a new support ticket. In that example, RAG handles knowledge retrieval, and MCP handles your system actions.
+For example, a RAG tool might power your enterprise AI chatbot to answer questions from your user guides and documentation. In contrast, MCP tools can help customer support agents retrieve a [user's license information](/mcp/using-mcp/use-cases/customer-support) or create a new support ticket. In that example, RAG handles knowledge retrieval, and MCP handles your system actions.
 
 ### The problem with MCP resources
 
@@ -35,7 +35,7 @@ RAG tools also enable features that are impossible with static resources: releva
 
 The diagram below shows how this architecture works in practice:
 
-![RAG tool architecture: User queries Claude Desktop, which calls Gram's MCP server, which calls your FastAPI, which queries the RAG service and ChromaDB](./assets/image-20251022083651160.png)
+![RAG tool architecture: User queries Claude Desktop, which calls Gram's MCP server, which calls your FastAPI, which queries the RAG service and ChromaDB](./assets/illustration.png)
 
 ## What inputs should be added to a RAG tool
 
@@ -53,9 +53,9 @@ LLMs understand and manage their context windows. In the tool parameters, let th
 
 ### Quality filtering
 
-Not all search results are equally relevant, so you should allow the LLM to filter by quality. 
+Not all search results are equally relevant, so you should allow the LLM to filter by quality.
 
-For example, when you query a vector database like [ChromaDB](https://docs.trychroma.com/docs/overview/getting-started?lang=typescript#next-steps), it returns results ranked by cosine similarity, a score measuring how close the query embedding is to each document embedding. A score of 1.0 means identical semantic meaning, 0.5 means somewhat related, and 0.0 means unrelated.
+For example, when you query a vector database like [ChromaDB](https://docs.trychroma.com/docs/overview/getting-started?lang=typescript#next-steps), if configured it can return results ranked by cosine similarity, a score measuring how close the query embedding is to each document embedding. A score of 1.0 means identical semantic meaning, 0.5 means somewhat related, and 0.0 means unrelated.
 
 This keeps low-quality results out of the LLM's context window entirely. When Claude asks for `min_score=0.7`, the RAG tool enforces this at retrieval time and filters out anything below that threshold.
 
@@ -90,7 +90,7 @@ LLMs need results in a format they can immediately use. Here's what works:
 }
 ```
 
-The response format will vary depending on your case, but here are some best practices to follow: 
+The response format will vary depending on your case, but here are some best practices to follow:
 
 1. Flat result array: Don't nest results in complex structures because LLM iterates through them sequentially.
 
@@ -128,13 +128,13 @@ The response format will vary depending on your case, but here are some best pra
 When searches fail, LLMs need actionable errors. Compare these:
 
 ```json
-# ❌ Bad: Generic error
+// ❌ Bad: Generic error
 {
     "error": "Search failed",
     "code": 400
 }
 
-# ✅ Good: Actionable error
+// ✅ Good: Actionable error
 {
     "error": "no_results_found",
     "message": "No documentation found for 'Djago GIS features'",
@@ -148,28 +148,27 @@ The second version tells the LLM what went wrong (a typo in "Django") and echoes
 
 Let's build a Django documentation search API and expose it as an MCP tool through Gram. This example extends the RAG implementation from the RAG vs. MCP article by wrapping it in a REST API with proper input/output design for LLM consumption.
 
-You can find the complete project [here](#) in the directory called `complete`. You can clone the project and use the code in the `base` folder to follow along with the instructions below.
+You can find the complete project [here](https://github.com/speakeasy-api/examples/tree/main/rag-mcp-example) in the directory called `complete`. You can clone the project and use the code in the `base` folder to follow along with the instructions below.
 
 ### Setup
 
 Clone and install the dependencies:
 
 ```bash
-git clone https://github.com/ritza-co/speakeasy-examples.git
-cd speakeasy-examples/rag-mcp-example/base
+git clone https://github.com/speakeasy-api/examples.git
+cd examples/rag-mcp-example/base
 uv sync
 ```
 
 Download the [Django 5.2.8 documentation PDF](https://app.readthedocs.org/projects/django/downloads/pdf/5.2.x/) and place it in the `base` directory as `django.pdf`. Run the indexing script to build the ChromaDB collection:
 
 ```bash
-cd scripts
 uv run python scripts/build_rag_index.py
 ```
 
 ### Defining the search interface
 
-In the `app/main.py` file, you will first see the schemas defined. 
+In the `app/main.py` file, you will first see the schemas defined.
 
 ```python
 # app/main.py
@@ -213,9 +212,10 @@ class SearchResponse(BaseModel):
 
 The query accepts natural language directly. The `max_results` attribute, capped at 10, prevents context overflow, and the `min_score` defaults to 0.5 for inclusive results, allowing the LLM to raise the threshold when it needs higher confidence.
 
-For the response schema `SearchResponse`, it keeps results in a flat array for easy LLM iteration. The score field lets the LLM judge quality and adjust queries. The `tokens_estimate` attribute helps with context window management, critical for preventing overflow.
+The response schema `SearchResponse`, keeps results in a flat array for easy LLM iteration. The score field lets the LLM judge quality and adjust queries. The `tokens_estimate` attribute helps with context window management, critical for preventing overflow.
 
-> **Note:** Token estimation divides total characters by 4 because most tokenizers average about 4 characters per token in English.
+> **Note:**
+> Token estimation divides total characters by 4 because most tokenizers average about 4 characters per token in English.
 
 ### Building the RAG search logic
 
@@ -229,22 +229,22 @@ class RAGService:
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
         self.client = chromadb.PersistentClient(path=CHROMA_PATH)
         self.collection = self.client.get_collection(CHROMA_COLLECTION)
-    
+
     def search(self, query: str, max_results: int, min_score: float):
         # Generate query embedding
         query_embedding = self.model.encode(query).tolist()
-        
+
         # Query ChromaDB
         search_results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=min(max_results * 3, 50)
         )
-        
+
         # Convert results
         documents = search_results["documents"][0]
         distances = search_results["distances"][0]
         ids = search_results["ids"][0]
-        
+
         results = []
         for doc, distance, doc_id in zip(documents, distances, ids):
             score = 1.0 / (1.0 + distance)
@@ -254,16 +254,16 @@ class RAGService:
                     source=doc_id,
                     score=round(score, 3)
                 ))
-        
+
         # Sort by score and limit
         results.sort(key=lambda x: x.score, reverse=True)
         total_found = len(results)
         filtered_results = results[:max_results]
-        
+
         # Estimate tokens (rough: 4 chars = 1 token)
         total_chars = sum(len(result.content) for result in filtered_results)
         tokens_estimate = total_chars // 4
-        
+
         return filtered_results, total_found, tokens_estimate
 ```
 
@@ -271,7 +271,7 @@ The service retrieves `max_results * 3` candidates to ensure enough survive scor
 
 ### Wiring up the search API
 
-The FastAPI endpoint wires everything together:
+The FastAPI `/search` endpoint wires everything together:
 
 ```python
 # app/main.py
@@ -311,7 +311,7 @@ async def search_documentation(request: SearchRequest):
         max_results=request.max_results or DEFAULT_MAX_RESULTS,
         min_score=request.min_score or DEFAULT_MIN_SCORE
     )
-    
+
     return SearchResponse(
         results=results,
         total_found=total_found,
@@ -319,20 +319,20 @@ async def search_documentation(request: SearchRequest):
     )
 ```
 
-The `operation_id="search_django_docs"` becomes the MCP tool name that Claude will call. The description tells the LLM what this tool does and when to use it. FastAPI handles validation and serialization automatically.
+The `operation_id="search_documentation"` becomes the MCP tool name that Claude will call. The description tells the LLM what this tool does and when to use it. FastAPI handles validation and serialization automatically.
 
 ### Customizing the OpenAPI document
 
-The MCP server will use the API we will host on Gram, and Gram provides an OpenAPI [extension](/docs/gram/build-mcp/advanced-tool-curation#provide-rich-context) `x-gram` that helps LLMs understand better the tool they are going to call. 
+The MCP server will use the OpenAPI document we will host on Gram, and Gram provides an OpenAPI [extension](/docs/gram/build-mcp/advanced-tool-curation#provide-rich-context) `x-gram` that helps LLMs understand better the tool they are going to call.
 
-To customize the OpenAPI document, create a function to rewrite the attributes you want: 
+To customize the OpenAPI document, create a function to rewrite the attributes you want:
 
 ```python
 # app/main.py
 
 def custom_openapi():
     """Customize OpenAPI Output with x-gram extensions for getgram MCP servers"""
-    
+
     if app.openapi_schema:
         return app.openapi_schema
 
@@ -385,7 +385,7 @@ app.openapi = custom_openapi
 
 ### Running the server
 
-Add the following lines at the end of the `app/main.py` file to run the server: 
+Add the following lines at the end of the `app/main.py` file to run the server:
 
 ```python
 if __name__ == "__main__":
@@ -401,31 +401,31 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### Deploying the MCP server with Gram
 
-Gram is a service that lets you create MCP servers from an OpenAPI document. Coding and building an MCP server from scratch is doable. You have tools like FastMCP to help, FastMCP cloud to host the server, and MCP SDKs to build MCP servers and expose them via HTTP streamable, for example. But at the end, you will: 
+Gram is a service that lets you create MCP servers from an OpenAPI document. Coding and building an MCP server from scratch is doable. You have tools like FastMCP to help, FastMCP cloud to host the server, and MCP SDKs to build MCP servers and expose them via HTTP streamable, for example. But at the end, you will:
 
-- Manage an infrastructure: maintain and monitor a service. 
-- Implement CI/CD pipelines. 
-- Need to handle security, and only OAuth2.1 is supported, which is a complex protocol to handle. 
-- Gram generates MCP servers directly from your OpenAPI specification. You build a standard REST API, provide the OpenAPI document, and Gram handles the MCP protocol implementation, hosting, and authentication. This means you focus on implementing your endpoints and business logic – whether that's RAG search, database queries, or API operations – rather than coding the MCP server infrastructure.
+- Manage infrastructure: maintain and monitor a service.
+- Implement CI/CD pipelines.
+- Need to handle security, and MCP requires OAuth 2.1 for authentication, which adds complexity.
+- Gram generates MCP servers directly from your OpenAPI specification. You build a standard REST API, provide the OpenAPI document, and Gram handles the MCP protocol implementation, hosting, and authentication. This means you focus on implementing your endpoints and business logic – whether that's RAG search, database queries, or API operations – rather than coding the MCP server and managing the infrastructure.
 
-With Gram, you will upload the OpenAPI document from the cloned project, configure the API URL using the Ngrok forwarding link, create the toolsets, enable remote MCP distribution, and then install and test it in Claude Desktop. 
+With Gram, you will upload the OpenAPI document from the cloned project, configure the API URL using an [ngrok](https://ngrok.com/) forwarding link, create the toolsets, enable remote MCP distribution, and then install and test it in Claude Desktop.
 
 [Sign up for Gram](https://getgram.ai) and follow these steps:
 
-- On the [**Toolsets** page](https://docs.getgram.ai/build-mcp/create-default-toolset), upload the RAG API's OpenAPI document.
+- On the [**Toolsets** page](https://docs.getgram.ai/build-mcp/create-default-toolset), click on **GET STARTED** and upload the RAG API's OpenAPI document `rag-mcp-example/base/openapi.yaml`.
 
 - Create a toolset named `Docs-Api-Rag` and add the `search_django_docs` tool.
 
   ![Gram toolset creation](./assets/gram-toolset-creation.png)
 
-- In the [**Auth** tab](https://docs.getgram.ai/concepts/environments), set `DOCS_API_SERVER_URL` to the URL of your internal tool API. If you're following this guide with the local RAG MCP API, expose the API with [ngrok](https://ngrok.com/) by running the `ngrok http 127.0.0.1:8000` command and using the forwarding URL to fill in the `DOCS_API_SERVER_URL` variable.
+- Click on the toolset to open it and on the [**Auth** tab](https://docs.getgram.ai/concepts/environments), set `DOCS_API_SERVER_URL` to the URL of your tool's API. If you're following this guide with the local RAG MCP API, expose the API with [ngrok](https://ngrok.com/) by running the `ngrok http 127.0.0.1:8000` command and use the forwarding URL to fill in the `DOCS_API_SERVER_URL` variable.
 - In **Settings**, create a [Gram API key](https://docs.getgram.ai/concepts/api-keys).
 
 ### Connecting to Claude Desktop
 
-In your Docs-Api-Rag toolset's MCP tab, click on the **View** button under the **MCP Installation** section to be redirected to the MCP installation page details.
+In your Docs-Api-Rag toolset's MCP tab, first enable the server by clicking **ENABLE** and then clicking **ENABLE SERVER** in the modal that shows. Scroll to the **Visibility** section and set the server visibility to public. Under the **MCP Installation** section click on the **VIEW** button to be redirected to the MCP installation page details.
 
-Copy the raw configuration details. 
+Copy the raw configuration details.
 
 ![Gram raw configuration](./assets/gram-raw-configuration.png)
 
@@ -458,7 +458,7 @@ Open the `claude_desktop_config.json` file, copy the raw configuration from Gram
 
 ```
 
-Replace the value of `GRAM_ENVIRONMENT` with `default` or the name of the environment you are storing the environment variables in, and `GRAM_KEY` with the Gram key.
+Replace the value of `GRAM_ENVIRONMENT` with `default` or the name of the environment you are storing the environment variables, and `GRAM_KEY` with your Gram key. Save the configuration and relaunch Claude Desktop.
 
 ### Testing with Claude
 
@@ -468,7 +468,7 @@ To test the RAG tool, open Claude Desktop and send the following prompt:
 Hi Claude. What's new in Django 5.2, mostly Django GIS? Are curved geometries supported?
 ```
 
-Claude will first use the MCP Rag tool to run a search, then reply. 
+Claude will first use the MCP Rag tool to make a search and then reply.
 
 ![Claude RAG search result](./assets/claude-rag-search-result.png)
 
@@ -480,7 +480,7 @@ Disable both the RAG tool and Claude's web search feature, then ask the same que
 
 Now that you've built a RAG tool for documentation search, consider what else becomes possible when you combine RAG with your MCP tools or other MCP tools:
 
-- You can design a [customer support agent](/mcp/using-mcp/use-cases/customer-support) for your customer. Combine a RAG tool for your product documentation with the [Zendesk MCP](/using-mcp/mcp-server-providers/zendesk) server, for example, or any CRM tools, support tickets, and analytics. The agent learns product context from documentation and then pulls customer data to provide personalized support responses.
+- You can design a [customer support agent](/mcp/using-mcp/use-cases/customer-support) for your customer. Combine a RAG tool for your product documentation with the [Zendesk MCP](/mcp/using-mcp/mcp-server-providers/zendesk) server, for example, or any CRM tools, support tickets, and analytics. The agent learns product context from documentation and then pulls customer data to provide personalized support responses.
 - You can power a developer code assistant. Build a RAG tool for your SDK documentation and code examples, paired with MCP tools that interact with your sandbox API. The LLM searches for implementation patterns, retrieves example code, and tests it against your sandbox environment.
 - You can build an [account management](/mcp/using-mcp/use-cases/account-management) assistant for your sales team. Create a RAG tool that searches your company's sales playbooks and account management guides. Pair it with the [HubSpot MCP](/mcp/using-mcp/mcp-server-providers/hubspot) server. When a sales agent asks "update this client's status to renewal stage and log our last conversation", the LLM uses RAG to check your renewal protocols, then updates the contact record and creates the activity log in your CRM following those guidelines.
 
@@ -488,6 +488,6 @@ Now that you've built a RAG tool for documentation search, consider what else be
 
 RAG and MCP are often compared as competing approaches, but they're most powerful when used together. An AI agent might use a RAG tool to search your product documentation for implementation guidance, then use other MCP tools to create tickets, update records, or query live data. The combination gives agents both knowledge and agency.
 
-If you're building RAG tools for MCP, check out existing implementations like [mcp-crawl4ai-rag](https://github.com/coleam00/mcp-crawl4ai-rag) and [rag-memory-mcp](https://github.com/ttommyth/rag-memory-mcp) for more patterns. 
+If you're building RAG tools for MCP, check out existing implementations like [mcp-crawl4ai-rag](https://github.com/coleam00/mcp-crawl4ai-rag) and [rag-memory-mcp](https://github.com/ttommyth/rag-memory-mcp) for more patterns.
 
 To host and manage your MCP servers using Gram, explore [Gram's documentation](https://docs.getgram.ai).
