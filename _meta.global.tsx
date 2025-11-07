@@ -13,12 +13,6 @@ export const docsIntroItems = {
       pagination: false,
     },
   },
-  introduction: {
-    title: "Introduction",
-  },
-  "core-concepts": {
-    title: "Core Concepts",
-  },
 };
 
 const meta = {
@@ -282,264 +276,403 @@ const meta = {
         type: "separator",
         title: <SidebarSeparator>{"SDKs"}</SidebarSeparator>,
       },
-      "create-client-sdks": {
-        title: "Generate SDKs",
-      },
-      "prep-openapi": {
-        title: "Prepare OpenAPI Spec",
-      },
-      customize: {
-        title: "Customize",
+      sdks: {
+        title: "SDKs",
+        display: "children",
         items: {
-          basics: {
-            title: "Customization Basics",
+          introduction: {
+            title: "Introduction",
           },
-          structure: {
-            title: "Structure",
+          "core-concepts": {
+            title: "Core Concepts",
           },
-          "data-model": {
-            title: "Data Model",
+          "create-client-sdks": {
+            title: "Generate SDKs",
+          },
+          "prep-openapi": {
+            title: "Prepare OpenAPI Spec",
+          },
+          customize: {
+            title: "Customize",
             items: {
-              types: {
-                title: "Types",
+              basics: {
+                title: "Customization Basics",
               },
-              enums: {
-                title: "Enums",
+              structure: {
+                title: "Structure",
               },
-              "oneof-schemas": {
-                title: "OneOf",
-              },
-              "allof-schemas": {
-                title: "AllOf",
-              },
-              "complex-numbers": {
-                title: "Complex Numbers",
-              },
-              additionalproperties: {
-                title: "Additional Properties",
-              },
-            },
-          },
-          methods: {
-            title: "Customize methods",
-          },
-          responses: {
-            title: "Responses & Error Handling",
-            items: {
-              responses: {
-                title: "Customize Responses",
-              },
-              errors: {
-                title: "Error Handling",
-              },
-            },
-          },
-          globals: {
-            title: "Global Parameters",
-          },
-          servers: {
-            title: "Configure servers",
-          },
-          deprecations: {
-            title: "Deprecations",
-          },
-          authentication: {
-            title: "Security & Authentication",
-            items: {
-              overview: {
-                title: "Overview",
-              },
-              configuration: {
-                title: "Configuration Options",
-              },
-              "simple-schemes": {
-                title: "Standard security schemes",
-              },
-              oauth: {
-                title: "OAuth 2.0 Authentication",
-              },
-              "custom-security-schemes": {
-                title: "Custom Security Schemes",
-              },
-              "security-callbacks": {
-                title: "Security Callbacks",
-              },
-            },
-          },
-          runtime: {
-            title: "SDK Behavior",
-            items: {
-              retries: {
-                title: "Enable Retries",
-              },
-              timeouts: {
-                title: "Enable Timeouts",
-              },
-              pagination: {
-                title: "Enable Pagination",
-              },
-              streaming: {
-                title: "Enable Streaming",
-              },
-              "server-sent-events": {
-                title: "Enable Server-Sent Events",
-              },
-              "jsonl-events": {
-                title: "Enable JSON Lines Responses",
-              },
-              "custom-http-client": {
-                title: "Customize HTTP Client",
-              },
-              "override-accept-headers": {
-                title: "Override accept headers",
-              },
-            },
-          },
-          webhooks: {
-            title: "Add webhooks to your SDKs",
-          },
-          code: {
-            title: "Add Custom Code",
-            items: {
-              "code-regions": {
+              "data-model": {
+                title: "Data Model",
                 items: {
-                  overview: {},
-                  python: {},
-                  typescript: {},
-                  java: {},
+                  types: {
+                    title: "Types",
+                  },
+                  enums: {
+                    title: "Enums",
+                  },
+                  "oneof-schemas": {
+                    title: "OneOf",
+                  },
+                  "allof-schemas": {
+                    title: "AllOf",
+                  },
+                  "complex-numbers": {
+                    title: "Complex Numbers",
+                  },
+                  additionalproperties: {
+                    title: "Additional Properties",
+                  },
+                },
+              },
+              methods: {
+                title: "Customize methods",
+              },
+              responses: {
+                title: "Responses & Error Handling",
+                items: {
+                  responses: {
+                    title: "Customize Responses",
+                  },
+                  errors: {
+                    title: "Error Handling",
+                  },
+                },
+              },
+              globals: {
+                title: "Global Parameters",
+              },
+              servers: {
+                title: "Configure servers",
+              },
+              deprecations: {
+                title: "Deprecations",
+              },
+              authentication: {
+                title: "Security & Authentication",
+                items: {
+                  overview: {
+                    title: "Overview",
+                  },
+                  configuration: {
+                    title: "Configuration Options",
+                  },
+                  "simple-schemes": {
+                    title: "Standard security schemes",
+                  },
+                  oauth: {
+                    title: "OAuth 2.0 Authentication",
+                  },
+                  "custom-security-schemes": {
+                    title: "Custom Security Schemes",
+                  },
+                  "security-callbacks": {
+                    title: "Security Callbacks",
+                  },
+                },
+              },
+              runtime: {
+                title: "SDK Behavior",
+                items: {
+                  retries: {
+                    title: "Enable Retries",
+                  },
+                  timeouts: {
+                    title: "Enable Timeouts",
+                  },
+                  pagination: {
+                    title: "Enable Pagination",
+                  },
+                  streaming: {
+                    title: "Enable Streaming",
+                  },
+                  "server-sent-events": {
+                    title: "Enable Server-Sent Events",
+                  },
+                  "jsonl-events": {
+                    title: "Enable JSON Lines Responses",
+                  },
+                  "custom-http-client": {
+                    title: "Customize HTTP Client",
+                  },
+                  "override-accept-headers": {
+                    title: "Override accept headers",
+                  },
+                },
+              },
+              webhooks: {
+                title: "Add webhooks to your SDKs",
+              },
+              code: {
+                title: "Add Custom Code",
+                items: {
+                  "code-regions": {
+                    items: {
+                      overview: {},
+                      python: {},
+                      typescript: {},
+                      java: {},
+                    },
+                  },
+                },
+              },
+              typescript: {
+                title: "TypeScript",
+                items: {
+                  "additional-index-exports": {
+                    title: "Additional index exports",
+                  },
+                  "configuring-module-format": {
+                    title: "Configuring Module Format",
+                  },
+                  "disabling-barrel-files": {
+                    title: "Disabling Barrel Files",
+                  },
+                  "model-validation-and-serialization": {
+                    title: "Model validation and serialization",
+                  },
+                  "property-naming": {
+                    title: "Control property casing: snake, camel",
+                  },
+                  "react-hooks": {
+                    title: "Generating React Hooks from OpenAPI",
+                  },
                 },
               },
             },
           },
-          typescript: {
-            title: "TypeScript",
+          manage: {
+            title: "Manage",
             items: {
-              "additional-index-exports": {
-                title: "Additional index exports",
+              versioning: {
+                title: "Version Control",
               },
-              "configuring-module-format": {
-                title: "Configuring Module Format",
+              "sdk-changelogs": {
+                title: "SDK Changelogs",
               },
-              "disabling-barrel-files": {
-                title: "Disabling Barrel Files",
+              "github-setup": {
+                title: "Github Setup",
               },
-              "model-validation-and-serialization": {
-                title: "Model validation and serialization",
+              "sdk-sandbox": {
+                title: "Enable Sandbox",
               },
-              "property-naming": {
-                title: "Control property casing: snake, camel",
+              migrate: {
+                title: "Migrate",
               },
-              "react-hooks": {
-                title: "Generating React Hooks from OpenAPI",
+              "forward-compatibility": {
+                title: "Forward Compatibility",
+              },
+              "breaking-changes": {
+                title: "Handle Breaking Changes",
               },
             },
           },
-        },
-      },
-      manage: {
-        title: "Manage",
-        items: {
-          versioning: {
-            title: "Version Control",
+          "publish-sdk": {
+            title: "Publish SDK",
           },
-          "sdk-changelogs": {
-            title: "SDK Changelogs",
-          },
-          "github-setup": {
-            title: "Github Setup",
-          },
-          "sdk-sandbox": {
-            title: "Enable Sandbox",
-          },
-          migrate: {
-            title: "Migrate",
-          },
-          "forward-compatibility": {
-            title: "Forward Compatibility",
-          },
-          "breaking-changes": {
-            title: "Handle Breaking Changes",
-          },
-        },
-      },
-      "publish-sdk": {
-        title: "Publish SDK",
-      },
-      "sdk-contract-testing": {
-        title: "SDK Contract Testing",
-        items: {
-          "bootstrapping-test-generation": {
-            title: "Bootstrapping SDK Tests",
-          },
-          "customizing-sdk-tests": {
-            title: "Customizing SDK Tests",
-          },
-          "github-actions": {
-            title: "Testing in Github Actions",
-          },
-          "openapi-in-tests": {
-            title: "OpenAPI data in Tests",
-          },
-          "running-tests": {
-            title: "Running SDK Tests",
-          },
-          "custom-contract-tests": {
-            title: "Custom Contract Tests",
-          },
-        },
-      },
-      "sdk-docs": {
-        title: "SDK Documentation",
-        items: {
-          "edit-readme": {
-            title: "Edit README",
-          },
-          integrations: {
-            title: "Integrate with docs provider",
+          "sdk-contract-testing": {
+            title: "SDK Contract Testing",
             items: {
-              readme: {
-                title: "README.com",
+              "bootstrapping-test-generation": {
+                title: "Bootstrapping SDK Tests",
               },
-              mintlify: {
-                title: "Mintlify",
+              "customizing-sdk-tests": {
+                title: "Customizing SDK Tests",
               },
-              scalar: {
-                title: "Scalar",
+              "github-actions": {
+                title: "Testing in Github Actions",
               },
-              bump: {
-                title: "Bump.sh",
+              "openapi-in-tests": {
+                title: "OpenAPI data in Tests",
+              },
+              "running-tests": {
+                title: "Running SDK Tests",
+              },
+              "custom-contract-tests": {
+                title: "Custom Contract Tests",
               },
             },
           },
-          "code-samples": {
-            title: "Code Samples",
+          "sdk-docs": {
+            title: "SDK Documentation",
             items: {
-              "generate-code-samples": {
-                title: "Generate Code Samples",
+              "edit-readme": {
+                title: "Edit README",
               },
-              "code-samples-api": {
-                title: "Code Samples API",
+              integrations: {
+                title: "Integrate with docs provider",
+                items: {
+                  readme: {
+                    title: "README.com",
+                  },
+                  mintlify: {
+                    title: "Mintlify",
+                  },
+                  scalar: {
+                    title: "Scalar",
+                  },
+                  bump: {
+                    title: "Bump.sh",
+                  },
+                },
               },
-              "automated-code-sample-urls": {
-                title: "Automated Code Sample URLs",
+              "code-samples": {
+                title: "Code Samples",
+                items: {
+                  "generate-code-samples": {
+                    title: "Generate Code Samples",
+                  },
+                  "code-samples-api": {
+                    title: "Code Samples API",
+                  },
+                  "automated-code-sample-urls": {
+                    title: "Automated Code Sample URLs",
+                  },
+                },
+              },
+              "snippet-ai": {
+                title: "SnippetAI",
+                display: "hidden",
+                items: {
+                  overview: {
+                    title: "Overview",
+                  },
+                  "integrate-via-react": {
+                    title: "Integrate via React",
+                  },
+                  "integrate-via-web-component": {
+                    title: "Integrate via Web Component",
+                  },
+                  "integrate-via-script": {
+                    title: "Integrate via Script",
+                  },
+                },
               },
             },
           },
-          "snippet-ai": {
-            title: "SnippetAI",
-            display: "hidden",
+          languages: {
+            title: "Language Design",
             items: {
-              overview: {
-                title: "Overview",
+              philosophy: {
+                title: "Design philosophy",
               },
-              "integrate-via-react": {
-                title: "Integrate via React",
+              maturity: {
+                title: "Maturity",
               },
-              "integrate-via-web-component": {
-                title: "Integrate via Web Component",
+              typescript: {
+                title: "TypeScript",
+                items: {
+                  "methodology-ts": {
+                    title: "TypeScript design",
+                  },
+                  "oss-comparison-ts": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "migrating-from-oss": {
+                    title: "Migrating from OpenAPI Generator to Speakeasy",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                  "standalone-functions": {
+                    title: "Standalone functions",
+                  },
+                },
               },
-              "integrate-via-script": {
-                title: "Integrate via Script",
+              python: {
+                title: "Python",
+                items: {
+                  "methodology-python": {
+                    title: "Python design",
+                  },
+                  "oss-comparison-python": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                },
+              },
+              golang: {
+                title: "Go",
+                items: {
+                  "methodology-go": {
+                    title: "Go design",
+                  },
+                  "oss-comparison-go": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                },
+              },
+              java: {
+                title: "Java",
+                items: {
+                  "methodology-java": {
+                    title: "Java design",
+                  },
+                  "oss-comparison-java": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                },
+              },
+              csharp: {
+                title: "C#",
+                items: {
+                  "methodology-csharp": {
+                    title: "C# design",
+                  },
+                  "oss-comparison-csharp": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                },
+              },
+              php: {
+                title: "PHP",
+                items: {
+                  "methodology-php": {
+                    title: "PHP design",
+                  },
+                  "oss-comparison-php": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                },
+              },
+              ruby: {
+                title: "Ruby [beta]",
+                items: {
+                  "methodology-ruby": {
+                    title: "Ruby design [coming soon]",
+                  },
+                },
+              },
+              rust: {
+                title: "Rust [coming]",
+                items: {
+                  "methodology-rust": {
+                    title: "Rust design [coming soon]",
+                  },
+                },
+              },
+              cpp: {
+                title: "C++ [coming]",
+                items: {
+                  "methodology-cpp": {
+                    title: "C++ design [coming soon]",
+                  },
+                },
+              },
+              unity: {
+                title: "Unity [beta]",
+                items: {
+                  "methodology-unity": {
+                    title: "Unity design [coming soon]",
+                  },
+                },
               },
             },
           },
@@ -550,133 +683,7 @@ const meta = {
         // once we hit public beta in July.
         display: "hidden",
       },
-      languages: {
-        title: "Language Design",
-        items: {
-          philosophy: {
-            title: "Design philosophy",
-          },
-          maturity: {
-            title: "Maturity",
-          },
-          typescript: {
-            title: "TypeScript",
-            items: {
-              "methodology-ts": {
-                title: "TypeScript design",
-              },
-              "oss-comparison-ts": {
-                title: "Speakeasy vs. OSS generators",
-              },
-              "migrating-from-oss": {
-                title: "Migrating from OpenAPI Generator to Speakeasy",
-              },
-              "feature-support": {
-                title: "Feature reference",
-              },
-              "standalone-functions": {
-                title: "Standalone functions",
-              },
-            },
-          },
-          python: {
-            title: "Python",
-            items: {
-              "methodology-python": {
-                title: "Python design",
-              },
-              "oss-comparison-python": {
-                title: "Speakeasy vs. OSS generators",
-              },
-              "feature-support": {
-                title: "Feature reference",
-              },
-            },
-          },
-          golang: {
-            title: "Go",
-            items: {
-              "methodology-go": {
-                title: "Go design",
-              },
-              "oss-comparison-go": {
-                title: "Speakeasy vs. OSS generators",
-              },
-              "feature-support": {
-                title: "Feature reference",
-              },
-            },
-          },
-          java: {
-            title: "Java",
-            items: {
-              "methodology-java": {
-                title: "Java design",
-              },
-              "oss-comparison-java": {
-                title: "Speakeasy vs. OSS generators",
-              },
-              "feature-support": {
-                title: "Feature reference",
-              },
-            },
-          },
-          csharp: {
-            title: "C#",
-            items: {
-              "methodology-csharp": {
-                title: "C# design",
-              },
-              "oss-comparison-csharp": {
-                title: "Speakeasy vs. OSS generators",
-              },
-            },
-          },
-          php: {
-            title: "PHP",
-            items: {
-              "methodology-php": {
-                title: "PHP design",
-              },
-              "oss-comparison-php": {
-                title: "Speakeasy vs. OSS generators",
-              },
-            },
-          },
-          ruby: {
-            title: "Ruby [beta]",
-            items: {
-              "methodology-ruby": {
-                title: "Ruby design [coming soon]",
-              },
-            },
-          },
-          rust: {
-            title: "Rust [coming]",
-            items: {
-              "methodology-rust": {
-                title: "Rust design [coming soon]",
-              },
-            },
-          },
-          cpp: {
-            title: "C++ [coming]",
-            items: {
-              "methodology-cpp": {
-                title: "C++ design [coming soon]",
-              },
-            },
-          },
-          unity: {
-            title: "Unity [beta]",
-            items: {
-              "methodology-unity": {
-                title: "Unity design [coming soon]",
-              },
-            },
-          },
-        },
-      },
+
       /*
             Terraform
           */
@@ -684,47 +691,53 @@ const meta = {
         type: "separator",
         title: <SidebarSeparator>{"Terraform"}</SidebarSeparator>,
       },
-      "create-terraform": {
-        title: "Generate Terraform Provider",
-      },
-      "publish-terraform": {
-        title: "Publish Terraform Provider",
-      },
       terraform: {
-        title: "Customize Terraform",
+        title: "Terraform",
+        display: "children",
         items: {
-          index: {
-            title: "Overview",
+          "create-terraform": {
+            title: "Generate Terraform Provider",
           },
-          "entity-mapping": {
-            title: "Map API Entities",
+          "publish-terraform": {
+            title: "Publish Terraform Provider",
           },
-          "provider-configuration": {
-            title: "Provider Configuration",
-          },
-          "resource-configuration": {
-            title: "Resource Configuration",
-          },
-          "property-customization": {
-            title: "Property Customization",
-          },
-          "validation-dependencies": {
-            title: "Validation and Dependencies",
-          },
-          "plan-modification": {
-            title: "Plan Modification",
-          },
-          "advanced-features": {
-            title: "Advanced Features",
-          },
-          "schema-keywords": {
-            title: "Schema Keywords",
-          },
-          testing: {
-            display: "hidden",
-          },
-          extensions: {
-            display: "hidden",
+          customize: {
+            title: "Customize Terraform",
+            items: {
+              index: {
+                title: "Overview",
+              },
+              "entity-mapping": {
+                title: "Map API Entities",
+              },
+              "provider-configuration": {
+                title: "Provider Configuration",
+              },
+              "resource-configuration": {
+                title: "Resource Configuration",
+              },
+              "property-customization": {
+                title: "Property Customization",
+              },
+              "validation-dependencies": {
+                title: "Validation and Dependencies",
+              },
+              "plan-modification": {
+                title: "Plan Modification",
+              },
+              "advanced-features": {
+                title: "Advanced Features",
+              },
+              "schema-keywords": {
+                title: "Schema Keywords",
+              },
+              testing: {
+                display: "hidden",
+              },
+              extensions: {
+                display: "hidden",
+              },
+            },
           },
         },
       },
@@ -784,11 +797,12 @@ const meta = {
               },
             },
           },
+          supported: {
+            title: "Supported",
+          },
         },
       },
-      supported: {
-        title: "Supported",
-      },
+
       /*
             Support
           */
