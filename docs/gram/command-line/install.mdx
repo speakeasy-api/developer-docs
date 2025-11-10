@@ -1,0 +1,256 @@
+---
+title: "gram install"
+description: "Install Gram toolsets as MCP servers in various AI clients"
+sidebar:
+  order: 8
+---
+
+The `gram install` command automates the configuration of Gram toolsets as MCP servers across multiple AI clients. Instead of manually editing configuration files, you can use this command to set up your MCP servers with a single command.
+
+## Supported Clients
+
+The install command supports the following AI clients:
+
+- **Claude Code** - Native HTTP transport with `.mcp.json` configuration
+- **Claude Desktop** - `.dxt` file generation for one-click installation
+- **Cursor** - Browser-based installation flow
+- **Gemini CLI** - Configuration file generation
+
+## Usage
+
+### Basic Usage (Automatic Configuration)
+
+The simplest way to install a toolset is to specify the toolset slug. The CLI will automatically fetch the toolset configuration from the Gram API and configure the appropriate MCP server:
+
+```bash
+gram install claude-code --toolset <your-toolset-slug>
+```
+
+This command will:
+- Fetch toolset metadata from the Gram API
+- Automatically derive the MCP URL
+- Determine authentication headers and environment variables
+- Create the appropriate configuration file for the selected client
+
+### Manual Configuration
+
+If you want to use a custom MCP URL or manually configure authentication, you can use the `--mcp-url` flag:
+
+```bash
+gram install claude-code \
+  --mcp-url https://mcp.getgram.ai/org/project/environment \
+  --api-key your-api-key \
+  --header Custom-Auth-Header
+```
+
+## Client-Specific Commands
+
+### Claude Code
+
+Install a Gram toolset for Claude Code:
+
+```bash
+gram install claude-code --toolset speakeasy-admin
+```
+
+This creates or updates the `.mcp.json` file in your current directory with the native HTTP transport configuration.
+
+**With environment variable substitution:**
+
+```bash
+gram install claude-code --toolset speakeasy-admin --env-var MY_API_KEY
+```
+
+If `MY_API_KEY` is already set in your environment, the CLI will use its value. Otherwise, it will use the `${MY_API_KEY}` substitution syntax in the config.
+
+### Claude Desktop
+
+Install a Gram toolset for Claude Desktop:
+
+```bash
+gram install claude-desktop --toolset speakeasy-admin
+```
+
+This generates a `.dxt` file in your Downloads folder (or a custom location specified with `--output-dir`) that can be opened to install the MCP server in Claude Desktop.
+
+**With custom output directory:**
+
+```bash
+gram install claude-desktop --toolset speakeasy-admin --output-dir ~/Desktop
+```
+
+### Cursor
+
+Install a Gram toolset for Cursor:
+
+```bash
+gram install cursor --toolset speakeasy-admin
+```
+
+This opens your browser with a URL that Cursor can use to install the MCP server.
+
+### Gemini CLI
+
+Install a Gram toolset for Gemini CLI:
+
+```bash
+gram install gemini-cli --toolset speakeasy-admin
+```
+
+This creates or updates the Gemini CLI configuration file with your Gram toolset.
+
+## Common Options
+
+All install commands support the following options:
+
+### `--toolset`
+
+The slug of the Gram toolset to install. The CLI will automatically look up the MCP configuration from the Gram API.
+
+```bash
+gram install claude-code --toolset speakeasy-admin
+```
+
+**Note:** You must provide either `--toolset` or `--mcp-url`, but not both.
+
+### `--mcp-url`
+
+The MCP server URL for manual configuration. Use this when you want to specify a custom URL or configure a non-Gram MCP server.
+
+```bash
+gram install claude-code --mcp-url https://mcp.getgram.ai/org/project/environment
+```
+
+### `--name`
+
+The name to use for this MCP server in the client configuration. If not provided, defaults to the toolset name or a name derived from the URL.
+
+```bash
+gram install claude-code --toolset speakeasy-admin --name "Speakeasy Admin Tools"
+```
+
+### `--api-key`
+
+The API key to use for authentication. If not provided, the CLI will fall back to:
+1. The `GRAM_API_KEY` environment variable
+2. The API key from your current profile (`~/.gram/profile.json`)
+
+```bash
+gram install claude-code --toolset speakeasy-admin --api-key sk_1234567890
+```
+
+### `--header`
+
+The HTTP header name for the API key. Defaults to `Authorization`. When using `--toolset`, this is automatically derived from the toolset's security configuration.
+
+```bash
+gram install claude-code --mcp-url https://api.example.com/mcp --header X-Custom-Auth
+```
+
+### `--env-var`
+
+Environment variable name to use for API key substitution. When provided, the configuration will use `${VAR_NAME}` syntax instead of hardcoding the key.
+
+```bash
+gram install claude-code --toolset speakeasy-admin --env-var MCP_API_KEY
+```
+
+**Smart environment variable handling:**
+- If the environment variable is already set locally, the CLI uses its actual value
+- If not set, the CLI uses the substitution syntax (e.g., `${MCP_API_KEY}`)
+
+This allows for:
+- **Development**: Use actual values when env vars are set
+- **Distribution**: Use substitution when sharing configs with your team
+
+## Examples
+
+### Example 1: Quick Setup with Automatic Configuration
+
+```bash
+# Install for Claude Code using automatic configuration
+gram install claude-code --toolset my-toolset
+
+# The CLI will:
+# 1. Fetch toolset metadata from Gram API
+# 2. Derive MCP URL, headers, and env vars automatically
+# 3. Create .mcp.json with native HTTP transport
+```
+
+### Example 2: Environment Variable Substitution
+
+```bash
+# Set up with environment variable for secure key storage
+export MCP_API_KEY=your-secret-key
+gram install claude-code --toolset my-toolset --env-var MCP_API_KEY
+
+# This creates a config that uses ${MCP_API_KEY}
+# which can be safely shared with your team
+```
+
+### Example 3: Custom MCP URL
+
+```bash
+# Configure with a custom MCP server URL
+gram install claude-code \
+  --mcp-url https://custom-mcp.example.com/mcp \
+  --api-key your-api-key \
+  --header X-Custom-Auth \
+  --name "Custom MCP Server"
+```
+
+### Example 4: Multiple Clients
+
+```bash
+# Install the same toolset for multiple clients
+gram install claude-code --toolset my-toolset
+gram install claude-desktop --toolset my-toolset
+gram install cursor --toolset my-toolset
+```
+
+## Advanced Configuration
+
+### Custom Project Context
+
+When using the automatic configuration with `--toolset`, you can specify a different project:
+
+```bash
+gram install claude-code --toolset my-toolset --project another-project
+```
+
+### Using Different Profiles
+
+Switch between different Gram profiles:
+
+```bash
+gram install claude-code --toolset my-toolset --profile production
+```
+
+## Troubleshooting
+
+### "Either --toolset or --mcp-url must be provided"
+
+You need to specify one of these options. Use `--toolset` for automatic configuration or `--mcp-url` for manual configuration.
+
+### "Cannot provide both --toolset and --mcp-url"
+
+These options are mutually exclusive. Choose one based on whether you want automatic or manual configuration.
+
+### "Failed to fetch toolset"
+
+- Verify the toolset slug is correct
+- Check that you have access to the project
+- Ensure your API key has the correct permissions
+
+### Configuration Not Working in Client
+
+- For Claude Code: Restart Claude Code to reload the configuration
+- For Claude Desktop: Try opening the `.dxt` file again
+- For Cursor: Check that the browser URL was opened successfully
+- Verify the MCP server URL is accessible
+
+## Related Commands
+
+- [`gram status`](/docs/gram/command-line/status) - View your current Gram configuration
+- [`gram auth`](/docs/gram/command-line/auth) - Authenticate with Gram
+- [`gram whoami`](/docs/gram/command-line/whoami) - View your current user information
