@@ -231,6 +231,9 @@ const meta = {
               "consuming-external-apis": {
                 title: "Connect to External APIs",
               },
+              "open-ai-apps-sdk": {
+                title: "Build a ChatGPT App",
+              }
             },
           },
         },
