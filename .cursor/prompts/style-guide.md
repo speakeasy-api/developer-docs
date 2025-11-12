@@ -88,8 +88,8 @@ Our documentation should be accessible for customers whose native language isnâ€
 - **Headings**: Use clear, descriptive headings for each section.
 - **Lists**: When listing steps or points, use ordered or unordered lists to improve readability.
 - **Code Blocks**: Use code blocks for technical commands and scripts, and ensure proper syntax highlighting.
-- **Links**: Links should be relative URLs like so: `[link](/docs/create-client-sdks)`
-  - Avoid absolute paths `~~[link](https://www.speakeasy.com/docs/create-client-sdks)~~`
+- **Links**: Links should be relative URLs like so: `[link](/docs/sdks/create-client-sdks)`
+  - Avoid absolute paths `~~[link](https://www.speakeasy.com/docs/sdks/create-client-sdks)~~`
   - Avoid linking to the mdx file `~~[link](./create-clients.mdx)~~`
 - Avoid using italics for emphasis.
 - Avoid numbered lists
