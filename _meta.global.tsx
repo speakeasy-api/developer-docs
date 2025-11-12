@@ -115,6 +115,9 @@ const meta = {
               "test-toolsets": {
                 title: "Test toolsets",
               },
+              "dynamic-toolsets": {
+                title: "Dynamic toolsets (experimental)",
+              },
               "response-filtering": {
                 title: "Response filtering (experimental)",
               },
