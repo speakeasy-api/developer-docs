@@ -34,6 +34,44 @@ paths:
       x-speakeasy-entity-operation: Pet#delete
 ```
 
+## Customize Status Codes for Missing Resources
+
+By default, Terraform removes a resource from state when a Read operation returns an HTTP 404 Not Found status code. However, some APIs use different status codes to indicate a resource is missing or has been deleted, such as 403 Forbidden or 410 Gone.
+
+The `x-speakeasy-entity-missing-codes` extension allows you to specify additional HTTP status codes that should trigger resource removal during Read operations. Apply this extension at the operation level on Read endpoints.
+
+```yaml
+paths:
+  "/pet/{petId}":
+    get:
+      x-speakeasy-entity-operation: Pet#read
+      x-speakeasy-entity-missing-codes:
+        - 403
+        - 410
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "403":
+          description: Forbidden - resource has been deleted
+        "404":
+          description: Not found
+        "410":
+          description: Gone - resource permanently deleted
+```
+
+When any of the specified status codes are returned during a Read operation, Terraform will automatically remove the resource from state and propose recreation on the next plan. The 404 status code is always checked by default, so you only need to specify additional codes.
+
+
 ## Property Defaults
 
 Setting a property default value that matches your API responses when unconfigured will enhance the Terraform plan to include the known value, rather than propagate the value as unknown `(known after apply)` during creation and updates.
