@@ -69,6 +69,40 @@ jobs:
             fi
           done
 
+      - name: Sync public assets to preview branch
+        run: |
+          set -euo pipefail
+          base_src="public/assets"
+          base_dest="private-repo/public/assets"
+
+          for dir in $SYNC_DIRS; do
+            src_assets="${base_src}/${dir}"
+            dest_assets="${base_dest}/${dir}"
+
+            if [ -d "$src_assets" ]; then
+              echo "Syncing assets $src_assets → $dest_assets"
+              mkdir -p "$dest_assets"
+              rsync -a --delete "$src_assets/" "$dest_assets/"
+            else
+              echo "Warning: $src_assets does not exist, skipping..."
+            fi
+          done
+
+      - name: Sync _meta.global.tsx into preview branch
+        run: |
+          set -euo pipefail
+
+          src_file="_meta.global.tsx"
+          dest_file="private-repo/src/app/_meta.global.tsx"
+
+          if [ -f "$src_file" ]; then
+            echo "Syncing file $src_file → $dest_file"
+            mkdir -p "$(dirname "$dest_file")"
+            cp "$src_file" "$dest_file"
+          else
+            echo "Warning: $src_file does not exist, skipping..."
+          fi
+
       - name: Commit and push preview branch
         id: diff
         run: |
