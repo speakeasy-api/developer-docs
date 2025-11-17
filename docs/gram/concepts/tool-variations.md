@@ -16,16 +16,10 @@ Gram provides two ways to improve a tool's description:
 
 Under the **Tools** tab for a toolset, you can edit the name and description of a tool.
 
-![Editing a tool name](/assets/docs/gram/img/concepts/tool-variations/editing-tool-name.png)
+To edit a tool's name, click the 3 dots and select **Edit name**. Update the tool name in the modal that opens.
 
-Update the tool name in the modal that opens:
+![Editing a tool name](/assets/docs/gram/videos/tool-variations/editing-tool-name.mp4)
 
-![Validating tool name editing](/assets/docs/gram/img/concepts/tool-variations/validating-tool-name-editing.png)
+Similarly, to edit a tool's description, click the 3 dots and select **Edit description**. Use the dedicated modal to validate and save your updated description:
 
-Similarly, hover over the tool description and click **Edit** to update it:
-
-![Editing a tool description](/assets/docs/gram/img/concepts/tool-variations/editing-tool-description.png)
-
-Use the dedicated modal to validate and save your updated description:
-
-![Validating tool description editing](/assets/docs/gram/img/concepts/tool-variations/validating-tool-description-editing.png)
+![Editing a tool description](/assets/docs/gram/videos/tool-variations/editing-tool-description.mp4)
