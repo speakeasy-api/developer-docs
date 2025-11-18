@@ -1,0 +1,35 @@
+---
+title: "Removing non-Terraform endpoints from your OpenAPI document"
+description: "Use an overlay to remove endpoints not used in Terraform generation."
+image: "/media/examples/generic.png"
+date: 2024-04-02
+authors:
+  - name: Sagar Batchu
+  - image_url: '/media/author-headshots/sagar.jpeg'
+tags:
+  - Terraform
+is_featured: true
+featured_image: "/media/examples/generic.png"
+---
+
+# Overlay to remove non-Terraform endpoints
+
+Often generating a Terraform provider from your OpenAPI spec means using a subset of endpoints to generate the provider. Endpoints or `paths` in your spec not used for terraform
+generation will still be used to generate a Go client inside your provider. This can lead to a bloated provider with unused endpoints. If you want to remove these consider using
+the following overlay.
+
+```yaml
+overlay: 1.0.0
+info:
+  title: Overlay openapi.yaml
+  version: 0.1.0
+actions:
+  - target: $.paths.*.*[?(!@.x-speakeasy-entity-operation && @.operationId)] # Find all paths that do not have x-speakeasy-entity-operation and operationId
+    remove: true
+```
+When applied to an OpenAPI specification this overlay will remove any paths from the specification that are not tagged with `x-speakeasy-entity-operation`. The operation needed to
+map an OpenAPI `operationId` to a terraform resource.
+
+To apply this overlay run `speakeasy overlay apply -s {your-spec.yaml} -o {overlay.yaml}`. This will generate a new OpenAPI specification with the paths removed.
+
+Finally add this to your terraform generation workflow by using `speakeasy configure sources` to add an overlay to any source with an existing openapi specificaiton configured.
