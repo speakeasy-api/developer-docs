@@ -35,11 +35,11 @@ To follow this tutorial, you need:
 
 ## Setting up a Gram project
 
-In the [Gram dashboard](https://app.getgram.ai), click your username at the bottom-left and then select the projects dropdown. Select **+ New Project**, enter a project name and click **Submit**.
+On the [Gram dashboard](https://app.getgram.ai), click your username in the bottom-left corner and then open the projects dropdown. Select **+ New Project**, enter a project name, and click **Submit**.
 
 ![Screenshot of the Gram dashboard showing the New Project link](./assets/gram-new-project.png)
 
-Click **GET STARTED** and select **Start fom API** to start the guided setup flow for creating a toolset and MCP server.
+Click **Get Started** and select **Start from API** to start the guided setup flow for creating a toolset and MCP server.
 
 Gram will then guide you through the following steps:
 
@@ -107,7 +107,9 @@ Click **Save**.
 
 Let's make the toolset available as an MCP server.
 
-Go to the **MCP** tab, find the **Taskmaster** toolset, and click on it to open the MCP details page. Click **ENABLE** and then **ENABLE SERVER** in the modal that shows, to enable the MCP server.
+Go to the **MCP** tab, find the **Taskmaster** toolset, and click on it to open the **MCP Details** page.
+
+To enable the server, click **Enable**, and then in the modal that opens, click **Enable Server**.
 
 Scroll down to the **Visibility** section and select the **Public** checkbox.
 
@@ -115,9 +117,9 @@ Scroll down to the **Visibility** section and select the **Public** checkbox.
 
 Next, you'll need to copy the MCP server configuration.
 
-Scroll down to the **MCP Installation** section and click the **VIEW** button to open the configuration details page.
+Scroll down to the **MCP Installation** section and click the **View** button to open the configuration details page.
 
-If you set the visibility to public the configuration will look something like this:
+If you set the visibility to **Public**, the configuration will look something like this:
 
 ```json
 {
@@ -141,7 +143,7 @@ If you set the visibility to public the configuration will look something like t
 }
 ```
 
-If you set the visibility to private, you will need a Gram API key to connect to the server. You  can generate an API key under **Settings → NEW API KEY** in the Gram dashboard, copy it, and paste it in the `GRAM_KEY` environment variable in place of `<your-key-here>`.
+If you set the visibility to private, you will need a Gram API key to connect to the server. You can generate an API key under **Settings → New API Key** in the Gram dashboard, copy it, and paste it in the `GRAM_KEY` environment variable in place of `<your-key-here>`.
 
 The configuration using the Gram key looks something like this:
 
@@ -177,78 +179,78 @@ For example, let's add a function that sends email reminders to users about thei
 
 1. Create a new Gram function project:
 
-```bash
-pnpm create @gram-ai/function@latest --template gram
-```
+    ```bash
+    pnpm create @gram-ai/function@latest --template gram
+    ```
 
-This will prompt you to enter the directory name and the project name, which will be the name of the Gram function.
+    This will prompt you to enter the directory name and the project name, which will be the name of the Gram function.
 
-2. Install the `resend` package with `pnpm install resend` and  replace the contents of `src/gram.ts` with the following code:
+2. Install the `resend` package with `pnpm install resend` and replace the contents of `src/gram.ts` with the following code:
 
-```ts
-import { Gram } from "@gram-ai/functions";
-import * as z from "zod/mini";
-import { Resend } from "resend";
+    ```ts
+    import { Gram } from "@gram-ai/functions";
+    import * as z from "zod/mini";
+    import { Resend } from "resend";
+    
+    const gram = new Gram({
+      envSchema: {
+        RESEND_API_KEY: z.string(),
+      },
+    }).tool({
+      name: "send_email",
+      description: "Send an email using Resend",
+      inputSchema: {
+        email: z.string(),
+        subject: z.string(),
+        text: z.string(),
+      },
+      async execute(ctx, input) {
+        const resend = new Resend(ctx.env["RESEND_API_KEY"]);
+    
+        try {
+          const result = await resend.emails.send({
+            from: "Acme <onboarding@resend.dev>",
+            to: [input["email"]],
+            subject: input["subject"],
+            html: `<p>${input["text"]}</p>`,
+          });
+    
+          return ctx.json({
+            success: true,
+            id: result.data?.id,
+            message: "Email sent successfully",
+          });
+        } catch (error) {
+          return ctx.fail(
+            {
+              error: "Failed to send email",
+              details: error instanceof Error ? error.message : String(error),
+            },
+            { status: 500 }
+          );
+        }
+      },
+    });
+    
+    export default gram;
+    ```
 
-const gram = new Gram({
-  envSchema: {
-    RESEND_API_KEY: z.string(),
-  },
-}).tool({
-  name: "send_email",
-  description: "Send an email using Resend",
-  inputSchema: {
-    email: z.string(),
-    subject: z.string(),
-    text: z.string(),
-  },
-  async execute(ctx, input) {
-    const resend = new Resend(ctx.env["RESEND_API_KEY"]);
-
-    try {
-      const result = await resend.emails.send({
-        from: "Acme <onboarding@resend.dev>",
-        to: [input["email"]],
-        subject: input["subject"],
-        html: `<p>${input["text"]}</p>`,
-      });
-
-      return ctx.json({
-        success: true,
-        id: result.data?.id,
-        message: "Email sent successfully",
-      });
-    } catch (error) {
-      return ctx.fail(
-        {
-          error: "Failed to send email",
-          details: error instanceof Error ? error.message : String(error),
-        },
-        { status: 500 }
-      );
-    }
-  },
-});
-
-export default gram;
-```
-
-The code above creates a function called `send_email` that accepts an email address, task title, and description as validated inputs using Zod schemas. The function uses the Resend API to send formatted HTML emails, with comprehensive error handling using `ctx.fail()` to return structured error responses with appropriate HTTP status codes, and `ctx.json()` to return successful results with the email message ID.
+    The code above creates a function called `send_email` that accepts an email address, task title, and description as validated inputs using Zod schemas. The function uses the Resend API to send formatted HTML emails, with comprehensive error handling using `ctx.fail()` to return structured error responses with appropriate HTTP status codes, and `ctx.json()` to return successful results with the email message ID.
 
 3. Build and deploy the function:
 
-```bash
-pnpm build
-pnpm push
-```
+    ```bash
+    pnpm build
+    pnpm push
+    ```
 
-4. In the Gram dashboard, go to **Toolsets**, click on the **Taskmaster** toolset, click **+ ADD TOOLS**, select the newly created function, and save the changes.
+4. In the Gram dashboard, go to **Toolsets**, click on the **Taskmaster** toolset, click **+ Add Tools**, select the newly created function, and save the changes.
 
-![Screenshot showing the Add Tool dialog with the send_email function selected](./assets/add-function-to-toolset.png)
+    ![Screenshot showing the Add Tool dialog with the send_email function selected](./assets/add-function-to-toolset.png)
 
-5. Update the environment variables by going to the **Auth** tab and update the new added `RESEND_API_KEY` variable with your Resend API key, and save the environment.
+5. Update the environment variables by going to the **Auth** tab, updating the newly added `RESEND_API_KEY` variable with your Resend API key, and saving the environment.
 
-![Screenshot showing the environment configuration dialog with RESEND_API_KEY variable being added](./assets/configure-resend-api-key.png)
+    ![Screenshot showing the environment configuration dialog with RESEND_API_KEY variable being added](./assets/configure-resend-api-key.png)
 
 Now the MCP server includes both the auto-generated CRUD tools from your OpenAPI document and a custom function for sending task reminders.
 
