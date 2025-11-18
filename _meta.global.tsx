@@ -66,11 +66,11 @@ const meta = {
               "tool-variations": {
                 title: "Tool Variations",
               },
-              environments: {
-                title: "Environments",
-              },
               "tool-sources": {
                 title: "Tool Sources",
+              },
+              environments: {
+                title: "Environments",
               },
               deployments: {
                 title: "Deployments",
@@ -92,6 +92,9 @@ const meta = {
               "mcp-sdk": {
                 title: "Using the MCP SDK",
               },
+              "configuring-environments": {
+                title: "Configuring environments",
+              },
               "build-deploy": {
                 title: "Build and Deploy",
               },
@@ -111,6 +114,9 @@ const meta = {
               },
               "configuring-environments": {
                 title: "Configure environments",
+              },
+              "attach-environments-to-sources": {
+                title: "Attach environments to tool sources",
               },
               "test-toolsets": {
                 title: "Test toolsets",
@@ -236,6 +242,9 @@ const meta = {
               },
               "open-ai-apps-sdk": {
                 title: "Build a ChatGPT App",
+              },
+              "using-environments-with-vercel-ai-sdk": {
+                title: "Using environments with the Vercel AI SDK",
               }
             },
           },
