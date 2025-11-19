@@ -31,7 +31,7 @@ If you scroll down to the **Visibility** section, you can change the visibility 
 
 ![MCP server visibility](/assets/docs/gram/img/guides/build-mcp/04-mcp-visibility.png)
 
-Under the **MCP Installation** section, you can see the MCP server installation details. You can also copy the MCP server configuration to your MCP client and choose to use the MCP server with or without authentication. 
+Under the **MCP Installation** section, you can edit and copy the MCP installation page and share it with others.
 
 ## Configure an MCP client
 
@@ -81,4 +81,3 @@ Common MCP server issues and fixes:
 - Reduce the number of tools in your toolset.
 - Use custom tools to create workflows with precise steps.
 - Create focused toolsets for different use cases.
-
