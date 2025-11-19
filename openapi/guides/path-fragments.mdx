@@ -1,0 +1,87 @@
+---
+title: "Solving Equivalent Path Signatures"
+description: "Using path fragments to solve equivalent path signatures"
+image: "/assets/examples/generic.png"
+date: 2024-12-10
+authors:
+  - name: Logan Gingerich
+  - image_url: '/assets/author-headshots/logan.jpg'
+tags:
+  - OpenAPI
+is_featured: true
+featured_image: "/assets/examples/generic.png"
+---
+
+# Using Path Fragments to Solve Equivalent Path Signatures
+
+Equivalent path signatures in an OpenAPI specification can cause validation errors and/or unexpected behaviors. Adding unique path fragments is an effective method for resolving these conflicts. Path fragments appended with an anchor (e.g., `#id`, `#name`) make paths unique without altering the API's functionality since the anchor section is not sent in API requests.
+
+## When to Use Path Fragments
+Path fragments should be used when the OpenAPI specification contains multiple paths with equivalent signatures but distinct parameter names. For example:
+
+```yaml
+paths:
+  /v13/deployments/{idOrUrl}:
+    get:
+      summary: "Get deployment by ID or URL"
+      parameters:
+        - name: idOrUrl
+          in: path
+          required: true
+          schema:
+            type: string
+  /v13/deployments/{id}:
+    get:
+      summary: "Get deployment by ID"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+```
+These paths conflict because their structures are identical, even though their parameter names differ.
+
+## Add Path Fragments
+
+Modify the conflicting paths by appending a unique anchor fragment to each. For example:
+
+   ```yaml
+   paths:
+     /v13/deployments/{idOrUrl}#idOrUrl:
+       get:
+         summary: "Get deployment by ID or URL"
+         parameters:
+           - name: idOrUrl
+             in: path
+             required: true
+             schema:
+               type: string
+     /v13/deployments/{id}#id:
+       get:
+         summary: "Get deployment by ID"
+         parameters:
+           - name: id
+             in: path
+             required: true
+             schema:
+               type: string
+   ```
+
+Corresponding SDK method signatures:
+
+   ```typescript
+   // For /v13/deployments/{idOrUrl}#idOrUrl
+   function getDeploymentByIdOrUrl(idOrUrl: string): Deployment {
+       // Implementation
+   }
+
+   // For /v13/deployments/{id}#id
+   function getDeploymentById(id: string): Deployment {
+       // Implementation
+   }
+   ```
+
+## Considerations
+- **Impact on Tooling**: Most tools will handle path fragments correctly, but confirm that all downstream tooling supports the updated specification.
+- **Path Fragments in Overlays**: Path fragments cannot be added using overlays. They must be introduced directly in the upstream OpenAPI specification.

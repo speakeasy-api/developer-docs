@@ -3,6 +3,8 @@ title: Dynamic toolsets
 description: Enable very large MCP servers by making a toolset dynamic
 ---
 
+import { Callout } from "@/mdx/components";
+
 Dynamic toolsets enable very large MCP servers without overloading context windows. Instead of exposing all tools upfront like traditional MCP, dynamic toolsets provide "meta" tools that allow the LLM to discover only the tools it needs to complete specific tasks, optimizing token and context management.
 
 Gram exposes two types of dynamic toolsets, both of which are experimental:

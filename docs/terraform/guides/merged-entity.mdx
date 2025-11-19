@@ -1,0 +1,588 @@
+---
+title: "Creating a Merged Terraform entity"
+description: "Specify how to orchestrate disparate API calls to create, update or delete a single merged entity that is resolved across multiple JSON Schemas in your OpenAPI spec."
+image: "/media/examples/generic.png"
+date: 2023-01-26
+authors:
+  - name: Ash Godfrey
+  - image_url: "/media/author-headshots/ash.jpg"
+tags:
+  - Terraform
+is_featured: true
+featured_image: "/media/examples/generic.png"
+---
+
+# Creating a Merged Terraform Entity
+
+Creating a merged Terraform entity involves combining data from separate API endpoints into a single Terraform resource. This process allows Terraform to manage complex entities that span multiple API calls for their lifecycle operations—create, read, update, and delete.
+
+## Example Scenario: Merging Resource Entities
+
+Consider a scenario where managing a `drink` resource requires setting a `visibility` attribute post-creation using separate API endpoints:
+
+1. **Create the drink**: Invoke `POST /drink` to create the drink entity.
+2. **Set visibility**: Follow with `POST /drink/{id}/visibility` to configure visibility.
+
+## Step 1: Define API Endpoints
+
+Identify the API endpoints involved in the operation. For instance, creating a `drink` and setting its visibility involves two distinct endpoints:
+
+```yaml filename="openapi.yaml"
+/drinks:
+  post:
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+            required: [name]
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                  required: [id]
+              required: [data]
+/drink/{id}/visibility:
+  post:
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              visibility:
+                type: string
+                enum:
+                  - public
+                  - private
+    responses:
+      "202":
+        description: OK
+```
+
+## Step 2: Annotate for Execution Order
+
+Mark both operations with annotations. For the operation requiring the `id` parameter, assign an `order` property value greater than the first operation to reflect its dependency on the `id` attribute.
+
+```yaml filename="openapi.yaml"
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+            required: [name]
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                  required: [id]
+              required: [data]
+/drink/{id}/visibility:
+  post:
+    x-speakeasy-entity-operation: Drink#create#2
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              visibility:
+                type: string
+                enum:
+                  - public
+                  - private
+    responses:
+      "202":
+        description: OK
+```
+
+## Step 3: Configure Hoisting for Response Unwrapping
+
+Use `x-speakeasy-entity` annotations to simplify response handling by hoisting, avoiding nested data wrapping.
+
+```yaml filename="openapi.yaml"
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            x-speakeasy-entity: Drink
+            type: object
+            properties:
+              name:
+                type: string
+            required: [name]
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  x-speakeasy-entity: Drink
+                  properties:
+                    id:
+                      type: string
+                  required: [id]
+              required: [data]
+/drink/{id}/visibility:
+  post:
+    x-speakeasy-entity-operation: Drink#create#2
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            x-speakeasy-entity: Drink
+            properties:
+              visibility:
+                type: string
+                enum:
+                  - public
+                  - private
+    responses:
+      "202":
+        description: OK
+```
+
+## Advanced Example Step-by-Step
+
+When an [x-speakeasy-entity-operation](/docs/terraform/customize/entity-mapping) is defined, the request body, parameters, and response bodies of `CREATE` and `READ` operations are considered the root of the Terraform Type Schema.
+
+## Step 1:
+
+Adding a `x-speakeasy-entity-operation: Drink#create` annotation marks the `POST /drinks` operation as CREATING a `drink` resource.
+
+```yaml filename="openapi.yaml"
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    parameters:
+      - name: type
+        in: query
+        description: The type of drink
+        required: false
+        deprecated: true
+        schema:
+          $ref: "#/components/schemas/DrinkType"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Drink"
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Drink"
+      "5XX":
+        $ref: "#/components/responses/APIError"
+      default:
+        $ref: "#/components/responses/UnknownError"
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        name:
+          description: The name of the drink.
+          type: string
+          examples:
+            - Old Fashioned
+            - Manhattan
+            - Negroni
+        type:
+          $ref: "#/components/schemas/DrinkType"
+        price:
+          description: The price of one unit of the drink in US cents.
+          type: number
+          examples:
+            - 1000 # $10.00
+            - 1200 # $12.00
+            - 1500 # $15.00
+      required:
+        - name
+        - price
+    DrinkType:
+      description: The type of drink.
+      type: string
+      enum:
+        - cocktail
+        - non-alcoholic
+        - beer
+        - wine
+        - spirit
+        - other
+```
+
+## Step 2:
+
+Parameters, Request Bodies, and Response Bodies (associated with a 2XX status code) are each considered roots of the Terraform Type Schema
+
+```yaml filename="openapi.yaml"
+/drinks:
+  post:
+    x-speakeasy-entity-operation: Drink#create
+    parameters:
+      - name: type
+        in: query
+        description: The type of drink
+        required: false
+        deprecated: true
+        schema:
+          $ref: "#/components/schemas/DrinkType"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Drink"
+    responses:
+      "200":
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Drink"
+      "5XX":
+        $ref: "#/components/responses/APIError"
+      default:
+        $ref: "#/components/responses/UnknownError"
+components:
+  schemas:
+    Drink:
+      type: object
+      properties:
+        name:
+          description: The name of the drink.
+          type: string
+          examples:
+            - Old Fashioned
+            - Manhattan
+            - Negroni
+        type:
+          $ref: "#/components/schemas/DrinkType"
+        price:
+          description: The price of one unit of the drink in US cents.
+          type: number
+          examples:
+            - 1000 # $10.00
+            - 1200 # $12.00
+            - 1500 # $15.00
+      required:
+        - name
+        - price
+    DrinkType:
+      description: The type of drink.
+      type: string
+      enum:
+        - cocktail
+        - non-alcoholic
+        - beer
+        - wine
+        - spirit
+        - other
+```
+
+## Step 3
+
+The Terraform Type Schema merges all 3 of these together, and inferring links between the Operation and the Attributes. Note that similarly named attributes are merged together, and that the `DrinkType` attribute is inferred to be a `DrinkType` enum, rather than a `string`.
+
+```yaml filename="derived.yaml"
+ - create.parameters:
+    type:
+      from: "paths["/drinks"].post.parameters[0]"
+      type: enum
+      enumValues:
+        type: string
+        values:
+          - cocktail
+          - non-alcoholic
+          - beer
+          - wine
+          - spirit
+          - other
+  - create.requestBody:
+      name:
+        from: "components.schemas.Drink.properties.name"
+        description: The name of the drink.
+        type: string
+        examples:
+          - Old Fashioned
+          - Manhattan
+          - Negroni
+      drinkType:
+        from: "components.schemas.Drink.properties.type"
+        type: string
+        enum:
+        - cocktail
+        - non-alcoholic
+        - beer
+        - wine
+        - spirit
+        - other
+      price:
+        from: "components.schemas.Drink.properties.price]"
+        type: number
+  - create.successResponseBody:
+      name:
+        from: "components.schemas.Drink.properties.name"
+        description: The name of the drink.
+        type: string
+        examples:
+          - Old Fashioned
+          - Manhattan
+          - Negroni
+      drinkType:
+        from: "components.schemas.Drink.properties.type"
+        type: string
+        enum:
+        - cocktail
+        - non-alcoholic
+        - beer
+        - wine
+        - spirit
+        - other
+      price:
+        from: "components.schemas.Drink.properties.price]"
+        type: number
+```
+
+## Step 4
+
+These attributes are then merged together. If any properties conflict in type, an error is raised.
+
+```yaml filename="derived.yaml"
+ - create.requestShard:
+     type:
+       from: "paths["/drinks"].post.parameters[0]"
+       type: enum
+       enumValues:
+          type: string
+          values:
+            - cocktail
+            - non-alcoholic
+            - beer
+            - wine
+            - spirit
+            - other
+    name:
+      from: "components.schemas.Drink.properties.name"
+      description: The name of the drink.
+      type: string
+      examples:
+        - Old Fashioned
+        - Manhattan
+        - Negroni
+    drinkType:
+      from: "components.schemas.Drink.properties.type"
+      type: string
+      enum:
+      - cocktail
+      - non-alcoholic
+      - beer
+      - wine
+      - spirit
+      - other
+    price:
+      from: "components.schemas.Drink.properties.price]"
+      type: number
+  - create.responseShard:
+      name:
+        from: "components.schemas.Drink.properties.name"
+        description: The name of the drink.
+        type: string
+        examples:
+          - Old Fashioned
+          - Manhattan
+          - Negroni
+      drinkType:
+        from: "components.schemas.Drink.properties.type"
+        type: string
+        enum:
+        - cocktail
+        - non-alcoholic
+        - beer
+        - wine
+        - spirit
+        - other
+      price:
+        from: "components.schemas.Drink.properties.price]"
+        type: number
+```
+
+## Step 5
+
+First, the `type` is taken from the OpenAPI `type`. It is `Optional: true` because it is not `required: true` or `nullable: true`.
+The description is taken from the OpenAPI `description`. The `examples` will be used to generate an example for the documentation
+
+```go filename="drink_resource.go"
+func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+  resp.Schema = schema.Schema{
+    MarkdownDescription: "Drink Resource",
+
+    Attributes: map[string]schema.Attribute{
+      "type": schema.StringAttribute{
+        Optional:    true,
+        Description: `The type of drink.`,
+      },
+    },
+  }
+}
+```
+
+## Step 6
+
+Second, the `drinkType` is taken from the request and response bodies. It's converted to snake case as `drink_type` to follow terraform best-practices.
+
+It is `Optional: true` because it was not a member of the OpenAPI `requiredProperties`. It is `Computed: true` because even if not defined, the API is defined to (optionally) return a value for it.
+
+A plan validator is added with each of the enum values. This will be used to validate the plan at plan-time.
+
+```go filename="drink_resource.go"
+func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+  resp.Schema = schema.Schema{
+    MarkdownDescription: "Drink Resource",
+
+    Attributes: map[string]schema.Attribute{
+      "type": schema.StringAttribute{
+        Optional:    true,
+        Description: `The type of drink.`,
+      },
+      "drink_type": schema.StringAttribute{
+        Optional:    true,
+        Computed:    true
+        Description: `The type of drink.`,
+        stringvalidator.OneOf(
+          "cocktail",
+          "non-alcoholic",
+          "beer",
+          "wine",
+          "spirit",
+          "other",
+        ),
+      },
+    },
+  }
+}
+```
+
+## Step 7
+
+The other parameters are also pulled in from the request body. Both of them are required, with their type being derived from the equivalent Terraform primitive to their OpenAPI type.
+
+```go filename="drink_resource.go"
+func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+  resp.Schema = schema.Schema{
+    MarkdownDescription: "Drink Resource",
+
+    Attributes: map[string]schema.Attribute{
+      "type": schema.StringAttribute{
+        Optional:    true,
+        Description: `The type of drink.`,
+      },
+      "drink_type": schema.StringAttribute{
+        Optional:    true,
+        Computed:    true
+        Description: `The type of drink.`,
+        stringvalidator.OneOf(
+          "cocktail",
+          "non-alcoholic",
+          "beer",
+          "wine",
+          "spirit",
+          "other",
+        ),
+      },
+      "name": schema.Int64Attribute{
+        Required:    true,
+        Description: `The name of the drink.`,
+      },
+      "price": schema.StringAttribute{
+        Required:    true,
+        Description: `The price of one unit of the drink in US cents.`,
+      },
+    },
+  }
+}
+```
+
+## Step 8: Cleanup
+
+In this API `drinkType` and `type` appear to refer to the same thing. `type` comes from a query parameter, whereas `drinkType` comes from the response body.
+
+This kind of pattern can be found in more legacy APIs, where parameters have been moved around and renamed, but older versions of those attributes are left around for backwards capability reasons.
+
+To clean up, we have many options we can apply to the API to describe what we want to happen:
+
+1. `x-speakeasy-ignore: true` could be applied to the query parameter. After this point, it won't be configurable, and will never be sent.
+2. `x-speakeasy-match: drinkType` could be applied to the query parameter. This will cause it to always be sent in the request, the same as the `drink_type` property.
+3. `x-speakeasy-name-override: type` could be applied to the `drinkType` property. This will rename it as `type`, and ensure both `drinkType` request body key and `type` query parameter are both always sent.
+
+```go filename="drink_resource.go"
+func (r *DrinkResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+  resp.Schema = schema.Schema{
+    MarkdownDescription: "Drink Resource",
+
+    Attributes: map[string]schema.Attribute{
+      "drink_type": schema.StringAttribute{
+        Optional:    true,
+        Computed:    true
+        Description: `The type of drink.`,
+        stringvalidator.OneOf(
+          "cocktail",
+          "non-alcoholic",
+          "beer",
+          "wine",
+          "spirit",
+          "other",
+        ),
+      },
+      "name": schema.Int64Attribute{
+        Required:    true,
+        Description: `The name of the drink.`,
+      },
+      "price": schema.StringAttribute{
+        Required:    true,
+        Description: `The price of one unit of the drink in US cents.`,
+      },
+    },
+  }
+}
+```
