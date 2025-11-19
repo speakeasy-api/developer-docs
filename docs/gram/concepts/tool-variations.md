@@ -18,8 +18,14 @@ Under the **Tools** tab for a toolset, you can edit the name and description of 
 
 To edit a tool's name, click the 3 dots and select **Edit name**. Update the tool name in the modal that opens.
 
-![Editing a tool name](/assets/docs/gram/videos/tool-variations/editing-tool-name.mp4)
+<video width="600" controls>
+  <source src="/assets/docs/gram/videos/tool-variations/editing-tool-name.mp4" type="video/mp4" />
+    Your browser does not support the video tag.
+</video>
 
 Similarly, to edit a tool's description, click the 3 dots and select **Edit description**. Use the dedicated modal to validate and save your updated description:
 
-![Editing a tool description](/assets/docs/gram/videos/tool-variations/editing-tool-description.mp4)
+<video width="600" controls>
+  <source src="/assets/docs/gram/videos/tool-variations/editing-tool-description.mp4" type="video/mp4" />
+    Your browser does not support the video tag.
+</video>
