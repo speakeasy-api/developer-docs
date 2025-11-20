@@ -5,54 +5,73 @@ description: Enable very large MCP servers by making a toolset dynamic
 
 import { Callout } from "@/mdx/components";
 
-Dynamic toolsets enable very large MCP servers without overloading context windows. Instead of exposing all tools upfront like traditional MCP, dynamic toolsets provide "meta" tools that allow the LLM to discover only the tools it needs to complete specific tasks, optimizing token and context management.
+Dynamic toolsets enable very large MCP servers without overloading context windows. Instead of exposing all tools upfront like traditional MCP, dynamic toolsets provide "meta" tools that allow the LLM to discover only the tools it needs to complete specific tasks, delivering up to 160x token reduction while maintaining full functionality.
 
-Gram exposes two types of dynamic toolsets, both of which are experimental:
+Our refined Dynamic Toolsets approach combines the best of semantic search and progressive discovery into a unified system that exposes three core tools. For detailed technical insights and performance benchmarks, see our [blog post on how we reduced token usage by 100x](/blog/how-we-reduced-token-usage-by-100x-dynamic-toolsets-v2).
 
-## Progressive Search
+## How Dynamic Toolsets work
 
-Progressive Search uses a "progressive discovery" approach to surface tools. Tools are organized into groups that the LLM can inspect to gradually discover what tools are available to it. Details of tools are only exposed when needed, for example tool schemas (which represent a large portion of tool token use) are only surfaced when the LLM decides it actually wants to use a specific tool. The toolset is compressed into three tools that actually get exposed directly to the LLM:
+Dynamic toolsets follow the natural workflow an LLM needs: search → describe → execute. The system compresses large toolsets into three meta-tools:
 
-### `list_tools`
+### `search_tools`
 
-The LLM can discover available tools using prefix-based lookup (e.g., `list_tools(/hubspot/deals/*)`). This process is accelerated by providing the structure of available tools in the tool description, creating a hierarchy of available sources and tags. This allows the LLM full control over what tools it discovers and when.
+The LLM searches for relevant tools using natural language queries with embeddings-based semantic search. The tool description includes categorical overviews of available tools (e.g., "This toolset includes HubSpot CRM operations, deal management...") and supports filtering by tags like `source:hubspot` for precise discovery.
 
 ### `describe_tools`
 
-The LLM can look up detailed information about specific tools, including input schemas. While this could be combined with `list_tools`, the input schemas represent a significant portion of tokens, so keeping them separate optimizes token and context management at the cost of speed.
+The LLM requests detailed schemas and documentation only for tools it intends to use. This separation optimizes token usage since input schemas represent 60-80% of total tokens in static toolsets.
 
 ### `execute_tool`
 
-Execute the discovered and described tools as needed for the specific task.
+The LLM executes discovered and described tools with proper parameters.
 
-## Semantic Search
+## Performance benefits
 
-Semantic Search provides an embeddings-based approach to tool discovery. Embeddings are created in advance for all the tools in a toolset, then searched over to find relevant tools for a given task.
+Dynamic toolsets deliver significant advantages over static toolsets:
 
-### `find_tools`
+**Massive token reduction**: Input tokens are reduced by an average of 96% for simple tasks and 91% for complex tasks, with total token usage dropping by 96% and 90% respectively.
 
-The LLM can execute semantic search over embeddings created from all tools in the toolset, allowing for more intuitive tool discovery based on natural language descriptions of what it wants to accomplish. This is generally faster than Progressive Search especially for large toolsets, but has less complete coverage and may result in worse discovery. The LLM has no insight into what tools are available broadly and can only operate off of whatever the semantic search returns.
+**Consistent scaling**: Token usage remains relatively constant regardless of toolset size. A 400-tool dynamic toolset uses only ~8,000 tokens initially compared to 410,000+ for the same static toolset.
 
-### `execute_tool`
+**Context window compatibility**: Large toolsets that exceed Claude's 200k context window limit with static approaches work seamlessly with dynamic toolsets.
 
-Execute the tools found through semantic search.
+**Perfect reliability**: Maintains 100% success rates across all toolset sizes and task complexities.
 
-## Benefits
+### Sample performance data
 
-Both dynamic toolset approaches share the same core benefit: they avoid dumping all tools into context upfront. Instead, they expose the LLM to only the tools actually needed for a given task, making it possible to work with very large toolsets while maintaining efficient context usage.
+| Toolset Size | Mode | Simple Task Tokens | Tool Calls | Complex Task Tokens | Tool Calls |
+|-------------|------|-------------------|------------|-------------------|------------|
+| 100 tools | Static | 159,218 | 1 | 159,216 | 3 |
+| 100 tools | Dynamic | 8,401 | 3 | 18,095 | 7 |
+| 400 tools | Static | 410,738 | 1 | 410,661 | 3 |
+| 400 tools | Dynamic | 8,421 | 3 | 31,355 | 7.8 |
 
-This approach is particularly valuable when working with extensive APIs or large collections of tools where loading everything at once would exceed context limits or create unnecessary complexity.
+## Trade-offs
+
+While dynamic toolsets offer significant benefits, there are some considerations:
+
+**Increased tool calls**: Dynamic toolsets require 2-3x more tool calls (typically 6-8 for complex tasks vs 3 for static), following the search → describe → execute pattern.
+
+**Potential latency**: Additional tool calls may introduce slight latency, though this is often offset by reduced token processing time.
+
+**Complexity**: The multi-step discovery process adds complexity compared to direct tool access, though this is handled automatically by the LLM.
 
 ## Enabling dynamic toolsets
 
-Head to the `MCP` tab to switch your toolset to one of the above dynamic modes.
+Head to the **MCP** tab in your Gram dashboard and switch your toolset from "Static" to "Dynamic" mode.
 
 <Callout title="Note" type="info">
-This setting only applies to MCP, and will not affect how your toolset is used in the playground.
+This setting only applies to MCP and will not affect how your toolset is used in the playground, where static tool exposure remains useful for testing and development.
 </Callout>
 
-![enabling dynamic toolsets](/assets/docs/gram/img/dashboard/tool-selection-mode.png)
+Dynamic toolsets are particularly valuable for:
+- APIs with 100+ operations
+- Enterprise systems with comprehensive toolsets
+- Applications where context window limits are a concern
+- Production environments requiring predictable costs
 
 ## Additional reading
 
+- [How we reduced token usage by 100x with Dynamic Toolsets](/blog/how-we-reduced-token-usage-by-100x-dynamic-toolsets-v2)
 - [Code Execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp)
+- [Previous Dynamic Toolsets implementation](/blog/100x-token-reduction-dynamic-toolsets)
