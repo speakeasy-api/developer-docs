@@ -17,7 +17,7 @@ speakeasy openapi diff [flags]
 ### Options
 
 ```
-  -f, --format string   output format (default "summary")
+  -f, --format string   output format (available options: [summary console html]) (default "summary")
   -h, --help            help for diff
       --new string      local filepath or URL for the updated OpenAPI schema
       --old string      local filepath or URL for the base OpenAPI schema to compare against
