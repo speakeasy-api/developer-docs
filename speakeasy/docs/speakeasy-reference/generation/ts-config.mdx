@@ -50,19 +50,43 @@ typescript:
 | `devDependencies`            | false    | `{}`                         | Additional development dependencies to include in the `package.json`.                          |
 | `peerDependencies`           | false    | `{}`                         | Peer dependencies for compatibility.                                                          |
 
+## Package scripts and examples
+
+```yml
+typescript:
+  additionalScripts:
+    custom-build: "tsc && webpack"
+  generateExamples: true
+  compileCommand: ["npm", "run", "build"]
+  usageSDKInit: "new Petstore({})"
+  usageSDKInitImports:
+    - package: "@petstore/sdk"
+      import: "Petstore"
+      type: "packageImport"
+```
+
+| Name                   | Required | Default Value | Description                                                                                   |
+|------------------------|----------|---------------|-----------------------------------------------------------------------------------------------|
+| `additionalScripts`     | false    | `{}`          | Additional scripts to include in the generated `package.json`.                                 |
+| `generateExamples`      | false    | `true`        | Whether to generate example files in an examples directory demonstrating SDK usage.            |
+| `compileCommand`        | false    | N/A           | The command to use for compiling the SDK. Must be an array where the first element is the command and the rest are arguments. |
+| `usageSDKInit`          | false    | N/A           | The SDK initialization code to use in usage examples (e.g., `new Petstore({})`).              |
+| `usageSDKInitImports`   | false    | `[]`          | Array of imports to add when `usageSDKInit` is configured. Each import should have `package`, `import`, and optionally `type` fields (options: `typeImport`, `packageImport`, `aliasImport`). |
+
 
 ## Method and parameter management
 ```yml
 typescript:
   maxMethodParams: 3
-  methodArguments: "require-security-and-request"
+  flatteningOrder: "parameters-first"
+  methodArguments: "infer-optional-args"
 ```
 
 | Name                       | Required | Default Value               | Description                                                                                   |
 |----------------------------|----------|-----------------------------|-----------------------------------------------------------------------------------------------|
-| `maxMethodParams`           | false    | `0`                         | Maximum number of parameters before an input object is created. `0` means input objects are always used. |
-| `flatteningOrder`           | false    | `parameters-first` or `body-first` | Determines the ordering of method arguments when flattening parameters and body fields.        |
-| `methodArguments`           | false    | `require-security-and-request` | Determines how arguments for SDK methods are generated.                                        |
+| `maxMethodParams`           | false    | `0`                         | Maximum number of parameters before an input object is created. `0` means input objects are always used. See the [methods documentation](https://www.speakeasy.com/docs/customize-sdks/methods). |
+| `flatteningOrder`           | false    | `parameters-first` | Determines the ordering of method arguments when flattening parameters and body fields. Options: `parameters-first` or `body-first`.        |
+| `methodArguments`           | false    | `infer-optional-args` | Determines how arguments for SDK methods are generated. If set to `infer-optional-args`, the method argument will be optional when all parameters and the request body are optional. Options: `infer-optional-args` or `require-security-and-request`.                                        |
 
 
 ## Security configuration
@@ -87,7 +111,7 @@ typescript:
 | Name                    | Required | Default Value     | Description                                                                                   |
 |-------------------------|----------|-------------------|-----------------------------------------------------------------------------------------------|
 | `useIndexModules`        | false    | `true`            | Controls generation of index modules (`index.ts`). Setting to `false` improves tree-shaking and build performance by avoiding barrel files. |
-| `moduleFormat`           | false    | `commonjs`        | Sets the module format to use when compiling the SDK (`commonjs`, `esm`, or `dual`). Using `dual` provides optimal compatibility while enabling modern bundler optimizations. |
+| `moduleFormat`           | false    | `dual`            | Sets the module format to use when compiling the SDK. Options: `commonjs`, `esm`, or `dual`. Using `dual` provides optimal compatibility while enabling modern bundler optimizations. |
 
 <Callout title="Performance optimization" variant="info">
 For optimal bundle size and tree-shaking performance in modern applications, we recommend using `moduleFormat: "dual"` together with `useIndexModules: false`. This combination ensures maximum compatibility while enabling the best possible bundler optimizations.
@@ -126,12 +150,59 @@ typescript:
 ## Error and response handling
 ```yml
 typescript:
-  clientServerStatusCodesAsErrors: false
-  responseFormat: "envelope-http"
+  clientServerStatusCodesAsErrors: true
+  responseFormat: "flat"
   enumFormat: "union"
+  defaultErrorName: "SDKError"
+  baseErrorName: "HTTPError"
 ```
 | Property          | Description                                                                                       | Type    | Default           |
 |-------------------|---------------------------------------------------------------------------------------------------|---------|-------------------|
-| `responseFormat`   | Defines how responses are structured. Options: `envelope`, `envelope-http`, or `flat`.             | string  | `envelope-http`    |
+| `responseFormat`   | Defines how responses are structured. Options: `envelope`, `envelope-http`, or `flat`.             | string  | `flat`    |
 | `enumFormat`       | Determines how enums are generated. Options: `enum` (TypeScript enums) or `union` (union types).   | string  | `union`            |
 | `clientServerStatusCodesAsErrors`| Treats `4XX` and `5XX` status codes as errors. Set to `false` to treat them as normal responses.         | boolean  | `true`    |
+| `defaultErrorName` | The name of the fallback error class if no more specific error class is matched. Must start with a capital letter and contain only letters and numbers. | string | `SDKError` |
+| `baseErrorName` | The name of the base error class used for HTTP error responses. Must start with a capital letter and contain only letters and numbers. | string | `HTTPError` |
+| `acceptHeaderEnum` | Whether to generate TypeScript enums for controlling the return content type of SDK methods when multiple accept types are available. | boolean | `false` |
+
+## Model validation and serialization
+
+```yml
+typescript:
+  jsonpath: "rfc9535"
+  zodVersion: "v4-mini"
+  constFieldsAlwaysOptional: false
+  modelPropertyCasing: "camel"
+  unionStrategy: "populated-fields"
+  laxMode: "lax"
+  sseFlatResponse: false
+  alwaysIncludeInboundAndOutbound: false
+  exportZodModelNamespace: false
+```
+
+| Name                              | Required | Default Value        | Description                                                                                   |
+|-----------------------------------|----------|----------------------|-----------------------------------------------------------------------------------------------|
+| `jsonpath`                        | false    | `rfc9535`            | Sets the JSONPath implementation to use. Options: `legacy` (deprecated) or `rfc9535` (recommended). The `rfc9535` option follows the JSONPath specification and should be preferred for new SDKs. |
+| `zodVersion`                      | false    | `v4-mini`            | The version of Zod to use for schema validation. Options: `v3`, `v4`, or `v4-mini`. |
+| `constFieldsAlwaysOptional`       | false    | `false`              | Whether const fields should be treated as optional in TypeScript types and schemas regardless of OpenAPI spec requirements. When `true` (legacy behavior), all const fields are optional. When `false` (recommended), const fields respect the OpenAPI spec's required array. |
+| `modelPropertyCasing`             | false    | `camel`              | Property naming convention to use. Options: `camel` (converts to camelCase) or `snake` (converts to snake_case). |
+| `unionStrategy`                   | false    | `populated-fields`   | Strategy for deserializing union types. Options: `left-to-right` (tries each type in order and returns the first valid match) or `populated-fields` (tries all types and returns the one with the most matching fields, including optional fields). |
+| `laxMode`                         | false    | `lax`                | Controls validation strictness. When set to `lax`, required fields will be coerced to their zero value (e.g., a missing required string will fallback to `""`). Lax mode also applies other coercions (e.g., boolean schemas will accept the string `"true"`). Lax mode only applies to deserialization of responses. When `laxMode` is enabled, `unionStrategy` is automatically set to `populated-fields`. Options: `lax` or `strict`. |
+| `sseFlatResponse`                 | false    | `false`              | Whether to flatten SSE (Server-Sent Events) responses by extracting the `data` field from wrapper models, providing direct access to the event data instead of the wrapper object. |
+| `alwaysIncludeInboundAndOutbound` | false    | `false`              | Whether to always include both inbound and outbound schemas for all types regardless of usage. |
+| `exportZodModelNamespace`         | false    | `false`              | Whether to export the deprecated `$` namespace containing `inboundSchema` and `outboundSchema` aliases. |
+
+## Advanced features
+
+```yml
+typescript:
+  enableReactQuery: false
+  enableMCPServer: false
+  enableCustomCodeRegions: false
+```
+
+| Name                       | Required | Default Value | Description                                                                                   |
+|----------------------------|----------|---------------|-----------------------------------------------------------------------------------------------|
+| `enableReactQuery`          | false    | `false`       | Generate React hooks using TanStack Query. See the [React hooks documentation](/docs/customize/typescript/react-hooks) for more information. |
+| `enableMCPServer`           | false    | `false`       | Generate a Model Context Protocol server. |
+| `enableCustomCodeRegions`   | false    | `false`       | Allow custom code to be inserted into the generated SDK. See the [custom code regions documentation](/docs/customize/code/code-regions/typescript) for more information. |
