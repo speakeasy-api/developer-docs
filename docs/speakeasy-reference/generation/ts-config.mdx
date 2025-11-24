@@ -75,7 +75,7 @@ typescript:
   ]}
 />
 
-## Additional scripts
+## Package scripts and examples
 
 ```yml
 typescript:
@@ -83,11 +83,22 @@ typescript:
     format: "prettier --write src"
     docs: "typedoc --out docs src"
     custom-test: "vitest run --coverage"
+  generateExamples: true
+  compileCommand: ["npm", "run", "build"]
+  usageSDKInit: "new Petstore({})"
+  usageSDKInitImports:
+    - package: "@petstore/sdk"
+      import: "Petstore"
+      type: "packageImport"
 ```
 
 <Table 
   data={[
-    { name: "additionalScripts", required: "false", default: "{}", description: "Custom npm scripts to add to the `package.json` file. Scripts with the same name as default scripts will override them." }
+    { name: "additionalScripts", required: "false", default: "{}", description: "Custom npm scripts to add to the `package.json` file. Scripts with the same name as default scripts will override them." },
+    { name: "generateExamples", required: "false", default: "true", description: "Whether to generate example files in an examples directory demonstrating SDK usage." },
+    { name: "compileCommand", required: "false", default: "N/A", description: "The command to use for compiling the SDK. Must be an array where the first element is the command and the rest are arguments." },
+    { name: "usageSDKInit", required: "false", default: "N/A", description: "The SDK initialization code to use in usage examples (e.g., `new Petstore({})`)." },
+    { name: "usageSDKInitImports", required: "false", default: "[]", description: "Array of imports to add when `usageSDKInit` is configured. Each import should have `package`, `import`, and optionally `type` fields (options: `typeImport`, `packageImport`, `aliasImport`)." }
   ]}
   columns={[
     { key: "name", header: "Name" },
@@ -149,14 +160,15 @@ typescript:
 ```yml
 typescript:
   maxMethodParams: 3
-  methodArguments: "require-security-and-request"
+  flatteningOrder: "parameters-first"
+  methodArguments: "infer-optional-args"
 ```
 
 <Table 
   data={[
-    { name: "[maxMethodParams](/docs/customize/methods)", required: "false", default: "0", description: "Maximum number of parameters before an input object is created. `0` means input objects are always used." },
-    { name: "[flatteningOrder](/docs/customize/methods#configuring-method-signatures)", required: "false", default: "parameters-first or body-first", description: "Determines the ordering of method arguments when flattening parameters and body fields." },
-    { name: "methodArguments", required: "false", default: "require-security-and-request", description: "Determines how arguments for SDK methods are generated." }
+    { name: "[maxMethodParams](/docs/sdks/customize/methods)", required: "false", default: "0", description: "Maximum number of parameters before an input object is created. `0` means input objects are always used." },
+    { name: "[flatteningOrder](/docs/sdks/customize/methods#configuring-method-signatures)", required: "false", default: "parameters-first", description: "Determines the ordering of method arguments when flattening parameters and body fields. Options: `parameters-first` or `body-first`." },
+    { name: "methodArguments", required: "false", default: "infer-optional-args", description: "Determines how arguments for SDK methods are generated. If set to `infer-optional-args`, the method argument will be optional when all parameters and the request body are optional. Options: `infer-optional-args` or `require-security-and-request`." }
   ]}
   columns={[
     { key: "name", header: "Name" },
@@ -197,8 +209,8 @@ typescript:
 
 <Table 
   data={[
-    { name: "[useIndexModules](/docs/customize/typescript/disabling-barrel-files)", required: "false", default: "true", description: "Controls generation of index modules (`index.ts`). Setting to `false` improves tree-shaking and build performance by avoiding barrel files." },
-    { name: "[moduleFormat](/docs/customize/typescript/configuring-module-format)", required: "false", default: "commonjs", description: "Sets the module format to use when compiling the SDK (`commonjs`, `esm`, or `dual`). Using `dual` provides optimal compatibility while enabling modern bundler optimizations." }
+    { name: "[useIndexModules](/docs/sdks/customize/typescript/disabling-barrel-files)", required: "false", default: "true", description: "Controls generation of index modules (`index.ts`). Setting to `false` improves tree-shaking and build performance by avoiding barrel files." },
+    { name: "[moduleFormat](/docs/sdks/customize/typescript/configuring-module-format)", required: "false", default: "dual", description: "Sets the module format to use when compiling the SDK. Options: `commonjs`, `esm`, or `dual`. Using `dual` provides optimal compatibility while enabling modern bundler optimizations." }
   ]}
   columns={[
     { key: "name", header: "Name" },
@@ -257,16 +269,26 @@ typescript:
 />
 
 
-## Property naming configuration
+## Error and response handling
 
 ```yml
 typescript:
-  modelPropertyCasing: "camel"
+  clientServerStatusCodesAsErrors: true
+  responseFormat: "flat"
+  enumFormat: "union"
+  defaultErrorName: "SDKError"
+  baseErrorName: "HTTPError"
+  acceptHeaderEnum: false
 ```
 
 <Table
   data={[
-    { property: "modelPropertyCasing", description: "Controls the casing of model property names in generated TypeScript types. Options: `camel` (camelCase) or `snake` (snake_case).", type: "string", default: "camel" }
+    { property: "[responseFormat](/docs/sdks/customize/responses/responses)", description: "Defines how responses are structured. Options: `envelope`, `envelope-http`, or `flat`.", type: "string", default: "flat" },
+    { property: "enumFormat", description: "Determines how enums are generated. Options: `enum` (TypeScript enums) or `union` (union types).", type: "string", default: "union" },
+    { property: "clientServerStatusCodesAsErrors", description: "Treats `4XX` and `5XX` status codes as errors. Set to `false` to treat them as normal responses.", type: "boolean", default: "true" },
+    { property: "defaultErrorName", description: "The name of the fallback error class if no more specific error class is matched. Must start with a capital letter and contain only letters and numbers.", type: "string", default: "SDKError" },
+    { property: "baseErrorName", description: "The name of the base error class used for HTTP error responses. Must start with a capital letter and contain only letters and numbers.", type: "string", default: "HTTPError" },
+    { property: "acceptHeaderEnum", description: "Whether to generate TypeScript enums for controlling the return content type of SDK methods when multiple accept types are available.", type: "boolean", default: "false" }
   ]}
   columns={[
     { key: "property", header: "Property" },
@@ -276,20 +298,30 @@ typescript:
   ]}
 />
 
-## Error and response handling
+## Model validation and serialization
 
 ```yml
 typescript:
-  clientServerStatusCodesAsErrors: false
-  responseFormat: "envelope-http"
-  enumFormat: "union"
+  jsonpath: "rfc9535"
+  zodVersion: "v4-mini"
+  constFieldsAlwaysOptional: false
+  modelPropertyCasing: "camel"
+  unionStrategy: "populated-fields"
+  laxMode: "lax"
+  alwaysIncludeInboundAndOutbound: false
+  exportZodModelNamespace: false
 ```
 
-<Table
+<Table 
   data={[
-    { property: "[responseFormat](/docs/customize/responses/responses)", description: "Defines how responses are structured. Options: `envelope`, `envelope-http`, or `flat`.", type: "string", default: "envelope-http" },
-    { property: "enumFormat", description: "Determines how enums are generated. Options: `enum` (TypeScript enums) or `union` (union types).", type: "string", default: "union" },
-    { property: "clientServerStatusCodesAsErrors", description: "Treats `4XX` and `5XX` status codes as errors. Set to `false` to treat them as normal responses.", type: "boolean", default: "true" }
+    { property: "jsonpath", description: "Sets the JSONPath implementation to use. Options: `legacy` (deprecated) or `rfc9535` (recommended). The `rfc9535` option follows the JSONPath specification and should be preferred for new SDKs.", type: "string", default: "rfc9535" },
+    { property: "zodVersion", description: "The version of Zod to use for schema validation. Options: `v3`, `v4`, or `v4-mini`.", type: "string", default: "v4-mini" },
+    { property: "constFieldsAlwaysOptional", description: "Whether const fields should be treated as optional in TypeScript types and schemas regardless of OpenAPI spec requirements. When `true` (legacy behavior), all const fields are optional. When `false` (recommended), const fields respect the OpenAPI spec's required array.", type: "boolean", default: "false" },
+    { property: "[modelPropertyCasing](/docs/sdks/customize/typescript/property-naming)", description: "Property naming convention to use. Options: `camel` (converts to camelCase) or `snake` (converts to snake_case).", type: "string", default: "camel" },
+    { property: "unionStrategy", description: "Strategy for deserializing union types. Options: `left-to-right` (tries each type in order and returns the first valid match) or `populated-fields` (tries all types and returns the one with the most matching fields, including optional fields).", type: "string", default: "populated-fields" },
+    { property: "laxMode", description: "Controls validation strictness. When set to `lax`, required fields will be coerced to their zero value (e.g., a missing required string will fallback to `\"\"`). Lax mode also applies other coercions (e.g., boolean schemas will accept the string `\"true\"`). Lax mode only applies to deserialization of responses. When `laxMode` is enabled, `unionStrategy` is automatically set to `populated-fields`. Options: `lax` or `strict`.", type: "string", default: "lax" },
+    { property: "alwaysIncludeInboundAndOutbound", description: "Whether to always include both inbound and outbound schemas for all types regardless of usage.", type: "boolean", default: "false" },
+    { property: "exportZodModelNamespace", description: "Whether to export the deprecated `$` namespace containing `inboundSchema` and `outboundSchema` aliases.", type: "boolean", default: "false" }
   ]}
   columns={[
     { key: "property", header: "Property" },
@@ -303,12 +335,31 @@ typescript:
 
 ```yml
 typescript:
-  sseFlatResponse: true
+  sseFlatResponse: false
 ```
 
 <Table 
   data={[
-    { property: "sseFlatResponse", description: "When enabled, hoists the `data` field content to the top level for server-sent events, eliminating the need to destructure data from yielded items. Consumers can directly access the data without additional parsing.", type: "boolean", default: "true" }
+    { property: "[sseFlatResponse](/docs/sdks/customize/runtime/server-sent-events)", description: "Whether to flatten SSE (Server-Sent Events) responses by extracting the `data` field from wrapper models, providing direct access to the event data instead of the wrapper object.", type: "boolean", default: "false" }
+  ]}
+  columns={[
+    { key: "property", header: "Property" },
+    { key: "description", header: "Description" },
+    { key: "type", header: "Type" },
+    { key: "default", header: "Default" }
+  ]}
+/>
+
+## Advanced features
+
+```yml
+typescript:
+  enableReactQuery: false
+```
+
+<Table 
+  data={[
+    { property: "[enableReactQuery](/docs/sdks/customize/typescript/react-hooks)", description: "Generate React hooks using TanStack Query.", type: "boolean", default: "false" }
   ]}
   columns={[
     { key: "property", header: "Property" },
