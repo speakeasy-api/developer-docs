@@ -37,7 +37,7 @@ There are a lot of [config options](https://scribe.knuckles.wtf/laravel/referenc
 php artisan scribe:generate
 ```
 
-The command above will generate both HTML documentation and an OpenAPI specification file. By default, the OpenAPI document will be saved in `storage/app/private/scribe/openapi.yaml`, but the command will let you know exactly where it's been saved.
+The command above will generate both HTML documentation and an OpenAPI specification file. By default, the OpenAPI document will be saved in `storage/app/private/scribe/openapi.yaml`, but the command will let you know exactly where it's stored.
 
 ```yaml
 openapi: 3.0.3
@@ -46,11 +46,9 @@ info:
   description: ''
   version: 1.0.0
 servers:
-  -
-    url: 'http://localhost'
+  - url: 'http://localhost'
 tags:
-  -
-    name: Endpoints
+  - name: Endpoints
     description: ''
 paths:
   /api/health:
@@ -345,11 +343,57 @@ paths:
           type: integer
 ```
 
-A surprisingly good start for something that's had absolutely no work done so far. Beyond just outputting endpoints and models, Scribe was able to look through JSON resources (serializers) to figure out what the response payloads would look like, and describe them as JSON Schema objects.
+A surprisingly good start for something that's had absolutely no work done on it. Beyond just outputting endpoints and models, Scribe was able to look through the [API resources](https://laravel.com/docs/12.x/eloquent-resources) (also known as serializers) to figure out what the response payloads would look like, and describe them as [OpenAPI Schema objects](https://learn.openapis.org/specification/content.html#the-schema-object).
 
-Examples were also generated based on the data in the database, which is a great touch, but got a bit big for sharing in the above example. They are based on Laravel's [database seeders](https://laravel.com/docs/12.x/seeding), so they will be more realistic than most hand-written examples.
+Examples were also generated based on the data in the database. This is a great touch at providing some realism immediately, but it made the above example too big to share. The examples generated are based on Laravel's [database seeders](https://laravel.com/docs/12.x/seeding), so they should be more realistic than most hand-written examples - unless the seeds are creating bad or outdated data. Here's how the examples were generated.
 
-The biggest shortfall is the lack of human-written descriptions. Not only are we missing a lot of the "why" and "how" in this sea of "what", but we are also struggling with poor summaries for each operation which in turn is giving poor `operationId`s, and THAT will produce a bad SDK in Speakeasy.
+```yaml
+  '/api/drivers/{id}':
+    get:
+      summary: 'Display the specified resource.'
+      operationId: displayTheSpecifiedResource
+      description: ''
+      parameters: []
+      responses:
+        200:
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                example:
+                  data:
+                    id: 1
+                    name: 'Max Verstappen'
+                    code: VER
+                    created_at: '2025-10-29T17:21:39.000000Z'
+                    updated_at: '2025-10-29T17:21:39.000000Z'
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: 'Max Verstappen'
+                      code:
+                        type: string
+                        example: VER
+                      created_at:
+                        type: string
+                        example: '2025-10-29T17:21:39.000000Z'
+                      updated_at:
+                        type: string
+                        example: '2025-10-29T17:21:39.000000Z'
+```
+
+However, there are some shortcomings to this auto-generated output.
+
+OpenAPI is used for a lot of different purposes, but in order to use it for API documentation it needs to have useful descriptions that provide context to the raw data. Currently the API missing a lot of the "why" and "how" in this sea of "what", and needs more human input.
+
+Additionally, the descriptions and summaries are all the same generic content pulled from some template, and having `summary: 'Display a listing of the resource.'` for each operation (which in turn is giving poor `operationId`) is not only going to be confusing for users, it will produce a bad SDK in Speakeasy.
 
 Let's look at some ways we can improve this output with quick config settings, and then by adding some attributes to the controllers to improve things further.
 
@@ -373,446 +417,291 @@ Open the `config/scribe.php` file that was published earlier, and look for the f
   INTRO,
 ```
 
-Updating these options will help give some context to the API consumers about what this API is all about, which is the first and most fundamental point of any API documentation.
+Updating these options will help give some context to the API consumers, but to get the rest of the API covered Scribe will need some extra context spread around the codebase.
 
-There are lots of other options available, but some of the most important ones to consider when generating an OpenAPI document are:
+## Creating summaries and descriptions
 
-- `routes` - this option allows us to configure how we want to detect the API routes. Tweak the prefix, and exclude any routes that should not show up in the documentation.
-- `auth` - specify the API's authentication mechanism. This will be used to describe the `security` section of the OpenAPI document.
-- `strategies` - this is where we configure how Scribe will interact with our application to get the data needed to create the specification and documentation.
+Scribe scans application routes to identify which endpoints should be described, then extracts metadata from the corresponding routes, such as route names, URI patterns, HTTP methods. It can do this by looking purely at the code, but extra information can be added using annotations and comments in the controller to expand on the "why" and "how" of the API.
 
-Poke around if its of interest, but for now let's move onto improving the API description by learning a litte more about how Scribe is creating them.
+In order to provide that context, Scribe looks at "docblock" comments (`/**`) on the controller methods. 
 
-### How Scribe Works
+Take a look at the `HealthController` because that has no descriptions or summary so far.
 
-Scribe scans your application routes to identify which endpoints should be described, based on your configuration. It then extracts metadata from the corresponding routes, such as route names, URI patterns, HTTP methods. It can do this by looking purely at the code, but extra information can be added using annotations and comments in the controller to expand on the "why" and "how" of the API.
+```php focus=10:16
+# app/Http/Controllers/HealthController.php
 
-Scribe then uses the extracted metadata to perform request simulation on your API. It captures the responses that come back, including: status codes, headers, and body content. All this then get packaged into an internal representation of your API, which is how the OpenAPI spec is created.
+namespace App\Http\Controllers\Api;
 
-In the example above, only the `401` is being documented because Scribe hasn't been configured with the proper authentication information, which makes it unable to access the proper response.
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 
-## Getting to 200
+class HealthController extends Controller
+{
+    /**
+     * Healthcheck
+     *
+     * Check that the service is up. If everything is okay, you'll get a 200 OK response.
+     *
+     * Otherwise, the request will fail with a 400 error, and a response listing the failed services.
+     */
+    public function show(): JsonResponse
+    {
+        return response()->json([
+            'status' => 'healthy',
+            'version' => 'unversioned',
+            'timestamp' => now()->toIso8601String(),
+        ]);
+    }
+}
+```
 
-Let's modify the Laravel code to get some useful information about our `200` responses.
+Now when `php artisan scribe:generated` is run again, the `/api/health` endpoint will have a proper summary and description. The summary is taken from the first line of the docblock, and the description is taken from the rest of the docblock, which will work just as well in traditional PHP documentation tools as well a the OpenAPI documentation tools after export. 
 
-To achieve this, [PHP Attributes](https://www.php.net/manual/en/language.attributes.overview.php) can be added to controllers.
+```yaml
+/api/health:
+    get:
+      summary: Healthcheck
+      operationId: healthcheck
+      description: "Check that the service is up. If everything is okay, you'll get a 200 OK response.\n\nOtherwise, the request will fail with a 400 error, and a response listing the failed services."
+      parameters: []
+      # ...
+```
 
+Looking at another example, the races collection has some default state and optional values, and the description can be improved to reflect that.
 
+```php focus=10:14
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Resources\RaceCollection;
+use App\Models\Race;
+use Illuminate\Http\Request;
+
+class RaceController extends Controller
+{
+    /**
+     * Get races
+     *
+     * A collection of race resources, newest first, optionally filtered by circuit or season query parameters.
+     */
+    public function index(Request $request): RaceCollection
+    {
+        $query = Race::query();
+
+        if ($request->has('circuit')) {
+            $query->where('circuit_id', $request->circuit);
+        }
+
+        if ($request->has('season')) {
+            $query->where('season', $request->season);
+        }
+
+        return new RaceCollection($query->get());
+    }
+```
+
+Now the `description`, `summary`, and `operationId`, are all much better, because instead of just saying "it returns stuff" it's providing a hint about the default state and sorting of the data being returned, and it's immediately pointing out some options that are likely to be of interest.
+
+```yaml
+  /api/races:
+    get:
+      summary: 'Get races'
+      operationId: getRaces
+      description: 'A collection of race resources, newest first, optionally filtered by circuit or season query parameters.'
+```
+
+With descriptions covered, let's properly document the stuff these descriptions have been eluding to so far. Instead of jamming it into the description, we can use attributes to take advantage of more Scribe and OpenAPI functionality.
 
 ### Adding tags
 
-In OpenAPI, `tags` are used to group related operations together. Typically, a good way to use tags is to have one tag per "resource" and then associate all the relevant operations that access and modify that resourc together. We'll add a group annotation to the top of the controller.
+In OpenAPI, `tags` are used to group related operations together. Typically, a
+good way to use tags is to have one tag per "resource" and then associate all
+the relevant operations that access and modify that resource together. 
 
 ```php
-// !focus(1)
-#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
-final readonly class IndexController
+use Knuckles\Scribe\Attributes\{Authenticated, Group, BodyParam, QueryParam};
+
+#[Group(name: 'Races', description: 'A series of endpoints that allow programmatic access to managing F1 races.')]
+class RaceController extends Controller
 {
-    public function __construct(
-        private AuthManager $auth,
-        private RaceRepository $repository,
-    ) {
-    }
-
-    #[Authenticated]
-    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
-    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
-    public function __invoke(Request $request): CollectionResponse
-    {
-        $races = $this->repository->forSeason(
-            season: $request->query('season', date('Y')),
-        );
-
-        return new CollectionResponse(
-            data: RaceResource::collection(
-                resource: $races->paginate(),
-            ),
-        );
-    }
-}
+  // ...
 ```
 
-### Authenicate Scribe
+Now instead of seeing `tags: [Endpoints]` in this controllers endpoints, the tag will be `Races`, and the description will be included in the OpenAPI document as a tag description. 
 
-Let's next focus on the `invoke` method that is what will be used to generate the path information. We use `#[Authenticated]` to let Scribe know that this endpoint needs to be authenticated
+**Learn more about [OpenAPI tags](/openapi/tags).**
 
-```php
-<<<<<<< HEAD
-#[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
-=======
-// !focus(10)
-#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
->>>>>>> 70f8667 (docs: laravel guide update)
-final readonly class IndexController
+## Documenting parameters
+
+The whole point of an API is being able to send and receive data, so describing and documenting [API parameters](/api-design/parameters.md) for an endpoint is crucial. OpenAPI supports [several types of parameters](/openapi/requests/parameters), with the most common being `path`, `query`, and `header` parameters. 
+
+Scribe can [automatically describe path parameters](https://scribe.knuckles.wtf/laravel/documenting/url-parameters) by looking at the route definitions, but query parameters and others need to be documented manually. It's best practice to document all types of parameters manually because the automatic generation is only spotting if its optional or not, so it will still need a description.
+
+In the race API, the `RaceController@index` method supports two optional query parameters: `season` and `circuit`. Let's document those using Scribe's `QueryParam` attribute.
+
+```php focus=6:7
+/**
+ * Get races
+ *
+ * A collection of race resources, newest first, optionally filtered by circuit or season query parameters.
+ */
+#[QueryParam(name: 'season', type: 'string', description: 'Filter the results by season year', required: false, example: '2024')]
+#[QueryParam(name: 'circuit', type: 'string', description: 'Filter the results by circuit name', required: false, example: 'Monaco')]
+public function index(Request $request): RaceCollection
 {
-    public function __construct(
-        private AuthManager $auth,
-        private RaceRepository $repository,
-    ) {
-    }
-
-    #[Authenticated]
-    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
-    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
-    public function __invoke(Request $request): CollectionResponse
-    {
-        $races = $this->repository->forSeason(
-            season: $request->query('season', date('Y')),
-        );
-
-        return new CollectionResponse(
-            data: RaceResource::collection(
-                resource: $races->paginate(),
-            ),
-        );
-    }
-}
 ```
-
-### Add Descriptions
-
-Use `#[Endpoint]` to add additional information about this endpoint; describing what it's function is.
-
-```php
-<<<<<<< HEAD
-#[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
-=======
-// !focus(11)
-#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
->>>>>>> 70f8667 (docs: laravel guide update)
-final readonly class IndexController
-{
-    public function __construct(
-        private AuthManager $auth,
-        private RaceRepository $repository,
-    ) {
-    }
-
-    #[Authenticated]
-    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
-    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
-    public function __invoke(Request $request): CollectionResponse
-    {
-        $races = $this->repository->forSeason(
-            season: $request->query('season', date('Y')),
-        );
-
-        return new CollectionResponse(
-            data: RaceResource::collection(
-                resource: $races->paginate(),
-            ),
-        );
-    }
-}
-```
-
-### Adding Responses
-
-Finally, we want to add `#[ResponseFromApiResource]` to let Scribe know how this API should respond, passing through the resource class and the model itself so Scribe can make a request in the background and inspect the types on the response payload. Also, we pass the boolean flag for whether or not this response should return a collection or not.
-
-```php
-<<<<<<< HEAD
-#[Group(name: 'Stand Ups', description: 'A series of endpoints that allow programatic access to managing stand-ups.', authenticated: true)]
-=======
-// !focus(12)
-#[Group(name: 'Races', description: 'A series of endpoints that allow programatic access to managing F1 races.', authenticated: true)]
->>>>>>> 70f8667 (docs: laravel guide update)
-final readonly class IndexController
-{
-    public function __construct(
-        private AuthManager $auth,
-        private RaceRepository $repository,
-    ) {
-    }
-
-    #[Authenticated]
-    #[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
-    #[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
-    public function __invoke(Request $request): CollectionResponse
-    {
-        $races = $this->repository->forSeason(
-            season: $request->query('season', date('Y')),
-        );
-
-        return new CollectionResponse(
-            data: RaceResource::collection(
-                resource: $races->paginate(),
-            ),
-        );
-    }
-}
-```
-
-Now let's see the OpenAPI spec:
-
-```yaml
-/api/races:
-  get:
-    summary: "Browse Races"
-    operationId: browseRaces
-    description: "Browse through the F1 races for the season."
-    responses:
-      200:
-        description: ""
-        content:
-          application/json:
-            schema:
-              type: object
-              example:
-                data:
-                  - id: ""
-                    type: races
-                    attributes:
-                      name: Monaco Grand Prix
-                      race_date: '2024-05-26'
-                      season: '2024'
-                      circuit: Monte Carlo Circuit
-                      winner: Max Verstappen
-                      created:
-                        human: null
-                        timestamp: null
-                        string: null
-                        local: null
-                  - id: ""
-                    type: races
-                    attributes:
-                      name: British Grand Prix
-                      race_date: '2024-07-07'
-                      season: '2024'
-                      circuit: Silverstone Circuit
-                      winner: Lewis Hamilton
-                      created:
-                        human: null
-                        timestamp: null
-                        string: null
-                        local: null
-              properties:
-                data:
-                  type: array
-                  example:
-                    - id: ""
-                      type: races
-                      attributes:
-                        name: Monaco Grand Prix
-                        race_date: '2024-05-26'
-                        season: '2024'
-                        circuit: Monte Carlo Circuit
-                        winner: Max Verstappen
-                        created:
-                          human: null
-                          timestamp: null
-                          string: null
-                          local: null
-                    - id: ""
-                      type: races
-                      attributes:
-                        name: British Grand Prix
-                        race_date: '2024-07-07'
-                        season: '2024'
-                        circuit: Silverstone Circuit
-                        winner: Lewis Hamilton
-                        winner: Lewis Hamilton
-                        created:
-                          human: null
-                          timestamp: null
-                          string: null
-                          local: null
-                  items:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: ""
-                      type:
-                        type: string
-                        example: races
-                      attributes:
-                        type: object
-                        properties:
-                          name:
-                            type: string
-                            example: Monaco Grand Prix
-                          race_date:
-                            type: string
-                            example: '2024-05-26'
-                          season:
-                            type: string
-                            example: '2024'
-                          circuit:
-                            type: string
-                            example: Monte Carlo Circuit
-                          winner:
-                            type: string
-                            example: Max Verstappen
-                          created:
-                            type: object
-                            properties:
-                              human:
-                                type: string
-                                example: null
-                              timestamp:
-                                type: string
-                                example: null
-                              string:
-                                type: string
-                                example: null
-                              local:
-                                type: string
-                                example: null
-    tags:
-      - "Races"
-```
-
-## Documenting Parameters
-
-So far so good! However, this API example is limited. What if we add query parameters like filtering and sorting which we would likely want on a real API.
-
-In terms of Laravel implementation, we recommend use the `spatie/laravel-query-builder` package to enable JSON:API style filtering on my API, as it ties directly into Eloquent ORM from the request parameters. Let's start adding some filters.
-
-Our controller code used our `RaceRepository` which just leverages Eloquent to query our database through a shared abstraction. However, we want to lean on the package by Spatie, which has a slightly different approach. Let's rewrite this code to make it more flexible.
-
-```php
-#[Authenticated]
-#[Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')]
-#[ResponseFromApiResource(RaceResource::class, Race::class, collection: true)]
-public function __invoke(Request $request): CollectionResponse
-{
-    $races = QueryBuilder::for(
-			subject: $this->repository->forSeason(
-				season: $request->query('season', date('Y')),
-			),
-		)->allowedFilters(
-			filters: $this->repository->filters(),
-		)->allowedIncludes(
-			includes: $this->repository->includes(),
-		)->allowedSorts(
-			sorts: $this->repository->sort(),
-		)->getEloquentBuilder();
-
-    return new CollectionResponse(
-        data: RaceResource::collection(
-            resource: $races->paginate(),
-        ),
-    );
-}
-```
-
-We use the `QueryBuilder` class from the package, to pass in the result of our repository call. The repository is just passing a pre-built query back, which we can use to paginate or extend as required. I prefer this approach as the sometimes you want to tie multiple methods together. You will see that I have 4 new methods that weren't there before:
-
-- `allowedFilters`
-- `allowedIncludes`
-- `allowedSorts`
-- `getEloquentBuilder`
-
-The first three allow you to programmatically control what parts of the query parameters to use and which to ignore. The final one is to get back the eloquent query builder, that we want to use as we know the API for it. The package returns a custom query builder, which does not have all of the methods we may want. Let's flesh out the filter, include, and sort method calls next.
-
-Going back we add attributes that will be parsed - so that our OpenAPI spec is generated with all available options:
-
-```php
-final readonly class IndexController
-{
-    public function __construct(
-        private AuthManager $auth,
-        private RaceRepository $repository,
-    ) {
-    }
-
-    #[
-      Authenticated,
-      QueryParam(name: 'filter[season]', type: 'string', description: 'Filter the results by season year', required: false, example: 'filter[season]=2024'),
-      QueryParam(name: 'filter[circuit]', type: 'string', description: 'Filter the results by circuit name', required: false, example: 'filter[circuit]=Monaco'),
-      QueryParam(name: 'filter[winner]', type: 'string', description: 'Filter the results by the winning driver', required: false, example: 'filter[winner]=Verstappen'),
-      QueryParam(name: 'include', type: 'string', description: 'A comma separated list of relationships to side-load', required: false, example: 'include=circuit,drivers'),
-      QueryParam(name: 'sort', type: 'string', description: 'Sort the results based on either the race_date, or the season', required: false, example: 'sort=-race_date'),
-      ResponseFromApiResource(RaceResource::class, Race::class, collection: true),
-      Endpoint(title: 'Browse Races', description: 'Browse through the F1 races for the season.')
-    ]
-    public function __invoke(Request $request): CollectionResponse
-    {
-        $races = $this->repository->forSeason(
-            season: $request->query('season', date('Y')),
-        );
-
-        return new CollectionResponse(
-            data: RaceResource::collection(
-                resource: $races->paginate(),
-            ),
-        );
-    }
-}
-```
-
-<Callout title="Note" type="info">
-  You may have noticed that the syntax has collapsed all the metadata into one
-  attribute. It's just a code style choice, there's no change in functionality.
-</Callout>
 
 The result of the above will be the following inside your OpenAPI specification:
 
 ```yaml
+summary: 'Get races'
+operationId: getRaces
+description: 'A collection of race resources, newest first, optionally filtered by circuit or season query parameters.'
 parameters:
-  - in: query
-    name: "filter[season]"
-    description: "Filter the results by season year"
-    example: "filter[season]=2024"
+  -
+    in: query
+    name: season
+    description: 'Filter the results by season year'
+    example: '2024'
     required: false
     schema:
       type: string
-      description: "Filter the results by season year"
-      example: "filter[season]=2024"
-  - in: query
-    name: "filter[circuit]"
-    description: "Filter the results by circuit name"
-    example: "filter[circuit]=Monaco"
+      description: 'Filter the results by season year'
+      example: '2024'
+      nullable: false
+  -
+    in: query
+    name: circuit
+    description: 'Filter the results by circuit name'
+    example: Monaco
     required: false
     schema:
       type: string
-      description: "Filter the results by circuit name"
-      example: "filter[circuit]=Monaco"
-  - in: query
-    name: "filter[winner]"
-    description: "Filter the results by the winning driver"
-    example: "filter[winner]=Verstappen"
-    required: false
-    schema:
-      type: string
-      description: "Filter the results by the winning driver"
-      example: "filter[winner]=Verstappen"
-  - in: query
-    name: include
-    description: "A comma separated list of relationships to side-load"
-    example: "include=circuit,drivers"
-    required: false
-    schema:
-      type: string
-      description: "A comma separated list of relationships to side-load"
-      example: "include=circuit,drivers"
-  - in: query
-    name: sort
-    description: "Sort the results based on either the race_date, or the season"
-    example: sort=-race_date
-    required: false
-    schema:
-      type: string
-      description: "Sort the results based on either the race_date, or the season"
-      example: sort=-race_date
+      description: 'Filter the results by circuit name'
+      example: Monaco
+      nullable: false
 ```
 
-Quite convenient I am sure you can agree!
+API consumers looking at the docs will be able to see what query parameters are available, what they do, and some examples of how to use them, which can really speed up adoption.
 
-## A More Complex Endpoint
+Scribe will set `in: query` for any `QueryParam` parameters, and `in: path` for `UrlParam` parameters. 
 
-Let's now move onto documenting our `store` endpoint which is what is used to create a new race.
+<Callout type="info" title="Note on duplication">
+The example and description are repeated in both the parameter definition and the schema definition, which is not required by OpenAPI itself, but its the most compatible way to ensure all tools can read the information correctly, and seeing as its automatically generated it doesn't hurt to have the duplication.
+</Callout>
+
+## Documenting request bodies
+
+APIs also need to accept data, and in RESTful APIs this is typically done through `POST`, `PUT`, and `PATCH` requests that contain a request body. Scribe can automatically generate request body schemas by looking at Laravel's [form request validation rules](https://laravel.com/docs/12.x/validation#form-request-validation), but similar to the earlier examples the generated output is very bare-bones and needs some extra context.
+
+Given the `RaceController` has a bog standard `store` method for creating new races, let's see how the automatic generation looks first.
+
+```php
+  /**
+   * Create a race
+   * 
+   * Allows authenticated users to submit a new Race resource to the system.
+   */
+  public function store(Request $request): RaceResource
+  {
+      $validated = $request->validate([
+          'name' => 'required|string',
+          'circuit_id' => 'required|integer|exists:circuits,id',
+          'race_date' => 'required|date',
+          'season' => 'nullable|string',
+          'driver_ids' => 'sometimes|array',
+          'driver_ids.*' => 'integer|exists:drivers,id',
+      ]);
+
+      $race = Race::create([
+          'name' => $validated['name'],
+          'circuit_id' => $validated['circuit_id'],
+          'race_date' => $validated['race_date'],
+          'season' => $validated['season'] ?? null,
+      ]);
+
+      if (isset($validated['driver_ids'])) {
+          $race->drivers()->attach($validated['driver_ids']);
+      }
+
+      return new RaceResource($race);
+  }
+```
+
+This will generate the following OpenAPI for the `POST /api/races` endpoint:
 
 ```yaml
-/api/races:
-  post:
-    summary: ""
-    operationId: postApiRaces
-    description: ""
-    responses: {}
-    tags:
-      - Endpoints
+    post:
+      summary: 'Create a race'
+      operationId: createARace
+      description: 'Allows authenticated users to submit a new Race resource to the system.'
+      parameters: []
+      responses: {  }
+      tags:
+        - Endpoints
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: ''
+                  example: architecto
+                  nullable: false
+                circuit_id:
+                  type: integer
+                  description: 'The <code>id</code> of an existing record in the circuits table.'
+                  example: 16
+                  nullable: false
+                race_date:
+                  type: string
+                  description: 'Must be a valid date.'
+                  example: '2025-11-16T14:53:59'
+                  nullable: false
+                season:
+                  type: string
+                  description: ''
+                  example: architecto
+                  nullable: true
+                driver_ids:
+                  type: array
+                  description: 'The <code>id</code> of an existing record in the drivers table.'
+                  example:
+                    - 16
+                  items:
+                    type: integer
+              required:
+                - name
+                - circuit_id
+                - race_date
+```
+
+Not bad! Some information is being pulled from the validation rules, such as required fields and types, but the descriptions are pretty much useless, and some of the examples don't make sense.
+
+For the most part, this has been documented quite well by leaning on the Laravel framework and understanding what the validation rules on the request means. Let's enhance this by adding some information.
+
+```php
+  /**
+   * Create a race
+   *
+   * Allows authenticated users to submit a new Race resource to the system.
+   */
+  #[Authenticated]
+  #[BodyParam(name: 'name', type: 'string', description: 'The name of the race.', required: true, example: 'Monaco Grand Prix')]
+  #[BodyParam(name: 'race_date', type: 'string', description: 'The date and time the race takes place, RFC 3339 in local timezone.', required: true, example: '2024-05-26T14:53:59')]
+  #[BodyParam(name: 'circuit_id', type: 'string', description: 'The Unique Identifier for the circuit where the race will be held.', required: true, example: '1234-1234-1234-1234')]
+  #[BodyParam(name: 'season', type: 'string', description: 'The season year for this race.', required: true, example: '2024')]
+  #[BodyParam(name: 'driver_ids', type: 'array', description: 'An array of Unique Identifiers for drivers participating in the race.', required: false, example: [ "5678-5678-5678-5678", "6789-6789-6789-6789" ])]
+  public function store(Request $request): RaceResource
+
+```
+
+Let's take a look at the resulting OpenAPI for the request body now:
+
+```yaml
     requestBody:
       required: true
       content:
@@ -822,187 +711,41 @@ Let's now move onto documenting our `store` endpoint which is what is used to cr
             properties:
               name:
                 type: string
-                description: ""
-                example: "Monaco Grand Prix"
-              race_date:
-                type: string
-                description: "Must be a valid date."
-                example: "2024-05-26"
-              season:
-                type: string
-                description: ""
-                example: "2024"
+                description: 'The name of the race.'
+                example: 'Monaco Grand Prix'
+                nullable: false
               circuit_id:
                 type: string
-                description: ""
-                example: abc123
+                description: 'The Unique Identifier for the circuit where the race will be held.'
+                example: 1234-1234-1234-1234
+                nullable: false
+              race_date:
+                type: string
+                description: 'The date and time the race takes place, RFC 3339 in local timezone.'
+                example: '2024-05-26T14:53:59'
+                nullable: false
+              season:
+                type: string
+                description: 'The season year for this race.'
+                example: '2024'
+                nullable: false
+              driver_ids:
+                type: array
+                description: 'An array of Unique Identifiers for drivers participating in the race.'
+                example:
+                  - 5678-5678-5678-5678
+                  - 6789-6789-6789-6789
+                items:
+                  type: string
             required:
               - name
+              - circuit_id
               - race_date
               - season
-              - circuit_id
-    security: []
-```
-
-For the most part, this has been documented quite well by leaning on the Laravel framework and understanding what the validation rules on the request means. Let's enhance this by adding some information.
-
-```php
-#[
-	Group(name: 'Races', description: 'A series of endpoints that allow programmatic access to managing F1 races.', authenticated: true),
-	Authenticated,
-	Endpoint(title: 'Create a new Race', description: 'Create a new F1 race for a specified circuit and season.'),
-]
-```
-
-This is similar to what we did on the `IndexController` but this time we are jumping straight into grouping the attributes all together at the top of the class. We do not need to add these above the `invoke` method, as this class only performs the one action anyway. I would consider moving these if I were to leverage additional Attributes for different purposes on the method, however for now I am not. Let's now regenerate the OpenAPI Specification to see what the difference is, but this time I am going to omit the request validation information.
-
-```yaml
-post:
-  summary: "Create a new Race"
-  operationId: createANewRace
-  description: "Create a new F1 race for a specified circuit and season."
-  responses: {}
-  tags:
-    - "Races"
-  requestBody:
-    required: true
-    content:
-```
-
-As you can see, the information is starting to build up based on the information we pass through to the PHP Attributes. Let's start expanding on the request body and response information and build a better specification.
-
-```php
-#[
-	Authenticated,
-  Group(name: 'Races', description: 'A series of endpoints that allow programmatic access to managing F1 races.', authenticated: true),
-  Endpoint(title: 'Create a new Race', description: 'Create a new F1 race for a specified circuit and season.'),
-
-  BodyParam(name: 'name', type: 'string', description: 'The name of the race.', required: true, example: 'Monaco Grand Prix'),
-  BodyParam(name: 'race_date', type: 'string', description: 'The date when the race will take place.', required: true, example: '2024-05-26'),
-  BodyParam(name: 'season', type: 'string', description: 'The season year for this race.', required: true, example: '2024'),
-  BodyParam(name: 'circuit_id', type: 'string', description: 'The Unique Identifier for the circuit where the race will be held.', required: true, example: '1234-1234-1234-1234'),
-  BodyParam(name: 'winner', type: 'string', description: 'The driver who won the race (optional, can be added after the race).', required: false, example: 'Max Verstappen'),
-
-  ResponseFromApiResource(RaceResource::class, Race::class, collection: false)
-]
-```
-
-Now we have the body parameters for this request, as well as how the API is expected to respond. We are currently only documenting the happy path - as we have yet to decide how we want to handle errors. This will create the following in your OpenAPI Specification:
-
-```yaml
-post:
-  summary: "Create a new Race"
-  operationId: createANewRace
-  description: "Create a new F1 race for a specified circuit and season."
-  responses:
-    200:
-      description: ""
-      content:
-        application/json:
-          schema:
-            type: object
-            example:
-              data:
-                id: 9bce14db-cdd1-4a8a-86cb-e05f9f918d20
-                type: races
-                attributes:
-                  name: "Monaco Grand Prix"
-                  race_date: "2024-05-26"
-                  season: "2024"
-                  circuit: "Monte Carlo Circuit"
-                  winner: null
-                  created:
-                    human: "0 seconds ago"
-                    timestamp: 1713094155
-                    string: "2024-04-14 11:29:15"
-                    local: "2024-04-14T11:29:15"
-            properties:
-              data:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: 9bce14db-cdd1-4a8a-86cb-e05f9f918d20
-                  type:
-                    type: string
-                    example: races
-                  attributes:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                        example: "Monaco Grand Prix"
-                      race_date:
-                        type: string
-                        example: "2024-05-26"
-                      season:
-                        type: string
-                        example: "2024"
-                      circuit:
-                        type: string
-                        example: "Monte Carlo Circuit"
-                      winner:
-                        type: string
-                        example: null
-                      created:
-                        type: object
-                        properties:
-                          human:
-                            type: string
-                            example: "0 seconds ago"
-                          timestamp:
-                            type: integer
-                            example: 1713094155
-                          string:
-                            type: string
-                            example: "2024-04-14 11:29:15"
-                          local:
-                            type: string
-                            example: "2024-04-14T11:29:15"
-  tags:
-    - "Races"
-  requestBody:
-    required: true
-    content:
-      application/json:
-        schema:
-          type: object
-          properties:
-            name:
-              type: string
-              description: "The name of the race."
-              example: "Monaco Grand Prix"
-            race_date:
-              type: string
-              description: "The date when the race will take place."
-              example: "2024-05-26"
-            season:
-              type: string
-              description: "The season year for this race."
-              example: "2024"
-            circuit_id:
-              type: string
-              description: "The Unique Identifier for the circuit where the race will be held."
-              example: 1234-1234-1234-1234
-            winner:
-              type: string
-              description: "The driver who won the race (optional, can be added after the race)."
-              example: "Max Verstappen"
-          required:
-            - name
-            - race_date
-            - season
-            - circuit_id
 ```
 
 As you can see, a lot more information is provided which will help anyone who wants to interact with this API.
 
 ## Summary
 
-If we follow this approach throughout our API, we can generate a well documented OpenAPI Specification for our Laravel based API - utilizing modern PHP to add information to our code base. This not only aids in the OpenAPI generation, but it also adds a level of in-code documentation that will help onboard any new developer who needs to know what the purpose of an endpoint may be.
-
-
-
-
-
-{/* TODO add .scribe to gitignore */}
+Generating an OpenAPI specification for your Laravel API is a great way to improve developer experience and streamline API consumption after the API has been built. When API design-first is not an option, "catching up" with Scribe means you can quickly get to the point of having a complete OpenAPI document that can be used in tools like Speakeasy to generate SDKs, tests, and more.
