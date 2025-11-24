@@ -1243,6 +1243,9 @@ const meta = {
           },
         },
       },
+      "openai-ecosystem": {
+        title: "The OpenAI ecosystem",
+      },
       "building-servers-section": {
         type: "separator",
         title: <SidebarSeparator>{"Building MCP servers"}</SidebarSeparator>,
