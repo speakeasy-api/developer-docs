@@ -66,11 +66,11 @@ const meta = {
               "tool-variations": {
                 title: "Tool Variations",
               },
-              environments: {
-                title: "Environments",
-              },
               "tool-sources": {
                 title: "Tool Sources",
+              },
+              environments: {
+                title: "Environments",
               },
               deployments: {
                 title: "Deployments",
@@ -92,6 +92,9 @@ const meta = {
               "mcp-sdk": {
                 title: "Using the MCP SDK",
               },
+              "configuring-environments": {
+                title: "Configuring environments",
+              },
               "build-deploy": {
                 title: "Build and Deploy",
               },
@@ -111,6 +114,9 @@ const meta = {
               },
               "configuring-environments": {
                 title: "Configure environments",
+              },
+              "attach-environments-to-sources": {
+                title: "Attach environments to tool sources",
               },
               "test-toolsets": {
                 title: "Test toolsets",
@@ -236,7 +242,10 @@ const meta = {
               },
               "open-ai-apps-sdk": {
                 title: "Build a ChatGPT App",
-              }
+              },
+              "using-environments-with-vercel-ai-sdk": {
+                title: "Using environments with the Vercel AI SDK",
+              },
             },
           },
         },
@@ -682,6 +691,17 @@ const meta = {
               },
             },
           },
+          guides: {
+            title: "Guides",
+            items: {
+              overlays: {
+                title: "Overlays",
+              },
+              hooks: {
+                title: "Hooks",
+              },
+            },
+          },
         },
       },
       "docs-md": {
@@ -745,6 +765,9 @@ const meta = {
               },
             },
           },
+          guides: {
+            title: "Guides",
+          },
         },
       },
       /*
@@ -805,6 +828,15 @@ const meta = {
           },
           supported: {
             title: "Supported",
+          },
+          extensions: {
+            title: "Extensions",
+          },
+          "workflow-file": {
+            title: "Workflow File",
+          },
+          guides: {
+            title: "Guides",
           },
         },
       },
@@ -1033,6 +1065,12 @@ const meta = {
           },
         },
       },
+      pagination: {
+        title: "Pagination",
+      },
+      guides: {
+        title: "Guides",
+      },
       "release-notes-section": {
         type: "separator",
         title: <SidebarSeparator>{"Release Notes"}</SidebarSeparator>,
@@ -1141,116 +1179,6 @@ const meta = {
       },
       collections: {
         title: "Collections",
-      },
-    },
-  },
-  guides: {
-    title: "Guides",
-    type: "page",
-    display: "children",
-    items: {
-      "search-bar-guides": {
-        type: "separator",
-        title: "__INKEEP_SEARCH__",
-      },
-      index: {
-        title: "Overview",
-      },
-      openapi: {
-        title: "OpenAPI Guides",
-        items: {
-          "x-codesamples": {
-            title: "Code Samples Extension",
-          },
-          "path-fragments": {
-            title: "Path Fragments",
-          },
-          "publish-specs-to-api-registry": {
-            title: "Publish Specs to API Registry",
-          },
-        },
-      },
-
-      sdks: {
-        title: "SDK Guides",
-        items: {
-          "creating-a-monorepo": {
-            title: "Create a Monorepo",
-          },
-          "utilizing-user-agent-strings": {
-            title: "User Agent Strings",
-          },
-          "generate-in-a-subdirectory": {
-            title: "Generate in a Subdirectory",
-          },
-          "typescript-monorepo-tips": {
-            title: "TypeScript Monorepo Tips",
-          },
-          "pnpm-default": {
-            title: "Using PNPM",
-          },
-          "override-compile": {
-            title: "Override Compile Commands",
-          },
-          overlays: {
-            title: "SDK Overlays",
-            items: {
-              overlays: {
-                title: "Common Overlays for SDKs",
-              },
-              "internal-external-versions": {
-                title: "Internal and External SDKs",
-              },
-              "json-path-expressions": {
-                title: "JSON Path Expressions",
-              },
-            },
-          },
-        },
-      },
-      hooks: {
-        title: "Hook Guides",
-        items: {
-          "env-auth-hook": {
-            title: "Environment Auth Hook",
-          },
-          "posthog-telemetry-hook": {
-            title: "PostHog Telemetry Hook",
-          },
-          "sentry-error-hook": {
-            title: "Sentry Error Hook",
-          },
-          "user-agent-hook": {
-            title: "User Agent Hook",
-          },
-        },
-      },
-
-      terraform: {
-        title: "Terraform Guides",
-        items: {
-          crud: {
-            title: "CRUD Example",
-          },
-          hoisting: {
-            title: "Hoisting",
-          },
-          "merged-entity": {
-            title: "Merged Entity",
-          },
-          "remove-nontf-endpoints": {
-            title: "Remove Non-TF Endpoints",
-          },
-        },
-      },
-
-      cli: {
-        title: "CLI Guides",
-        items: {
-          "code-samples-without-github-actions": {
-            title: "Populate Code Samples Without GitHub Actions",
-          },
-        },
       },
     },
   },

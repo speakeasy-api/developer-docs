@@ -5,9 +5,13 @@ sidebar:
   order: 2
 ---
 
-Gram allows you to manage settings that control how users access your Gram-hosted MCP server (public vs private) and how they authenticate with the underlying API (pass-through vs managed). These settings can be used in different combinations, giving you four possible configuration options as shown below.
+Gram allows you to manage settings that control how users access your Gram-hosted MCP server (public vs private) and how they authenticate with the underlying API (pass-through vs managed). These settings can be used in different combinations.
+
+Under the **MCP Installation** section, you can edit and copy the MCP installation page and share it with others.
 
 ![Four MCP server configuration options showing combinations of public/private and passthrough/managed authentication](/assets/docs/gram/img/guides/mcp-server-four-options.png)
+
+The MCP installation page provides a detailed guide on how to install and configure your MCP server. You can customize the installation process to fit your specific needs.
 
 Common use cases for each combination:
 

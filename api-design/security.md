@@ -8,7 +8,7 @@ description: "Implement robust security measures in your API to protect sensitiv
 Creating an API is like opening a door to the outside world. Who is allowed
 through, what they can carry, and where they're allowed to go is incredibly
 important. In this guide we'll see how design choices made early on impact the
-security of an API once it's built. 
+security of an API once it's built.
 
 Many API security problems come down to coding errors or misconfigured
 infrastructure, but this guide focuses more on the foundational API design
@@ -48,10 +48,10 @@ decisions can make or break an API's defenses before it's even built.
 **Every API consumer should only have access to what they need and nothing more.**
 
 Imagine designing an API for an e-commerce platform. A customer should be
-able to view their order history, but not other customers' orders. 
+able to view their order history, but not other customers' orders.
 
 Similarly, a "staff" user might need access to refund functionality but shouldn't
-necessarily see sensitive payment details. 
+necessarily see sensitive payment details.
 
 **What Could Go Wrong**: Failure to verify this could lead
 to Insecure Direct Object References (IDOR), a common flaw where attackers can
@@ -67,7 +67,7 @@ Authorization: Bearer {access_token}
 ```
 
 The application should verify that the `orderId` belongs to the authenticated
-user, unless the user has a role like `admin`. 
+user, unless the user has a role like `admin`.
 
 Refund logic and payment details can be split onto their own endpoints:
 
@@ -83,7 +83,7 @@ Authorization: Bearer {admin_access_token}
 
 This allows staff handle refunds, but does not leak sensitive credit card
 information to as many people within the company, whilst still making it
-possible to escalate customer problems to a higher access user. 
+possible to escalate customer problems to a higher access user.
 
 Better yet, **the payments collection is not even on the API**, it's something only
 viewable in an admin backend system thats protected with a firewall and VPN.
@@ -94,17 +94,17 @@ viewable in an admin backend system thats protected with a firewall and VPN.
 "private".**
 
 Any incoming API traffic could be compromised in some way, even if it's
-considered to be a trusted source. 
+considered to be a trusted source.
 
 An API could suddenly become public: either intentionally when infrastructure
 teams move things around, or accidentally when somebody de-compiles an iOS
-application or sniffs traffic to find an API that people thought was hidden. 
+application or sniffs traffic to find an API that people thought was hidden.
 
 Even if an API is firewalled off from public traffic, another API or service
 could have been hacked giving them access to the protected API.
 
 It's best to treat everyone with suspicion, and validate all inputs as strictly
-as possible. 
+as possible.
 
 **What Could Go Wrong**: Malicious data could be introduced, or private
 information leaked, leading to any number of issues. People could delete invoice
@@ -113,13 +113,13 @@ wrong person. They could change passwords for users so they can log in as them
 to access information and processes not even available in the API.
 
 **Design Decision**: Set strict rules for which properties are editable, which
-can be returned, and set strict validation rules for these properties. 
+can be returned, and set strict validation rules for these properties.
 
 This can be described in OpenAPI early on utilizing `readOnly`, `writeOnly`,
 `required`, setting `additionalProperties: false`. [Learn more about
-additionalProperties](https://www.speakeasy.com/guides/openapi/additionalproperties).
+additionalProperties](https://www.speakeasy.com/docs/sdks/customize/data-model/additionalproperties).
 This means when the API is developed the OpenAPI can be used for integration
-testing to poke and prod to see if extra properties can sneak though. 
+testing to poke and prod to see if extra properties can sneak though.
 
 Comical examples of this was somebody hacking GitHub and Rails to update the
 `created_at` date to have the year 3012. This attack is known as Bender from the
@@ -153,7 +153,7 @@ Authorization: Bearer my-secret-key
 
 Using `Authorization` has the added benefit over generic custom headers like
 `X-API-Key` because it will alert HTTP caching tools to not reuse this response
-for other users by default. 
+for other users by default.
 
 This is not simply about authorization though, there are lots of other
 "sensitive" things which should not go into the URL. Email addresses, social
@@ -168,7 +168,7 @@ we're all looking for.
 ## Principle #4: Limit one-time URLs
 
 Logins and file uploads often involve allowing a user to pass in a URL, which
-will then be downloaded or redirected to. 
+will then be downloaded or redirected to.
 
 ```http
 POST /products/{productId}/images
@@ -221,7 +221,7 @@ business might not want to expose, or allow outright theft of an entire dataset.
 
 A startup tracking street art around the world (think Banksy, Bragga, and
 smaller artists) built an amazing unique database of user-generated photographs
-and locations of all sorts of graffiti, sculptures, installations, etc. 
+and locations of all sorts of graffiti, sculptures, installations, etc.
 
 This data was not available anywhere else on the Internet, but their website
 relied on two API endpoints:
@@ -240,10 +240,11 @@ number of how many active users versus inactive users, leaking a "churn rate"
 which could be embarrassing in the press of scare off investors.
 
 Using the same approach a client can hit `GET /artworks/1` and loop through with `id
-+ 1` to grab a hold of all that data, which helped that company populate their
-own database, making a new competitor quite easily, and with a slightly better
-app as they didn't have to spend time or money building the dataset in the first
-place. This put the original startup out of business.
+
+- 1` to grab a hold of all that data, which helped that company populate their
+  own database, making a new competitor quite easily, and with a slightly better
+  app as they didn't have to spend time or money building the dataset in the first
+  place. This put the original startup out of business.
 
 **Design Decision**: There are non-incremental or "hard to guess" system of
 identifiers instead. Standards like
@@ -282,7 +283,7 @@ thresholds for various user roles:
 - Paid users: 1,000 requests per hour
 
 Communicate these limits clearly in API documentation and return appropriate
-status codes like `429 Too Many Requests` when limits are exceeded. 
+status codes like `429 Too Many Requests` when limits are exceeded.
 
 Learn more about [rate limiting](/api-design/rate-limiting).
 
@@ -317,7 +318,7 @@ keeping up to date with new editions when they're released.
 ## Tooling
 
 Much of this advice and more can be applied to an OpenAPI automatically to help
-whole teams make good decisions early on in the API design process. 
+whole teams make good decisions early on in the API design process.
 
 - [Vacuum](https://quobix.com/vacuum/) via the built in [OWASP Ruleset](https://quobix.com/vacuum/rules/owasp/).
 - [Spectral](https://github.com/stoplightio/spectral) with the [Spectral OWASP Ruleset](https://github.com/stoplightio/spectral-owasp-ruleset).
@@ -330,10 +331,10 @@ many of the pitfalls outlined here and in the OWASP API Security Top 10 can be a
 
 Remember, every design decision is a trade-off. Security measures often add
 complexity or impact usability. The goal is to strike the right balance,
-keeping the needs of both API consumers and the business in mind. 
+keeping the needs of both API consumers and the business in mind.
 
 There's no need to go to massive massive and intrusive lengths to secure
 information that is fine out in the public, but it is important to establish
-good practices for limiting interactions for more sensitive data. 
+good practices for limiting interactions for more sensitive data.
 
 Maybe this means creating more than one API.

@@ -109,121 +109,21 @@ const gram = new Gram({ lax: true }).tool({
 
 ## Environment variables
 
-Gram Functions support environment variables for managing credentials, API keys, and configuration values. These can be provided through [stored Gram environments](/docs/gram/concepts/environments) or via MCP client headers.
-
-### Declaring environment variables
-
-Environment variables must be declared using `envSchema` to be published in the tool manifest and made available in the Gram dashboard and MCP clients.
+Gram Functions can access environment variables directly from `process.env`:
 
 ```typescript
-import { Gram } from "@gram-ai/functions";
-import * as z from "zod/mini";
-
-const gram = new Gram({
-  envSchema: {
-    API_KEY: z.string(),
-    BASE_URL: z.string().url(),
-    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
-  },
-}).tool({
+const gram = new Gram().tool({
   name: "api_call",
   inputSchema: { endpoint: z.string() },
   async execute(ctx, input) {
-    const baseUrl = ctx.env.BASE_URL;
-    const apiKey = ctx.env.API_KEY;
-    const expiresAt = ctx.env.EXPIRES_AT;
-    // Use validated and typed environment variables...
+    const apiUrl = process.env.API_URL;
+    const response = await fetch(`${apiUrl}/${input.endpoint}`);
+    return ctx.json(await response.json());
   },
 });
 ```
 
-### How environment variables work
-
-When a tool call is received, the Gram function runner spawns a new Node.js subprocess with environment variables set from the tool call request. This follows standard Node.js process forking behavior.
-
-#### Two ways to access environment variables
-
-Environment variables are accessible in two forms:
-
-**`process.env`** - Raw string values from the Node.js process environment:
-
-```typescript
-async execute(ctx) {
-  console.log(typeof process.env.EXPIRES_AT); // "string"
-  console.log(process.env.EXPIRES_AT); // "2026-03-01T06:15:00Z"
-}
-```
-
-**`ctx.env`** - Parsed and validated values according to `envSchema`:
-
-```typescript
-async execute(ctx) {
-  console.log(typeof ctx.env.EXPIRES_AT); // "object"
-  console.log(ctx.env.EXPIRES_AT instanceof Date); // true
-  console.log(ctx.env.EXPIRES_AT); // Date object: 2026-03-01T06:15:00.000Z
-}
-```
-
-The `ctx.env` object provides several benefits:
-
-- **Type safety**: TypeScript types are inferred from the Zod schema
-- **Validation**: Values are validated against the schema before execution
-- **Transformation**: Values can be transformed (for example, parsing dates, numbers, or custom formats)
-- **Better developer experience**: Access validated, typed values instead of raw strings
-
-### Example: Date transformation
-
-A common use case is parsing ISO datetime strings into Date objects:
-
-```typescript
-const gram = new Gram({
-  envSchema: {
-    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
-  }
-}).tool({
-  name: "check_expiration",
-  inputSchema: {},
-  async execute(ctx) {
-    // process.env.EXPIRES_AT is the raw string "2026-03-01T06:15:00Z"
-    // ctx.env.EXPIRES_AT is a Date object
-
-    const daysUntilExpiry = Math.floor(
-      (ctx.env.EXPIRES_AT.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    );
-
-    return ctx.text(`Expires in ${daysUntilExpiry} days`);
-  },
-});
-```
-
-### Testing with environment variables
-
-When writing tests for Gram Functions, provide fake environment values using the `env` option instead of relying on `process.env`:
-
-```typescript
-const gram = new Gram({
-  env: {
-    API_KEY: "test-api-key",
-    BASE_URL: "https://test.example.com",
-    EXPIRES_AT: "2026-03-01T06:15:00Z",
-  },
-  envSchema: {
-    API_KEY: z.string(),
-    BASE_URL: z.string().url(),
-    EXPIRES_AT: z.string().datetime().transform(v => new Date(v))
-  }
-}).tool({
-  name: "test_tool",
-  inputSchema: {},
-  async execute(ctx) {
-    // ctx.env will use the fake values provided above
-    // process.env is not used to populate ctx.env in this case
-    return ctx.json({ apiKey: ctx.env.API_KEY });
-  },
-});
-```
-
-This approach ensures tests are isolated from the actual process environment and provides predictable, controlled values for testing.
+For more details on configuring and managing environment variables in Gram Functions, see [Configuring environments](/docs/gram/gram-functions/configuring-environments).
 
 ## Using fetch
 
@@ -262,6 +162,136 @@ const gram = new Gram().tool({
   },
 });
 ```
+
+## Composability
+
+Gram instances can be composed together using the `.extend()` method, allowing tool definitions to be split across multiple files and modules. This pattern is similar to Hono's grouping pattern and helps organize larger codebases.
+
+### Basic composition
+
+Split tool definitions into separate modules and combine them:
+
+```typescript filename="train.ts"
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+export const trainGram = new Gram({
+  envSchema: {
+    TRAIN_API_KEY: z.string().describe("API key for the train service"),
+  },
+})
+  .tool({
+    name: "train_book",
+    description: "Books a train ticket",
+    inputSchema: { destination: z.string(), date: z.string() },
+    async execute(ctx, input) {
+      const apiKey = ctx.env.TRAIN_API_KEY;
+      // Implementation here
+      return ctx.json({ booked: true });
+    },
+  })
+  .tool({
+    name: "train_status",
+    description: "Gets the status of a train",
+    inputSchema: { trainId: z.string() },
+    async execute(ctx, input) {
+      // Implementation here
+      return ctx.json({ status: "on time" });
+    },
+  });
+```
+
+```typescript filename="flight.ts"
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+export const flightGram = new Gram({
+  envSchema: {
+    FLIGHT_API_KEY: z.string().describe("API key for the flight service"),
+  },
+})
+  .tool({
+    name: "flight_book",
+    description: "Books a flight ticket",
+    inputSchema: { destination: z.string(), date: z.string() },
+    async execute(ctx, input) {
+      const apiKey = ctx.env.FLIGHT_API_KEY;
+      // Implementation here
+      return ctx.json({ booked: true });
+    },
+  })
+  .tool({
+    name: "flight_status",
+    description: "Gets the status of a flight",
+    inputSchema: { flightNumber: z.string() },
+    async execute(ctx, input) {
+      // Implementation here
+      return ctx.json({ status: "departed" });
+    },
+  });
+```
+
+```typescript filename="gram.ts"
+import { Gram } from "@gram-ai/functions";
+import { trainGram } from "./train";
+import { flightGram } from "./flight";
+
+const gram = new Gram()
+  .extend(trainGram)
+  .extend(flightGram);
+
+export default gram;
+```
+
+### Environment schema merging
+
+When composing Gram instances, environment schemas are automatically merged. Each module can define its own environment variables, and the final composed instance will validate all required variables:
+
+```typescript
+// Each module defines its own environment requirements
+const weatherGram = new Gram({
+  envSchema: {
+    WEATHER_API_KEY: z.string(),
+  },
+}).tool({
+  name: "get_weather",
+  inputSchema: { city: z.string() },
+  async execute(ctx, input) {
+    // Access environment variable from this module
+    const apiKey = ctx.env.WEATHER_API_KEY;
+    return ctx.json({ temperature: 72 });
+  },
+});
+
+const newsGram = new Gram({
+  envSchema: {
+    NEWS_API_KEY: z.string(),
+  },
+}).tool({
+  name: "get_news",
+  inputSchema: { topic: z.string() },
+  async execute(ctx, input) {
+    // Access environment variable from this module
+    const apiKey = ctx.env.NEWS_API_KEY;
+    return ctx.json({ articles: [] });
+  },
+});
+
+// Composed instance requires both environment variables
+const gram = new Gram()
+  .extend(weatherGram)
+  .extend(newsGram);
+// Both WEATHER_API_KEY and NEWS_API_KEY must be provided
+```
+
+### Benefits of composition
+
+Composing Gram instances provides several advantages:
+
+- **Modularity**: Organize related tools into separate files
+- **Reusability**: Share tool definitions across different Gram instances
+- **Maintainability**: Easier to manage large codebases with many tools
+- **Team collaboration**: Different team members can work on separate modules
 
 ## Next steps
 - [Build and deploy](/docs/gram/gram-functions/build-deploy)
