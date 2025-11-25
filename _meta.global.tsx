@@ -786,6 +786,9 @@ const meta = {
               "getting-started": {
                 title: "Getting Started",
               },
+              docker: {
+                title: "Using with Docker",
+              },
               "mise-toolkit": {
                 title: "Using with mise toolkit",
               },

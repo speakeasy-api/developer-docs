@@ -1,0 +1,186 @@
+---
+description: "Use Speakeasy Docker images to generate SDKs and manage your API tooling in containerized environments. Includes all necessary build tools for supported languages."
+slug: /speakeasy-cli/docker/
+---
+
+# Using Speakeasy with Docker
+
+The Speakeasy Docker image provides a containerized environment for running Speakeasy CLI commands. The image includes all necessary build tools for all languages supported by Speakeasy, making it ideal for CI/CD pipelines and consistent development environments.
+
+## Docker image
+
+The official Speakeasy Docker image is available on GitHub Container Registry:
+
+[ghcr.io/speakeasy-api/speakeasy](https://github.com/speakeasy-api/speakeasy/pkgs/container/speakeasy)
+
+## Installation
+
+Pull the latest Speakeasy Docker image:
+
+```bash
+docker pull ghcr.io/speakeasy-api/speakeasy:latest
+```
+
+You can also use specific version tags instead of `latest` for reproducible builds:
+
+```bash
+docker pull ghcr.io/speakeasy-api/speakeasy:v1.234.0
+```
+
+## Authentication
+
+To authenticate with the Speakeasy Platform from within a Docker container, you need to:
+
+1. Set the `SPEAKEASY_LOGIN_CALLBACK_PORT` environment variable
+2. Expose the callback port for OAuth authentication
+3. Mount your workspace directory
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    -e SPEAKEASY_LOGIN_CALLBACK_PORT=$SPEAKEASY_LOGIN_CALLBACK_PORT \
+    -p $SPEAKEASY_LOGIN_CALLBACK_PORT:$SPEAKEASY_LOGIN_CALLBACK_PORT \
+    ghcr.io/speakeasy-api/speakeasy:latest auth login
+```
+
+After running this command, a browser window will open for you to authenticate with the Speakeasy Platform.
+
+### Using API keys in CI/CD
+
+For automated environments like CI/CD pipelines, use an API key instead of interactive authentication:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    -e SPEAKEASY_API_KEY=$SPEAKEASY_API_KEY \
+    ghcr.io/speakeasy-api/speakeasy:latest run
+```
+
+Create an API key in the [Speakeasy Platform](https://app.speakeasy.com) and set it as the `SPEAKEASY_API_KEY` environment variable.
+
+## Generate SDK
+
+To generate an SDK using the Docker image, mount your workspace directory and run the generation command:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest run all --pinned --frozen-workflow-lockfile --output console
+```
+
+This command:
+- Mounts the current directory to `/workspace` in the container
+- Sets the working directory to `/workspace`
+- Runs all configured SDK generation workflows
+- Uses pinned versions for reproducibility
+- Uses a frozen workflow lockfile to ensure consistent dependencies
+- Outputs results to the console
+
+## Common usage examples
+
+### Run quickstart
+
+Get started with an interactive quickstart:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest quickstart
+```
+
+### Validate OpenAPI spec
+
+Validate your OpenAPI specification:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest validate openapi -s ./openapi.yaml
+```
+
+### Generate SDK for specific language
+
+Generate an SDK for a specific language:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest run -t typescript
+```
+
+### Check SDK status
+
+Check the status of your SDK generation:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest status
+```
+
+## Included build tools
+
+The Speakeasy Docker image includes all necessary build tools for generating SDKs in the following languages:
+
+- TypeScript/JavaScript (Node.js, npm, pnpm, yarn)
+- Python (Python 3.x, pip, poetry)
+- Go (Go compiler and tools)
+- Java (JDK, Maven, Gradle)
+- C# (.NET SDK)
+- PHP (PHP runtime and Composer)
+- Ruby (Ruby runtime and Bundler)
+- Rust (Rust compiler and Cargo)
+
+This ensures that SDK generation works out of the box without requiring additional setup or dependencies.
+
+## Using in CI/CD pipelines
+
+The Docker image is designed for use in CI/CD pipelines. Here's an example GitHub Actions workflow:
+
+```yaml
+name: Generate SDK
+on:
+  push:
+    branches: [main]
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate SDK
+        run: |
+          docker run -v "$(pwd):/workspace" -w "/workspace" \
+            -e SPEAKEASY_API_KEY=${{ secrets.SPEAKEASY_API_KEY }} \
+            ghcr.io/speakeasy-api/speakeasy:latest run all --pinned --frozen-workflow-lockfile
+```
+
+## Volume mounts and permissions
+
+When using the Docker image, ensure that:
+
+1. Your workspace directory is mounted to `/workspace`
+2. The working directory is set to `/workspace` with `-w "/workspace"`
+3. File permissions allow the container to read and write files
+
+If you encounter permission issues, you may need to adjust file ownership or run the container with appropriate user permissions.
+
+## Troubleshooting
+
+### Authentication issues
+
+If authentication fails, ensure that:
+- The callback port is properly exposed with `-p`
+- The `SPEAKEASY_LOGIN_CALLBACK_PORT` environment variable is set
+- Your firewall allows connections on the callback port
+
+### File permission errors
+
+If you encounter file permission errors, try running the container with your user ID:
+
+```bash
+docker run -it --user $(id -u):$(id -g) \
+    -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest run
+```
+
+### Network connectivity
+
+Ensure your Docker container has network access to:
+- The Speakeasy Platform (app.speakeasy.com)
+- Package registries for your target languages
+- Your OpenAPI specification source (if remote)
