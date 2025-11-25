@@ -1265,8 +1265,8 @@ const meta = {
           "response-filtering-jq": {
             title: "Response Filtering with JQ",
           },
-          "optimizing-openapi": {
-            title: "Optimize OpenAPI for MCP",
+          "generate-mcp-tools-from-openapi": {
+            title: "Build tools from OpenAPI",
           },
         },
       },
