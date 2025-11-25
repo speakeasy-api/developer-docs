@@ -1,0 +1,1050 @@
+---
+title: How To Generate an OpenAPI Document With Zod v3
+description: "How to generate OpenAPI documents and great SDK clients for your Zod v3-validated API."
+---
+
+import { Callout } from "@/mdx/components";
+
+# How to generate an OpenAPI document with Zod v3
+
+<Callout title="Zod Version" type="info">
+This guide covers Zod v3. For Zod v4, see the [Zod v4 guide](/openapi/frameworks/zod).
+</Callout>
+
+Zod is a powerful and flexible schema validation library for TypeScript, which many developers use to define their TypeScript data parsing schemas.
+
+This tutorial demonstrates how to use another TypeScript library, the `zod-openapi` npm package, to convert Zod schemas into a complete OpenAPI document, and then how to use Speakeasy to generate a production-ready SDK from that document.
+
+## Why use Zod with OpenAPI?
+
+Combining Zod with OpenAPI generation offers the best of both worlds: runtime validation and automatic API documentation. Instead of writing schemas twice – once for runtime validation and again for your OpenAPI document – you define your data models once in Zod and generate both TypeScript types and OpenAPI documentation from the same source.
+
+This eliminates the task of keeping hand-written OpenAPI documents in sync with your actual API implementation. When paired with Speakeasy's SDK generation, you get type-safe client libraries that automatically stay up to date with your API changes.
+
+<Callout title="Zod versions and other libraries" type="info">
+This guide uses `zod-openapi`, which is actively maintained and offers better TypeScript integration than the older `zod-to-openapi` library.
+
+We show how to use a dual import strategy, which means we use both Zod v3 and v4 in the same project. This approach is necessary because `zod-openapi` currently requires Zod v3 compatibility, but you may want to use Zod v4 features elsewhere in your application.
+
+While Zod v4 introduces new features like `z.strictObject()` and `z.email()`, you'll need to use the standard Zod import for OpenAPI schemas and the `/v4` subpath for new features until `zod-openapi` adds full v4 support. Check the [zod-openapi releases](https://github.com/samchungy/zod-openapi/releases) for the latest compatibility updates.
+
+Unlike most libraries, Zod is directly embedded in hundreds of other libraries' public APIs. A normal `zod@4.0.0` release would force every one of those libraries to publish breaking changes simultaneously - a massive "version avalanche".
+
+The subpath approach (inspired by Go modules) lets libraries support both versions with one dependency, providing a gradual migration path for the entire ecosystem.
+
+See [Colin's detailed explanation](https://github.com/colinhacks/zod/issues/4371) for the full technical reasoning.
+
+</Callout>
+
+## zod-openapi overview
+
+The [`zod-openapi`](https://github.com/samchungy/zod-openapi) package is a TypeScript library that helps developers define OpenAPI schemas as Zod schemas. The stated goal of the project is to cut down on code duplication, and it does a wonderful job of this.
+
+Zod schemas map well to OpenAPI schemas, and the changes required to extract OpenAPI documents from a schema defined in Zod are often small.
+
+<Callout title="Migrating from zod-to-openapi?" type="info">
+  If you're currently using the older `zod-to-openapi` library, the syntax will
+  be familiar, and you can use either library. For migration guidance, see the
+  [zod-openapi migration
+  documentation](https://github.com/samchungy/zod-openapi#migration).
+</Callout>
+
+### Key concepts
+
+Here's an overview of some key concepts in Zod and how they relate to Zod versioning.
+
+#### Schemas and z.strictObject
+
+Zod v4 introduces top-level helpers like `z.strictObject()` for objects that reject unknown keys and `z.email()` for email validation.
+
+```typescript filename="concept.ts"
+import { z as z3 } from "zod";
+import { z as z4 } from "zod/v4";
+
+// Use z4 for new Zod v4 features
+const user = z4.strictObject({
+  email: z4.email(),
+  age: z4.number().int().min(18),
+});
+```
+
+#### Field metadata
+
+The `.openapi()` method adds OpenAPI-specific metadata like descriptions and examples to any Zod schema. Use `z3` for OpenAPI schemas.
+
+```typescript filename="concept.ts"
+import { z as z3 } from "zod";
+import { extendZodWithOpenApi } from "zod-openapi";
+
+extendZodWithOpenApi(z3);
+
+const name = z3.string().min(1).openapi({
+  description: "The user's full name",
+  example: "Alice Johnson",
+});
+```
+
+#### Operation objects
+
+Use `ZodOpenApiOperationObject` to define API endpoints with request and response schemas.
+
+```typescript filename="concept.ts"
+import { z as z3 } from "zod";
+import { ZodOpenApiOperationObject } from "zod-openapi";
+
+const getUser: ZodOpenApiOperationObject = {
+  operationId: "getUser",
+  summary: "Get user by ID",
+  requestParams: { path: z3.object({ id: z3.string() }) },
+  responses: {
+    "200": {
+      description: "User found",
+      content: { "application/json": { schema: userSchema } },
+    },
+  },
+};
+```
+
+#### Adding tags to operations
+
+Tags help organize your API operations in the generated documentation and SDKs. You can add a `tags` array to each operation object:
+
+```typescript filename="concept.ts"
+const getBurger: ZodOpenApiOperationObject = {
+  operationId: "getBurger",
+  summary: "Get a burger by ID",
+  tags: ["burgers"], // <--- Add tags here
+  // ...rest of the operation
+};
+```
+
+#### Using Zod v4 features alongside OpenAPI documents
+
+While your OpenAPI documents must use the `z3` instance for compatibility, you can use `z4` features for internal validation, type checking, or other parts of your application:
+
+```typescript filename="concept.ts"
+// OpenAPI-compatible schemas (use z3)
+const apiUserSchema = z3
+  .object({
+    id: z3.string(),
+    name: z3.string(),
+    email: z3.string(),
+  })
+  .openapi("User");
+
+// Internal schemas can use Zod v4 features (use z4)
+const internalUserSchema = z4.strictObject({
+  // v4 feature
+  id: z4.string().uuid(),
+  name: z4.string().min(1),
+  email: z4.string().email(), // v4 feature
+  preferences: z4
+    .object({
+      darkMode: z4.boolean(),
+      notifications: z4.enum(["all", "mentions", "none"]),
+    })
+    .optional(),
+});
+```
+
+## Step-by-step tutorial: From Zod to OpenAPI to an SDK
+
+Now let's walk through the process of generating an OpenAPI document and SDK for our Burgers and Orders API.
+
+### Requirements
+
+This tutorial assumes basic familiarity with TypeScript and Node.js development.
+
+The following should be installed on your machine:
+
+- [Node.js version 18 or above](https://nodejs.org/en/download)
+- The [Speakeasy CLI](/docs/introduction#install-the-speakeasy-cli), which we'll use to generate an SDK from the OpenAPI document
+
+### Creating your Zod project
+
+<Callout title="Complete Example Available" type="info">
+  The source code for our complete example is available in the
+  [`speakeasy-api/examples`](https://github.com/speakeasy-api/examples.git)
+  repository in the `zod-openapi` directory. The project contains a
+  pre-generated Python SDK with instructions on how to generate more SDKs. You
+  can clone this repository to test how changes to the Zod schema definition
+  result in changes to the generated SDK.
+</Callout>
+
+Alternatively, you can initialize a new npm project and install the required dependencies if you're not using our burgers example.
+
+```
+npm init -y
+npm install zod@^3.25 zod-openapi yaml
+```
+
+If you're following along, start by cloning the `speakeasy-api/examples` repository.
+
+```bash filename="Terminal"
+git clone https://github.com/speakeasy-api/examples.git
+cd zod-openapi
+```
+
+Next, install the dependencies:
+
+```bash filename="Terminal"
+npm install
+```
+
+### Installing TypeScript development tools
+
+For this tutorial, we'll use `tsx` for running TypeScript directly:
+
+```bash filename="Terminal"
+npm install -D tsx
+```
+
+### Creating your app's first Zod schema
+
+Save this TypeScript code in a new file called `index.ts`. Note the dual import strategy:
+
+```typescript filename="index.ts"
+// Import Zod v3 compatible instance for zod-openapi
+import { z as z3 } from "zod";
+// Import Zod v4 for new features and future migration
+import { z as z4 } from "zod/v4";
+
+// For now, we'll use z3 for OpenAPI schemas since zod-openapi requires it
+const burgerSchema = z3.object({
+  id: z3.number().min(1),
+  name: z3.string().min(1).max(50),
+  description: z3.string().max(255).optional(),
+});
+```
+
+### Extending Zod with OpenAPI
+
+We'll add the `openapi` method to Zod by calling `extendZodWithOpenApi` once. Update `index.ts` to import `extendZodWithOpenApi` from `zod-openapi`, then call `extendZodWithOpenApi` on the `z3` instance.
+
+```typescript filename="index.ts"
+import { z as z3 } from "zod";
+import { extendZodWithOpenApi } from "zod-openapi";
+import { z as z4 } from "zod/v4";
+
+// Extend the Zod v3 compatible instance for zod-openapi
+extendZodWithOpenApi(z3);
+
+// Schemas defined with z3 for current zod-openapi compatibility
+const burgerSchema = z3.object({
+  id: z3.number().min(1),
+  name: z3.string().min(1).max(50),
+  description: z3.string().max(255).optional(),
+});
+```
+
+### Registering and generating a component schema
+
+Next, we'll use the new `openapi` method provided by `extendZodWithOpenApi` to register an OpenAPI schema for the `burgerSchema`. Edit `index.ts` and add `.openapi({ref: "Burger"}` to the `burgerSchema` schema object.
+
+We'll also add an OpenAPI generator, `OpenApiGeneratorV31`, and log the generated component to the console as YAML.
+
+```typescript filename="index.ts"
+import { z as z3 } from "zod";
+import { extendZodWithOpenApi } from "zod-openapi";
+import { z as z4 } from "zod/v4";
+
+extendZodWithOpenApi(z3);
+
+const burgerSchema = z3.object({
+  id: z3.number().min(1),
+  name: z3.string().min(1).max(50),
+  description: z3.string().max(255).optional(),
+});
+
+burgerSchema.openapi({ ref: "Burger" });
+```
+
+### Adding metadata to components
+
+To generate an SDK that offers a great developer experience, we recommend adding descriptions and examples to all fields in OpenAPI components.
+
+With `zod-openapi`, we'll call the `.openapi` method on each field, and add an example and description to each field.
+
+We'll also add a description to the `Burger` component itself.
+
+Edit `index.ts` and edit `burgerSchema` to add OpenAPI metadata.
+
+```typescript filename="index.ts"
+import { z as z3 } from "zod";
+import { extendZodWithOpenApi } from "zod-openapi";
+import { z as z4 } from "zod/v4";
+
+extendZodWithOpenApi(z3);
+
+const burgerSchema = z3.object({
+  id: z3.number().min(1).openapi({
+    description: "The unique identifier of the burger.",
+    example: 1,
+  }),
+  name: z3.string().min(1).max(50).openapi({
+    description: "The name of the burger.",
+    example: "Veggie Burger",
+  }),
+  description: z3.string().max(255).optional().openapi({
+    description: "The description of the burger.",
+    example: "A delicious bean burger with avocado.",
+  }),
+});
+
+burgerSchema.openapi({
+  ref: "Burger",
+  description: "A burger served at the restaurant.",
+});
+```
+
+### Preparing to generate an OpenAPI document
+
+Now that we know how to register components with metadata for our OpenAPI schema, let's generate a complete schema document.
+
+Import `yaml` and `createDocument`.
+
+```typescript filename="index.ts"
+import * as yaml from "yaml";
+import { z as z3 } from "zod";
+import { createDocument, extendZodWithOpenApi } from "zod-openapi";
+import { z as z4 } from "zod/v4";
+
+extendZodWithOpenApi(z3);
+
+const burgerSchema = z3.object({
+  id: z3.number().min(1).openapi({
+    description: "The unique identifier of the burger.",
+    example: 1,
+  }),
+  name: z3.string().min(1).max(50).openapi({
+    description: "The name of the burger.",
+    example: "Veggie Burger",
+  }),
+  description: z3.string().max(255).optional().openapi({
+    description: "The description of the burger.",
+    example: "A delicious bean burger with avocado.",
+  }),
+});
+
+burgerSchema.openapi({
+  ref: "Burger",
+  description: "A burger served at the restaurant.",
+});
+```
+
+### Generating an OpenAPI document
+
+We'll use the `createDocument` method to generate an OpenAPI document. We'll pass in the `burgerSchema` and a title for the document.
+
+```typescript filename="index.ts"
+import * as yaml from "yaml";
+import { z as z3 } from "zod";
+import { createDocument, extendZodWithOpenApi } from "zod-openapi";
+import { z as z4 } from "zod/v4";
+
+extendZodWithOpenApi(z3);
+
+const burgerSchema = z3.object({
+  id: z3.number().min(1).openapi({
+    description: "The unique identifier of the burger.",
+    example: 1,
+  }),
+  name: z3.string().min(1).max(50).openapi({
+    description: "The name of the burger.",
+    example: "Veggie Burger",
+  }),
+  description: z3.string().max(255).optional().openapi({
+    description: "The description of the burger.",
+    example: "A delicious bean burger with avocado.",
+  }),
+});
+
+burgerSchema.openapi({
+  ref: "Burger",
+  description: "A burger served at the restaurant.",
+});
+
+const document = createDocument({
+  openapi: "3.1.0",
+  info: {
+    title: "Burger Restaurant API",
+    description: "An API for managing burgers and orders at a restaurant.",
+    version: "1.0.0",
+  },
+  servers: [
+    {
+      url: "https://example.com",
+      description: "The production server.",
+    },
+  ],
+  components: {
+    schemas: {
+      burgerSchema,
+    },
+  },
+});
+
+console.log(yaml.stringify(document));
+```
+
+### Adding a burger ID schema
+
+To make the burger ID available to other schemas, we'll define a burger ID schema. We'll also use this schema to define a path parameter for the burger ID later on.
+
+```typescript filename="index.ts"
+const BurgerIdSchema = z3
+  .number()
+  .min(1)
+  .openapi({
+    ref: "BurgerId",
+    description: "The unique identifier of the burger.",
+    example: 1,
+    param: {
+      in: "path",
+      name: "id",
+    },
+  });
+```
+
+Update the `burgerSchema` to use the `BurgerIdSchema`.
+
+```typescript filename="index.ts"
+const burgerSchema = z3.object({
+  id: BurgerIdSchema,
+  name: z3.string().min(1).max(50).openapi({
+    description: "The name of the burger.",
+    example: "Veggie Burger",
+  }),
+  description: z3.string().max(255).optional().openapi({
+    description: "The description of the burger.",
+    example: "A delicious bean burger with avocado.",
+  }),
+});
+```
+
+### Adding a schema for creating burgers
+
+We'll add a schema for creating burgers that doesn't include an ID. We'll use this schema to define the request body for the create burger path.
+
+```typescript filename="index.ts"
+const burgerCreateSchema = burgerSchema.omit({ id: true }).openapi({
+  ref: "BurgerCreate",
+  description: "A burger to create.",
+});
+```
+
+### Adding order schemas
+
+To match the final OpenAPI output, let's add schemas and endpoints for orders.
+
+```typescript filename="index.ts"
+const OrderIdSchema = z3
+  .number()
+  .min(1)
+  .openapi({
+    ref: "OrderId",
+    description: "The unique identifier of the order.",
+    example: 1,
+    param: {
+      in: "path",
+      name: "id",
+    },
+  });
+
+const orderSchema = z3
+  .object({
+    id: OrderIdSchema,
+    burger_ids: z3
+      .array(BurgerIdSchema)
+      .min(1)
+      .openapi({
+        description: "The burgers in the order.",
+        example: [1, 2],
+      }),
+    time: z3.string().openapi({
+      description: "The time the order was placed.",
+      example: "2021-01-01T00:00:00.000Z",
+      format: "date-time",
+    }),
+    table: z3.number().min(1).openapi({
+      description: "The table the order is for.",
+      example: 1,
+    }),
+    status: z3.enum(["pending", "in_progress", "ready", "delivered"]).openapi({
+      description: "The status of the order.",
+      example: "pending",
+    }),
+    note: z3.string().optional().openapi({
+      description: "A note for the order.",
+      example: "No onions.",
+    }),
+  })
+  .openapi({
+    ref: "Order",
+    description: "An order placed at the restaurant.",
+  });
+
+const orderCreateSchema = orderSchema.omit({ id: true }).openapi({
+  ref: "OrderCreate",
+  description: "An order to create.",
+});
+```
+
+### Defining burger and order operations
+
+Now, define the operations for creating and getting burgers and orders, and listing burgers:
+
+```typescript filename="index.ts"
+import { ZodOpenApiOperationObject } from "zod-openapi";
+
+const createBurger: ZodOpenApiOperationObject = {
+  operationId: "createBurger",
+  summary: "Create a new burger",
+  description: "Creates a new burger in the database.",
+  tags: ["burgers"],
+  requestBody: {
+    description: "The burger to create.",
+    content: {
+      "application/json": {
+        schema: burgerCreateSchema,
+      },
+    },
+  },
+  responses: {
+    "201": {
+      description: "The burger was created successfully.",
+      content: {
+        "application/json": {
+          schema: burgerSchema,
+        },
+      },
+    },
+  },
+};
+
+const getBurger: ZodOpenApiOperationObject = {
+  operationId: "getBurger",
+  summary: "Get a burger",
+  description: "Gets a burger from the database.",
+  tags: ["burgers"],
+  requestParams: {
+    path: z3.object({ id: BurgerIdSchema }),
+  },
+  responses: {
+    "200": {
+      description: "The burger was retrieved successfully.",
+      content: {
+        "application/json": {
+          schema: burgerSchema,
+        },
+      },
+    },
+  },
+};
+
+const listBurgers: ZodOpenApiOperationObject = {
+  operationId: "listBurgers",
+  summary: "List burgers",
+  description: "Lists all burgers in the database.",
+  tags: ["burgers"],
+  responses: {
+    "200": {
+      description: "The burgers were retrieved successfully.",
+      content: {
+        "application/json": {
+          schema: z3.array(burgerSchema),
+        },
+      },
+    },
+  },
+};
+
+const createOrder: ZodOpenApiOperationObject = {
+  operationId: "createOrder",
+  summary: "Create a new order",
+  description: "Creates a new order in the database.",
+  tags: ["orders"],
+  requestBody: {
+    description: "The order to create.",
+    content: {
+      "application/json": {
+        schema: orderCreateSchema,
+      },
+    },
+  },
+  responses: {
+    "201": {
+      description: "The order was created successfully.",
+      content: {
+        "application/json": {
+          schema: orderSchema,
+        },
+      },
+    },
+  },
+};
+
+const getOrder: ZodOpenApiOperationObject = {
+  operationId: "getOrder",
+  summary: "Get an order",
+  description: "Gets an order from the database.",
+  tags: ["orders"],
+  requestParams: {
+    path: z3.object({ id: OrderIdSchema }),
+  },
+  responses: {
+    "200": {
+      description: "The order was retrieved successfully.",
+      content: {
+        "application/json": {
+          schema: orderSchema,
+        },
+      },
+    },
+  },
+};
+```
+
+### Adding a webhook that runs when a burger is created
+
+We'll add a webhook that runs when a burger is created. We'll use the `ZodOpenApiOperationObject` type to define the webhook.
+
+```typescript filename="index.ts"
+const createBurgerWebhook: ZodOpenApiOperationObject = {
+  operationId: "createBurgerWebhook",
+  summary: "New burger webhook",
+  description: "A webhook that is called when a new burger is created.",
+  tags: ["burgers"],
+  requestBody: {
+    description: "The burger that was created.",
+    content: {
+      "application/json": {
+        schema: burgerSchema,
+      },
+    },
+  },
+  responses: {
+    "200": {
+      description: "The webhook was processed successfully.",
+    },
+  },
+};
+```
+
+### Registering all paths, webhooks, and extensions
+
+Now, register all schemas, paths, webhooks, and the `x-speakeasy-retries` extension:
+
+```typescript filename="index.ts"
+const document = createDocument({
+  openapi: "3.1.0",
+  info: {
+    title: "Burger Restaurant API",
+    description: "An API for managing burgers and orders at a restaurant.",
+    version: "1.0.0",
+  },
+  servers: [
+    {
+      url: "https://example.com",
+      description: "The production server.",
+    },
+  ],
+  "x-speakeasy-retries": {
+    strategy: "backoff",
+    backoff: {
+      initialInterval: 500,
+      maxInterval: 60000,
+      maxElapsedTime: 3600000,
+      exponent: 1.5,
+    },
+    statusCodes: ["5XX"],
+    retryConnectionErrors: true,
+  },
+  paths: {
+    "/burgers": {
+      post: createBurger,
+      get: listBurgers,
+    },
+    "/burgers/{id}": {
+      get: getBurger,
+    },
+    "/orders": {
+      post: createOrder,
+    },
+    "/orders/{id}": {
+      get: getOrder,
+    },
+  },
+  webhooks: {
+    "/burgers": {
+      post: createBurgerWebhook,
+    },
+  },
+  components: {
+    schemas: {
+      burgerSchema,
+      burgerCreateSchema,
+      BurgerIdSchema,
+      orderSchema,
+      orderCreateSchema,
+      OrderIdSchema,
+    },
+  },
+});
+
+console.log(yaml.stringify(document));
+```
+
+Speakeasy will read the `x-speakeasy-*` extensions to configure the SDK. In this example, the `x-speakeasy-retries` extension will configure the SDK to retry failed requests. For more information on the available extensions, see the [extensions guide](/openapi/extensions).
+
+### Generating the OpenAPI document
+
+Run the `index.ts` file to generate the OpenAPI document.
+
+```bash filename="Terminal"
+npx tsx index.ts > openapi.yaml
+```
+
+The output will be a YAML file that looks like this:
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Burger Restaurant API
+  description: An API for managing burgers and orders at a restaurant.
+  version: 1.0.0
+servers:
+  - url: https://example.com
+    description: The production server.
+x-speakeasy-retries:
+  strategy: backoff
+  backoff:
+    initialInterval: 500
+    maxInterval: 60000
+    maxElapsedTime: 3600000
+    exponent: 1.5
+  statusCodes:
+    - 5XX
+  retryConnectionErrors: true
+paths:
+  /burgers:
+    post:
+      operationId: createBurger
+      summary: Create a new burger
+      description: Creates a new burger in the database.
+      tags:
+        - burgers
+      requestBody:
+        description: The burger to create.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BurgerCreate"
+      responses:
+        "201":
+          description: The burger was created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/burgerSchema"
+    get:
+      operationId: listBurgers
+      summary: List burgers
+      description: Lists all burgers in the database.
+      tags:
+        - burgers
+      responses:
+        "200":
+          description: The burgers were retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/burgerSchema"
+  /burgers/{id}:
+    get:
+      operationId: getBurger
+      summary: Get a burger
+      description: Gets a burger from the database.
+      tags:
+        - burgers
+      parameters:
+        - in: path
+          name: id
+          description: The unique identifier of the burger.
+          schema:
+            $ref: "#/components/schemas/BurgerId"
+          required: true
+      responses:
+        "200":
+          description: The burger was retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/burgerSchema"
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Create a new order
+      description: Creates a new order in the database.
+      tags:
+        - orders
+      requestBody:
+        description: The order to create.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCreate"
+      responses:
+        "201":
+          description: The order was created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      summary: Get an order
+      description: Gets an order from the database.
+      tags:
+        - orders
+      parameters:
+        - in: path
+          name: id
+          description: The unique identifier of the order.
+          schema:
+            $ref: "#/components/schemas/OrderId"
+          required: true
+      responses:
+        "200":
+          description: The order was retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+webhooks:
+  /burgers:
+    post:
+      operationId: createBurgerWebhook
+      summary: New burger webhook
+      description: A webhook that is called when a new burger is created.
+      tags:
+        - burgers
+      requestBody:
+        description: The burger that was created.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/burgerSchema"
+      responses:
+        "200":
+          description: The webhook was processed successfully.
+components:
+  schemas:
+    burgerSchema:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/BurgerId"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: The name of the burger.
+          example: Veggie Burger
+        description:
+          type: string
+          maxLength: 255
+          description: The description of the burger.
+          example: A delicious bean burger with avocado.
+      required:
+        - id
+        - name
+    BurgerCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: The name of the burger.
+          example: Veggie Burger
+        description:
+          type: string
+          maxLength: 255
+          description: The description of the burger.
+          example: A delicious bean burger with avocado.
+      required:
+        - name
+      description: A burger to create.
+    BurgerId:
+      type: number
+      minimum: 1
+      description: The unique identifier of the burger.
+      example: 1
+    Order:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/OrderId"
+        burger_ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/BurgerId"
+          minItems: 1
+          description: The burgers in the order.
+          example: &a1
+            - 1
+            - 2
+        time:
+          type: string
+          format: date-time
+          description: The time the order was placed.
+          example: 2021-01-01T00:00:00.000Z
+        table:
+          type: number
+          minimum: 1
+          description: The table the order is for.
+          example: 1
+        status:
+          type: string
+          enum: &a2
+            - pending
+            - in_progress
+            - ready
+            - delivered
+          description: The status of the order.
+          example: pending
+        note:
+          type: string
+          description: A note for the order.
+          example: No onions.
+      required:
+        - id
+        - burger_ids
+        - time
+        - table
+        - status
+      description: An order placed at the restaurant.
+    OrderCreate:
+      type: object
+      properties:
+        burger_ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/BurgerId"
+          minItems: 1
+          description: The burgers in the order.
+          example: *a1
+        time:
+          type: string
+          format: date-time
+          description: The time the order was placed.
+          example: 2021-01-01T00:00:00.000Z
+        table:
+          type: number
+          minimum: 1
+          description: The table the order is for.
+          example: 1
+        status:
+          type: string
+          enum: *a2
+          description: The status of the order.
+          example: pending
+        note:
+          type: string
+          description: A note for the order.
+          example: No onions.
+      required:
+        - burger_ids
+        - time
+        - table
+        - status
+      description: An order to create.
+    OrderId:
+      type: number
+      minimum: 1
+      description: The unique identifier of the order.
+      example: 1
+```
+
+### Generating an SDK
+
+With our OpenAPI document complete, we can now generate an SDK using the Speakeasy SDK generator.
+
+#### Installing the Speakeasy CLI
+
+First, install the Speakeasy CLI:
+
+```bash filename="Terminal"
+# Using Homebrew (recommended)
+brew install speakeasy-api/tap/speakeasy
+
+# Using curl
+curl -fsSL https://go.speakeasy.com/cli-install.sh | sh
+```
+
+#### Linting your OpenAPI document
+
+Before generating SDKs, lint your OpenAPI document to catch common issues:
+
+```bash filename="Terminal"
+speakeasy lint openapi --schema openapi.yaml
+```
+
+#### Using AI to improve your OpenAPI document
+
+The Speakeasy CLI now includes AI-powered suggestions to automatically improve your OpenAPI documents:
+
+```bash filename="Terminal"
+speakeasy suggest openapi.yaml
+```
+
+Follow the onscreen prompts to provide the necessary configuration details for your new SDK, such as the schema and output path.
+
+Read the [Speakeasy Suggest](/docs/prep-openapi/maintenance) documentation for more information on how to use Speakeasy Suggest.
+
+#### Generating your SDK
+
+Now you can generate your SDK using the quickstart command:
+
+```bash filename="Terminal"
+speakeasy quickstart
+```
+
+Follow the onscreen prompts to provide the necessary configuration details for your new SDK, such as the name, schema location, and output path. Enter `openapi.yaml` (or your improved OpenAPI document if you used suggestions) when prompted for the OpenAPI document location, and select your preferred language when prompted.
+
+## Using your generated SDK
+
+Once you've generated your SDK, you can [publish](/docs/publish-sdk) it for use. For TypeScript, you can publish it as an npm package.
+
+TypeScript SDKs generated with Speakeasy include an installable [Model Context Protocol (MCP) server](/docs/standalone-mcp/build-server) where the various SDK methods are exposed as tools that AI applications can invoke. Your SDK documentation includes instructions for installing the MCP server.
+
+<Callout title="Production Readiness" type="warning">
+  Note that the SDK is not ready for production use immediately after
+  generation. To get it production-ready, follow the steps outlined in your
+  Speakeasy workspace.
+</Callout>
+
+### Adding SDK generation to your CI/CD pipeline
+
+The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows for integrating the Speakeasy CLI into CI/CD pipelines to automatically regenerate SDKs when your Zod schemas change.
+
+You can set up Speakeasy to automatically push a new branch to your SDK repositories so that your engineers can review and merge the SDK changes.
+
+For an overview of how to set up automation for your SDKs, see the Speakeasy [SDK workflow syntax reference](/docs/speakeasy-reference/workflow-file).
+
+## Summary
+
+In this tutorial, we learned how to generate OpenAPI schemas from Zod and create client SDKs with Speakeasy.
+
+By following these steps, you can ensure that your API is well-documented, easy to use, and offers a great developer experience.
+
+### Further reading
+
+This guide covered the basics of generating an OpenAPI document using `zod-openapi`. Here are some resources to help you learn more about Zod, OpenAPI, and Speakeasy:
+
+- [The `zod-openapi` documentation](https://github.com/samchungy/zod-openapi): Learn more about the `zod-openapi` library, including advanced features like custom serializers and middleware integration.
+- [The Zod documentation](https://zod.dev/): Comprehensive guide to Zod schema validation, including the latest v4 features.
