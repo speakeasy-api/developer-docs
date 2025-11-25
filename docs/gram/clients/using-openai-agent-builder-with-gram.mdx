@@ -1,0 +1,484 @@
+---
+title: "Using the OpenAI Agent Builder with Gram-hosted MCP servers"
+description: "Build visual AI agent workflows by connecting OpenAI's Agent Builder to Gram-hosted MCP servers using the drag-and-drop canvas."
+sidebar:
+  order: 9
+---
+
+OpenAI's **Agent Builder** is a visual drag-and-drop canvas for creating multi-agent workflows. Part of the OpenAI AgentKit suite [launched in October 2025](https://openai.com/index/introducing-agentkit/), Agent Builder lets you design workflows visually, connect to external tools via MCP servers, and deploy them without writing code.
+
+![Screenshot of multi-agent workflow with If/else routing](/assets/docs/gram/img/guides/agent-builder/multi-agent-handoff.png)
+
+When combined with [Gram-hosted MCP servers](/gram-quickstart), Agent Builder gives your agents safe, authenticated access to your APIs and tools through visual workflows.
+
+This guide shows you how to build a visual workflow in Agent Builder using a [Gram-hosted MCP server](/blog/the-easiest-way-to-host-mcp-servers) for Taskmaster, a full-stack CRUD application for task and project management. Taskmaster includes a web UI for managing projects and tasks, a built-in HTTP API, OAuth 2.0 authentication, and a Neon PostgreSQL database for storing data. Try the [demo app](https://taskmaster-speakeasyapi.vercel.app/) to see it in action.
+
+You'll learn how to build a visual workflow, connect it to your Gram MCP server, and deploy it using ChatKit or the Agents SDK.
+
+Find the full code and OpenAPI document in the [Taskmaster repository](https://github.com/speakeasy-api/taskmaster).
+
+## The AgentKit ecosystem
+
+OpenAI introduced **AgentKit** as a complete toolkit for building, deploying, and optimizing AI agents. Understanding the different components helps clarify the sometimes confusing terminology.
+
+### AgentKit components
+
+**AgentKit** is the umbrella term for OpenAI's complete agent development platform, which includes:
+
+- **Agent Builder:** A visual canvas for creating and versioning multi-agent workflows with drag-and-drop nodes, MCP connections, and custom guardrails. Currently in beta. (The focus of this guide.)
+- **ChatKit:** A toolkit for embedding customizable chat-based agent experiences in your product. Generally available to all developers.
+- **Connector Registry:** A central registry that consolidates data sources into a single admin panel across ChatGPT and the API, including prebuilt connectors like Dropbox, Google Drive, SharePoint, and Microsoft Teams, as well as third-party MCP servers. Beginning beta rollout to Enterprise customers.
+- **Enhanced Evaluations:** Tools for trace grading, dataset testing, and automated prompt optimization. Generally available to all developers.
+
+### How Agent Builder differs from other OpenAI tools
+
+**The OpenAI [Agents SDK](/api-clients/using-openai-agents-sdk-with-gram-mcp-servers)** is a Python framework for building agents programmatically with code. Use it when you need full programmatic control, complex logic, or want to embed agents in existing applications.
+
+**[ChatGPT Developer Mode](/clients/using-chatgpt-developer-mode-with-gram)** adds custom MCP connectors directly to ChatGPT's web interface for end-user interactions. Use it when you want to give ChatGPT access to your tools without building custom workflows.
+
+**Agent Builder** is for building multi-step agent workflows without code. Use this when you want to create complex workflows visually, chain multiple agents together, or quickly prototype agent behaviors. You then deploy the workflow via ChatKit or download the SDK code.
+
+### Agent Builder nodes
+
+In Agent Builder, you compose workflows by inserting and connecting nodes. Each connection between nodes becomes a typed edge. Agent Builder provides several node types.
+
+**Core nodes** provide the basic functionality used in most workflows:
+
+- **Start** nodes define workflow inputs.
+- **Agent** nodes configure agent instructions, tools, and model settings.
+- **Note** nodes add comments and explanations (but don't affect execution).
+
+**Tool nodes** add tools and external services to agent workflows:
+
+- **File search** nodes retrieve data from OpenAI vector stores.
+- **Guardrails** nodes add safety checks for PII, jailbreaks, hallucinations, and content moderation.
+- **MCP** nodes call third-party tools and services via MCP servers.
+
+**Logic nodes** insert custom logic and workflow controls:
+
+- **If/else** nodes add conditional branching using Common Expression Language (CEL).
+- **While** nodes loop on custom conditions.
+- **Human approval** nodes defer to end-users for approval before continuing.
+
+**Data nodes** define and manipulate data within workflows:
+
+- **Transform** nodes reshape outputs (for example, object → array).
+- **Set state** nodes define global variables for use across the workflow.
+
+See the [Node reference documentation](https://platform.openai.com/docs/guides/node-reference) for complete details on all available nodes.
+
+### The Agent Builder workflow
+
+This guide walks you through Agent Builder's three-step process for creating and deploying agent workflows.
+
+- **Design your workflow:** Use the visual canvas to compose agents and add nodes for external tools, configuring guardrails, and defining control flow logic.
+- **Publish your workflow:** Create a versioned snapshot with a workflow ID.
+- **Deploy your workflow:** Either embed it in your app using ChatKit (recommended) or download the Agents SDK code to run it yourself.
+
+## Prerequisites
+
+To follow the tutorial, you need:
+
+- An [OpenAI account](https://platform.openai.com/) with access to Agent Builder (currently in beta)
+- A [Gram account](https://app.getgram.ai)
+- A [Taskmaster MCP server](/examples/creating-taskmaster-mcp-server) set up and configured
+
+:::note[Agent Builder Beta Access]
+Agent Builder is currently in beta. If you don't have access yet, you can request access through the [OpenAI platform](https://platform.openai.com/).
+
+**Note on documentation:** This guide describes the general workflow based on the [official OpenAI documentation](https://platform.openai.com/docs/guides/agent-builder). Since Agent Builder is in active beta development, some UI details may evolve. Refer to the official docs for the most current information.
+
+While waiting for access, consider using the OpenAI [Agents SDK](/api-clients/using-openai-agents-sdk-with-gram-mcp-servers) or [ChatGPT Developer Mode](/clients/using-chatgpt-developer-mode-with-gram) to integrate with Gram MCP servers.
+:::
+
+### Create a Taskmaster MCP server
+
+Before you can use a Taskmaster MCP server to create workflows in Agent Builder, you first need to create one.
+
+Follow the guide to [creating a Taskmaster MCP server](/examples/creating-taskmaster-mcp-server), which walks you through:
+
+- Setting up a Gram project with the Taskmaster OpenAPI document
+- Getting a Taskmaster API key from your instance
+- Configuring environment variables
+- Publishing your MCP server with the correct authentication headers
+
+## Build your workflow in Agent Builder
+
+Once you've configured the Taskmaster MCP server, you can access Agent Builder and start creating your workflow.
+
+### Access Agent Builder
+
+Log in to the [OpenAI Platform](https://platform.openai.com/) and navigate to [Agent Builder](https://platform.openai.com/agent-builder).
+
+### Create a new workflow
+
+Click **+ Create** or **Open Agent Builder** to start a new workflow. You can start from a template or from a blank canvas.
+
+Agent Builder provides templates for common workflow patterns, like customer service automation, homework helpers, and Q&A agents. For this tutorial, we'll start from a blank canvas.
+
+Every workflow begins with a **Start** node, which defines inputs to your workflow. For chat workflows, the **Start** node appends user input to conversation history and exposes it as `input_as_text`.
+
+![Screenshot of Agent Builder interface showing node palette and canvas](/assets/docs/gram/img/guides/agent-builder/agent-add-tools.png)
+
+### Add an Agent node
+
+- From the node palette on the left, drag an **Agent** node onto the canvas.
+- Connect the **Start** node to the **Agent** node by dragging from the **Start** node's output.
+- Click on the **Agent** node to configure it, filling in the fields as follows:
+
+   - **Name:** `Task Manager`
+   - **Instructions:** `You help users manage their tasks and projects using Taskmaster. Be helpful and conversational. When creating tasks, always confirm the details with the user.`
+   - **Model:** Select **gpt-5** or your preferred model
+
+Keep each agent's scope well defined. You can have multiple agent nodes in a workflow, each specialized for different tasks.
+
+### Add MCP tools to your Agent
+
+Instead of adding a separate MCP node, you add MCP tools directly to your Agent node. This is how Agent Builder connects to external MCP servers:
+
+- Click on your **Agent** node to open its configuration panel.
+- Scroll down to the **Tools** section.
+- Click the **+** button to add a tool.
+- Select **MCP server** from the dropdown menu (under **Hosted**).
+
+![Screenshot showing tool options in Agent node](/assets/docs/gram/img/guides/agent-builder/agent-add-tools.png)
+
+This opens the **Add MCP Server** dialog, where you'll configure your Gram-hosted Taskmaster MCP server connection.
+
+### Configure the MCP server connection
+
+In the **Add MCP Server** dialog, click **+ Server** and  fill in your Taskmaster MCP server details:
+
+- **URL:** Enter your Gram Hosted URL (for example, `https://app.getgram.ai/mcp/your-taskmaster-slug`).
+- **Label:** Add a unique identifier for this MCP connection (for example, `taskmaster_mcp`).
+- **Description:** Provide a brief description of what the MCP server does (for example, `A Todo app`).
+- **Authentication:** Select **Custom headers** from the dropdown.
+  - For **Pass-through Authentication**, add the header, `TASKMASTER_API_KEY`, with your Taskmaster API key.
+  - For **Managed Authentication**, add the header, `Authorization`, with the value, `Bearer YOUR_GRAM_API_KEY`.
+  - Click **+ Header** if you need to add additional headers.
+
+:::note[Authentication headers]
+The exact authentication header you use depends on your Taskmaster MCP server configuration. Refer to your [Taskmaster MCP server setup](/examples/creating-taskmaster-mcp-server) for the correct header name and format. Also, ensure that the MCP server's visibility is set to public, so that it is reachable.
+:::
+
+Click **Connect** to establish the connection.
+
+![Screenshot showing the Connect to MCP Server dialog](/assets/docs/gram/img/guides/agent-builder/fill-mcp-server-details.png)
+
+### Wait for connection
+
+Agent Builder connects to your Gram server and fetches the available tools. This may take a few seconds:
+
+![Screenshot showing connection in progress](/assets/docs/gram/img/guides/agent-builder/taskmaster-mcp-details-loading.png)
+
+### Select tools and configure approval
+
+Once connected, you'll see a list of available tools from your Taskmaster MCP server:
+
+![Screenshot showing available Taskmaster tools](/assets/docs/gram/img/guides/agent-builder/taskmaster-mcp-select-tools.png)
+
+Now, configure the following settings.
+
+- **Custom headers:** Review and confirm your authentication headers are correct
+- **Approval:** Choose whether tool calls need explicit approval.
+  - Select **Always require approval for all tool calls** to require approval for every tool call (safest for testing).
+  - Select **Never require approval** to skip approvals for all tools (recommended for trusted servers in production).
+  - Use a **Custom configuration** to approve specific tools automatically, while requiring approval for others.
+- **Tools:** Select which tools to enable. By default, all tools are selected.
+  - Uncheck tools you don't want to use.
+  - Click **+ Widget** next to each tool to configure custom UI widgets (optional).
+
+The available Taskmaster tools include:
+
+- `taskmaster_create_task` for creating a new task
+- `taskmaster_create_project` for creating a new project
+- `taskmaster_update_task` for updating an existing task
+- `taskmaster_get_tasks` for listing all tasks
+- `taskmaster_get_admin_projects` for getting projects
+
+Click **Done** or close the dialog to save your MCP server configuration.
+
+### Verify that the MCP tool has been added
+
+Back in the Agent node configuration, you should now see the MCP server listed under **Tools**:
+
+![Screenshot showing MCP tool enabled in Agent](/assets/docs/gram/img/guides/agent-builder/tool-enabled-preview-button.png)
+
+The Agent can now use all the enabled tools from your Taskmaster MCP server when responding to user requests.
+
+:::tip[How MCP tools work in Agent Builder]
+When you add an MCP server to an Agent node:
+- Agent Builder fetches tool definitions from your Gram-hosted MCP server once at connection time
+- The agent can then call the tools as needed during workflow execution
+- All tool calls and responses are visible in the **Preview** and **trace view** for debugging
+- This uses the same underlying technology as the [Responses API(https://platform.openai.com/docs/guides/tools-connectors-mcp) MCP tool]
+:::
+
+### Add Guardrails (optional)
+
+For production agents, OpenAI recommends you add guardrails to protect against unwanted behavior.
+
+- From the node palette, drag a **Guardrails** node onto the canvas.
+- Connect the **Guardrails** node in your workflow (typically after the **Agent** node).
+- Click on the **Guardrails** node to configure the safety checks as follows:
+   - Toggle **Personally identifiable information** on to prevent exposure of PII.
+   - Toggle **Moderation** on to filter inappropriate content.
+   - Toggle **Jailbreak** on to block attempts to override agent instructions.
+   - Toggle **Hallucination** on to validate agent responses against tool outputs.
+   - Toggle **Continue on error** based on whether you want to continue or halt the workflow if a guardrail fails.
+
+![Screenshot of Guardrails node configuration](/assets/docs/gram/img/guides/agent-builder/optional-guardrails.png)
+
+Guardrails are pass/fail by default. When a guardrail fails, you can either:
+
+- End the workflow (safest option)
+- Return to the previous step with a warning
+- Continue with modified output (if **Continue on error** is enabled)
+
+For the Taskmaster workflow, guardrails are optional but recommended for production use.
+
+### Preview and test the workflow
+
+Agent Builder provides a **Preview** feature for interactive testing.
+
+- Click **Preview** in the top navigation panel.
+- In the preview panel, enter a prompt:
+
+   ```
+   Create a new task: Review OpenAI Agent Builder documentation
+   ```
+
+-  Watch the workflow execute the prompt:
+   - The Start node captures your input.
+   - The Agent interprets your request.
+   - The Agent has access to all Taskmaster tools from your MCP server.
+   - The Agent calls the appropriate tool (for example, `taskmaster_create_task`).
+   - The workflow returns a confirmation message.
+
+You can observe the execution in real time, including which tools are called and what data is passed.
+
+- Try additional prompts to test different tools:
+
+   ```
+   What tasks do I have?
+   ```
+   ```
+   Update my documentation task to mark it as in progress.
+   ```
+
+Here's what the **Preview** interaction looks like when updating a task:
+
+![Screenshot showing task update in Preview mode](/assets/docs/gram/img/guides/agent-builder/update-task.png)
+
+You can observe the execution of each node, inspect data flowing between them, and review trace details for debugging.
+
+### Watch the complete demo
+
+Here's a full demo of the Taskmaster workflow in action:
+
+<video width="600" controls>
+  <source src="/assets/docs/gram/videos/taskmaster-agentkit-demo.mp4" type="video/mp4" />
+  Your browser does not support the video tag.
+</video>
+
+## Publish your workflow
+
+Agent Builder autosaves your work as you go, so once you're satisfied with your workflow's behavior, click **Publish** in the top navigation panel (next to the **Preview** button).
+
+Publishing creates a **versioned snapshot** of your workflow and generates a **workflow ID** that looks like this: `wf_68df4b13b3588190a09d19288d4610ec0df388c3983f58d1`. You can create multiple versions of your workflow and use the workflow ID to specify which version to use in deployments.
+
+## Deploy your workflow
+
+After publishing, you have two deployment options available through the **Code** button in Agent Builder's top navigation panel. We recommend using ChatKit, but you can also download the SDK code for more advanced integration.
+
+### Option 1: ChatKit
+
+**ChatKit** is the easiest way to deploy your Agent Builder workflow. It provides an embeddable chat UI that connects to your workflow as the backend, handling streaming responses, conversation threads, model thinking visualization, and custom widgets for displaying data and interactive elements.
+
+#### Design your UI with ChatKit Studio
+
+Before implementing ChatKit in code, you can design and customize your chat interface visually using **[ChatKit Studio](https://chatkit.studio/)**. The **[ChatKit Playground](https://chatkit.studio/playground)** lets you choose light or dark modes, customize colors and typography, adjust message bubble styles, and set up starter prompts — all with a real-time preview.
+
+![Screenshot of ChatKit Studio showing visual customization options](/assets/docs/gram/img/guides/agent-builder/chatkit-studio.png)
+
+You can also create custom widgets without code using the **[Widget Builder](https://widgets.chatkit.studio/)**. Browse prebuilt templates for cards, lists, and forms, customize them to match your design, and copy the generated JSON to use in your integration. See live examples at **[ChatKit World](https://chatkit.world/)**.
+
+<video width="600" controls>
+  <source src="/assets/docs/gram/videos/widget-builder.mp4" type="video/mp4" />
+  Your browser does not support the video tag.
+</video>
+
+
+#### Implementation example
+
+- In Agent Builder, click **Code** → **ChatKit** and copy your workflow ID.
+- Design your UI in **ChatKit Studio** if you want to.
+- Then, follow the [ChatKit quickstart](https://platform.openai.com/docs/guides/chatkit) to create a server endpoint, install the ChatKit React bindings (`npm install @openai/chatkit-react`), and embed the chat widget in your website or application.
+
+Here's a simplified example:
+
+```tsx
+// Server-side: Create ChatKit session with your workflow ID
+import { OpenAI } from "openai";
+
+const openai = new OpenAI();
+
+export async function createChatKitSession() {
+  const session = await openai.chatkit.sessions.create({
+    workflow: { id: "wf_YOUR_WORKFLOW_ID_HERE" },
+    user: "user_device_id",
+  });
+
+  return { client_secret: session.client_secret };
+}
+
+// Client-side: Render ChatKit
+import { ChatKit, useChatKit } from '@openai/chatkit-react';
+
+export function MyChat() {
+  const { control } = useChatKit({
+    api: {
+      async getClientSecret() {
+        const res = await fetch('/api/chatkit/session', { method: 'POST' });
+        const { client_secret } = await res.json();
+        return client_secret;
+      },
+    },
+  });
+
+  return <ChatKit control={control} className="h-[600px] w-[320px]" />;
+}
+```
+
+Your users will interact with a chat interface powered by your Agent Builder workflow, with full access to the tools from your Gram-hosted Taskmaster MCP server.
+
+### Option 2: Advanced integration
+
+For maximum control, click **Code** → **Agents SDK** to download the generated Python or TypeScript code. This lets you run the workflow on your own infrastructure with full control over hosting, scaling, custom UI implementation, and advanced error handling.
+
+## Advanced workflow patterns
+
+Agent Builder supports complex multi-agent workflows. The following advanced patterns demonstrate potential use cases:
+
+### Multi-agent workflows with conditional routing
+
+You can build sophisticated workflows that use multiple specialized agents with conditional logic to route requests:
+
+- Create a **Classification Agent** that determines the type of request.
+- Add an **If/else** logic node to route based on the classification.
+- Create specialized agents for different domains, such as a **Task Manager Agent** that handles to-do operations, a **Calendar Agent** that manages scheduling (requires a calendar MCP server), and an **Information Agent** that answers questions from a knowledge base.
+
+You can then write conditions using [Common Expression Language (CEL)](https://cel.dev/), and route to different agent paths based on tool call results, user input patterns, agent classifications, or data from MCP servers.
+
+Here's an example of a multi-agent workflow with conditional routing:
+
+![Screenshot of multi-agent workflow with If/else routing](/assets/docs/gram/img/guides/agent-builder/multi-agent-handoff.png)
+
+In this workflow, user requests are classified and routed to the appropriate specialized agent based on the request type.
+
+### Integration with multiple MCP servers
+
+You can connect multiple Gram-hosted MCP servers to create powerful cross-system agents:
+
+- Add multiple **MCP** nodes to your workflow, each configured for a different Gram-hosted MCP server.
+- Create agents that can access tools from different systems.
+- Use logic nodes to orchestrate operations across systems.
+
+For example, if you sent the following prompt to a cross-system agent, it would use a different MCP server to handle each action:
+
+```
+Create a task in Taskmaster, then add a calendar event, then send a notification via Slack.
+```
+
+### Human approval workflows
+
+For sensitive operations, add human approval to ensure oversight before executing critical actions:
+
+- Add a **Human approval** node before critical operations, such as deleting tasks or sending emails.
+- Configure the approval prompt and timeout behavior.
+- Route the workflow differently based on when the operation is approved or rejected.
+
+![Screenshot of human approval workflow](/assets/docs/gram/img/guides/agent-builder/human-approval.png)
+
+This is useful for workflows where agents draft emails, make purchases, delete data, or perform other operations that need human oversight before execution.
+
+## Gram Playground testing
+
+Before integrating with Agent Builder, you can test your Gram-hosted MCP server in the [Gram Playground](https://app.getgram.ai):
+
+![Screenshot of Gram Playground testing](/assets/docs/gram/img/guides/chatgpt/playground-test.png)
+
+This helps isolate issues between your MCP server configuration and Agent Builder workflows.
+
+## Troubleshooting
+
+This section provides troubleshooting steps for the following issues:
+
+### MCP node not connecting
+
+If an MCP node shows connection errors or fails to list tools:
+
+- Test your Gram-hosted MCP server in the Gram Playground to check it's working correctly.
+- Verify that the **Server URL** is correct (copy it directly from Gram's **MCP** tab).
+- Check that your server visibility is set to **Public** in Gram (or that you've provided correct authentication).
+- Ensure the **Server URL** includes the correct protocol (`https://`).
+- For managed authentication servers, check that your Gram API key is valid and properly formatted.
+
+### Tools not working as expected
+
+If the agent calls tools but returns errors or unexpected results:
+
+- Check tool definitions in your Gram toolset—ensure descriptions are clear and accurate.
+- Verify environment variables are set correctly in Gram.
+- Test the tools directly in Gram Playground.
+- Review the trace view in Agent Builder Preview to see exact tool call parameters and responses.
+- Update your agent instructions to be more specific about when and how to use tools.
+
+### Authentication errors
+
+If you encounter `401 Unauthorized` or `403 Forbidden` errors when the workflow calls MCP tools on a **public server**:
+
+- Check that your MCP server visibility is set to **Public** in Gram.
+
+If you encounter `401 Unauthorized` or `403 Forbidden` errors when the workflow calls MCP tools on an **authenticated server**:
+
+- Confirm your Gram API key is valid (check in Gram **Settings → API Keys**).
+- Ensure you've provided the Bearer token in the correct format in the MCP node.
+- Verify that the API key hasn't expired or been revoked.
+
+### Agent not using tools
+
+If the agent responds but never calls your MCP tools.
+
+- Make the agent instructions more explicit about when to use tools.
+- Verify that the MCP node is properly connected in the workflow.
+- Check that tools are being listed successfully (look for `mcp_list_tools` in **Preview** traces).
+- Ensure tool descriptions in Gram are clear and indicate when the tool should be used.
+- Try writing more direct prompts that clearly require tool usage. For example, write *"Create a task called X,"* instead of *"I need to remember to do X."*
+
+## What's next
+
+You now have a complete understanding of how to use OpenAI's Agent Builder with Gram-hosted MCP servers. You've learned to:
+
+- Create and configure Gram-hosted MCP servers from OpenAPI documents
+- Build visual workflows in Agent Builder using MCP nodes
+- Test and debug workflows with Preview and trace grading
+- Deploy workflows using ChatKit or the Agents SDK
+
+Agent Builder's visual canvas, combined with Gram's hosted MCP servers, makes it easy to build production-ready agent workflows that can safely interact with your APIs and services.
+
+Ready to build your own MCP server? [Try Gram today](https://app.getgram.ai) and turn any OpenAPI document into agent-ready tools that work across OpenAI's AgentKit, Anthropic's Claude, and other AI platforms.
+
+### Related guides
+
+- **[Using OpenAI Agents SDK with Gram](/api-clients/using-openai-agents-sdk-with-gram-mcp-servers):** Build agents programmatically with Python code for maximum control.
+- **[Using ChatGPT Developer Mode with Gram](/clients/using-chatgpt-developer-mode-with-gram):** Add MCP connectors directly to ChatGPT's web interface for end-user access.
+- **[Using OpenAI API with Gram](/api-clients/using-openai-api-with-gram-mcp-servers):** Use the Responses API for simple request-response patterns.
+- **[Creating a Taskmaster MCP server](/examples/creating-taskmaster-mcp-server):** Build a full-featured CRUD application with OAuth authentication.
+
+### Learn more about Agent Builder
+
+- **[Agent Builder documentation](https://platform.openai.com/docs/guides/agent-builder):** Read OpenAI's complete guide to Agent Builder.
+- **[Node reference](https://platform.openai.com/docs/guides/node-reference):** Consult the detailed documentation on all available nodes.
+- **[Connectors and MCP servers](https://platform.openai.com/docs/guides/tools-connectors-mcp):** Learn how MCP integration works on the OpenAI platform.
+- **[ChatKit documentation](https://platform.openai.com/docs/guides/chatkit):** Learn to deploy your workflows with embeddable chat interfaces.
