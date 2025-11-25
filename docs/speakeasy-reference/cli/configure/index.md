@@ -51,5 +51,5 @@ speakeasy configure [flags]
 * [speakeasy configure local-workflow](/docs/speakeasy-reference/cli/configure/local-workflow)	 - Create a local workflow configuration file.
 * [speakeasy configure publishing](/docs/speakeasy-reference/cli/configure/publishing)	 - Configure Speakeasy for publishing.
 * [speakeasy configure sources](/docs/speakeasy-reference/cli/configure/sources)	 - Configure new or existing sources.
-* [speakeasy configure targets](/docs/speakeasy-reference/cli/configure/targets)	 - Configure new target.
+* [speakeasy configure targets](/docs/speakeasy-reference/cli/configure/targets)	 - Configure new or existing targets.
 * [speakeasy configure tests](/docs/speakeasy-reference/cli/configure/tests)	 - Configure Speakeasy SDK tests.

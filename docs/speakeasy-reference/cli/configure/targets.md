@@ -2,11 +2,11 @@
 `speakeasy configure targets`  
 
 
-Configure new target.  
+Configure new or existing targets.  
 
 ## Details
 
-Guided prompts to configure a new target in your speakeasy workflow.
+Guided prompts to configure a new or existing target in your speakeasy workflow.
 
 ## Usage
 
