@@ -59,16 +59,127 @@ When you first run `gemini`, you're prompted to authenticate. Sign in with your 
 
 Before connecting Gemini CLI to a Taskmaster MCP server, you first need to create one. Follow our guide to [creating a Taskmaster MCP server](/docs/gram/examples/creating-taskmaster-mcp-server).
 
-## Connecting Gemini CLI to your Gram-hosted MCP server
+Once your Taskmaster MCP server is ready, there are three ways to connect it to Gemini CLI:
 
-Now let's connect Gemini CLI to your Taskmaster MCP server.
+- Use the `gemini mcp add` command from the Gram installation page (recommended).
+- Use the Gram CLI to automatically configure the connection.
+- Manually edit the Gemini CLI configuration file.
+
+## Connecting Gemini CLI from the Gram installation page
+
+The quickest way to connect Gemini CLI to a Gram-hosted MCP server is to copy the installation command from the Gram dashboard.
+
+Go to your toolset's installation page at `https://app.getgram.ai/mcp/<your-toolset-slug>/install` and select **Gemini CLI**. Copy the installation command and run it in your terminal:
+
+![Screenshot showing the Gram installation page with client options](/assets/docs/gram/img/guides/install-clients-page.png)
+
+```bash
+gemini mcp add --transport http "taskmaster" "https://app.getgram.ai/mcp/your-toolset-slug"
+```
+
+Replace `your-toolset-slug` with the slug of your toolset.
+
+You can verify the server was added by running `/mcp list` in Gemini CLI:
+
+![Screenshot showing Gemini CLI with the taskmaster MCP server installed](/assets/docs/gram/img/guides/mcp-gemini/gemini-taskmaster-installed.png)
+
+## Connecting Gemini CLI using the Gram CLI
+
+Alternatively, you can use the Gram CLI to configure the connection. The CLI automatically fetches your toolset configuration and creates the appropriate settings file.
+
+### 1. Install the Gram CLI
+
+Install the Gram CLI using curl:
+
+```bash
+curl -fsSL https://go.getgram.ai/cli.sh | bash
+```
+
+Alternatively, install using Homebrew:
+
+```bash
+brew tap speakeasy-api/tap
+brew install gram
+```
+
+Verify the installation:
+
+```bash
+gram --version
+```
+
+For more information about the Gram CLI, see the [Gram CLI documentation](/docs/gram/command-line).
+
+### 2. Authenticate with Gram
+
+Authenticate with your Gram account:
+
+```bash
+gram auth
+```
+
+Follow the prompts to complete authentication. This creates an API key and saves it locally.
+
+Verify authentication:
+
+```bash
+gram whoami
+```
+
+### 3. Install the toolset
+
+Run the install command:
+
+```bash
+gram install gemini-cli --toolset your-toolset-slug
+```
+
+Replace `your-toolset-slug` with the slug of your toolset. For example, to install the Taskmaster toolset:
+
+```bash
+gram install gemini-cli --toolset taskmaster
+```
+
+The CLI automatically fetches the toolset configuration from Gram and creates or updates the Gemini CLI settings file.
+
+![Screenshot showing the output of the gram install gemini-cli command](/assets/docs/gram/img/guides/mcp-gemini/gram-install-gemini-cli-command.png)
+
+### Setting up environment variables
+
+If your toolset requires authentication, you'll need to set up environment variables. The `gram install` command will display the required variable names and provide the export command you need to run.
+
+For the Taskmaster toolset, you'll need to set the `MCP_TASK_MASTER_API_KEY` environment variable:
+
+```bash
+export MCP_TASK_MASTER_API_KEY='your-api-key-value'
+```
+
+### Configuration scopes
+
+You can control where the MCP server configuration is installed using the `--scope` flag:
+
+```bash
+# Install to user-level config (default) - available across all projects
+gram install gemini-cli --toolset taskmaster --scope user
+
+# Install to project-level config - can be shared with your team
+gram install gemini-cli --toolset taskmaster --scope project
+```
+
+Use `--scope project` when you want to commit the `.gemini/settings.json` configuration to version control and share it with your team.
+
+For more details and advanced options, see the [`gram install` documentation](/docs/gram/command-line/install).
+
+## Manual Setup
+
+Alternatively, you can manually configure Gemini CLI by editing the settings file directly.
 
 Gemini CLI uses a `settings.json` configuration file to manage MCP servers. You can configure MCP servers in one of two files:
 
 - Globally at `~/.gemini/settings.json`.
 - For a specific project at `.gemini/settings.json` in your project root.
 
-Copy your public or authenticated MCP server configuration from Gram and add it to the `.gemini/settings.json` file.
+Copy your public or authenticated MCP server configuration from Gram and add it to the `settings.json` file.
 
 - For **Pass-through Authentication**, the configuration looks like this:
 
@@ -124,7 +235,7 @@ gemini
 Then use the `/mcp` command to view the MCP server status:
 
 ```bash
-/mcp
+/mcp list
 ```
 
 You should see `GramTaskmaster` and its available tools listed.
