@@ -243,6 +243,63 @@ oneOf:
   types - **Java**: Provides type discrimination with generic string handling
 </Callout>
 
+## TypeScript-specific configuration
+
+TypeScript SDKs have additional generator options that enable forward compatibility and fault tolerance by default. These options work together to ensure your SDK gracefully handles API evolution.
+
+```yaml
+typescript:
+  forwardCompatibleEnumsByDefault: true
+  forwardCompatibleUnionsByDefault: tagged-only
+  laxMode: lax
+  unionStrategy: populated-fields
+```
+
+### Forward-compatible enums
+
+When `forwardCompatibleEnumsByDefault` is enabled (the default for new TypeScript SDKs), enums used in responses accept unknown values instead of rejecting the response. Unknown values are captured in a type-safe `Unrecognized<string>` wrapper:
+
+```typescript
+const notification = await sdk.notifications.get(id);
+// Before: Error: Expected 'email' | 'sms' | 'push'
+// After:  'email' | 'sms' | 'push' | Unrecognized<string>
+```
+
+### Forward-compatible unions
+
+When `forwardCompatibleUnionsByDefault` is enabled (the default for new TypeScript SDKs), discriminated unions accept unknown values. Unknown variants are captured with their raw data and accessible via the `UNKNOWN` discriminator value:
+
+```typescript
+const account = await sdk.accounts.getLinkedAccount();
+// Before: Error: Unable to deserialize into any union member
+// After:
+//   | { type: "email"; email: string }
+//   | { type: "google"; googleId: string }
+//   | { type: "UNKNOWN"; raw: unknown }
+```
+
+### Lax mode
+
+When `laxMode` is set to `lax` (the default for new TypeScript SDKs), the SDK gracefully handles missing or mistyped fields in responses by applying zero-value defaults and type coercions. This ensures one missing field doesn't break the entire response:
+
+- Missing required strings become `""`
+- Missing required numbers become `0`
+- Missing required booleans become `false`
+- String `"true"` and `"false"` are coerced to booleans
+- Numeric strings are coerced to numbers
+
+Lax mode only affects response deserialization and never lies about types. The SDK types remain accurate.
+
+### Smart union deserialization
+
+When `unionStrategy` is set to `populated-fields` (the default for new TypeScript SDKs), the SDK uses a smarter algorithm to pick the best union variant. Instead of trying each type in order and returning the first valid match, it tries all types and returns the one with the most matching fields.
+
+This prevents issues where one union variant is a subset of another and the wrong variant gets selected due to ordering.
+
+<Callout type="info" title="Per-schema overrides">
+Individual enums and unions can override the global defaults using `x-speakeasy-unknown-values: allow` or `x-speakeasy-unknown-values: disallow` in your OpenAPI spec. See the [TypeScript configuration reference](/docs/speakeasy-reference/generation/ts-config#forward-compatibility) for all available options.
+</Callout>
+
 ## Guard-rails for breaking changes
 
 Speakeasy provides several tools to detect and prevent breaking changes:
