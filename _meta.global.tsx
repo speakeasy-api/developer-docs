@@ -591,6 +591,9 @@ const meta = {
                   "standalone-functions": {
                     title: "Standalone functions",
                   },
+                  "dependency-management": {
+                    title: "Dependency management",
+                  },
                 },
               },
               python: {
