@@ -128,7 +128,9 @@ resource "yourprovider_order" "example" {
 ```
 
 <Callout title="Warning" type="warning">
-Properties above the `x-speakeasy-entity` annotation are flattened, which could cause conflicts. Apply the annotation carefully to align the structure of the Terraform provider with the API&apos;s intended interaction.
+  Properties above the `x-speakeasy-entity` annotation are flattened, which
+  could cause conflicts. Apply the annotation carefully to align the structure
+  of the Terraform provider with the API&apos;s intended interaction.
 </Callout>
 
 ## Specify CRUD Operations for API Endpoints
@@ -163,7 +165,7 @@ paths:
         - pet
       summary: Info for a specific pet
       x-speakeasy-entity-operation: Pet#read
-    update:
+    put:
       tags:
         - pet
       summary: Update the pet
@@ -171,15 +173,16 @@ paths:
     delete:
       tags:
         - pet
-      summary: Delete the pet 
+      summary: Delete the pet
       x-speakeasy-entity-operation: Pet#delete
 ```
 
 <Callout title="Note" type="info">
   Terraform generation automatically handles pagination implementation details
-  via the `x-speakeasy-pagination` [extension](/docs/customize/runtime/pagination).
-  This includes paging through all responses and removing unnecessary pagination
-  handling properties from the schema.
+  via the `x-speakeasy-pagination`
+  [extension](/docs/customize/runtime/pagination). This includes paging through
+  all responses and removing unnecessary pagination handling properties from the
+  schema.
 </Callout>
 
 In this example, an automatically paginated Pets data resource is defined:
@@ -237,6 +240,83 @@ x-speakeasy-entity-operation:
 
 One API operation for multiple resources can be combined with the entity operation ordering of [multiple API operations for one resource](#multiple-api-operations-for-one-resource) as necessary.
 
+### API Operation Polling
+
+Define automatic API operation polling logic for APIs with asynchronous behaviors via the `x-speakeasy-polling` and `x-speakeasy-entity-operation` extensions in the OpenAPI Specification document. Refer to the [SDK Polling documentation](/docs/customize/runtime/polling) for additional information about configuring `x-speakeasy-polling`.
+
+In this example:
+
+```yaml
+/task:
+  post:
+    x-speakeasy-entity-operation: Task#create#1
+/task/{id}:
+  get:
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum:
+                    - completed
+                    - errored
+                    - pending
+                    - running
+              required:
+                - name
+                - status
+    x-speakeasy-polling:
+      - name: WaitForCompleted
+        failureCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "errored"
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "completed"
+    x-speakeasy-entity-operation:
+      - Task#read
+      - entityOperation: Task#create#2
+        options:
+          polling:
+            name: WaitForCompleted
+```
+
+The API operation is used for both the read operation and the second create operation, where the second create operation will use the `WaitForCompleted` polling method to ensure the success criteria is met before the resource logic (and therefore Terraform) continues.
+
+There are `delaySeconds`, `intervalSeconds`, and `limitCount` configurations to override the `x-speakeasy-polling` configuration values for a specific entity operation.
+
+In this example:
+
+```yaml
+/task/{id}:
+  get:
+    x-speakeasy-polling:
+      - name: WaitForCompleted
+        failureCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "errored"
+        intervalSeconds: 5
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "completed"
+    x-speakeasy-entity-operation:
+      - Task#read
+      - entityOperation: Task#create#2
+        options:
+          polling:
+            name: WaitForCompleted
+            intervalSeconds: 10
+```
+
+The `WaitForCompleted` polling method for the API operation defaults to a 5 second interval, however the create entity operation overrides to a 10 second interval.
+
 ### Manual association between Operations and Resource / Data Sources
 
 The default behavior within Speakeasy is to automatically infer a data source from all operations that have an `x-speakeasy-entity-operation: Entity#read` association defined.
@@ -282,12 +362,12 @@ paths:
     get:
       x-speakeasy-entity-operation: Example#read
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExampleResponse'
+                $ref: "#/components/schemas/ExampleResponse"
   /example/{id}/subconfig:
     parameters:
       - name: id
@@ -298,13 +378,13 @@ paths:
     get:
       x-speakeasy-entity-operation: Example#read#2
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/ExampleSubconfigResponse'
+                  - $ref: "#/components/schemas/ExampleSubconfigResponse"
                   - x-speakeasy-wrapped-attribute: subconfig
 ```
 
@@ -320,7 +400,7 @@ paths:
     get:
       x-speakeasy-entity-operation: Things#read
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
@@ -335,7 +415,7 @@ Since the response is `type: array`, Speakeasy wraps it in a `data` attribute fo
 Access in Terraform:
 
 ```hcl
-data.my_things_list.data[0].id
+data.example_things.data[0].id
 ```
 
 **Customize the wrapper name:**
@@ -346,7 +426,7 @@ paths:
     get:
       x-speakeasy-entity-operation: Things#read
       responses:
-        '200':
+        "200":
           description: OK
           content:
             application/json:
@@ -360,11 +440,13 @@ paths:
 Now the wrapping attribute is named `items` instead:
 
 ```hcl
-data.my_things_list.items[0].id
+data.example_things.items[0].id
 ```
 
 <Callout title="Note" type="info">
-  The wrapping attribute name is a Terraform construct created by Speakeasy, completely separate from your API's response structure. Use `x-speakeasy-wrapped-attribute` to customize it.
+  The wrapping attribute name is a Terraform construct created by Speakeasy,
+  completely separate from your API's response structure. Use
+  `x-speakeasy-wrapped-attribute` to customize it.
 </Callout>
 
 ### Resources with Soft Delete

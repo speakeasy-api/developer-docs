@@ -1,0 +1,181 @@
+---
+description: "Learn how to simplify polling behaviors in Speakeasy-managed SDKs by creating SDKs with built-in polling methods."
+sidebar_label: "Add Polling"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Adding polling to SDKs
+
+Customize polling methods for each API operation using the `x-speakeasy-polling` extension.
+
+Adding polling to an SDK enhances the developer experience by providing a consistent way to handle consuming code that waits for a particular API response change, which is common in API backends that perform asynchronous operations.
+
+```go
+opts := []operations.Option{
+  operations.WithPolling(client.PollingEndpointWaitForCompleted()),
+}
+response, err := client.PollingEndpoint(ctx, id, opts...)
+```
+
+The polling methods, such as `PollingEndpointWaitForCompleted()` above, are generated from configuration within the API operation that declares one or more success criteria.
+
+## Configuring polling
+
+To configure polling, add the `x-speakeasy-polling` extension to the OpenAPI Specification document.
+
+```yaml
+/example/{id}:
+  get:
+    parameters:
+      - name: id
+        in: path
+        schema:
+          type: string
+        required: true
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum:
+                    - completed
+                    - errored
+                    - pending
+                    - running
+              required:
+                - name
+                - status
+    x-speakeasy-polling:
+      - name: WaitForCompleted
+        failureCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "errored"
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "completed"
+```
+
+The `x-speakeasy-polling` configuration supports multiple entries with unique names, which will generate unique polling methods with their required success criteria.
+
+## Configuration options
+
+### delaySeconds
+
+Customize the delay before the API operation requests begin. By default, this is set to 1 second.
+
+In this example:
+
+```yaml
+x-speakeasy-polling:
+  - name: WaitForCompleted
+    delaySeconds: 5
+    failureCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "errored"
+    successCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "completed"
+```
+
+The `WaitForCompleted` polling method makes the first API operation request after 5 seconds. Clients can override this value when using the SDK.
+
+### failureCriteria
+
+Customize the polling method to immediately return an error when defined conditions are met. This is useful when the API response contains any sort of "errored" or "failed" status value.
+
+<Callout title="Note" type="info">
+  It is not necessary to define failure criteria for API responses that are
+  already considered errors, such as a 4XX or 5XX HTTP status code.
+</Callout>
+
+In this example:
+
+```yaml
+x-speakeasy-polling:
+  - name: WaitForCompleted
+    failureCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "errored"
+    successCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "completed"
+```
+
+The `WaitForCompleted` polling method will immediately return an error when the response body `status` property value is `errored`. Clients cannot override this behavior.
+
+Refer to `successCriteria` for additional information about supported criteria as they share implementation details.
+
+### intervalSeconds
+
+Customize the interval between the API operation requests. By default, this is set to 1 second.
+
+In this example:
+
+```yaml
+x-speakeasy-polling:
+  - name: WaitForCompleted
+    failureCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "errored"
+    intervalSeconds: 5
+    successCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "completed"
+```
+
+The `WaitForCompleted` polling method makes the next API operation request 5 seconds after the previous response. Clients can override this value when using the SDK.
+
+### limitCount
+
+Customize the total number of API operation requests before raising an error. By default, this is set to 60.
+
+In this example:
+
+```yaml
+x-speakeasy-polling:
+  - name: WaitForCompleted
+    failureCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "errored"
+    limitCount: 120
+    successCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "completed"
+```
+
+The `WaitForCompleted` polling method makes at most 120 API operation requests. Clients can override this value when using the SDK.
+
+### successCriteria
+
+Configure the polling method success criteria. This configuration is required for all polling methods. The criteria themselves are a limited subset of [OpenAPI Arazzo criterion](https://spec.openapis.org/arazzo/latest.html#criterion-object). Each condition is a logical AND operation, evaluated in configuration order.
+
+Supported conditions include:
+
+- `$statusCode`: HTTP status code. Must be defined before response body conditions.
+- `$response.body`: HTTP response body data. A value within the data is defined with a JSONPath expression.
+
+Supported operators include:
+
+- `==`: Equals
+- `!=`: Not Equals
+
+Certain language implementations, such as Go, also support using error status codes as success criteria. In these cases any SDK error that would have been returned to the SDK client are swallowed instead.
+
+In this example:
+
+```yaml
+x-speakeasy-polling:
+  - name: WaitForNotFound
+    successCriteria:
+      - condition: $statusCode == 404
+```
+
+The `WaitForNotFound` polling method immediately returns without error when the API operation returns a 404 Not Found HTTP status code.

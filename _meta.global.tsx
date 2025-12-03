@@ -397,6 +397,9 @@ const meta = {
                   pagination: {
                     title: "Enable Pagination",
                   },
+                  polling: {
+                    title: "Enable Polling",
+                  },
                   streaming: {
                     title: "Enable Streaming",
                   },
