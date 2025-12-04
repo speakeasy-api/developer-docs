@@ -17,7 +17,7 @@ To follow this tutorial, you need:
 
 - A [Gram account](/product/gram)
 - An OpenAPI API key
-- A Node environment set up on your machine
+- A Node.js environment set up on your machine
 
 ## Creating a Gram MCP server
 
@@ -29,7 +29,7 @@ In the [Gram dashboard](https://app.getgram.ai), click **New Project** to create
 
 ![Screenshot of the Gram dashboard showing the New Project modal](./assets/gram-new-project.png)
 
-Once the project is created click the **Get Started** button.
+Once the project is created, click the **Get Started** button.
 
 Choose **Start from API**. Gram will then guide you through the following steps.
 
@@ -45,7 +45,7 @@ Give your toolset a name (for example, "Push Advisor") and click **Continue**.
 
 ![Screenshot of the create toolset dialog](./assets/create-toolset.png)
 
-Notice that the names of the tools that will be generated from your OpenAPI document are displayed in this dialog.
+Notice that the **Name Your Toolset** dialog displays the names of the tools that Gram will generate from your OpenAPI document.
 
 #### Step 3: Configure MCP
 
@@ -78,7 +78,7 @@ Let's make the toolset available as an MCP server.
 
 Go to the **MCP** tab, find the Push Advisor toolset, and click the title of the server.
 
-On the **MCP Details** page, click **Enable**  and then **Enable Server** to enable the server.
+On the **MCP Details** page, click **Enable** and then **Enable Server** to enable the server.
 
 ![Screenshot of the MCP details page](./assets/mcp-details.png)
 
@@ -109,13 +109,15 @@ Press Enter to accept defaults for the remaining options.
 
 ![Screenshot of the Mastra project setup prompts](./assets/mastra-project-setup.png)
 
-After the project is created, open `.env.local` and add your API keys:
-```txt
+After the project is created, create a `.env.local` file and add your API keys:
+
+```
 GRAM_KEY=your-gram-api-key-here
 OPENAI_API_KEY=your-openai-api-key-here
 ```
 
 Install the MCP dependencies:
+
 ```bash
 npm install '@mastra/mcp@^0.14.4' '@ai-sdk/openai@^1.0.0' 'dotenv@^16.4.5' --legacy-peer-deps
 ```
@@ -123,6 +125,7 @@ npm install '@mastra/mcp@^0.14.4' '@ai-sdk/openai@^1.0.0' 'dotenv@^16.4.5' --leg
 This installs the MCP client library, OpenAI SDK adapter, and dotenv for environment variables. The `--legacy-peer-deps` flag resolves a version conflict: the Mastra CLI installs `zod@^4.1.13`, but `@ai-sdk/openai@^1.0.0` requires `zod@^3.0.0`. Both versions are compatible at runtime.
 
 Install `tsx` as a dev dependency for running TypeScript:
+
 ```bash
 npm install -D 'tsx@^4.7.0' --legacy-peer-deps
 ```
@@ -130,18 +133,18 @@ npm install -D 'tsx@^4.7.0' --legacy-peer-deps
 ### Configure the project
 
 Update the `scripts` section in `package.json` to add a dev script:
+
 ```json
-{
-  "scripts": {
+"scripts": {
     "dev": "tsx src/index.ts",
     "dev:mastra": "mastra dev",
     "build": "mastra build",
     "start": "mastra start"
-  }
-}
+},
 ```
 
 Make sure the project has the following structure:
+
 ```
 src/
   ├── config/
@@ -160,6 +163,7 @@ This follows Mastra's recommended organization: the `mastra/` directory contains
 ### Adding the MCP server configuration
 
 In `src/config/mcp-server.ts`, add the following code to configure the connection to your Gram-hosted MCP server:
+
 ```typescript
 import { MCPClient } from "@mastra/mcp";
 import dotenv from "dotenv";
@@ -181,11 +185,14 @@ export const gramMcpClient = new MCPClient({
 });
 ```
 
+Replace `your-mcp-server-slug` with your actual Gram MCP server slug.
+
 The [`MCPClient`](https://mastra.ai/reference/tools/mcp-client) class connects to MCP servers and handles protocol negotiation automatically. The configuration loads environment variables first with `dotenv.config()` so `GRAM_KEY` is available, then defines a server named `PushAdvisor` with its URL and Bearer token authentication. When you call methods like `getTools()`, the client connects to the server and discovers available tools.
 
 ### Adding the agent configuration
 
 In `src/mastra/agents/mcp-agent.ts`, add an [agent](https://mastra.ai/docs/agents/overview) that can use the MCP server tools. The agent processes questions and decides which tools to call.
+
 ```typescript
 import { Agent } from "@mastra/core/agent";
 import { openai } from "@ai-sdk/openai";
@@ -213,6 +220,7 @@ The code uses a singleton pattern to cache the agent instance, avoiding the cost
 ### Adding the workflow definition
 
 A Mastra [workflow](https://mastra.ai/docs/workflows/overview) defines how an application processes requests. Add the following code in `src/mastra/workflows/mcp-workflow.ts`:
+
 ```typescript
 import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { getMcpAgent } from "../agents/mcp-agent";
@@ -261,10 +269,11 @@ The `createStep` function defines a workflow step with Zod schemas for input and
 ### Creating the entry point
 
 The entry point is where the application starts. Add the following code in `src/index.ts`:
+
 ```typescript
 import dotenv from "dotenv";
 import { resolve } from "path";
-import { mcpWorkflow } from "./workflows/mcp-workflows";
+import { mcpWorkflow } from "./mastra/workflows/mcp-workflow";
 
 dotenv.config({ path: resolve(process.cwd(), ".env.local") });
 
@@ -308,6 +317,7 @@ export const mastra = new Mastra()
 ### Testing the project
 
 Run the application:
+
 ```bash
 npm run dev "Is it a good day to push today?"
 ```
@@ -315,6 +325,7 @@ npm run dev "Is it a good day to push today?"
 This uses `tsx` to run TypeScript directly without compilation. The question is passed as a command-line argument and becomes the workflow input.
 
 You should see output like:
+
 ```
 Starting Mastra workflow with Gram MCP server...
 Input: Is it a good day to push today?
@@ -342,4 +353,4 @@ If you see model compatibility errors:
 
 - Use `streamLegacy()` for AI SDK v4 models like `gpt-4o-mini`.
 - For AI SDK v5 models, use `generate()` instead.
-- See the [Mastra model documentation](https://mastra.ai/docs/llms/overview) for compatibility details.
+- See the [Mastra model documentation](https://mastra.ai/models) for compatibility details.
