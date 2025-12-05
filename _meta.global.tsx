@@ -152,6 +152,20 @@ const meta = {
               },
             },
           },
+          "agents-api": {
+            title: "Gram Agents API (Beta)",
+            items: {
+              "overview": {
+                title: "Gram Agents API Overview",
+              },
+              "billing-and-usage": {
+                title: "Gram Agents API Billing and Usage",
+              },
+              "example-usage": {
+                title: "Gram Agents API Usage Examples",
+              },
+            },
+          },
           "command-line": {
             title: "Command Line",
             items: {
