@@ -1,71 +1,73 @@
 ---
-title: How To Generate OpenAPI/Swagger Documentation with RSwag for Rails APIs
-description: "Learn how to generate OpenAPI specifications for your Rails API using RSwag and create SDKs with Speakeasy."
+title: How To Generate OpenAPI Documentation with Rswag for Ruby on Rails
+description: "Learn how to generate OpenAPI specifications for your Rails App using Rswag and create SDKs with Speakeasy."
 ---
 
-# How to generate OpenAPI documentation with RSwag for Rails APIs
+# How to generate OpenAPI documentation with Rswag for Ruby on Rails
 
-When building APIs with Ruby on Rails, clear and accurate documentation is essential for your API consumers. [The OpenAPI Specification](https://swagger.io/specification/) (formerly Swagger) has become the industry standard for documenting RESTful APIs. However, manually writing and maintaining OpenAPI documents can be a time-consuming and error-prone process.
+When building APIs in a Ruby on Rails application, "Convention over Configuration" is already embraced. Building RESTful routes is standard for most Rails developers, as is writing tests using Test Driven Development (TDD), but creating an OpenAPI document that accurately describes an API can be another matter.
 
-[RSwag](https://github.com/rswag/rswag) solves this problem by allowing you to generate OpenAPI documents directly from your RSpec tests. This ensures your documentation always stays in sync with your actual API implementation.
+[The OpenAPI Specification](https://swagger.io/specification/) (formerly Swagger) has become the industry standard for documenting RESTful APIs, but manually writing and maintaining OpenAPI documents can be a time-consuming and error-prone process.
 
-In this guide, we'll demonstrate how you can do the following:
+[Rswag](https://github.com/rswag/rswag) solves this problem by enabling OpenAPI documents to be generated directly from RSpec tests. This approach helps documentation stay in sync with the actual API implementation.
 
-- Document a Rails API with RSwag's RSpec-based domain-specific language (DSL).
+This guide demonstrates how to:
+
+- Document a Rails API with Rswag's RSpec-based domain-specific language (DSL).
 - Generate OpenAPI documents.
 - Use the Speakeasy CLI to generate client SDKs.
 
-We'll also look at how to customize OpenAPI documents and troubleshoot some common issues.
+The guide also covers customization of OpenAPI documents and troubleshooting common issues.
 
-## What is RSwag?
+## What is Rswag?
 
-[RSwag](https://github.com/rswag/rswag) is a Ruby gem that helps you create documentation for your Rails APIs. Unlike other frameworks that let you add documentation directly in your code with comments, such as Django and FastAPI, RSwag builds your API documentation through your tests.
+[Rswag](https://github.com/rswag/rswag) is a Ruby gem that helps generate documentation for Rails APIs. Unlike other Ruby gems that add API documentation directly into code with comments or special attributes, Rswag builds API documentation through tests.
 
-The basic idea behind RSwag is simple: You write special RSpec tests that describe what your API does, and RSwag uses these tests to generate OpenAPI documentation. This is different from most documentation tools because you're testing and documenting at the same time.
+The idea behind Rswag is simple: RSpec tests describe API behavior using Rswag's extended rspec-rails OpenAPI-based DSL, and those tests are used to generate OpenAPI documentation. Unlike other tools, this approach tests the application while producing documentation at the same time.
 
 ### Wait, what's RSpec?
 
-[RSpec](https://rspec.info/) is a testing framework for Ruby that lets you write tests for your code. RSpec has a DSL that lets you write tests in a way that is easy to read and understand. RSwag is an extension of RSpec that uses RSpec's DSL to describe your API endpoints and then generates the OpenAPI document from those API definition files.
+[RSpec](https://rspec.info/) is a Ruby testing framework used to write tests for code. Specifically, [rspec-rails](https://github.com/rspec/rspec-rails) brings RSpec testing to Rails applications. RSpec has a DSL (Domain Specific Language) that makes tests easy to read and understand. Rswag builds on this with its OpenAPI-based DSL to describe API endpoints and then generate the OpenAPI document from spec tests.
 
 ### So, to summarize:
 
 ```mermaid
 graph TD
     R[(Rails API endpoints)] -->|are defined in| A[RSpec request specs]
-    A -->|feed| B[RSwag generator]
+    A -->|feed| B[Rswag generator]
     B --> |generate| C[(OpenAPI document)]
 ```
 
-RSwag has three main parts that we'll use in this guide:
+Rswag has three main parts used in this guide:
 
-- `rswag-specs`: This adds special test commands to [RSpec](https://rspec.info/) that let you describe your API endpoints. When you run these tests, they check whether your API works correctly and collect information for the documentation.
-- `rswag-api`: This creates an endpoint in your Rails app that serves the OpenAPI document (in JSON or YAML format) so other tools can use it.
-- `rswag-ui`: This adds the Swagger documentation UI to your app, giving you a nice webpage for viewing and trying out your API.
+- `rswag-specs`: Adds an OpenAPI-based DSL to [RSpec](https://rspec.info/) to describe API endpoints. When these spec tests run, they verify that the API works correctly and collect information for the documentation.
+- `rswag-api`: Creates an endpoint in the Rails app that serves the OpenAPI document (in JSON or YAML format) for use by other tools.
+- `rswag-ui`: Adds the OpenAPI documentation UI to the app, providing a webpage for viewing and trying out the API.
 
-What makes RSwag really useful is that your documentation is always up-to-date with your code. If you change how your API works but forget to update the documentation, your tests will fail. This helps you catch documentation errors early. Also, since the documentation is generated from tests that actually run against your API, you can be confident that what's in the documentation really works.
+Rswag keeps documentation aligned with code changes. If the API behavior changes without updated documentation, tests will fail, helping catch documentation errors early. Because the documentation is generated from tests that run against the API, the documented behavior reflects reality.
 
 ## Example API repository
 
-The source code for a complete implementation of this guide is available in the [rails-f1-laps-api repository](https://github.com/speakeasy-api/examples/tree/main/frameworks-rails-rswag). You can clone it and follow along with the tutorial or use it as a reference for your own Rails project.
+The source code for a complete implementation of this guide is available in the [rails-f1-laps-api repository](https://github.com/speakeasy-api/examples/tree/main/frameworks-rails-rswag). Clone the repository to follow along with the tutorial or use it as a reference for a Rails project.
 
-For this guide, we'll use a simple Formula 1 (F1) lap times API with the following resources:
+This guide uses a simple Formula 1 (F1) lap times API with the following resources:
 
 - **Drivers**: F1 drivers with their names, codes, and countries
 - **Circuits**: Racing circuits with names and locations
 - **Lap times**: Records of lap times for drivers on specific circuits
 
-The API allows clients to list all drivers, circuits, and lap times. You can also use query parameters to filter lap times by specific drivers, circuits, and lap numbers, and use `POST` requests to create new lap time records.
+The API allows clients to list all drivers, circuits, and lap times. Query parameters can be used to filter lap times by specific drivers, circuits, and lap numbers, and `POST` requests can be used to create new lap time records.
 
 ### Requirements
 
-To follow this guide, you should have:
+To follow this guide, the following should be available:
 
 - Ruby on Rails installed
-- A Rails API application (you can use the example app provided above)
+- A Rails API application (the example app provided above can be used)
 
-## Adding RSwag to your Rails application
+## Adding Rswag to a Rails application
 
-Let's begin by adding RSwag to our Rails application. First, add the RSwag gems to your application's Gemfile:
+Begin by adding Rswag to a Rails application. First, add the Rswag gems to the application's Gemfile:
 
 ```ruby filename="Gemfile"
 group :development, :test do
@@ -76,15 +78,15 @@ gem 'rswag-api'
 gem 'rswag-ui'
 ```
 
-The `rswag-specs` gem is only needed for development and testing, while the `rswag-api` and `rswag-ui` gems are required in all environments.
+The `rswag-specs` gem is needed only for development and testing, while the `rswag-api` and `rswag-ui` gems are required in all environments to allow other tools to interact with OpenAPI specs.
 
-After updating your Gemfile, install the gems:
+After updating the Gemfile, install the gems:
 
 ```bash
 bundle install
 ```
 
-Now, run the RSwag generators to set up the necessary files:
+Now, run the Rswag generators to set up the necessary files:
 
 ```bash
 rails generate rswag:api:install
@@ -94,27 +96,27 @@ rails generate rswag:specs:install
 
 These generators create several important files, including:
 
-- `config/initializers/rswag_api.rb`, which configures how the OpenAPI files are served
-- `config/initializers/rswag_ui.rb`, which configures the Swagger UI
+- `config/initializers/rswag_api.rb`, which configures how the Rails Enginge exposes the OpenAPI files
+- `config/initializers/rswag_ui.rb`, which configures the OpenAPI UI and OpenAPI endpoints
 - `spec/swagger_helper.rb`, which sets up RSpec for generating OpenAPI specifications
-- `config/routes.rb`, where the generators mount Rswag
+- `config/routes.rb`, configures where Rails mounts Rswag's OpenAPI documentation engine
 
-## Configuring RSwag
+## Configuring Rswag
 
-Now that we have the RSwag components installed, we need to configure them to work with our API.
+With the Rswag components installed, configure them to work with the API.
 
 ### Configuring the OpenAPI document generator
 
-The `spec/swagger_helper.rb` file is the central configuration for your API documentation.
+The `spec/swagger_helper.rb` file is the central configuration for API documentation.
 
-Here's an example configuration for our F1 Laps API:
+Here is an example configuration for the F1 Laps API:
 
 ```ruby filename="swagger_helper.rb"
 RSpec.configure do |config|
-  config.openapi_root = Rails.root.join('swagger').to_s
+  config.openapi_root = Rails.root.to_s + '/openapi'
 
   config.openapi_specs = {
-    'v1/swagger.yaml' => {
+    'v1/openapi.yaml' => {
       openapi: '3.0.1',
       info: {
         title: 'F1 Laps API',
@@ -164,13 +166,13 @@ This configuration defines:
 - Security schemes for authentication, such as JWT bearer tokens
 - Server information
 
-### Configuring the Swagger UI
+### Configuring the OpenAPI UI
 
-You can customize the Swagger UI through the `config/initializers/rswag_ui.rb` file, which will be rendered at `<your-api-url>/api-docs` by default:
+The OpenAPI UI can be customized through the `config/initializers/rswag_ui.rb` file, which renders at `<api-url>/api-docs` by default:
 
 ```ruby filename="rswag_ui.rb"
 Rswag::Ui.configure do |c|
-  c.openapi_endpoint '/api-docs/v1/swagger.yaml', 'F1 Laps API V1'
+  c.openapi_endpoint '/api-docs/v1/openapi.yaml', 'F1 Laps API V1'
 
   # UI configuration options
   c.config_object['defaultModelsExpandDepth'] = 2
@@ -187,17 +189,19 @@ end
 
 ### Configuring the OpenAPI files (rswag_api.rb)
 
-The `config/initializers/rswag_api.rb` file configures how the OpenAPI files are served:
+The `config/initializers/rswag_api.rb` file configures the root location where the OpenAPI files are served:
 
 ```ruby filename="rswag_api.rb"
 Rswag::Api.configure do |c|
-  c.openapi_root = Rails.root.to_s + '/swagger'
+  c.openapi_root = Rails.root.to_s + '/openapi'
 end
 ```
 
-## Writing RSwag documentation specs
+When using rswag-specs to generate OpenAPI files, ensure both `rswag-api` and `swagger_helper.rb` use the same `<openapi_root>`. Different settings exist to support setups where `rswag-api` is installed independently and OpenAPI files are created manually.
 
-The most powerful feature of RSwag is its ability to generate OpenAPI documentation directly from your RSpec tests. These tests not only verify your API's functionality but also produce detailed OpenAPI documentation. Let's look at how to write these OpenAPI documents for different endpoints.
+## Writing Rswag documentation specs
+
+The most powerful feature of Rswag is the ability to generate OpenAPI documentation directly from RSpec tests. These tests not only verify API functionality but also produce detailed OpenAPI documentation. The following sections show how to write these OpenAPI documents for different endpoints.
 
 ### Documenting a simple endpoint
 
@@ -237,11 +241,11 @@ This spec does a few things:
 - Documents the expected `200` response with a detailed schema
 - Uses `run_test!` to execute the test and validate the actual response
 
-The `run_test!` method is important, as it makes a request to your API and verifies that the response matches the documented schema. This ensures your documentation remains accurate and up-to-date with your implementation.
+The `run_test!` method makes a request to the API and verifies that the response matches the documented schema, helping documentation remain accurate and aligned with the implementation.
 
 ### Documenting endpoints with parameters
 
-For more complex endpoints, such as those with parameters, request bodies, and multiple response types, you can create more detailed specs:
+For more complex endpoints, such as those with parameters, request bodies, and multiple response types, more detailed specs can be created:
 
 ```ruby filename="lap_times_spec.rb"
 # spec/requests/api/v1/lap_times_spec.rb
@@ -337,9 +341,9 @@ end
 
 This more detailed spec documents multiple HTTP methods, query parameters, request bodies, different response types, and nested routes. The `let` statements provide test data that will be used when executing the tests.
 
-### Understanding the RSwag DSL
+### Understanding the Rswag DSL
 
-When writing RSwag documentation specs, you'll use the following elements to describe your API:
+When writing Rswag documentation specs, the following elements are used to describe the API:
 
 - **Path and HTTP method definitions:** The `path` method defines the API endpoint being documented.
 
@@ -433,30 +437,38 @@ When writing RSwag documentation specs, you'll use the following elements to des
 
 ## Generating the OpenAPI document
 
-After writing your documentation specs, you can generate the OpenAPI document by running a single `rake` task:
-
-```bash
-RAILS_ENV=test # first we need to set the environment
-```
+After writing documentation specs, generate the OpenAPI document by running a single `rake` task:
 
 ```bash
 rake rswag:specs:swaggerize
 ```
 
+Alternatively, run the aliased command:
+
+```bash
+rake rswag
+```
+
+If the command fails, set the environment to "test" using:
+
+```bash
+RAILS_ENV=test rails rswag
+```
+
 This command performs two important steps:
 
-- It runs your RSwag specs to validate that your API implementation matches the documentation.
+- Runs Rswag specs to validate that the API implementation matches the documentation.
 - It generates the OpenAPI document file at the configured location.
 
-The result is an OpenAPI document (for example, `swagger/v1/swagger.yaml`) that you can use with various tools, including the built-in Swagger UI and the Speakeasy CLI.
+The result is an OpenAPI document (for example, `openapi/v1/openapi.yaml`) usable with various tools, including the built-in OpenAPI UI and the Speakeasy CLI.
 
-If your tests fail during this process, it indicates that your API implementation doesn't match your documentation. This is a valuable feature of RSwag, as it ensures your documentation stays accurate and up-to-date with your actual implementation.
+If tests fail during this process, it indicates that the API implementation doesn't match the documentation. This behavior ensures documentation stays accurate and aligned with the actual implementation.
 
 ### Understanding the generated OpenAPI document
 
-After running the `rswag:specs:swaggerize` command, RSwag generates a comprehensive OpenAPI document. Here's what a section of that generated document looks like for the lap times endpoint:
+After running the `rswag:specs:swaggerize` command, Rswag generates a comprehensive OpenAPI document. Here's what a section of that generated document looks like for the lap times endpoint:
 
-```yaml filename="swagger.yaml"
+```yaml filename="openapi.yaml"
 # Generated OpenAPI spec for Lap Times endpoint
 "/api/v1/lap_times":
   get:
@@ -551,7 +563,7 @@ After running the `rswag:specs:swaggerize` command, RSwag generates a comprehens
               - lap_number
 ```
 
-You can see how RSwag has automatically documented:
+Rswag automatically documents:
 
 - The HTTP methods (`GET` and `POST`)
 - Query parameters for filtering
@@ -559,15 +571,15 @@ You can see how RSwag has automatically documented:
 - Response codes and schemas
 - The required fields
 
-This is all generated from your RSwag spec files and matches the actual implementation of your API.
+All of this is generated from Rswag spec files and matches the actual implementation of the API.
 
-## Customizing your OpenAPI document
+## Customizing the OpenAPI document
 
-While the basic RSwag setup provides a solid foundation, you can customize your OpenAPI documents and enhance them with additional details to make your doc more useful to API consumers.
+While the basic Rswag setup provides a solid foundation, OpenAPI documents can be customized and enhanced with additional details to make them more useful to API consumers.
 
 ### Documenting authentication
 
-If your API requires authentication, you can configure security schemes in `spec/swagger_helper.rb` and add security requirements to your specs:
+If the API requires authentication, configure security schemes in `spec/swagger_helper.rb` and add security requirements to specs:
 
 ```ruby filename="swagger_helper.rb"
 components: {
@@ -581,7 +593,7 @@ components: {
 }
 ```
 
-And then in your specs:
+And then in the specs:
 
 ```ruby filename="lap_times_spec.rb"
 path '/api/v1/protected_resource' do
@@ -598,7 +610,7 @@ This tells API consumers that they need to include a bearer token in their reque
 
 ### Documenting file uploads
 
-For endpoints that handle file uploads, you can use the `multipart/form-data` content type and specify file parameters:
+For endpoints that handle file uploads, use the `multipart/form-data` content type and specify file parameters:
 
 ```ruby filename="lap_times_spec.rb"
 post 'Upload file' do
@@ -614,7 +626,7 @@ end
 
 ### Creating reusable schemas
 
-To keep your specs DRY [(Don't Repeat Yourself)](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself), you can define reusable schema components in `spec/swagger_helper.rb`:
+To keep specs DRY [(Don't Repeat Yourself)](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself), define reusable schema components in `spec/swagger_helper.rb`:
 
 ```ruby filename="swagger_helper.rb"
 components: {
@@ -633,41 +645,41 @@ components: {
 }
 ```
 
-And then in your specs:
+And then in the specs:
 
 ```ruby filename="lap_times_spec.rb"
 parameter name: :lap_time, in: :body, schema: { '$ref' => '#/components/schemas/lap_time' }
 ```
 
-This allows you to define common models once and reference them throughout your documentation.
+This allows common models to be defined once and referenced throughout the documentation.
 
 ## Troubleshooting common issues
 
-Let's look at some of the common issues you may encounter when using RSwag and how you can troubleshoot them.
+Common issues encountered when using Rswag and how to troubleshoot them are outlined below.
 
 ### Missing documentation
 
-If the endpoints don't appear in your Swagger UI:
+If endpoints do not appear in the OpenAPI UI:
 
-- Ensure your specs include the proper RSwag DSL syntax.
-- Verify that your spec files are in the correct location.
-- Check that your controller routes match the paths in your specs.
+- Ensure specs include the proper Rswag DSL syntax.
+- Verify that spec files are in the correct location.
+- Check that controller routes match the paths in the specs.
 
-Ideally, the CLI will give you a good error message if something is missing.
+Ideally, the CLI provides a helpful error message if something is missing.
 
 ### Test failures
 
-If your RSwag specs fail, it may be because the implementation doesn't match the documentation. To fix this, check the generated OpenAPI document to see what is missing, then update your specs to match the implementation.
+If Rswag specs fail, the implementation may not match the documentation. To fix this, check the generated OpenAPI document to identify missing elements, then update specs to match the implementation.
 
 Make sure to check the required parameters in both specs and controllers.
 
 ### Generation issues
 
-If your OpenAPI document hasn't been generated correctly, check that you are running the command in the test environment (`RAILS_ENV=test`) and that the file permissions are correct in the destination directory.
+If the OpenAPI document has not been generated correctly, ensure the command is run in the test environment (`RAILS_ENV=test`) and that file permissions are correct in the destination directory.
 
 ## Generating SDKs with Speakeasy
 
-Once you have created your OpenAPI document with RSwag, you can use Speakeasy to generate client SDKs for your API. This makes it easy for developers to interact with your API in their preferred programming language.
+Once an OpenAPI document has been created with Rswag, Speakeasy can be used to generate client SDKs for the API. This makes it easier for developers to interact with the API in their preferred programming language.
 
 First, install the Speakeasy CLI:
 
@@ -675,18 +687,18 @@ First, install the Speakeasy CLI:
 curl -fsSL https://go.speakeasy.com/cli-install.sh | sh
 ```
 
-Next, you can follow the instructions on the [Getting Started](https://www.speakeasy.com/docs/speakeasy-reference/cli/getting-started) page to set up and authenticate with Speakeasy.
+Next, follow the instructions on the [Getting Started](https://www.speakeasy.com/docs/speakeasy-reference/cli/getting-started) page to set up and authenticate with Speakeasy.
 
-To generate a client SDK, run the following command from the root of your project:
+To generate a client SDK, run the following command from the root of the project:
 
 ```bash
 speakeasy quickstart
 ```
 
-Follow the prompts to provide your OpenAPI document location (`swagger/v1/swagger.yaml`) and configure your SDK options.
+Follow the prompts to provide the OpenAPI document location (`openapi/v1/openapi.yaml`) and configure SDK options.
 
-Speakeasy then generates a complete SDK based on your API specification, making it easy for developers to integrate with your API.
+Speakeasy then generates a complete SDK based on the API specification, making it easier for developers to integrate with the API.
 
 ## Summary
 
-In this guide, we've explored how you can use RSwag to generate OpenAPI documents for your Rails API. We've covered how to document your API endpoints using RSwag's RSpec-based DSL and then use RSwag to generate your OpenAPI document, as well as how you can customize the OpenAPI document and use it to generate client SDKs with Speakeasy.
+This guide explored how Rswag can be used to generate OpenAPI documents for a Rails API. It covered documenting API endpoints using Rswag's RSpec-based DSL, generating an OpenAPI document with Rswag, customizing the OpenAPI document, and using it to generate client SDKs with Speakeasy.
