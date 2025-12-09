@@ -62,85 +62,122 @@ const sdk = new SDK({
     {
       label: "Python",
       language: "python",
-      code: `import sdk
+      code: `import requests
+  import sdk
+  from sdk.components import Security
 
-async def get_token() -> str:
-    # refresh token here
-    token = "<YOUR_JWT>"
-    return token
+  def callback() -> Security:
+      # refresh token here
+      token = "<YOUR_JWT>"
+      return Security(bearer_auth=token)
 
-s = sdk.SDK(bearer_auth=get_token)`,
+  s = sdk.SDK(security=with_authorization(callback))`,
     },
     {
       label: "Go",
       language: "go",
       code: `import (
-  "context"
-  sdk "speakeasy"
-)
+    "context"
+    sdk "speakeasy"
+    "speakeasy/components"
+  )
 
-s := sdk.New(
-    sdk.WithBearerAuth(func(ctx context.Context) (string, error) {
-        // refresh token here
-        token := "<YOUR_JWT>"
-        return token, nil
-    }),
-)`,
+  s := sdk.New(
+      sdk.WithSecuritySource(func(ctx context.Context) (components.Security, error) {
+          // refresh token here
+          token := "<YOUR_JWT>"
+          return components.Security{BearerAuth: token}, nil
+      }),
+  )`,
     },
     {
       label: "Java",
       language: "java",
       code: `import dev.speakeasyapi.speakeasy.SDK;
-import java.util.function.Supplier;
+  import dev.speakeasyapi.speakeasy.SecuritySource;
+  import dev.speakeasyapi.speakeasy.models.components.Security;
 
-Supplier<String> tokenSupplier = () -> {
-    // refresh token here
-    return "<YOUR_JWT>";
-};
 
-SDK s = SDK.builder()
-    .bearerAuth(tokenSupplier)
-    .build();`,
+  class BearerSource implements SecuritySource {
+
+      public Security getSecurity() {
+          // refresh token here
+          return Security.builder()
+              .bearerAuth("<YOUR_JWT>")
+              .build();
+      }
+  }
+
+  _____________________________________
+
+
+  import dev.speakeasyapi.speakeasy.SDK;
+  import dev.speakeasyapi.speakeasy.SecuritySource;
+  import dev.speakeasyapi.speakeasy.models.components.Security;
+
+  SDK s = SDK.builder()
+      .securitySource(new BearerSource())
+      .build();`,
     },
     {
       label: "C#",
       language: "csharp",
       code: `using Speakeasy;
+  using Speakeasy.Models.Components;
 
-Func<string> tokenSource = () =>
-{
-    // refresh token here
-    return "<YOUR_JWT>";
-};
 
-var sdk = new SDK(bearerAuth: tokenSource);`,
+  Func<Security> tokenSource = () =>
+  {
+      // refresh token here
+      var token = "<YOUR_JWT>"
+
+      return new Security { BearerAuth = token}
+  }
+
+  var sdk = new SDK(securitySource: tokenSource);`,
     },
     {
       label: "PHP",
       language: "php",
       code: `use Speakeasy\\Speakeasy;
 
-$sdk = Speakeasy\\SDK::builder()
-    ->setBearerAuth(
-        function (): string {
-            // refresh token here
-            return "<YOUR_JWT>";
-        }
-    )->build();`,
+  $sdk = Speakeasy\\SDK::builder()
+      ->setSecuritySource(
+          function (): Security {
+              //refresh token here
+              var token = "<YOUR_JWT>";
+
+              return new Security(bearerAuth: $token);
+          }
+      )->build();
+
+  try {
+      $res = $sdk->drinks->listDrinks();
+
+      if ($res->Drinks != null) {
+          // handle response
+      }
+  } catch (Errors\\ErrorThrowable $e) {
+      // handle exception
+  }`,
     },
     {
       label: "Ruby",
       language: "ruby",
       code: `require 'speakeasy'
 
-sdk = Speakeasy::SDK.new(
-  bearer_auth: -> {
-    # Refresh token here
-    '<YOUR_JWT>'
-  }
-)`,
-    },
-  ]}
+  sdk = Speakeasy::SDK.new(
+    security_source: -> {
+      # Refresh token here
+      token = '<YOUR_JWT>'
+
+      Models::Components::Security.new(bearer_auth: token)
+    }
+  )
+
+  res = sdk.drinks.list_drinks`,
+}
+]}
 />
 
 ## Multiple security schemes
@@ -184,113 +221,120 @@ const sdk = new SDK({
     {
       label: "Python",
       language: "python",
-      code: `import sdk
-from sdk.components import Security
+      code: `import requests
+  import sdk
+  from sdk.components import Security
 
-def callback() -> Security:
-    # Choose which auth method to use and refresh if needed
-    token = "<YOUR_JWT>"
-    return Security(bearer_auth=token)
-    # OR: return Security(api_key_auth="your-api-key")
+  def callback() -> Security:
+      # refresh token here
+      token = "<YOUR_JWT>"
+      return Security(bearer_auth=token)
 
-s = sdk.SDK(security=callback)`,
+  s = sdk.SDK(security=with_authorization(callback))`,
     },
     {
       label: "Go",
       language: "go",
       code: `import (
-  "context"
-  sdk "speakeasy"
-  "speakeasy/components"
-)
+    "context"
+    sdk "speakeasy"
+    "speakeasy/components"
+  )
 
-s := sdk.New(
-    sdk.WithSecuritySource(func(ctx context.Context) (components.Security, error) {
-        // Choose which auth method to use and refresh if needed
-        token := "<YOUR_JWT>"
-        return components.Security{BearerAuth: token}, nil
-        // OR: return components.Security{APIKeyAuth: "your-api-key"}, nil
-    }),
-)`,
+  s := sdk.New(
+      sdk.WithSecuritySource(func(ctx context.Context) (components.Security, error) {
+          // refresh token here
+          token := "<YOUR_JWT>"
+          return components.Security{BearerAuth: token}, nil
+      }),
+  )`,
     },
     {
       label: "Java",
       language: "java",
       code: `import dev.speakeasyapi.speakeasy.SDK;
-import dev.speakeasyapi.speakeasy.SecuritySource;
-import dev.speakeasyapi.speakeasy.models.components.Security;
+  import dev.speakeasyapi.speakeasy.SecuritySource;
+  import dev.speakeasyapi.speakeasy.models.components.Security;
 
 
-class MultiAuthSource implements SecuritySource {
+  class BearerSource implements SecuritySource {
 
-    public Security getSecurity() {
-        // Choose which auth method to use and refresh if needed
-        return Security.builder()
-            .bearerAuth("<YOUR_JWT>")
-            .build();
-        // OR: return Security.builder().apiKeyAuth("your-api-key").build();
-    }
-}
+      public Security getSecurity() {
+          // refresh token here
+          return Security.builder()
+              .bearerAuth("<YOUR_JWT>")
+              .build();
+      }
+  }
 
-_____________________________________
+  _____________________________________
 
 
-import dev.speakeasyapi.speakeasy.SDK;
-import dev.speakeasyapi.speakeasy.SecuritySource;
-import dev.speakeasyapi.speakeasy.models.components.Security;
+  import dev.speakeasyapi.speakeasy.SDK;
+  import dev.speakeasyapi.speakeasy.SecuritySource;
+  import dev.speakeasyapi.speakeasy.models.components.Security;
 
-SDK s = SDK.builder()
-    .securitySource(new MultiAuthSource())
-    .build();`,
+  SDK s = SDK.builder()
+      .securitySource(new BearerSource())
+      .build();`,
     },
     {
       label: "C#",
       language: "csharp",
       code: `using Speakeasy;
-using Speakeasy.Models.Components;
+  using Speakeasy.Models.Components;
 
 
-Func<Security> securitySource = () =>
-{
-    // Choose which auth method to use and refresh if needed
-    var token = "<YOUR_JWT>";
+  Func<Security> tokenSource = () =>
+  {
+      // refresh token here
+      var token = "<YOUR_JWT>"
 
-    return new Security { BearerAuth = token };
-    // OR: return new Security { ApiKeyAuth = "your-api-key" };
-};
+      return new Security { BearerAuth = token}
+  }
 
-var sdk = new SDK(securitySource: securitySource);`,
+  var sdk = new SDK(securitySource: tokenSource);`,
     },
     {
       label: "PHP",
       language: "php",
       code: `use Speakeasy\\Speakeasy;
 
-$sdk = Speakeasy\\SDK::builder()
-    ->setSecuritySource(
-        function (): Security {
-            // Choose which auth method to use and refresh if needed
-            $token = "<YOUR_JWT>";
+  $sdk = Speakeasy\\SDK::builder()
+      ->setSecuritySource(
+          function (): Security {
+              //refresh token here
+              var token = "<YOUR_JWT>";
 
-            return new Security(bearerAuth: $token);
-            // OR: return new Security(apiKeyAuth: "your-api-key");
-        }
-    )->build();`,
+              return new Security(bearerAuth: $token);
+          }
+      )->build();
+
+  try {
+      $res = $sdk->drinks->listDrinks();
+
+      if ($res->Drinks != null) {
+          // handle response
+      }
+  } catch (Errors\\ErrorThrowable $e) {
+      // handle exception
+  }`,
     },
     {
       label: "Ruby",
       language: "ruby",
       code: `require 'speakeasy'
 
-sdk = Speakeasy::SDK.new(
-  security_source: -> {
-    # Choose which auth method to use and refresh if needed
-    token = '<YOUR_JWT>'
+  sdk = Speakeasy::SDK.new(
+    security_source: -> {
+      # Refresh token here
+      token = '<YOUR_JWT>'
 
-    Models::Components::Security.new(bearer_auth: token)
-    # OR: Models::Components::Security.new(api_key_auth: 'your-api-key')
-  }
-)`,
-    },
-  ]}
+      Models::Components::Security.new(bearer_auth: token)
+    }
+  )
+
+  res = sdk.drinks.list_drinks`,
+}
+]}
 />
