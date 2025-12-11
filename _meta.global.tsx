@@ -435,14 +435,43 @@ const meta = {
                 title: "Add webhooks to your SDKs",
               },
               code: {
-                title: "Add Custom Code",
+                title: "Modify SDK code",
                 items: {
-                  "code-regions": {
+                  "sdk-hooks": {
+                    title: "Hooks",
+                  },
+                  "custom-code": {
+                    title: "Custom code",
                     items: {
-                      overview: {},
-                      python: {},
-                      typescript: {},
-                      java: {},
+                      "custom-code": {
+                        title: "Overview",
+                      },
+                      "custom-code-best-practices": {
+                        title: "Best practices",
+                      },
+                      "custom-code-reference": {
+                        title: "Technical reference",
+                      },
+                      genignore: {
+                        title: "Ignoring files",
+                      },
+                    },
+                  },
+                  "code-regions": {
+                    title: "Code regions",
+                    items: {
+                      overview: {
+                        title: "Custom code regions",
+                      },
+                      python: {
+                        title: "Python",
+                      },
+                      typescript: {
+                        title: "TypeScript",
+                      },
+                      java: {
+                        title: "Java",
+                      },
                     },
                   },
                 },
