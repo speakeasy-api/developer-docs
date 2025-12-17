@@ -47,6 +47,7 @@ speakeasy configure [flags]
 * [speakeasy](/docs/speakeasy-reference/cli/getting-started)	 - The Speakeasy CLI tool provides access to the Speakeasy.com platform
 ### Sub Commands
 
+* [speakeasy configure generation](/docs/speakeasy-reference/cli/configure/generation)	 - Configure and inspect generation settings.
 * [speakeasy configure github](/docs/speakeasy-reference/cli/configure/github)	 - Configure Speakeasy for github.
 * [speakeasy configure local-workflow](/docs/speakeasy-reference/cli/configure/local-workflow)	 - Create a local workflow configuration file.
 * [speakeasy configure publishing](/docs/speakeasy-reference/cli/configure/publishing)	 - Configure Speakeasy for publishing.
