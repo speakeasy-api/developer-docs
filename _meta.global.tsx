@@ -548,6 +548,17 @@ const meta = {
         },
       },
       /*
+            OpenAPI
+          */
+      "openapi-section": {
+        type: "separator",
+        title: <SidebarSeparator>{"OpenAPI"}</SidebarSeparator>,
+      },
+      "openapi-hub": {
+        title: "OpenAPI",
+        href: "/openapi",
+      },
+      /*
             Reference
           */
       "reference-section": {
