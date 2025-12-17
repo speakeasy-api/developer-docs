@@ -66,6 +66,19 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+        - name: filter
+          in: query
+          description: Advanced filter criteria as a JSON object.
+          required: false
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  productCode:
+                    type: string
+                  inStock:
+                    type: boolean
       responses:
         "200":
           description: A list of drinks.
@@ -191,6 +204,77 @@ The order of fields above is recommended for defining fields in the document.
 
 ## Parameter Serialization
 
-Depending on the parameter's `in`, `style`, and `explode` fields and schema type, the parameter value will be serialized in different ways. Some combinations of schema type and parameter serialization are not valid and should be avoided.
+OpenAPI provides two mutually exclusive ways to describe how parameter values are serialized: using `schema` with `style` and `explode`, or using `content`. You must use one or the other, but not both.
 
-The `content` field can be used instead to define complex serialization scenarios for a parameter such as serializing an object to a JSON string for including in a query parameter in the URL.
+### Schema with Style and Explode (Recommended for Most Cases)
+
+The `schema` approach is the standard way to define parameters and is suitable for most scenarios. It works well for primitive values, arrays, and simple objects that can be serialized into a string.
+
+With this approach, serialization is controlled by:
+- **`style`**: Defines the serialization format (e.g., `form`, `simple`, `matrix`, `label`)
+- **`explode`**: Controls whether arrays and objects are expanded into separate parameters
+
+Example of array serialization using `schema`:
+
+```yaml
+parameters:
+  - name: colors
+    in: query
+    schema:
+      type: array
+      items:
+        type: string
+    style: form
+    explode: false
+```
+
+This serializes as: `?colors=blue,black,brown`
+
+For detailed serialization rules for each parameter type, see the [path](/openapi/requests/parameters/path-parameters), [header](/openapi/requests/parameters/header-parameters), [query](/openapi/requests/parameters/query-parameters), and [cookie](/openapi/requests/parameters/cookie-parameters) parameter documentation.
+
+### Content (For Complex Serialization)
+
+The `content` approach is designed for complex serialization scenarios that cannot be handled by `style` and `explode`. This is particularly useful when you need to send structured data using a specific media type serialization, such as JSON.
+
+Use `content` when you need to:
+- Send complex nested objects that require JSON serialization
+- Use a specific media type format for the parameter value
+- Handle serialization that goes beyond what `style` and `explode` support
+
+Example of JSON-serialized object in a query parameter:
+
+```yaml
+parameters:
+  - name: filter
+    in: query
+    description: Filter criteria as a JSON object
+    required: false
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            type:
+              type: string
+              example: t-shirt
+            color:
+              type: string
+              example: blue
+            priceRange:
+              type: object
+              properties:
+                min:
+                  type: number
+                max:
+                  type: number
+```
+
+This parameter would be sent as a JSON string in the URL:
+
+```
+?filter={"type":"t-shirt","color":"blue","priceRange":{"min":10,"max":50}}
+```
+
+The `content` field maps media types to schemas, allowing you to specify exactly how the parameter should be serialized and deserialized. While `application/json` is common for complex query parameters, you can use any media type that makes sense for your API.
+
+**Important**: You cannot use `style` and `explode` when using `content`. Choose the approach that best fits your serialization needs.
