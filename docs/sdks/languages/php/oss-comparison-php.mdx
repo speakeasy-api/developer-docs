@@ -1,6 +1,18 @@
+{/* TODO 
+
+- does not handle any polymorphism whatsoever, no allof or anyOf 
+
+- se allows configure namespaces if you want. makes a git repo if you want. 
+- og gives you... travis ci lol
+
+- se provides asynchronous versions of each HTTP call, such as `getStation` and `getStationAsync`.
+- OpenAPI Generator provides asynchronous versions of each HTTP call, such as `AddPet` and `AddPetAsync`.
+
+*/}
+
 import { Table } from "@/mdx/components";
 
-# OpenAPI PHP SDK creation: Speakeasy vs open source
+# Comparing OpenAPI PHP SDK Generators
 
 Many of our users have switched from [OpenAPI Generator](https://openapi-generator.tech/) to Speakeasy for their PHP SDKs. Learn how to use both SDK creators in this guide, and the differences between them.
 
@@ -15,21 +27,18 @@ Here's the high-level summary of the differences between Speakeasy and OpenAPI G
     { key: "openapi", header: "OpenAPI Generator" }
   ]}
   data={[
-    { feature: "OpenAPI 3.0 support", speakeasy: "✅", openapi: "✅" },
-    { feature: "OpenAPI 3.1 support", speakeasy: "✅", openapi: "❌" },
-    { feature: "Laravel integration", speakeasy: "✅", openapi: "❌" },
-    { feature: "Code readability", speakeasy: "Concise, human-readable code", openapi: "Verbose, messy code" },
-    { feature: "Files generated", speakeasy: "84 granular separation", openapi: "16 less separation" },
-    { feature: "Code generated", speakeasy: "3,915 lines", openapi: "6,316 lines" },
-    { feature: "PHP version support", speakeasy: "PHP 8.1+", openapi: "PHP 7.4+" },
+    { feature: "OpenAPI 3.2 support", speakeasy: "✅", openapi: "❌" },
+    { feature: "OpenAPI 3.1 support", speakeasy: "✅", openapi: "🚧" },
+    { feature: "PHP version support", speakeasy: "PHP >=8.2", openapi: "PHP >=8.1" },
+    { feature: "Laravel integration", speakeasy: "✅", openapi: "✅" },
     { feature: "Type safety", speakeasy: "✅", openapi: "❌" },
     { feature: "Runtime type checking", speakeasy: "✅ JMS Serializer", openapi: "❌" },
+    { feature: "Async support", speakeasy: "✅", openapi: "✅" },
+    { feature: "OAuth 2.0 support", speakeasy: "✅", openapi: "❌" },
     { feature: "Serialization", speakeasy: "✅ JMS Serializer", openapi: "✅ PHP extensions" },
-    { feature: "Enum support", speakeasy: "✅", openapi: "⚠️ Uses constant strings and functions" },
-    { feature: "OAuth 2.0 support", speakeasy: "⚠️ Coming soon", openapi: "❌" },
-    { feature: "Content type support", speakeasy: "JSON and form", openapi: "JSON, form, and XML" },
-    { feature: "Async support", speakeasy: "❌", openapi: "✅" },
+    { feature: "Enum support", speakeasy: "✅", openapi: "⚠️ Uses getter/setter workarounds" },
     { feature: "Union type handling", speakeasy: "✅", openapi: "⚠️ Creates custom implementation" },
+    { feature: "Content type support", speakeasy: "JSON and Form", openapi: "JSON, Form, and XML" },
     { feature: "Documentation", speakeasy: "✅", openapi: "⚠️ Examples may lack required fields" },
     { feature: "CI/CD integration", speakeasy: "✅", openapi: "❌" }
   ]}
@@ -51,23 +60,8 @@ To follow along with this guide, locate the PetStore file in **File -> Load Exam
 
 OpenAPI Generator provides a Docker image, but Speakeasy does not. To install the Speakeasy CLI, you can either follow the steps in the [Speakeasy Getting Started guide](/docs/speakeasy-reference/cli/getting-started) to install the Go binary directly on your computer, or run it in Docker, as we did.
 
-To use Docker, first create a `Dockerfile` with the content below, replacing `YourApiKey` with your key from the Speakeasy website.
 
-```bash
-FROM alpine:3.19
-WORKDIR /app
-RUN apk add bash go curl unzip sudo nodejs npm
-RUN curl -fsSL https://go.speakeasy.com/cli-install.sh | sh;
-ENV GOPATH=/root/go
-ENV PATH=$PATH:$GOPATH/bin
-ENV SPEAKEASY_API_KEY=YourApiKey
-```
 
-Then build the Speakeasy image with the command below.
-
-```sh
-docker build -t seimage .
-```
 
 ## Validating the schemas
 
@@ -75,10 +69,10 @@ Both OpenAPI Generator and the Speakeasy CLI can validate an OpenAPI schema. We'
 
 ### Validation using OpenAPI Generator
 
-To validate `schema.yaml` using OpenAPI Generator, run the following in the terminal:
+To validate `openapi.yaml` using OpenAPI Generator, run the following in the terminal:
 
 ```bash
-docker run --rm -v "./app:/local" openapitools/openapi-generator-cli validate -i /local/schema.yaml
+openapi-generator-cli validate -i openapi.yaml
 ```
 
 OpenAPI Generator returns two warnings:
@@ -93,10 +87,10 @@ Warnings:
 
 ### Validation using Speakeasy
 
-Validate the schema with Speakeasy by running the following in the terminal:
+Validate the OpenAPI document with Speakeasy by running the following in the terminal:
 
 ```bash
-docker run --rm -v "./app:/app" seimage speakeasy validate openapi -s /app/schema.yaml
+speakeasy validate openapi -s openapi.yaml
 ```
 
 The Speakeasy validator returns 72 hints about missing examples, seven warnings about missing responses, and three warnings about unused components. Each warning includes a detailed JSON-formatted error with line numbers.
@@ -114,7 +108,7 @@ OpenAPI Generator includes three different PHP SDK creators (and six server crea
 To create an SDK from the schema file using OpenAPI Generator, we ran the command below, which we found in the [OpenAPI Generator README](https://github.com/OpenAPITools/openapi-generator#16---docker).
 
 ```sh
-docker run --rm -v "./app:/local" openapitools/openapi-generator-cli generate -i /local/schema.yaml -g php -o /local/og
+openapi-generator-cli generate -i openapi.yaml -g php -o og
 ```
 
 OpenAPI Generator creates three folders:
@@ -143,17 +137,17 @@ OpenAPI Generator creates three folders:
 A warning from OpenAPI Generator in the terminal read:
 
 ```
-Generation using 3.1.0 specs is in development and is not officially supported yet.
+OpenAPI 3.1 support is still in beta. To report an issue related to 3.1 spec, please kindly open an issue in the Github repo: https://github.com/openAPITools/openapi-generator.
 ```
 
-The [OpenAPI Generator roadmap](https://openapi-generator.tech/docs/roadmap) hasn't been updated in almost two years.
+The [OpenAPI Generator roadmap](https://openapi-generator.tech/docs/roadmap) hasn't been updated since late 2022 and does not mention PHP at all.
 
 ### Creating an SDK with Speakeasy
 
 Next, we'll create an SDK using the Speakeasy CLI with the command below.
 
 ```bash
-docker run --rm -v "./app:/app" seimage speakeasy quickstart
+speakeasy quickstart
 ```
 
 Speakeasy gives multiple warnings about `xml request bodies are not currently supported` and creates the following folders.
@@ -716,6 +710,8 @@ In Speakeasy, the JMS Serializer checks types when converting from JSON to PHP o
 
 ### Enums
 
+{/* TODO Speakeasy uses proper enums and OG hasnt got a clue!! */}
+
 OpenAPI Generator provides a workaround for enumerations using constant strings and functions. Below is the pet status enumeration for OpenAPI Generator.
 
 ```php
@@ -767,7 +763,7 @@ requestBody:
         $ref: "#/components/schemas/Pet"
 ```
 
-Speakeasy supports JSON and form content types, but not XML. OpenAPI Generator supports all three. Additionally, OpenAPI Generator provides asynchronous versions of each HTTP call, such as `AddPet` and `AddPetAsync`.
+Speakeasy supports JSON and form content types, but not XML. OpenAPI Generator supports all three. 
 
 In Speakeasy, each content type for each operation will become its own file in the SDK. In OpenAPI Generator, all operations are combined into one API file.
 
