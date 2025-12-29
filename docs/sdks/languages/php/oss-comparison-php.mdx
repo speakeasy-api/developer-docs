@@ -8,14 +8,13 @@
 - se provides asynchronous versions of each HTTP call, such as `getStation` and `getStationAsync`.
 - OpenAPI Generator provides asynchronous versions of each HTTP call, such as `AddPet` and `AddPetAsync`.
 
-
 */}
 
 import { Table } from "@/mdx/components";
 
 # Comparing OpenAPI PHP SDK Generators
 
-Many of our users have switched from [OpenAPI Generator](https://openapi-generator.tech/) to Speakeasy for their PHP SDKs. Learn how to use both SDK creators in this guide, and the differences between them.
+The biggest generator of SDKs (a.k.a API clients) in PHP is the multilingual open-source generator [OpenAPI Generator](https://openapi-generator.tech/), but so many of our users have switched to Speakeasy for their PHP SDKs it seemed helpful to compare the offerings and help others make an informed decision.
 
 Open-source OpenAPI generators are great for experimentation but lack the reliability, performance, and intuitive developer experience required for critical applications. As an alternative, Speakeasy creates [idiomatic SDKs](/post/client-sdks-as-a-service) that meet the bar for enterprise use.
 
@@ -31,23 +30,24 @@ Here's the high-level summary of the differences between Speakeasy and OpenAPI G
     { feature: "OpenAPI 3.2 support", speakeasy: "✅", openapi: "❌" },
     { feature: "OpenAPI 3.1 support", speakeasy: "✅", openapi: "🚧" },
     { feature: "PHP version support", speakeasy: "PHP >=8.2", openapi: "PHP >=8.1" },
-    { feature: "Laravel integration", speakeasy: "✅", openapi: "✅" },
+    { feature: "Laravel integration", speakeasy: "✅", openapi: "❌" },
     { feature: "Type safety", speakeasy: "✅", openapi: "❌" },
     { feature: "Runtime type checking", speakeasy: "✅ JMS Serializer", openapi: "❌" },
     { feature: "Async support", speakeasy: "✅", openapi: "✅" },
-    { feature: "OAuth 2.0 support", speakeasy: "✅", openapi: "❌" },
+    { feature: "OAuth 2.0 support", speakeasy: "✅", openapi: "⚠️ Implict grant only" },
     { feature: "Serialization", speakeasy: "✅ JMS Serializer", openapi: "✅ PHP extensions" },
     { feature: "Enum support", speakeasy: "✅", openapi: "⚠️ Uses getter/setter workarounds" },
     { feature: "Union type handling", speakeasy: "✅", openapi: "⚠️ Creates custom implementation" },
     { feature: "Content type support", speakeasy: "JSON and Form", openapi: "JSON, Form, and XML" },
     { feature: "Documentation", speakeasy: "✅", openapi: "⚠️ Examples may lack required fields" },
+    /* { feature: "PHPUnit Support", speakeasy: "✅ PHPUnit v10+", openapi: "⚠️ PHPUnit v8/v9 only" }, */
     { feature: "CI/CD integration", speakeasy: "✅", openapi: "❌" }
   ]}
 />
 
 In this post, we'll do a technical deep dive on creating PHP SDKs using both Speakeasy and OpenAPI Generator, then we'll compare the generated SDKs.
 
-## History of PHP's OpenAPI generators
+## History of PHP OpenAPI generators
 
 **OpenAPI Generator** is a community-run open-source tool for generating SDKs from OpenAPI documents. The project is not connected to the OpenAPI Initiative at all, which has been the source of much confusion. The origin of this project was as a [fork of Swagger Codegen](https://openapi-generator.tech/docs/fork-qna). [Swagger CodeGen](https://swagger.io/tools/swagger-codegen) is a similar tool maintained by SmartBear.
 
@@ -57,15 +57,15 @@ PHP version support has also been slow. Managing which PHP versions to support i
 
 OpenAPI Generator has been able to able to maintain compatibility with newer PHP versions (does not throw errors using it on the latest versions), but the minimum version is PHP 8.1 which lost security support end of 2025. There is always a tradeoff with supporting older versions to help users stuck on older versions, but the project has also been slow to take advantage of newer PHP 8.x features to simplify generated code and improve user experience in an increasingly type safe world.
 
-[JanePHP](https://github.com/janephp/janephp) arrived as a dedicated PHP SDK generator with a much better focus on modern PHP features. Sadly it too [lacks support for OpenAPI v3.1](https://github.com/janephp/janephp/issues/759 ) and above, and [does not support enums](https://github.com/janephp/janephp/issues/615) natively.
+[JanePHP](https://github.com/janephp/janephp) appeared on the scene as a dedicated PHP SDK generator with more focus on modern PHP features. Sadly it too [lacks support for OpenAPI v3.1](https://github.com/janephp/janephp/issues/759 ) and above, and [does not support enums](https://github.com/janephp/janephp/issues/615) natively.
 
 This comparison will only focus on tools with OpenAPI v3.1 support, so JanePHP will not be included and neither will Swagger CodeGen.
 
 ## Preparing the SDK generators
 
-OpenAPI Generator requires Java to run, so some folks prefer to wrap that in a Docker image to keep their computer setups clean. Thankfully there's a few [alternative installs](https://openapi-generator.tech/docs/installation/) for OpenAPI Generator, including a [Homebrew package](https://openapi-generator.tech/docs/installation/#homebrew) for macOS users, [Scoop package](https://openapi-generator.tech/docs/installation/#scoop) for Windows users, and [an NPM wrapper](https://openapi-generator.tech/docs/installation/#npm).
+OpenAPI Generator requires Java to run, so some folks prefer to wrap that in a Docker image to keep their workstation clean. Thankfully there's a few [alternative installs](https://openapi-generator.tech/docs/installation/) for OpenAPI Generator, including a [Homebrew package](https://openapi-generator.tech/docs/installation/#homebrew) for macOS users, [Scoop package](https://openapi-generator.tech/docs/installation/#scoop) for Windows users, and [an NPM wrapper](https://openapi-generator.tech/docs/installation/#npm).
 
-```bash
+```sh
 # macOS
 brew install openapi-generator
 
@@ -78,7 +78,7 @@ npm install @openapitools/openapi-generator-cli -g
 
 To install the Speakeasy CLI follow the steps in the [Speakeasy Getting Started guide](/docs/speakeasy-reference/cli/getting-started). Again there are multiple installation options, with [Homebrew for macOS](https://www.speakeasy.com/docs/speakeasy-reference/cli/getting-started#homebrew-macos) or [Chocolatey](https://www.speakeasy.com/docs/speakeasy-reference/cli/getting-started#chocolatey-windows) for Windows users.
 
-```bash
+```sh
 # macOS
 brew install speakeasy-api/tap/speakeasy
 
@@ -93,9 +93,13 @@ Speakeasy has a user interface component as it is a full SaaS platform, but acco
 
 Finally to work with these SDK generators we'll need an OpenAPI document. We'll use the [Train Travel API](https://raw.githubusercontent.com/bump-sh-examples/train-travel-api/main/openapi.yaml) from our friends at Bump.sh for demonstration purposes. Save the file as `openapi.yaml` in your working directory.
 
+```sh
+wget https://raw.githubusercontent.com/bump-sh-examples/train-travel-api/main/openapi.yaml -O openapi.yaml
+```
+
 ## Validating OpenAPI
 
-Before creating an SDK its a good idea to validate the files, and whilst there are many tools to do that its best to use the built-in validation functionality of the SDK generator to make sure it's not only valid, but will work well in that tool.
+Before creating an SDK its a good idea to validate the OpenAPI documents. There are plenty of tools available to do that, but it's best to use the built-in validation functionality of the SDK generator to make sure it's not only valid, but will work well in that tool.
 
 OpenAPI Generator and Speakeasy CLI can validate OpenAPI documents, so let's run the two and see how they compare. 
 
@@ -107,7 +111,7 @@ wget https://github.com/Mermade/openapi3-examples/raw/refs/heads/master/3.0/fail
 
 To validate using OpenAPI Generator, run the following in the terminal:
 
-```bash
+```sh
 openapi-generator-cli validate -i openapi.bad.yaml
 ```
 
@@ -120,11 +124,11 @@ No validation issues detected.
 
 The validation command in Speakeasy is pretty similar, but seeing as Speakeasy's `validate` command can validate multiple formats including [Arazzo](https://www.speakeasy.com/openapi/arazzo), it needs `validate openapi` to specify the format:
 
-```bash
+```sh
 speakeasy validate openapi -s openapi.bad.yaml
 ```
 
-Speakeasy correctly identifies the issues with the file, seeing 1 Error, 1 Warning, and 3 Hints.
+Speakeasy correctly identifies the issues with the file, seeing 1 error, 1 warning, and 3 hints.
 
 ```
 validation error: [line 8] validate-json-schema - OpenAPI document invalid: expected boolean, but got string - https://spec.openapis.org/oas/3.0/schema/2021-09-28#/definitions/Operation/properties/deprecated/type
@@ -150,12 +154,11 @@ The warnings and hints in that document are more like opinions than specifically
 
 ## Creating the SDKs
 
-Right, onto the SDK generation. Let's create one with OpenAPI Generator and one with Speakeasy, then compare the results.
+Right, time to generate some code. Let's create one with OpenAPI Generator and one with Speakeasy, then compare the results.
 
 ### Creating an SDK with OpenAPI Generator
 
-{/* todo check this bit */}
-OpenAPI Generator includes three different PHP SDK creators (and six server creators). We'll use the stable [PHP creator](https://openapi-generator.tech/docs/generators/php), as the others are in beta testing and have fewer features.
+OpenAPI Generator includes three different PHP templates for SDK generation: `php`, `php-dt`, `php-nexgen`. We'll use the stable [`php` generator](https://openapi-generator.tech/docs/generators/php) as `php-dt` is a wrapper around a very niche [DataTransfer](https://github.com/Articus/DataTransfer) package, and `php-nextgen` has been in beta for a long time without making much progress.
 
 To create an SDK from the schema file using OpenAPI Generator, we ran the command below, which we found in the [OpenAPI Generator README](https://github.com/OpenAPITools/openapi-generator#16---docker).
 
@@ -177,7 +180,7 @@ OpenAPI Generator creates three folders:
     },
     { 
       folder: "`lib`", 
-      content: "PHP code to call the API on the server, includes a `Model` folder containing a file for each object in the schema and an `Api` folder containing a file for each tag in the schema. If you pass [parameters](https://openapi-generator.tech/docs/generators/php#config-options) to the build command, you can rename `Api`, for example, to `PetstoreSdk`." 
+      content: "PHP code to call the API on the server, includes a `Model` folder containing a file for each object in the schema and an `Api` folder containing a file for each tag in the schema. If you pass [parameters](https://openapi-generator.tech/docs/generators/php#config-options) to the build command, you can rename `Api`, for example, to `TrainTravelSdk`." 
     },
     { 
       folder: "`test`", 
@@ -192,13 +195,13 @@ A warning from OpenAPI Generator in the terminal read:
 OpenAPI 3.1 support is still in beta. To report an issue related to 3.1 spec, please kindly open an issue in the Github repo: https://github.com/openAPITools/openapi-generator.
 ```
 
-The [OpenAPI Generator roadmap](https://openapi-generator.tech/docs/roadmap) hasn't been updated since late 2022 and does not mention PHP at all.
+The [OpenAPI Generator roadmap](https://openapi-generator.tech/docs/roadmap) hasn't been updated since late 2022 and does not mention PHP or OpenAPI at all, so the comparison will have to focus on the current state of the SDKs.
 
 ### Creating an SDK with Speakeasy
 
-Next, we'll create an SDK using the Speakeasy CLI with the command below.
+Next, create an SDK using the Speakeasy CLI with the command below.
 
-```bash
+```sh
 speakeasy quickstart
 ```
 
@@ -402,7 +405,7 @@ Let's compare the structure of the SDKs in terms of code volume and folder struc
 
 You can count the lines of code in the SDKs by running `cloc` for each (ignoring documentation and test folders):
 
-```bash
+```sh
 cloc ./app/og/lib
 cloc ./app/se/src
 ```
