@@ -5,52 +5,128 @@ description: "How to create OpenAPI schemas and SDKs from TypeSpec"
 
 # How to Create OpenAPI Schemas and SDKs With TypeSpec
 
-[TypeSpec](https://typespec.io/) is a brand-new domain-specific language (DSL) used to describe APIs. As the name implies you describe your API using a TypeScript-like type system, with language constructs such as `model` for the structure or schema of your API's data, or `op` for operations in your API. If you've used [OpenAPI](/openapi), these concepts likely sound familiar – this is because TypeSpec is also influenced by and generates OpenAPI.
+[TypeSpec](https://typespec.io/) is a brand-new domain-specific language (DSL) used to design APIs and generate API artifacts such as documentation, client SDKs, and server stubs.
 
-So something that is _like_ OpenAPI, and also generates OpenAPI specifications? You may be asking yourself, why does TypeSpec exist? Like many people, our initial reaction to TypeSpec was to reference the iconic XKCD strip:
+Some consider TypeSpec to be a replacement for OpenAPI, but the goal of TypeSpec is to be used earlier in the planning process. OpenAPI can be used to design an API that does not yet exist (the API design-first workflow), or describe an API that already exists (API code-first workflow). TypeSpec focuses on the design-first workflow, providing a lightweight language for rapidly designing APIs in a TypeScript-like way, which can then be used to generate OpenAPI documents and other handy artifacts from a single source of truth.
 
-<div className="text-center">
-  <br />
-  <img src="https://imgs.xkcd.com/comics/standards_2x.png" className="w-[70%] mx-auto" alt="Standards" />
-</div>
+TypeSpec has high level language constructs such as `model` for the structure or schema of your API's data, or `op` for operations in your API. 
 
-However, after spending some time with it, we've come to understand the justification for a new DSL - we'll cover some of that shortly. We also ran into this young language's rough edges, and we'll cover those in detail, too.
+```typespec
+import "@typespec/http";
 
-Our end goal with this article is to create a high-quality TypeScript SDK. However, before we create an SDK, we'll need to learn how to generate an OpenAPI document based on a TypeSpec specification. For that, we need to learn TypeSpec, and there is no better way to get started learning a new language than by asking _why_ it exists in the first place.
+using Http;
+
+model Store {
+  name: string;
+  address: Address;
+}
+
+model Address {
+  street: string;
+  city: string;
+}
+
+@route("/stores")
+interface Stores {
+  list(@query filter: string): Store[];
+  read(@path id: Store): Store;
+}
+```
+
+If you've used [OpenAPI](/openapi), these concepts translate to `schema` and `operation`, respectively.
+
+```yaml
+openapi: 3.2.0
+info:
+  title: (title)
+  version: 0.0.0
+tags: []
+paths:
+  /stores:
+    get:
+      operationId: Stores_list
+      parameters:
+        - name: filter
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Store'
+  /stores/{id}:
+    get:
+      operationId: Stores_read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Store'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Store'
+components:
+  schemas:
+    Address:
+      type: object
+      required:
+        - street
+        - city
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+    Store:
+      type: object
+      required:
+        - name
+        - address
+      properties:
+        name:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+```
+
+The end goal for this guide is to create a high-quality TypeScript SDK. However, before we create an SDK, we'll need to learn how to generate an OpenAPI document based on a TypeSpec document. For that, we need to learn TypeSpec, and there is no better way to get started learning a new language than by asking _why_ it exists in the first place.
 
 ## The Problem TypeSpec Solves
 
-Code generation is a force multiplier in API design and development. When an executive unironically asks, "How do we 10x API creation?", the unironic answer is, " API-first design + Code generation."
+Code generation is a force multiplier in API design and development. When an executive unironically asks, "How do we 10x API creation?", the unironic answer is: "API design-first + Code generation."
 
-API-first means specifying exactly what your application's programming interface will look like before anything gets built, code generation means using that definition to create documentation, server (stubs) and client libraries (SDKs).
+API design-first means specifying exactly what your application's programming interface will look like before anything gets built, getting stakeholders to approve these designs and mock servers before getting stuck into coding. Code generation means using those approved designs to generate server (stubs) and client libraries (SDKs), rapidly reducing the amount of code that needs to be manually written and cutting down on human error in the process.
 
-As mentioned previously,OpenAPI is widely used for exactly this reason – it provides a human-readable (as YAML) specification format for APIs, and comes with a thriving ecosystem of tools and code generators. So if OpenAPI exists, what can TypeSpec add?
+As mentioned previously, OpenAPI is widely used for exactly this reason - it provides a human-readable (as YAML) description format for APIs, and comes with a thriving ecosystem of tools and code generators. So if OpenAPI exists, what can TypeSpec add?
 
-The fundamental problem TypeSpec aims to solve is that writing OpenAPI documents by hand is complex, tedious, and error-prone. The complexity often leads to teams to abandon an API-first approach and instead start by coding their API, and then extracting OpenAPI from the codebase when they get to the point where they need documentation and SDKs – a quasi-API-first approach.
+The fundamental problem TypeSpec aims to solve is that writing OpenAPI documents by hand is complex, tedious, and error-prone. The complexity often leads to teams to abandon an design-first approach and instead start by coding their APIs without any of the usual review and feedback processes early on that can advert disaster. 
 
-Ultimately, OpenAPI isn't for everyone. Neither is TypeSpec for that matter. But for those who are immersed in the TypeScript ecosystem, TypeSpec may be a more natural fit than OpenAPI. And the more tools we have to help businesses create great APIs, the better.
+OpenAPI documents can become large and unwieldy, making them difficult to read and maintain. The YAML syntax can be verbose and repetitive, leading to duplication and inconsistencies. This confusion is because OpenAPI _can_ be used to both **design** an API that does not yet exist, and **describe** an API that already exists, but TypeSpec focuses on the former: TypeSpec helps teams rapidly design APIs with a simple TypeScript language that's a lot more friendly on the fingertips, without relying on [GUI editors](https://openapi.tools/#gui-editors) to wrestle OpenAPI's YAML for you. 
 
-## TypeSpec Development Status
+The workflow is writing TypeSpec early on in the planning process, rapidly prototyping APIs, and evolving them over time. All the while, CI/CD can convert TypeSpec to OpenAPI documents, powering API documentation, SDK generation, mock servers, and other handy artifacts from a tidy single source of truth.
 
-Before you trade in your OpenAPI YAML for TypeSpec, know that at the time of writing, TypeSpec is nowhere near as feature-rich and stable as OpenAPI. If you're designing a new API from scratch, taking the time to learn OpenAPI will benefit your team, even if TypeSpec one day becomes the most popular API specification language.
-
-## TypeSpec Libraries and Emitters
-
-Developers can extend the capabilities of TypeSpec by creating and using libraries. These libraries can provide additional functionality, such as decorators, types, and operations, that are not part of the core TypeSpec language.
-
-A special type of library in TypeSpec is an emitter. Emitters are used to generate output from a TypeSpec specification. For example, the `@typespec/openapi3` library provides an emitter that generates an OpenAPI document from a TypeSpec specification.
-
-When targeting a specific output format, such as OpenAPI, you can use the corresponding emitter library to generate the desired output. This allows you to write your API specification in TypeSpec and then generate the output in the desired format.
+Perhaps TypeSpec continues to be the source of truth forever, or perhaps it's ditched after the initial design phase. However you use it, TypeSpec aims to make API design-first easier, faster, and more enjoyable for those used to TypeScript and similar languages.
 
 ## A Brief Introduction to TypeSpec Syntax
 
-This guide won't give a complete introduction or overview of TypeSpec, but we'll take a brief look at the language's structure and important concepts in the context of generating SDKs.
+To get started with TypeSpec, let's cover some of the basic syntax and concepts you'll need to understand to read and write TypeSpec specifications.
 
 ### Modularity in TypeSpec
 
 The main entry point in TypeSpec is the `main.tsp` file. This file has the same role as the `index.ts` file in a TypeScript project.
 
-Just like in TypeScript, we can organize code into files, folders, and modules, then [import](https://typespec.io/docs/language-basics/imports) these using the `import` statement. This helps split large API specifications into smaller, more manageable parts. The difference between TypeScript and TypeSpec in this regard is that TypeSpec imports files, not code.
+Just like in TypeScript, we can organize code into files, folders, and modules, then [import](https://typespec.io/docs/language-basics/imports) these using the `import` statement. This helps split large API designs into smaller, more manageable parts. The difference between TypeScript and TypeSpec in this regard is that TypeSpec imports files, not code.
 
 Here's an example of how you can import files, folders, and modules in TypeSpec:
 
@@ -136,7 +212,7 @@ namespace WithoutComposition {
 }
 ```
 
-The equivalent OpenAPI specification for the `User` model above would look like this:
+The equivalent OpenAPI document for the `User` model above would look like this:
 
 ```yaml filename="openapi.yaml"
 components:
@@ -150,6 +226,19 @@ components:
           type: string
         email:
           type: string
+    HasRole:
+      type: object
+      properties:
+        role:
+          type: string
+    Admin:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - $ref: "#/components/schemas/HasRole"
+        - type: object
+          properties:
+            level:
+              type: integer
 ```
 
 ### Operations in TypeSpec
@@ -175,7 +264,7 @@ interface Users {
 }
 ```
 
-The equivalent OpenAPI specification for the `Users` interface above would look like this:
+The equivalent OpenAPI for the `Users` interface above would look like this:
 
 ```yaml filename="openapi.yaml"
 paths:
@@ -242,7 +331,7 @@ model User {
 }
 ```
 
-Decorators allow you to add custom behavior to your TypeSpec definitions using JavaScript functions. You can [define your own decorators](https://typespec.io/docs/extending-typespec/create-decorators) or use built-in decorators provided by TypeSpec or third-party libraries.
+Decorators allow you to add custom behavior to TypeSpec definitions using JavaScript functions. You can [define your own decorators](https://typespec.io/docs/extending-typespec/create-decorators) or use built-in decorators provided by TypeSpec or third-party libraries.
 
 ### Learn More About TypeSpec
 
@@ -254,11 +343,7 @@ We'll cover more detailed examples of TypeSpec syntax in our full example below.
 
 ## Generating an OpenAPI Document from TypeSpec
 
-Now that we have a basic understanding of TypeSpec syntax, let's generate an OpenAPI document from a TypeSpec specification.
-
-The example below will guide you through the process of creating a TypeSpec project, writing a TypeSpec specification, and generating an OpenAPI document from it.
-
-For a speedrun, we've published the full example in a [GitHub repository](https://github.com/speakeasy-api/typespec-openapi-example).
+Now that we have a basic understanding of TypeSpec syntax, let's generate an OpenAPI document from a TypeSpec document.
 
 ### Step 1: Install the TypeSpec Compiler CLI
 
@@ -273,8 +358,8 @@ npm install -g @typespec/compiler
 Create a new directory for your TypeSpec project and navigate into it:
 
 ```bash filename="Terminal"
-mkdir typespec-example-speakeasy
-cd typespec-example-speakeasy
+mkdir typespec-example
+cd typespec-example
 ```
 
 Run the following command to initialize a new TypeSpec project:
@@ -283,35 +368,411 @@ Run the following command to initialize a new TypeSpec project:
 tsp init
 ```
 
-This will prompt you to select a template for your project. Choose the `Generic REST API` template and press enter. Press enter repeatedly to select the defaults until the project is initialized.
+This will prompt you to select a template for your project. Choose the `Generic REST API` template and press enter. 
 
-### Step 3: Install the TypeSpec Dependencies
-
-Install the TypeSpec dependencies using `tsp`:
-
-```bash filename="Terminal"
-tsp install
+```
+✔ Select a project template: Generic REST API
+✔ Enter a project name: typespec-example-speakeasy
+? What emitters do you want to use?:
+❯ ◉ OpenAPI 3.1 document       [@typespec/openapi3]
+  ◯ C# client                  [@typespec/http-client-csharp]
+  ◯ Java client                [@typespec/http-client-java]
+  ◯ JavaScript client          [@typespec/http-client-js]
+  ◯ Python client              [@typespec/http-client-python]
+  ◯ C# server stubs            [@typespec/http-server-csharp]
+  ◯ JavaScript server stubs    [@typespec/http-server-js]
 ```
 
-We'll need to install the `@typespec/versioning` and `@typespec/openapi` modules to generate an OpenAPI document. Run the following commands to install these modules:
+Depending on which emitters you select, the `tsp init` will install the necessary dependencies and create a `main.tsp` file in your project directory.
 
-```bash filename="Terminal"
-npm install @typespec/versioning @typespec/openapi
-```
+### Step 3: Write Your TypeSpec Specification
 
-### Step 4: Write Your TypeSpec Specification
-
-Open the `main.tsp` file in your text editor and write your TypeSpec specification. Here's an example of a simple TypeSpec specification:
+Open the `main.tsp` file in your text editor and write your TypeSpec specification. Here's an example of a simple TypeSpec document:
 
 ### Example TypeSpec File
 
-Here's an example of a complete TypeSpec file for a Book Store API:
+Here's an example of a complete TypeSpec file for a Train Travel API:
 
 ```typescript
 import "@typespec/http";
 import "@typespec/openapi";
 import "@typespec/openapi3";
-import "@typespec/versioning";
+
+using Http;
+using OpenAPI;
+
+/**
+ * API for finding and booking train trips across Europe.
+ *
+ */
+@service(#{ title: "Train Travel API" })
+@info(#{
+  version: "1.2.1",
+  contact: #{
+    name: "Train Support",
+    url: "https://example.com/support",
+    email: "support@example.com",
+  },
+  license: #{
+    name: "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International",
+  },
+})
+@server("https://api.example.com", "Production")
+@tagMetadata(
+  "Stations",
+  #{
+    description: "Find and filter train stations across Europe, including their location and local timezone.",
+  }
+)
+@tagMetadata(
+  "Trips",
+  #{
+    description: "Timetables and routes for train trips between stations, including pricing and availability.",
+  }
+)
+@tagMetadata(
+  "Bookings",
+  #{
+    description: "Create and manage bookings for train trips, including passenger details and optional extras.",
+  }
+)
+@tagMetadata(
+  "Payments",
+  #{
+    description: "Pay for bookings using a card or bank account, and view payment status and history. **Warning:** Bookings usually expire within 1 hour so you'll need to make your payment before the expiry date.",
+  }
+)
+
+namespace TrainTravelAPI;
+
+/** A train station. */
+model Station {
+  /** Unique identifier for the station. */
+  @format("uuid") id: string;
+
+  /** The name of the station */
+  name: string;
+
+  /** The address of the station. */
+  address: string;
+
+  /** The country code of the station. */
+  @format("iso-country-code") country_code: string;
+
+  /** The timezone of the station in the [IANA Time Zone Database format](https://www.iana.org/time-zones). */
+  timezone?: string;
+}
+
+/** A train trip. */
+model Trip {
+  /** Unique identifier for the trip */
+  @format("uuid") id?: string;
+
+  /** The starting station of the trip */
+  origin?: string;
+
+  /** The destination station of the trip */
+  destination?: string;
+
+  /** The date and time when the trip departs */
+  departure_time?: utcDateTime;
+
+  /** The date and time when the trip arrives */
+  arrival_time?: utcDateTime;
+
+  /** The name of the operator of the trip */
+  operator?: string;
+
+  /** The cost of the trip */
+  price?: numeric;
+
+  /** Indicates whether bicycles are allowed on the trip */
+  bicycles_allowed?: boolean;
+
+  /** Indicates whether dogs are allowed on the trip */
+  dogs_allowed?: boolean;
+}
+
+/** A booking for a train trip. */
+model Booking {
+  /** Unique identifier for the booking */
+  @format("uuid") id?: string;
+
+  /** Identifier of the booked trip */
+  @format("uuid") trip_id?: string;
+
+  /** Name of the passenger */
+  passenger_name?: string;
+
+  /** Indicates whether the passenger has a bicycle. */
+  has_bicycle?: boolean;
+
+  /** Indicates whether the passenger has a dog. */
+  has_dog?: boolean;
+}
+
+/** A problem detail object as defined in RFC 7807. */
+model Problem {
+  /** A URI reference that identifies the problem type */
+  type?: string;
+
+  /** A short, human-readable summary of the problem type */
+  title?: string;
+
+  /** A human-readable explanation specific to this occurrence of the problem */
+  detail?: string;
+
+  /** A URI reference that identifies the specific occurrence of the problem */
+  instance?: string;
+
+  /** The HTTP status code */
+  status?: integer;
+}
+
+/** Returns a paginated and searchable list of all train stations. */
+@tag("Stations")
+@route("/stations")
+@get
+@summary("Get a list of train stations")
+op `get-stations`(
+  ...Parameters.page,
+  ...Parameters.limit,
+
+  /**
+   * The latitude and longitude of the user's location, to narrow down the search results to sites within a proximity of this location.
+   *
+   */
+  @query(#{ explode: true }) coordinates?: string,
+
+  /**
+   * A search term to filter the list of stations by name or address.
+   *
+   */
+  @query(#{ explode: true }) search?: string,
+
+  /** Filter stations by country code */
+  @format("iso-country-code") @query(#{ explode: true }) country?: string,
+):
+  | {
+      @header("Cache-Control") CacheControl?: string;
+      @header RateLimit?: string;
+
+      @body body: {
+        data?: Station[];
+        links?: {
+          self?: url;
+          next?: url;
+          prev?: url;
+        };
+      };
+    }
+  | {
+      @statusCode statusCode: 400;
+      @header RateLimit?: string;
+      @header contentType: "application/problem+json";
+      @body body: Problem;
+    };
+
+/**
+ * Returns a list of available train trips between the specified origin and destination stations on the given date.
+ *
+ */
+@tag("Trips")
+@route("/trips")
+@get
+@summary("Get available train trips")
+op `get-trips`(
+  ...Parameters.page,
+  ...Parameters.limit,
+
+  /** The ID of the origin station */
+  @format("uuid") @query(#{ explode: true }) origin: string,
+
+  /** The ID of the destination station */
+  @format("uuid") @query(#{ explode: true }) destination: string,
+
+  /** The date and time of the trip in ISO 8601 format in origin station's timezone. */
+  @query(#{ explode: true }) date: utcDateTime,
+
+  /** Only return trips where bicycles are known to be allowed */
+  @query(#{ explode: true }) bicycles?: boolean,
+
+  /** Only return trips where dogs are known to be allowed */
+  @query(#{ explode: true }) dogs?: boolean,
+):
+  | {
+      @header("Cache-Control") CacheControl?: string;
+      @header RateLimit?: string;
+
+      @body body: {
+        data?: Trip[];
+        links?: {
+          self?: url;
+          next?: url;
+          prev?: url;
+        };
+      };
+    }
+  | {
+      @statusCode statusCode: 400;
+      @header RateLimit?: string;
+      @header contentType: "application/problem+json";
+      @body body: Problem;
+    };
+
+/** A booking is a temporary hold on a trip. It is not confirmed until the payment is processed. */
+@tag("Bookings")
+@route("/bookings")
+@post
+@summary("Create a booking")
+op `create-booking`(
+  /** Booking details */
+  @body body: Booking,
+):
+  | {
+      @statusCode statusCode: 201;
+      @body body: Booking & {
+        links?: { self?: url };
+      };
+    }
+  | {
+      @statusCode statusCode: 400;
+      @header RateLimit?: string;
+      @header contentType: "application/problem+json";
+      @body body: Problem;
+    };
+
+namespace Parameters {
+  model page {
+    /** The page number to return */
+    @minValue(1) @query(#{ explode: true }) page?: integer = 1;
+  }
+  model limit {
+    /** The number of items to return per page */
+    @minValue(1)
+    @maxValue(100)
+    @query(#{ explode: true })
+    limit?: integer = 10;
+  }
+}
+```
+
+Let's break down some of the key features of this TypeSpec file:
+
+#### Importing and Using Modules
+
+The file starts by importing necessary TypeSpec modules:
+
+```typescript
+import "@typespec/http";
+import "@typespec/openapi";
+import "@typespec/openapi3";
+
+using Http;
+using OpenAPI;
+```
+
+These modules extend TypeSpec's capabilities for HTTP APIs and OpenAPI generation.
+
+#### Namespace and Service Definition
+
+The `TrainTravelAPI` namespace is decorated with several metadata decorators:
+
+```typescript
+@service(#{ title: "Train Travel API" })
+@info(#{
+  version: "1.2.1",
+  contact: #{
+    name: "Train Support",
+    url: "https://example.com/support",
+    email: "support@example.com",
+  },
+  license: #{
+    name: "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International",
+  },
+})
+@server("https://api.example.com", "Production")
+namespace TrainTravelAPI;
+```
+
+- `@service` marks this namespace as a service and provides its title
+- `@info` provides additional information for the OpenAPI document
+- `@server` defines the base URL for the API
+- `@tagMetadata` provides descriptions for operation tags
+
+#### Models with Validation
+
+TypeSpec supports various validation decorators for model properties:
+
+```typescript
+/** A train station. */
+model Station {
+  /** Unique identifier for the station. */
+  @format("uuid") id: string;
+
+  /** The name of the station */
+  name: string;
+
+  /** The address of the station. */
+  address: string;
+
+  /** The country code of the station. */
+  @format("iso-country-code") country_code: string;
+
+  /** The timezone of the station */
+  timezone?: string;
+}
+```
+
+The `@format` decorator adds format validation, while the `?` makes properties optional.
+
+#### Operations with Multiple Response Types
+
+Operations can return different response types using union types:
+
+```typescript
+op `get-stations`(...params):
+  | {
+      @header("Cache-Control") CacheControl?: string;
+      @header RateLimit?: string;
+      @body body: {
+        data?: Station[];
+        links?: { /* ... */ };
+      };
+    }
+  | {
+      @statusCode statusCode: 400;
+      @header RateLimit?: string;
+      @header contentType: "application/problem+json";
+      @body body: Problem;
+    };
+```
+
+This creates both successful (200) and error (400) responses in the generated OpenAPI.
+
+#### Reusable Parameters
+
+The `Parameters` namespace defines reusable parameter models:
+
+```typescript
+namespace Parameters {
+  model page {
+    /** The page number to return */
+    @minValue(1) @query(#{ explode: true }) page?: integer = 1;
+  }
+  model limit {
+    /** The number of items to return per page */
+    @minValue(1)
+    @maxValue(100)
+    @query(#{ explode: true })
+    limit?: integer = 10;
+  }
+}
+```
+
+These can be spread into operations using `...Parameters.page` and `...Parameters.limit`.
+
+### Step 4: Generate the OpenAPI Document
 
 using TypeSpec.Http;
 using TypeSpec.OpenAPI;
