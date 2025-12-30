@@ -724,7 +724,7 @@ model Station {
 }
 ```
 
-The `@format` decorator adds format validation, while the `?` makes properties optional.
+The `@format` decorator adds format annotations (which some OpenAPI tools may choose to validate), while the `?` makes properties optional.
 
 #### Operations with Multiple Response Types
 
@@ -733,8 +733,6 @@ Operations can return different response types using union types:
 ```typescript
 op `get-stations`(...params):
   | {
-      @header("Cache-Control") CacheControl?: string;
-      @header RateLimit?: string;
       @body body: {
         data?: Station[];
         links?: { /* ... */ };
@@ -742,8 +740,6 @@ op `get-stations`(...params):
     }
   | {
       @statusCode statusCode: 400;
-      @header RateLimit?: string;
-      @header contentType: "application/problem+json";
       @body body: Problem;
     };
 ```
@@ -774,349 +770,27 @@ These can be spread into operations using `...Parameters.page` and `...Parameter
 
 ### Step 4: Generate the OpenAPI Document
 
-using TypeSpec.Http;
-using TypeSpec.OpenAPI;
-using TypeSpec.Versioning;
+You can generate an OpenAPI 3.1 document using the TypeSpec compiler:
 
-@service({
-  title: "Book Store API",
-})
-@info({
-  termsOfService: "https://bookstore.example.com/terms",
-  contact: {
-    name: "API Support",
-    url: "https://bookstore.example.com/support",
-    email: "support@bookstore.example.com",
-  },
-  license: {
-    name: "Apache 2.0",
-    url: "https://www.apache.org/licenses/LICENSE-2.0.html",
-  },
-})
-@versioned(Versions)
-@server("http://127.0.0.1:4010", "Book Store API v1")
-@doc("API for managing a book store inventory and orders")
-namespace BookStore;
-
-enum Versions {
-  `1.0.0`,
-}
-
-enum PublicationType {
-  Book,
-  Magazine,
-}
-
-@doc("Base model for books and magazines")
-model PublicationBase {
-  @doc("Unique identifier")
-  @key
-  id: string;
-
-  @doc("Title of the publication")
-  title: string;
-
-  @doc("Publication date")
-  publishDate: utcDateTime;
-
-  @doc("Price in USD")
-  price: float32;
-
-  @doc("Type of publication")
-  type: PublicationType;
-}
-
-const BookExample1 = #{
-  id: "123",
-  title: "Book Title",
-  publishDate: utcDateTime.fromISO("2020-01-01T00:00:00Z"),
-  price: 19.99,
-  type: PublicationType.Book,
-  author: "Author Name",
-  isbn: "1234567890",
-};
-
-const BookExample2 = #{
-  id: "456",
-  title: "Another Book Title",
-  publishDate: utcDateTime.fromISO("2020-02-01T00:00:00Z"),
-  price: 24.99,
-  type: PublicationType.Book,
-  author: "Another Author",
-  isbn: "0987654321",
-};
-
-@example(BookExample1)
-@doc("Represents a book in the store")
-model Book extends PublicationBase {
-  type: PublicationType.Book;
-
-  @doc("Author of the book")
-  author: string;
-
-  @doc("ISBN of the book")
-  isbn: string;
-}
-
-const MagazineExample1 = #{
-  id: "789",
-  title: "Magazine Title",
-  publishDate: utcDateTime.fromISO("2020-03-01T00:00:00Z"),
-  price: 9.99,
-  type: PublicationType.Magazine,
-  issueNumber: 1,
-  publisher: "Publisher Name",
-};
-
-const MagazineExample2 = #{
-  id: "012",
-  title: "Another Magazine Title",
-  publishDate: utcDateTime.fromISO("2020-04-01T00:00:00Z"),
-  price: 7.99,
-  type: PublicationType.Magazine,
-  issueNumber: 2,
-  publisher: "Another Publisher",
-};
-
-@example(MagazineExample1)
-@doc("Represents a magazine in the store")
-model Magazine extends PublicationBase {
-  type: PublicationType.Magazine;
-
-  @doc("Issue number of the magazine")
-  issueNumber: int32;
-
-  @doc("Publisher of the magazine")
-  publisher: string;
-}
-
-const PublicationExample1 = BookExample1;
-
-const PublicationExample2 = MagazineExample1;
-
-@example(PublicationExample1)
-@discriminator("type")
-@oneOf
-union Publication {
-  book: Book,
-  magazine: Magazine,
-}
-
-@doc("Possible statuses for an order")
-enum OrderStatus {
-  Pending,
-  Shipped,
-  Delivered,
-  Cancelled,
-};
-
-const OrderExample1 = #{
-  id: "abc",
-  customerId: "123",
-  items: #[BookExample1, MagazineExample1],
-  totalPrice: 29.98,
-  status: OrderStatus.Pending,
-};
-
-@example(OrderExample1)
-@doc("Represents an order for publications")
-model Order {
-  @doc("Unique identifier for the order")
-  id: string;
-
-  @doc("Customer who placed the order")
-  customerId: string;
-
-  @doc("List of publications in the order")
-  items: Publication[];
-
-  @doc("Total price of the order")
-  totalPrice: float32;
-
-  @doc("Status of the order")
-  status: OrderStatus;
-}
-
-@doc("Operations for managing publications")
-@tag("publications")
-@route("/publications")
-interface Publications {
-  @opExample(#{ returnType: #[BookExample1, MagazineExample1] })
-  @doc("List all publications")
-  @operationId("listPublications")
-  list(): Publication[];
-
-  @opExample(#{ parameters: #{ id: "123" }, returnType: BookExample1 })
-  @doc("Get a specific publication by ID")
-  @operationId("getPublication")
-  get(@path id: string): Publication | Error;
-
-  @opExample(#{
-    parameters: #{ publication: BookExample1 },
-    returnType: BookExample1,
-  })
-  @doc("Create a new publication")
-  @operationId("createPublication")
-  create(@body publication: Publication): Publication | Error;
-}
-
-@doc("Operations for managing orders")
-@tag("orders")
-@route("/orders")
-interface Orders {
-  @opExample(#{
-    parameters: #{ order: OrderExample1 },
-    returnType: OrderExample1,
-  })
-  @doc("Place a new order")
-  @operationId("placeOrder")
-  placeOrder(@body order: Order): Order | Error;
-
-  @opExample(#{ parameters: #{ id: "123" }, returnType: OrderExample1 })
-  @doc("Get an order by ID")
-  @operationId("getOrder")
-  getOrder(@path id: string): Order | Error;
-
-  @opExample(#{
-    parameters: #{ id: "123", status: OrderStatus.Shipped },
-    returnType: OrderExample1,
-  })
-  @doc("Update the status of an order")
-  @operationId("updateOrderStatus")
-  updateStatus(@path id: string, @body status: OrderStatus): Order | Error;
-}
-
-@example(#{ code: 404, message: "Publication not found" })
-@error
-@doc("Error response")
-model Error {
-  @doc("Error code")
-  code: int32;
-
-  @doc("Error message")
-  message: string;
-}
+```bash
+tsp compile . --emit @typespec/openapi3
 ```
 
-Let's break down some of the key features of this TypeSpec file:
+This will generate an OpenAPI JSON file in the `tsp-output/@typespec/openapi3` directory.
 
-#### Importing and Using Modules
+### Step 5: (Optional) Output as YAML
 
-The file starts by importing necessary TypeSpec modules:
+By default, the TypeSpec compiler outputs JSON. However, you can specify YAML output by updating your `tspconfig.yaml`:
 
-```typescript
-import "@typespec/http";
-import "@typespec/openapi";
-import "@typespec/openapi3";
-import "@typespec/versioning";
-
-using TypeSpec.Http;
-using TypeSpec.OpenAPI;
-using TypeSpec.Versioning;
+```yaml
+emit:
+  - "@typespec/openapi3"
+options:
+  "@typespec/openapi3":
+    output-file: "{output-dir}/openapi.yaml"
 ```
 
-These modules extend TypeSpec's capabilities for HTTP APIs, OpenAPI generation, and API versioning.
-
-#### Namespace and Service Definition
-
-The `BookStore` namespace is decorated with several metadata decorators:
-
-```typescript
-@service({
-  title: "Book Store API",
-})
-@info({
-  termsOfService: "https://bookstore.example.com/terms",
-  contact: {
-    name: "API Support",
-    url: "https://bookstore.example.com/support",
-    email: "support@bookstore.example.com",
-  },
-  license: {
-    name: "Apache 2.0",
-    url: "https://www.apache.org/licenses/LICENSE-2.0.html",
-  },
-})
-@versioned(Versions)
-@server("http://127.0.0.1:4010", "Book Store API v1")
-@doc("API for managing a book store inventory and orders")
-namespace BookStore;
-```
-
-- `@service` marks this namespace as a service and provides its title
-- `@info` provides additional information for the OpenAPI document
-- `@versioned` specifies the API versions
-- `@server` defines the base URL for the API
-- `@doc` provides a description for the API
-
-#### Models and Inheritance
-
-TypeSpec supports model inheritance, which is used to create specific publication types:
-
-```typescript
-@doc("Base model for books and magazines")
-model PublicationBase {
-  // properties
-}
-
-@example(BookExample1)
-@doc("Represents a book in the store")
-model Book extends PublicationBase {
-  // additional properties specific to books
-}
-```
-
-#### Union Types
-
-Union types allow representing multiple possible types with a discriminator property:
-
-```typescript
-@example(PublicationExample1)
-@discriminator("type")
-@oneOf
-union Publication {
-  book: Book,
-  magazine: Magazine,
-}
-```
-
-#### Interfaces and Operations
-
-Interfaces in TypeSpec group related operations:
-
-```typescript
-@doc("Operations for managing publications")
-@tag("publications")
-@route("/publications")
-interface Publications {
-  // operations
-}
-```
-
-Operations can be defined with various parameters and return types:
-
-```typescript
-@opExample(#{ parameters: #{ id: "123" }, returnType: BookExample1 })
-@doc("Get a specific publication by ID")
-@operationId("getPublication")
-get(@path id: string): Publication | Error;
-```
-
-The `@path` decorator indicates a path parameter, while `@body` would indicate a request body parameter.
-
-### Step 5: Generate the OpenAPI Document
-
-Now that we've written our TypeSpec specification, we can generate an OpenAPI document from it using the `tsp` compiler.
-
-Run the following command to generate an OpenAPI document:
-
-```bash filename="Terminal"
-tsp compile main.tsp --emit @typespec/openapi3
-```
-
-The `tsp compile` command creates a new directory called `tsp-output`, then the `@typespec/openapi3` emitter creates the directories `@typespec/openapi3` within. If we were to use other emitters, such as protobuf, we would see `@typespec/protobuf` directories instead.
-
-Because we're using the versioning library, the OpenAPI document will be generated for the specified version of the API. In our case, the file generated by the OpenAPI 3 emitter will be named `openapi.yaml`.
+Running `tsp compile .` again will now generate a YAML file instead.
 
 ### Step 6: View the Generated OpenAPI Document
 
@@ -1131,10 +805,10 @@ When the TypeSpec compiler processes our specification, it generates an OpenAPI 
 The document starts with the OpenAPI version:
 
 ```yaml
-openapi: 3.0.0
+openapi: 3.1.0
 ```
 
-This is determined by the `@typespec/openapi3` emitter we used, which generates OpenAPI 3.0 documents.
+This is determined by the `@typespec/openapi3` emitter we used, which generates OpenAPI 3.1 documents.
 
 #### API Information
 
@@ -1142,17 +816,29 @@ The `info` section contains metadata from our `@service` and `@info` decorators:
 
 ```yaml
 info:
-  title: Book Store API
-  description: API for managing a book store inventory and orders
-  termsOfService: https://bookstore.example.com/terms
+  title: Train Travel API
+  version: 1.2.1
   contact:
-    name: API Support
-    url: https://bookstore.example.com/support
-    email: support@bookstore.example.com
+    name: Train Support
+    url: https://example.com/support
+    email: support@example.com
   license:
-    name: Apache 2.0
-    url: https://www.apache.org/licenses/LICENSE-2.0.html
-  version: 1.0.0
+    name: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+  description: API for finding and booking train trips across Europe.
+```
+
+#### Tags
+
+The `tags` section contains descriptions from our `@tagMetadata` decorators:
+
+```yaml
+tags:
+  - name: Stations
+    description: Find and filter train stations across Europe, including their location and local timezone.
+  - name: Trips
+    description: Timetables and routes for train trips between stations, including pricing and availability.
+  - name: Bookings
+    description: Create and manage bookings for train trips, including passenger details and optional extras.
 ```
 
 #### Server Information
@@ -1161,50 +847,60 @@ The server URL from our `@server` decorator:
 
 ```yaml
 servers:
-  - url: http://127.0.0.1:4010
-    description: Book Store API v1
+  - url: https://api.example.com
+    description: Production
 ```
 
 #### Paths and Operations
 
-The `/publications` and `/orders` paths come from our interface route decorators:
+The operations from our TypeSpec file become paths in the OpenAPI document:
 
 ```yaml
 paths:
-  /publications:
+  /stations:
     get:
+      operationId: get-stations
+      summary: Get a list of train stations
+      description: Returns a paginated and searchable list of all train stations.
       tags:
-        - publications
-      operationId: listPublications
-      description: List all publications
+        - Stations
+      parameters:
+        - $ref: '#/components/parameters/Parameters.page'
+        - $ref: '#/components/parameters/Parameters.limit'
+        - name: coordinates
+          in: query
+          required: false
+          description: The latitude and longitude of the user's location
+          style: form
+          explode: true
+          schema:
+            type: string
       responses:
-        "200":
+        '200':
           description: The request has succeeded.
+          headers:
+            Cache-Control:
+              required: false
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Publication"
-    # ... other operations
-```
-
-The `@body` parameters in TypeSpec translate to `requestBody` in OpenAPI:
-
-```yaml
-  /orders:
-    post:
-      tags:
-        - orders
-      operationId: placeOrder
-      description: Place a new order
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Order"
-      # ... responses
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Station'
+                  links:
+                    type: object
+                    properties:
+                      self:
+                        type: string
+                        format: uri
+                      next:
+                        type: string
+                        format: uri
 ```
 
 #### Components and Schemas
@@ -1214,69 +910,110 @@ Our models become schemas in the `components` section:
 ```yaml
 components:
   schemas:
-    Book:
-      allOf:
-        - $ref: "#/components/schemas/PublicationBase"
-        - type: object
-          properties:
-            author:
-              description: Author of the book
-              type: string
-            isbn:
-              description: ISBN of the book
-              type: string
-          required:
-            - author
-            - isbn
+    Station:
+      type: object
+      required:
+        - id
+        - name
+        - address
+        - country_code
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the station.
+        name:
+          type: string
+          description: The name of the station
+        address:
+          type: string
+          description: The address of the station.
+        country_code:
+          type: string
+          format: iso-country-code
+          description: The country code of the station.
+        timezone:
+          type: string
+          description: The timezone of the station
+      description: A train station.
 ```
 
-Union types use the `oneOf` keyword:
+#### Reusable Parameters
+
+Our spread parameter models become reusable parameter components:
 
 ```yaml
-    Publication:
-      oneOf:
-        - $ref: "#/components/schemas/Book"
-        - $ref: "#/components/schemas/Magazine"
-      discriminator:
-        propertyName: type
-        mapping:
-          Book: "#/components/schemas/Book"
-          Magazine: "#/components/schemas/Magazine"
+components:
+  parameters:
+    Parameters.page:
+      name: page
+      in: query
+      required: false
+      description: The page number to return
+      style: form
+      explode: true
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Parameters.limit:
+      name: limit
+      in: query
+      required: false
+      description: The number of items to return per page
+      style: form
+      explode: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
 ```
+
+### Step 7: Use the OpenAPI Document With Speakeasy
+
+Now that you have a valid OpenAPI document, you can use it with Speakeasy to generate SDKs, documentation, and more. Refer to the [Speakeasy documentation](/docs) for more information on how to use the generated OpenAPI document.
+
+## Adding OpenAPI Extensions for SDK Generation
+
+TypeSpec allows you to add OpenAPI extensions using the `@extension` decorator. This is particularly useful for adding Speakeasy-specific extensions to customize SDK generation behavior.
 
 ### Adding Retries with OpenAPI Extensions
 
-To add retry logic to the `listPublications` operation, we can add the Speakeasy `x-speakeasy-retries` extension to our TypeSpec specification:
+To add retry logic to operations, you can add the Speakeasy `x-speakeasy-retries` extension to your TypeSpec specification:
 
 ```typescript
-interface Publications {
-  @extension("x-speakeasy-retries", {
-    strategy: "backoff",
-    backoff: {
-      initialInterval: 500,
-      maxInterval: 60000,
-      maxElapsedTime: 3600000,
-      exponent: 1.5,
-    },
-    statusCodes: ["5XX"],
-    retryConnectionErrors: true
-  })
-  @opExample(#{ returnType: #[BookExample1, MagazineExample1] })
-  @doc("List all publications")
-  @operationId("listPublications")
-  list(): Publication[];
-  
-  // ... other operations
-}
+@tag("Stations")
+@route("/stations")
+@get
+@summary("Get a list of train stations")
+@extension("x-speakeasy-retries", #{
+  strategy: "backoff",
+  backoff: #{
+    initialInterval: 500,
+    maxInterval: 60000,
+    maxElapsedTime: 3600000,
+    exponent: 1.5,
+  },
+  statusCodes: ["5XX"],
+  retryConnectionErrors: true
+})
+op `get-stations`(
+  ...Parameters.page,
+  ...Parameters.limit,
+  @query(#{ explode: true }) coordinates?: string,
+  @query(#{ explode: true }) search?: string,
+): /* ... responses ... */;
 ```
 
 This generates the following extension in the OpenAPI document:
 
 ```yaml
 paths:
-  /publications:
+  /stations:
     get:
-      # ... other properties
+      operationId: get-stations
+      summary: Get a list of train stations
       x-speakeasy-retries:
         strategy: backoff
         backoff:
@@ -1289,7 +1026,9 @@ paths:
         retryConnectionErrors: true
 ```
 
-### Step 7: Generate an SDK from the OpenAPI Document
+You can add similar extensions for other Speakeasy features like [pagination](/docs/customize-sdks/pagination), [error handling](/docs/customize-sdks/error-handling), and more.
+
+### Step 8: Generate an SDK from the OpenAPI Document
 
 Now that we have an OpenAPI document for our API, we can generate an SDK using Speakeasy.
 
@@ -1305,35 +1044,22 @@ Then, generate a TypeScript SDK using the following command:
 speakeasy quickstart
 ```
 
-This command generates a TypeScript SDK for the API defined in the OpenAPI document. The SDK will be placed in the `sdks/bookstore-ts` directory.
+This command will:
+1. Detect your OpenAPI document
+2. Generate a TypeScript SDK in the `sdks/train-travel-ts` directory (or your chosen directory)
+3. Set up proper retry logic, pagination, and other SDK features based on your OpenAPI extensions
 
-### Step 8: Customize the SDK
-
-We'd like to add retry logic to the SDK's `listPublications` to handle network errors gracefully. We'll do this by using an OpenAPI extension that [Speakeasy provides](/docs/customize-sdks/retries), `x-speakeasy-retries`.
-
-Instead of modifying the OpenAPI document directly, we'll add this extension to the TypeSpec specification and regenerate the OpenAPI document and SDK.
-
-After generating our OpenAPI document, we can generate an SDK using the Speakeasy CLI. Here's the process:
-
-1. First, compile our TypeSpec code to generate the OpenAPI document:
+After making changes to your TypeSpec file, you can regenerate both the OpenAPI document and SDK:
 
 ```bash
-tsp compile main.tsp --emit @typespec/openapi3
+# Regenerate OpenAPI document
+tsp compile . --emit @typespec/openapi3
+
+# Regenerate SDK
+speakeasy run
 ```
 
-2. Then use Speakeasy to generate the SDK:
-
-```bash
-speakeasy quickstart
-```
-
-This will create a TypeScript SDK in the `./sdks/bookstore-ts` directory.
-
-Now that we've added the `x-speakeasy-retries` extension to the `listPublications` operation in the TypeSpec specification, we can use Speakeasy to recreate the SDK:
-
-```bash filename="Terminal"
-speakeasy quickstart
-```
+The `speakeasy run` command uses your existing Speakeasy configuration to regenerate the SDK with your latest changes.
 
 ## Common TypeSpec Pitfalls and Possible Solutions
 
@@ -1345,53 +1071,61 @@ Examples only shipped as part of TypeSpec version 0.58.0, and the OpenAPI emitte
 
 To work around this limitation, you can provide examples directly in the OpenAPI document, preferably by using an [OpenAPI Overlay](/docs/prep-openapi/overlays/create-overlays).
 
-Here's an overlay, saved as `bookstore-overlay.yaml`, that adds examples to the `Book` and `Magazine` models in the OpenAPI document:
+Here's an overlay, saved as `train-travel-overlay.yaml`, that adds examples to the `Station` and `Trip` models in the OpenAPI document:
 
-```yaml filename="bookstore-overlay.yaml"
+```yaml filename="train-travel-overlay.yaml"
 overlay: 1.0.0
 info:
-  title: Add Examples to Book and Magazine Models
+  title: Add Examples to Station and Trip Models
   version: 1.0.0
 actions:
-  - target: $.components.schemas.Book
+  - target: $.components.schemas.Station
     update:
       example:
-        id: "1"
-        title: "The Great Gatsby"
-        publishDate: "2022-01-01T00:00:00Z"
-        price: 19.99
-  - target: $.components.schemas.Magazine
+        id: "efdbb9d1-02c2-4bc3-afb7-6788d8782b1e"
+        name: "Berlin Hauptbahnhof"
+        address: "Europaplatz 1, 10557 Berlin, Germany"
+        country_code: "DE"
+        timezone: "Europe/Berlin"
+  - target: $.components.schemas.Trip
     update:
       example:
-        id: "2"
-        title: "National Geographic"
-        publishDate: "2022-01-01T00:00:00Z"
-        price: 5.99
+        id: "4f4e4e1-c824-4d63-b37a-d8d698862f1d"
+        origin: "Berlin Hauptbahnhof"
+        destination: "Paris Gare du Nord"
+        departure_time: "2024-02-01T10:00:00Z"
+        arrival_time: "2024-02-01T16:30:00Z"
+        operator: "Deutsche Bahn"
+        price: 200
+        bicycles_allowed: true
+        dogs_allowed: true
 ```
 
 Validate the overlay using Speakeasy:
 
 ```bash filename="Terminal"
-speakeasy overlay validate -o bookstore-overlay.yaml
+speakeasy overlay validate -o train-travel-overlay.yaml
 ```
 
 Then apply the overlay to the OpenAPI document:
 
 ```bash filename="Terminal"
-speakeasy overlay apply -s tsp-output/@typespec/openapi3/openapi.yaml -o bookstore-overlay.yaml > combined-openapi.yaml
+speakeasy overlay apply -s tsp-output/schema/openapi.yaml -o train-travel-overlay.yaml > combined-openapi.yaml
 ```
 
-If we look at the `combined-openapi.yaml` file, we should see the examples added to the `Book` and `Magazine` models, for example:
+If we look at the `combined-openapi.yaml` file, we should see the examples added to the `Station` and `Trip` models, for example:
 
 ```yaml filename="combined-openapi.yaml"
 example:
-  type: Magazine
-  issueNumber: 1
-  publisher: Publisher Name
-  id: "2"
-  title: "National Geographic"
-  publishDate: "2022-01-01T00:00:00Z"
-  price: 5.99
+  id: "4f4e4e1-c824-4d63-b37a-d8d698862f1d"
+  origin: "Berlin Hauptbahnhof"
+  destination: "Paris Gare du Nord"
+  departure_time: "2024-02-01T10:00:00Z"
+  arrival_time: "2024-02-01T16:30:00Z"
+  operator: "Deutsche Bahn"
+  price: 200
+  bicycles_allowed: true
+  dogs_allowed: true
 ```
 
 ### 2. Only Single Examples Supported
@@ -1413,10 +1147,6 @@ To work around this limitation, you can add the `x-speakeasy-retries` extension 
 TypeSpec does not yet support webhooks or callbacks, which are common in modern APIs. This means you cannot define webhook operations or callback URLs in your TypeSpec specification and generate OpenAPI documents for them.
 
 To work around this limitation, you can define webhooks and callbacks directly in the OpenAPI document using an overlay, or by adding them to the OpenAPI document manually.
-
-### 5. OpenAPI 3.0.0 Only
-
-TypeSpec's OpenAPI emitter currently only supports OpenAPI version 3.0.0. We much prefer OpenAPI 3.1.0, which introduced several improvements over 3.0.0.
 
 ## The TypeSpec Playground
 
