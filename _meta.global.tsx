@@ -548,6 +548,43 @@ const meta = {
         },
       },
       /*
+            Standalone MCP
+          */
+      "standalone-mcp-section": {
+        type: "separator",
+        title: <SidebarSeparator>{"Standalone MCP"}</SidebarSeparator>,
+      },
+      "standalone-mcp": {
+        title: "Standalone MCP",
+        display: "children",
+        items: {
+          index: {
+            title: "Introduction",
+          },
+          "build-server": {
+            title: "Generate MCP Servers from OpenAPI Documents",
+          },
+          "cloudflare-deployment": {
+            title: "Deploy to Cloudflare Workers",
+          },
+          "custom-prompts": {
+            title: "Custom Prompts",
+          },
+          "custom-resources": {
+            title: "Custom Resources",
+          },
+          "customize-tools": {
+            title: "Customize Tools",
+          },
+          "remote-mcp-servers": {
+            title: "Adapting Speakeasy MCP Servers for Remote Deployment",
+          },
+          "setting-up-oauth": {
+            title: "Add OAuth to an MCP Server",
+          },
+        },
+      },
+      /*
             OpenAPI
           */
       "openapi-section": {
@@ -630,6 +667,9 @@ const meta = {
             title: "Guides",
           },
         },
+      },
+      gram: {
+        display: "hidden",
       },
 
       /*
