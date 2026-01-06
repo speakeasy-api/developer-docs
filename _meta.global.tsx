@@ -477,6 +477,9 @@ const meta = {
               hooks: {
                 title: "Hooks",
               },
+              "code-samples-without-github-actions": {
+                title: "Populate Code Samples Without GitHub Actions",
+              },
             },
           },
         },
@@ -662,9 +665,6 @@ const meta = {
           },
           "workflow-file": {
             title: "Workflow File",
-          },
-          guides: {
-            title: "Guides",
           },
         },
       },
