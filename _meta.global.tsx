@@ -834,6 +834,11 @@ const meta = {
           },
           zod: {
             title: "Zod",
+            items: {
+              "zod-v3": {
+                title: "Zod v3",
+              },
+            },
           },
 
           // Python Frameworks
