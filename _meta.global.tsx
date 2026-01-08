@@ -561,7 +561,7 @@ const meta = {
         title: "Standalone MCP",
         display: "children",
         items: {
-          index: {
+          introduction: {
             title: "Introduction",
           },
           "build-server": {
