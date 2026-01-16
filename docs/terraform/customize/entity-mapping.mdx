@@ -321,6 +321,63 @@ In this example:
 
 The `WaitForCompleted` polling method for the API operation defaults to a 5 second interval, however the create entity operation overrides to a 10 second interval.
 
+### Update Patch Semantics
+
+Define automatic patch semantics for Terraform provider update operations via the `x-speakeasy-entity-operation` extension in the OpenAPI Specification document. When enabled, entity operations will only send attributes that have changed from their prior state, rather than sending the entire resource representation.
+
+This is particularly useful for APIs that support partial updates (such as PATCH semantics) where sending unchanged fields may cause unintended side effects or where bandwidth efficiency is important.
+
+#### Basic Usage
+
+In this example:
+
+```yaml
+/resource:
+  post:
+    x-speakeasy-entity-operation:
+      - entityOperation: Resource#create,update
+        options:
+          patch:
+            style: only-send-changed-attributes
+    operationId: create-or-update-resource
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResourceRequest'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceResponse'
+```
+
+The `create,update` entity operation uses the `only-send-changed-attributes` patch style. During entity operations, the generated Terraform provider will compare each attribute against its prior state and only include attributes that have changed in the API request.
+
+#### Configuration
+
+The patch style is configured within the `options` section of an entity operation mapping:
+
+```yaml
+x-speakeasy-entity-operation:
+  - entityOperation: Entity#operation
+    options:
+      patch:
+        style: only-send-changed-attributes
+```
+
+#### When to Use
+
+Use `only-send-changed-attributes` when:
+
+- Your API supports partial updates (PATCH semantics) and may have side effects when unchanged fields are sent
+- You want to minimize request payload size by excluding unchanged attributes
+- Your API has fields where re-sending the same value triggers unwanted behavior (such as regenerating tokens or timestamps)
+
+
 ### Manual association between Operations and Resource / Data Sources
 
 The default behavior within Speakeasy is to automatically infer a data source from all operations that have an `x-speakeasy-entity-operation: Entity#read` association defined.
