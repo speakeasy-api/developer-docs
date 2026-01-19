@@ -1,0 +1,242 @@
+---
+title: Async hooks for Python
+description: "Use async hooks for non-blocking I/O in Python SDK async methods."
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+# Async Hooks for Python
+
+Python SDKs support async hooks for non-blocking I/O operations in async methods. When your SDK uses async operations (e.g., `await sdk.some_operation_async()`), async hooks prevent blocking the event loop during hook execution.
+
+## When to Use Async Hooks
+
+Use async hooks when your hooks need to perform I/O operations in async SDK methods:
+
+- Fetching tokens from external authentication services
+- Logging to external services (e.g., Datadog, Splunk)
+- Caching with async clients (e.g., Redis with aioredis)
+- Sending telemetry to monitoring services
+
+For simple, CPU-bound operations (like modifying headers), sync hooks work fine and are automatically adapted.
+
+## Enabling Async Hooks
+
+Add `useAsyncHooks: true` to your `gen.yaml`:
+
+```yaml
+python:
+  useAsyncHooks: true
+```
+
+This generates additional async hook infrastructure alongside the existing sync hooks.
+
+## Hook Registration Files
+
+When async hooks are enabled, you have two registration files:
+
+<Table
+  data={[
+    { type: "Sync Hooks", path: "`src/{sdk_name}/_hooks/registration.py`", description: "Used by sync SDK methods" },
+    { type: "Async Hooks", path: "`src/{sdk_name}/_hooks/asyncregistration.py`", description: "Used by async SDK methods" },
+  ]}
+  columns={[
+    { key: "type", header: "Hook Type" },
+    { key: "path", header: "File Path" },
+    { key: "description", header: "Usage" },
+  ]}
+/>
+
+### Registering Async Hooks
+
+In `asyncregistration.py`:
+
+```python
+from .asynctypes import AsyncHooks
+from .my_async_hook import MyAsyncHook
+
+
+def init_async_hooks(hooks: AsyncHooks):
+    """Register async hooks for async SDK methods."""
+    hooks.register_before_request_hook(MyAsyncHook())
+    hooks.register_after_success_hook(MyAsyncHook())
+    hooks.register_after_error_hook(MyAsyncHook())
+```
+
+## Async Hook Interfaces
+
+Async hooks implement these interfaces from `asynctypes.py`:
+
+| Interface | Method | Purpose |
+|-----------|--------|---------|
+| `AsyncBeforeRequestHook` | `async def before_request(...)` | Modify requests before sending |
+| `AsyncAfterSuccessHook` | `async def after_success(...)` | Process successful responses |
+| `AsyncAfterErrorHook` | `async def after_error(...)` | Handle errors and failed responses |
+
+<Callout title="No AsyncSDKInitHook" type="info">
+  SDK initialization (`__init__`) is always synchronous in Python. Use the regular `SDKInitHook` from `types.py` for initialization logic like wrapping HTTP clients.
+</Callout>
+
+## Complete Example
+
+Here's a complete async hook implementation:
+
+```python
+import httpx
+from typing import Optional, Tuple, Union
+
+from .asynctypes import (
+    AsyncBeforeRequestHook,
+    AsyncAfterSuccessHook,
+    AsyncAfterErrorHook,
+)
+from .types import BeforeRequestContext, AfterSuccessContext, AfterErrorContext
+
+
+class MyAsyncHook(AsyncBeforeRequestHook, AsyncAfterSuccessHook, AsyncAfterErrorHook):
+    """Example async hook with non-blocking I/O operations."""
+
+    async def before_request(
+        self, hook_ctx: BeforeRequestContext, request: httpx.Request
+    ) -> Union[httpx.Request, Exception]:
+        """Modify request before sending.
+
+        Access hook context for:
+        - hook_ctx.operation_id: The API operation being called
+        - hook_ctx.base_url: The base URL for the request
+        - hook_ctx.config: Full SDK configuration (if sdkHooksConfigAccess enabled)
+        """
+        # Example: Fetch token from async cache/service
+        token = await self._fetch_token_async()
+
+        # Modify request headers
+        request.headers["Authorization"] = f"Bearer {token}"
+        request.headers["X-Request-ID"] = await self._generate_request_id()
+
+        return request
+
+    async def after_success(
+        self, hook_ctx: AfterSuccessContext, response: httpx.Response
+    ) -> Union[httpx.Response, Exception]:
+        """Process successful response.
+
+        Return the response to continue, or an Exception to raise an error.
+        """
+        # Example: Async logging to external service
+        await self._log_request_async(
+            operation_id=hook_ctx.operation_id,
+            status_code=response.status_code,
+            latency_ms=response.elapsed.total_seconds() * 1000,
+        )
+
+        return response
+
+    async def after_error(
+        self,
+        hook_ctx: AfterErrorContext,
+        response: Optional[httpx.Response],
+        error: Optional[Exception],
+    ) -> Union[Tuple[Optional[httpx.Response], Optional[Exception]], Exception]:
+        """Handle errors and failed responses.
+
+        Return (response, error) tuple to continue processing,
+        or raise an Exception to abort immediately.
+        """
+        # Example: Report error to async monitoring service
+        await self._report_error_async(
+            operation_id=hook_ctx.operation_id,
+            error=error,
+            status_code=response.status_code if response else None,
+        )
+
+        return (response, error)
+
+    # Helper methods (would be implemented with actual async I/O)
+    async def _fetch_token_async(self) -> str:
+        # Fetch from Redis, external auth service, etc.
+        ...
+
+    async def _generate_request_id(self) -> str:
+        ...
+
+    async def _log_request_async(self, **kwargs) -> None:
+        ...
+
+    async def _report_error_async(self, **kwargs) -> None:
+        ...
+```
+
+## Automatic Sync-to-Async Adaptation
+
+Existing sync hooks automatically work in async contexts. When you register a sync hook, it's wrapped to run in a thread pool via `asyncio.to_thread()` (Python 3.9+) or `run_in_executor()` (Python 3.7-3.8).
+
+**How it works:**
+
+1. You register a sync hook in `registration.py`
+2. The SDK auto-creates an adapter in the async hooks registry
+3. In async methods, the adapter runs your sync hook in a thread pool
+
+```python
+# registration.py - your existing sync hook
+def init_hooks(hooks: Hooks):
+    hooks.register_before_request_hook(MySyncHook())
+
+# When async method is called:
+# await sdk.operation_async()
+#   → Adapter wraps MySyncHook
+#   → Runs via asyncio.to_thread() (non-blocking)
+```
+
+**This means:**
+- Sync methods use sync hooks directly (no overhead)
+- Async methods automatically adapt sync hooks (thread pool overhead)
+- No code changes required for backward compatibility
+
+## Migration Path
+
+You can migrate from sync to async hooks incrementally:
+
+| Stage | Sync Methods | Async Methods |
+|-------|--------------|---------------|
+| **Start** | Sync hooks | Sync hooks (auto-adapted) |
+| **Partial migration** | Sync hooks | Mix of native async + adapted sync |
+| **Complete** | Sync hooks | Native async hooks |
+
+<Callout title="Performance Consideration" type="warning">
+  Native async hooks are more efficient than adapted sync hooks in async contexts. Adapted hooks incur thread pool overhead for each hook invocation. For I/O-heavy hooks called frequently, native async implementations provide better performance.
+</Callout>
+
+## Mixing Sync and Async Hooks
+
+You can register both sync and async hooks. They're invoked in registration order:
+
+```python
+# asyncregistration.py
+def init_async_hooks(hooks: AsyncHooks):
+    # Native async hook (best performance)
+    hooks.register_before_request_hook(MyAsyncAuthHook())
+
+    # Adapted sync hook (runs in thread pool)
+    from .adapters import SyncToAsyncBeforeRequestAdapter
+    from .my_sync_hook import MySyncLoggingHook
+    hooks.register_before_request_hook(
+        SyncToAsyncBeforeRequestAdapter(MySyncLoggingHook())
+    )
+```
+
+## Adapters Reference
+
+The SDK provides bidirectional adapters in `adapters.py`:
+
+| Adapter | Purpose |
+|---------|---------|
+| `SyncToAsyncBeforeRequestAdapter` | Run sync `BeforeRequestHook` in async context |
+| `SyncToAsyncAfterSuccessAdapter` | Run sync `AfterSuccessHook` in async context |
+| `SyncToAsyncAfterErrorAdapter` | Run sync `AfterErrorHook` in async context |
+| `AsyncToSyncBeforeRequestAdapter` | Run async hook in sync context (creates event loop) |
+| `AsyncToSyncAfterSuccessAdapter` | Run async hook in sync context |
+| `AsyncToSyncAfterErrorAdapter` | Run async hook in sync context |
+
+<Callout title="Async-to-Sync Warning" type="warning">
+  Async-to-sync adapters create a new event loop per invocation via `asyncio.run()`. This is inefficient and should be avoided in production. Prefer native sync hooks for sync contexts.
+</Callout>
