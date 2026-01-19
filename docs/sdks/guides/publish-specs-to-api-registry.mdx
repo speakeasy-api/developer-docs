@@ -1,0 +1,91 @@
+---
+description: "Manage your OpenAPI specs with Speakeasy."
+sidebar_label: "Publish specs to API Registry"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Manage OpenAPI specs with Speakeasy
+
+<Callout type="info" title="Use this guide only for managing OpenAPI specs independent of generating SDKs.">
+
+For the quickstart to set up SDKs, see the [SDK Quickstart](/docs/sdks/create-client-sdks).
+
+</Callout>
+
+This guide walks through the process of managing OpenAPI specs using the Speakeasy API Registry and CLI. This is also known as a "source-only workflow" as it only uses the sources feature of [Speakeasy workflows](/docs/speakeasy-reference/workflow-file).
+
+## Prerequisites
+
+- A Speakeasy account and CLI installed. Log in [here](https://app.speakeasy.com/) to create an account.
+- An OpenAPI spec for the API
+
+## Overview
+
+To get started, create a GitHub repository. Something like `company-specs` or `company-openapi` are common repository names.
+
+Initialize a new workflow file by running `speakeasy configure sources` and follow the prompts to add in the OpenAPI spec and any
+[overlays](/docs/prep-openapi/overlays/create-overlays). Make sure to give the `source` a meaningful name as this will be the name used for the API Registry in the workspace dashboard.
+
+A common repository structure will look like the following:
+
+```yaml
+company-specs
+├── .speakeasy/
+│   ├── workflow.yaml
+├── specs
+│   ├── openapi.yaml
+│   ├── ...
+├── overlays
+│   ├── overlay.yaml
+│   ├── ...
+├── overlayed_specs          # This folder includes specs that have been modified by overlays
+│   ├── openapi_modified.yaml
+│   ├── ...
+└── .gitignore
+```
+
+The workflow file will be generated in the `.speakeasy` folder and will look like the following:
+
+```yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+    my-api:             # This is the name of the source used in `speakeasy configure sources`
+        inputs:
+            - location: specs/openapi.yaml
+        registry:
+            location: registry.speakeasy.com/your-company/your-company/my-api
+        outputs:
+            - location: overlayed_specs/openapi_modified.yaml
+targets: {}
+```
+
+## Publishing spec changes
+
+Any time a new version of the OpenAPI spec should be published to the API Registry, run:
+
+```bash
+speakeasy run -s target
+```
+
+This will publish the spec to the API Registry as a new revision for the source `my-api`.
+
+Optionally tag the revision of a spec by running:
+
+```bash
+speakeasy tag apply -n v0.0.2
+```
+
+This will tag the most recent revision of the spec with the tag `v0.0.2`.
+
+## API Registry
+
+This will show up as the latest revision in the API Registry tab in the dashboard.
+
+![Registry Tab](/assets/guides/registry-tab.png)
+
+The API Registry can be used to:
+- Track changes to specs, view detailed change reports, and download past versions of the spec.
+- Create a stable public URL for sharing a particular revision of the spec.
+- Use the registry URI as a source for generating SDKs, for example: `registry.speakeasy.com/your-company/your-company/my-api`.
