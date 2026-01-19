@@ -99,6 +99,70 @@ authentication may need to be provided.
       # .... more openapi documents can be added here
 ```
 
+### Model namespace
+
+When merging multiple OpenAPI documents, schema components with the same name can cause naming conflicts in generated code. The `modelNamespace` option allows each input document to specify a namespace for its schema components, ensuring unique names in the merged output.
+
+```yaml
+sources:
+  merged-api:
+    inputs:
+      - location: service-a.yaml
+        modelNamespace: serviceA
+      - location: service-b.yaml
+        modelNamespace: serviceB
+```
+
+When `modelNamespace` is specified, the merge process automatically adds `x-speakeasy-name-override` and `x-speakeasy-model-namespace` extensions to each schema component from that input. This preserves the original schema name for serialization while placing the generated model in a separate namespace to avoid conflicts.
+
+For example, if both `service-a.yaml` and `service-b.yaml` define a `Pet` schema:
+
+```yaml
+# service-a.yaml
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+```
+
+```yaml
+# service-b.yaml
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        species:
+          type: string
+```
+
+The merged output will contain both schemas with unique names and namespace extensions:
+
+```yaml
+# merged.yaml
+components:
+  schemas:
+    serviceA_Pet:
+      x-speakeasy-name-override: Pet
+      x-speakeasy-model-namespace: serviceA
+      type: object
+      properties:
+        name:
+          type: string
+    serviceB_Pet:
+      x-speakeasy-name-override: Pet
+      x-speakeasy-model-namespace: serviceB
+      type: object
+      properties:
+        species:
+          type: string
+```
+
+For more granular control over which schemas belong to which namespace, apply the `x-speakeasy-model-namespace` extension directly to individual schemas in the OpenAPI document instead of using `modelNamespace` in the workflow file.
+
 ### Transformations
 
 Sources can include transformations that modify the OpenAPI document before it's used to generate SDKs. Transformations are applied in order after merging inputs and applying overlays.
