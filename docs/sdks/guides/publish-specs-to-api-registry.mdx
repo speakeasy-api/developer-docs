@@ -89,3 +89,110 @@ The API Registry can be used to:
 - Track changes to specs, view detailed change reports, and download past versions of the spec.
 - Create a stable public URL for sharing a particular revision of the spec.
 - Use the registry URI as a source for generating SDKs, for example: `registry.speakeasy.com/your-company/your-company/my-api`.
+
+## Triggering downstream SDK generation
+
+For teams that manage SDKs in separate repositories, the spec repo can trigger SDK generation in downstream repos when changes are made. This pattern is useful when:
+
+- A central team manages the API specification
+- Multiple SDK repositories need to be generated from the same spec
+- SDK generation should be triggered automatically when the spec changes
+- SDK PRs should be created in downstream repos for review before merging
+
+### Architecture overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Spec Repository                               │
+│  ┌─────────────┐    ┌─────────────────────────────────────────────┐    │
+│  │ OpenAPI     │    │ GitHub Actions Workflow                     │    │
+│  │ Spec        │───▶│ 1. Runs `speakeasy run` to tag spec         │    │
+│  │ (PR change) │    │ 2. Triggers downstream SDK workflows        │    │
+│  └─────────────┘    │ 3. Updates PR comment with status           │    │
+│                     └─────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   │ gh workflow run
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Downstream SDK Repos                             │
+│  ┌──────────────────────────┐    ┌──────────────────────────┐          │
+│  │ TypeScript SDK           │    │ Python SDK               │          │
+│  │ - Pulls tagged spec      │    │ - Pulls tagged spec      │          │
+│  │ - Generates SDK          │    │ - Generates SDK          │          │
+│  │ - Creates PR             │    │ - Creates PR             │          │
+│  └──────────────────────────┘    └──────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Setting up downstream SDK repositories
+
+Each downstream SDK repository needs a workflow that accepts `workflow_dispatch` inputs. After running `speakeasy configure github`, modify the generated workflow to accept these inputs:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force SDK regeneration"
+        required: false
+        default: "false"
+      feature_branch:
+        description: "Branch for SDK changes"
+        required: false
+      environment:
+        description: "Environment variables (e.g., TAG=branch-name)"
+        required: false
+```
+
+Pass these inputs to the workflow executor:
+
+```yaml
+jobs:
+  generate:
+    uses: speakeasy-api/sdk-generation-action/.github/workflows/workflow-executor.yaml@v15
+    with:
+      mode: pr
+      force: ${{ inputs.force }}
+      feature_branch: ${{ inputs.feature_branch }}
+      environment: ${{ inputs.environment }}
+    secrets:
+      github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+```
+
+The SDK repo's `.speakeasy/workflow.yaml` should reference the registry with a `$TAG` variable:
+
+```yaml
+sources:
+  my-api:
+    inputs:
+      - location: registry.speakeasyapi.dev/your-company/your-company/my-api@$TAG
+```
+
+### Required secrets
+
+On the spec repository, configure these secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `SPEAKEASY_API_KEY` | Authenticates the Speakeasy CLI. Obtain from the [Speakeasy Platform](https://app.speakeasy.com) API Keys page. |
+| `DOWNSTREAM_SDK_TOKEN` | A fine-grained GitHub PAT with `actions: write`, `contents: write`, and `pull-requests: write` permissions on all downstream SDK repos. |
+
+On each downstream SDK repository:
+
+| Secret | Description |
+|--------|-------------|
+| `SPEAKEASY_API_KEY` | Authenticates the Speakeasy CLI. Can be the same key as the spec repo or a separate key. |
+
+### Example implementation
+
+A complete working example is available in the [examples-downstream-spec-repo](https://github.com/speakeasy-api/examples-downstream-spec-repo) repository, which triggers SDK generation in:
+
+- [examples-downstream-spec-sdk-typescript](https://github.com/speakeasy-api/examples-downstream-spec-sdk-typescript)
+- [examples-downstream-spec-sdk-python](https://github.com/speakeasy-api/examples-downstream-spec-sdk-python)
+
+The example includes workflows that:
+- Trigger SDK generation when a PR is opened on the spec repo
+- Update the spec PR with comments showing generation status and links to SDK PRs
+- Automatically merge or close SDK PRs when the spec PR is merged or closed
