@@ -724,9 +724,39 @@ const meta = {
       },
       servers: {
         title: "Servers",
+        items: {
+          "server-variables": {
+            title: "Server Variables",
+          },
+        },
       },
       security: {
         title: "Security",
+        items: {
+          "security-schemes": {
+            title: "Security Schemes",
+            items: {
+              "security-api-key": {
+                title: "API Key",
+              },
+              "security-http": {
+                title: "HTTP Authentication",
+              },
+              "security-mutualtls": {
+                title: "Mutual TLS",
+              },
+              "security-oauth2": {
+                title: "OAuth 2.0",
+              },
+              "security-openid": {
+                title: "OpenID Connect",
+              },
+            },
+          },
+          "custom-auth": {
+            title: "Custom Authentication",
+          },
+        },
       },
       paths: {
         title: "Paths",
@@ -750,9 +780,62 @@ const meta = {
       },
       schemas: {
         title: "Data Types",
+        items: {
+          strings: {
+            title: "Strings",
+          },
+          numbers: {
+            title: "Numbers",
+          },
+          booleans: {
+            title: "Booleans",
+          },
+          null: {
+            title: "Null",
+          },
+          arrays: {
+            title: "Arrays",
+          },
+          objects: {
+            title: "Objects",
+            items: {
+              polymorphism: {
+                title: "Polymorphism",
+              },
+              xml: {
+                title: "XML",
+              },
+            },
+          },
+          enums: {
+            title: "Enums",
+          },
+          composition: {
+            title: "Composition",
+          },
+        },
       },
       requests: {
         title: "Requests",
+        items: {
+          parameters: {
+            title: "Parameters",
+            items: {
+              "path-parameters": {
+                title: "Path Parameters",
+              },
+              "query-parameters": {
+                title: "Query Parameters",
+              },
+              "header-parameters": {
+                title: "Header Parameters",
+              },
+              "cookie-parameters": {
+                title: "Cookie Parameters",
+              },
+            },
+          },
+        },
       },
       responses: {
         title: "Responses",
