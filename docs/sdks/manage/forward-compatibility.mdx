@@ -9,117 +9,92 @@ import { Callout, CodeWithTabs, Table } from "@/mdx/components";
 
 # Forward compatibility
 
-This guide explains how Speakeasy-generated SDKs maintain forward compatibility when APIs evolve. Forward compatibility ensures older SDK versions continue to work correctly when the API adds new fields, enum values, or other data.
+Forward compatibility ensures older SDK versions continue to work correctly when APIs evolve by adding new fields, enum values, or other data. This guide covers how Speakeasy SDKs handle these changes automatically and how to configure additional resilience.
 
-## Forward compatibility at a glance
-
-<Callout type="info">
-  Forward compatibility ensures older SDK versions continue to work when APIs
-  evolve. The table below shows which changes are safe and which require special
-  handling.
-</Callout>
+## Quick reference
 
 <Table
   data={[
     {
-      change: "New Field Added",
+      change: "New field added",
       status: "✅",
       impact:
-        "**Safe change.** Older SDKs automatically ignore unknown fields in API responses, allowing seamless evolution.",
+        "**Safe.** SDKs ignore unknown fields automatically.",
     },
     {
-      change: "New Enum Value in Open Enum",
+      change: "New enum value (open enum)",
       status: "✅",
       impact:
-        "**Safe change.** With `x-speakeasy-unknown-values: allow`, SDKs handle new enum values gracefully through language-specific mechanisms.",
+        "**Safe.** With `x-speakeasy-unknown-values: allow`, SDKs handle new values gracefully.",
     },
     {
-      change: "New Enum Value in Closed Enum",
+      change: "New enum value (closed enum)",
       status: "❌",
       impact:
-        "**Breaking change.** Older SDKs will reject responses with unknown enum values. Convert to open enums using `x-speakeasy-unknown-values: allow`.",
+        "**Breaking.** Convert to open enum using `x-speakeasy-unknown-values: allow`.",
     },
     {
-      change: "Type Change",
+      change: "Type change",
       status: "❌",
       impact:
-        "**Breaking change.** Changing a field's type (e.g., string to integer) will cause deserialization errors in older SDKs.",
+        "**Breaking.** Changing a field's type causes deserialization errors.",
     },
     {
-      change: "Required request field → Optional",
+      change: "Required request field → optional",
       status: "✅",
       impact:
-        "**Safe change.** Older SDKs will continue to send the field, while newer SDKs can omit it when not needed.",
+        "**Safe.** Older SDKs continue sending the field.",
     },
     {
-      change: "Optional request field → Required",
+      change: "Optional request field → required",
       status: "⚠️",
       impact:
-        "**Depends on client implementation.** If clients were already sending the optional field, they'll continue working. If they weren't, requests will fail with validation errors.",
+        "**Depends.** Works if clients already send the field; fails otherwise.",
     },
     {
-      change: "Required response field → Optional",
+      change: "Required response field → optional",
       status: "❌",
       impact:
-        "**Breaking change.** Older SDKs expect this field to always be present and may throw errors when it's missing.",
+        "**Breaking.** Older SDKs expect the field and may throw errors.",
     },
     {
-      change: "Required response field → Optional with Default",
+      change: "Required response field → optional with default",
       status: "✅",
       impact:
-        "**Safe with proper default value.** When the field is omitted, the API returns a default value, preventing errors in older SDKs.",
+        "**Safe.** The API returns a default value when the field is omitted.",
     },
   ]}
   columns={[
     { key: "change", header: "API Change" },
     { key: "status", header: "Status" },
-    { key: "impact", header: "Impact & Handling" },
+    { key: "impact", header: "Impact" },
   ]}
 />
 
-## Common forward compatibility scenarios
+## How SDKs handle API changes
 
-This section covers the most frequent scenarios encountered when evolving APIs and how Speakeasy handles them to maintain forward compatibility.
+Speakeasy SDKs automatically handle common API evolution scenarios without requiring code changes.
 
-### Handling new fields
+### New fields
 
-Adding new fields to API responses is safe because older SDK versions ignore these fields. When an API response includes fields not defined in the SDK's model, these fields are simply not deserialized.
+Adding new fields to API responses is always safe. SDKs ignore fields not defined in their model.
 
-<CodeWithTabs
-  tabs={[
-    {
-      label: "Original Schema",
-      language: "yaml",
-      code: `type: object
-  properties:
-    name:
-      type: string
-    created_at:
-      type: string
-      format: date-time`,
-    },
-    {
-      label: "Updated Schema",
-      language: "yaml",
-      code: `type: object
-  properties:
-    name:
-      type: string
-    created_at:
-      type: string
-      format: date-time
-    updated_at: # New field
-      type: string
-      format: date-time`,
-    },
-  ]}
-/>
+```yaml
+type: object
+properties:
+  name:
+    type: string
+  created_at:
+    type: string
+    format: date-time
+  updated_at: # New field - ignored by older SDKs
+    type: string
+    format: date-time
+```
 
-Older SDK versions will continue to work without errors, ignoring the `updated_at` field. This allows APIs to evolve by adding new data without breaking existing integrations.
+### New enum values
 
-### Handling new enum values
-
-APIs often need to add new enum values over time. Speakeasy provides the `x-speakeasy-unknown-values` extension to handle this gracefully.
+APIs often add new enum values over time. The `x-speakeasy-unknown-values` extension enables SDKs to handle unknown values gracefully instead of throwing errors.
 
 ```yaml
 status:
@@ -131,28 +106,62 @@ status:
     - pending
 ```
 
-When the API adds a new enum value (e.g., `suspended`), older SDK versions handle it according to the language:
+When the API adds a new value (e.g., `suspended`), each language handles it differently:
 
-- **TypeScript**
-- **Python**
-- **Go**
-- **Java**
+<CodeWithTabs
+  tabs={[
+    {
+      label: "TypeScript",
+      language: "typescript",
+      code: `// Unknown values are captured in a type-safe wrapper
+const status = response.status;
+// Type: "active" | "inactive" | "pending" | Unrecognized<string>
 
-This prevents runtime errors when new enum values are encountered, allowing APIs to add new states without breaking existing clients.
+// Check for unknown values
+if (typeof status === "object") {
+  console.log("Unknown status:", status.value);
+}`,
+    },
+    {
+      label: "Python",
+      language: "python",
+      code: `# Unknown values pass through as raw strings
+status = response.status
+# Type: Status | str
 
-### Handling unexpected data
+# Check for unknown values
+if status not in Status:
+    print(f"Unknown status: {status}")`,
+    },
+    {
+      label: "Go",
+      language: "go",
+      code: `// Unknown values are accepted as the underlying type
+status := response.Status
+// Type: Status (string)
 
-Speakeasy-generated SDKs include built-in mechanisms to handle unexpected data:
+// Check for unknown values
+if status != StatusActive && status != StatusInactive && status != StatusPending {
+    fmt.Println("Unknown status:", status)
+}`,
+    },
+    {
+      label: "Java",
+      language: "java",
+      code: `// Unknown values are wrapped with isKnown() method
+Status status = response.getStatus();
 
-1. **Validation errors**: SDKs provide detailed validation errors when unexpected data is received, making debugging easier
+// Check for unknown values
+if (!status.isKnown()) {
+    System.out.println("Unknown status: " + status.value());
+}`,
+    },
+  ]}
+/>
 
-2. **OneOf schemas**: When using `oneOf` schemas, SDKs can handle evolving data structures by attempting to match against known variants
+### New response codes
 
-3. **Optional fields**: Fields marked as optional in the OpenAPI spec won't cause validation errors if missing
-
-### Handling unexpected response codes
-
-APIs evolve over time and may introduce new response codes. Speakeasy-generated SDKs are designed to handle unexpected response codes gracefully:
+Using status code ranges allows APIs to add specific codes without breaking SDKs:
 
 ```yaml
 responses:
@@ -170,27 +179,164 @@ responses:
           $ref: "#/components/schemas/ErrorResponse"
 ```
 
-#### Benefits of status code ranges
+When an API returns an unexpected status code, SDKs match it to the appropriate range (`2xx`, `4xx`, `5xx`), parse the response using that range's schema, and provide access to both the status code and response body.
 
-1. **Flexible status codes**: Using `2xx` and `4xx` patterns allows APIs to add new specific status codes (like `201` or `429`) without breaking existing SDKs
+### Unexpected data
 
-2. **Consistent error handling**: All error responses follow the same structure, making it easier to handle new error types
+SDKs include additional mechanisms for handling unexpected data:
 
-3. **Graceful degradation**: Even when encountering unexpected status codes, SDKs can still extract useful information from the response
+- **Validation errors**: Detailed error messages when unexpected data is received
+- **OneOf schemas**: Attempts to match against known variants before failing
+- **Optional fields**: Missing optional fields never cause validation errors
 
-When an API returns a status code that wasn't explicitly defined in the original specification, Speakeasy SDKs:
+## Configuring SDK resilience
 
-- Match it to the appropriate range (`2xx`, `4xx`, `5xx`)
-- Parse the response using the defined schema for that range
-- Provide access to both the status code and response body
+Generator options enable additional forward compatibility features. These are configured in `gen.yaml`.
 
-## Advanced forward compatibility techniques
+<Table
+  data={[
+    {
+      feature: "Forward-compatible enums",
+      typescript: "✅",
+      python: "Coming soon",
+      go: "✅",
+      java: "✅",
+      csharp: "Not supported",
+    },
+    {
+      feature: "Forward-compatible unions",
+      typescript: "✅",
+      python: "Not supported",
+      go: "Not supported",
+      java: "✅",
+      csharp: "Not supported",
+    },
+    {
+      feature: "Lax mode",
+      typescript: "✅",
+      python: "Built-in (Pydantic)",
+      go: "Via respectRequiredFields: false",
+      java: "Not supported",
+      csharp: "Not supported",
+    },
+    {
+      feature: "Smart union deserialization",
+      typescript: "✅",
+      python: "Built-in (Pydantic)",
+      go: "✅",
+      java: "✅",
+      csharp: "Not supported",
+    },
+  ]}
+  columns={[
+    { key: "feature", header: "Feature" },
+    { key: "typescript", header: "TypeScript" },
+    { key: "python", header: "Python" },
+    { key: "go", header: "Go" },
+    { key: "java", header: "Java" },
+    { key: "csharp", header: "C#" },
+  ]}
+/>
 
-These advanced techniques help maintain forward compatibility in more complex scenarios.
+<CodeWithTabs
+  tabs={[
+    {
+      label: "TypeScript",
+      language: "yaml",
+      code: `typescript:
+  forwardCompatibleEnumsByDefault: true
+  forwardCompatibleUnionsByDefault: tagged-only
+  laxMode: lax
+  unionStrategy: populated-fields`,
+    },
+    {
+      label: "Go",
+      language: "yaml",
+      code: `go:
+  forwardCompatibleEnumsByDefault: true
+  unionStrategy: populated-fields
+  respectRequiredFields: false`,
+    },
+    {
+      label: "Java",
+      language: "yaml",
+      code: `java:
+  forwardCompatibleEnumsByDefault: true
+  unionStrategy: populated-fields
+  openUnions: true
+  generateOptionalUnionAccessors: true`,
+    },
+    {
+      label: "Python",
+      language: "yaml",
+      code: `# Smart unions and lax coercion are built-in via Pydantic
+# forwardCompatibleEnumsByDefault coming soon`,
+    },
+  ]}
+/>
+
+### Forward-compatible enums
+
+When `forwardCompatibleEnumsByDefault` is enabled (the default for new TypeScript, Go, and Java SDKs), enums accept unknown values instead of rejecting the response:
+
+```typescript
+const notification = await sdk.notifications.get(id);
+// Before: Error: Expected 'email' | 'sms' | 'push'
+// After:  'email' | 'sms' | 'push' | Unrecognized<string>
+```
+
+### Forward-compatible unions
+
+When `forwardCompatibleUnionsByDefault` is enabled (TypeScript) or `openUnions` is enabled (Java), discriminated unions accept unknown variants:
+
+```typescript
+const account = await sdk.accounts.getLinkedAccount();
+// Before: Error: Unable to deserialize into any union member
+// After:
+//   | { type: "email"; email: string }
+//   | { type: "google"; googleId: string }
+//   | { type: "UNKNOWN"; raw: unknown }
+```
+
+### Lax mode (TypeScript)
+
+When `laxMode` is set to `lax` (the default for new TypeScript SDKs), the SDK handles missing or mistyped fields by applying zero-value defaults and type coercions:
+
+- Missing required strings become `""`
+- Missing required numbers become `0`
+- Missing required booleans become `false`
+- Missing required dates become `Date(0)` (Unix epoch)
+- Missing required bigints become `0n`
+- Missing required literals become the literal value
+- String `"true"` and `"false"` are coerced to booleans
+- Numeric strings are coerced to numbers
+- Numbers are coerced to dates (treated as milliseconds)
+- Strings are coerced to bigints
+- Any non-string value is coerced to string via `JSON.stringify()`
+
+Lax mode only affects response deserialization and never lies about types.
+
+<Callout type="info" title="Go zero-value defaults">
+Go SDKs can achieve similar resilience with `respectRequiredFields: false`, which applies zero-value defaults for missing required fields. However, Go does not perform type coercions like TypeScript's lax mode.
+</Callout>
+
+### Smart union deserialization
+
+When `unionStrategy` is set to `populated-fields` (the default for new TypeScript, Go, and Java SDKs), the SDK picks the best union variant by trying all types and returning the one with the most matching fields. When there's a tie, it picks the variant with the fewest coerced or inexact fields.
+
+This prevents issues where one union variant is a subset of another and the wrong variant gets selected due to ordering.
+
+<Callout type="info" title="Per-schema overrides">
+Individual enums and unions can override global defaults using `x-speakeasy-unknown-values: allow` or `x-speakeasy-unknown-values: disallow` in the OpenAPI spec. See the [TypeScript configuration reference](/docs/speakeasy-reference/generation/ts-config#forward-compatibility) for all available options.
+</Callout>
+
+## Evolving APIs safely
+
+Best practices for making changes without breaking existing SDK users.
 
 ### Deprecating fields
 
-When evolving APIs, deprecating fields is a common necessity. Speakeasy provides extensions to handle field deprecation gracefully while maintaining forward compatibility:
+Mark fields as deprecated before removing them:
 
 ```yaml
 properties:
@@ -202,25 +348,16 @@ properties:
     x-speakeasy-deprecation-message: We no longer support the SKU property.
 ```
 
-#### Benefits of proper deprecation
-
-1. Fields remain accessible to older SDK versions
-2. New SDK versions mark these fields with proper deprecation annotations
-3. Generated documentation includes deprecation notices
-4. Developers receive clear guidance on migration
-
-#### Field removal process
-
-When planning to remove a field entirely:
+This keeps fields accessible to older SDKs while new SDKs show deprecation warnings. When removing a field entirely:
 
 1. Mark the field as optional first
-2. Add deprecation notices with the `deprecated` keyword and `x-speakeasy-deprecation-message`
-3. Allow sufficient time for users to update implementations
-4. Remove the field only after a suitable deprecation period
+2. Add deprecation notices
+3. Allow time for users to update
+4. Remove the field after a suitable deprecation period
 
-### Forward-compatible unions
+### Forward-compatible union patterns
 
-To create forward-compatible unions that can handle new data types added in the future, use the oneOf pattern with a string fallback:
+To create unions that handle future data types, use the oneOf pattern with a string fallback:
 
 ```yaml
 oneOf:
@@ -229,140 +366,44 @@ oneOf:
   - { type: string }
 ```
 
-#### Benefits of string fallback
+This provides strongly typed handling for known variants while gracefully capturing future variants as strings.
 
-1. Provides strongly typed handling for known variants (`dog` and `cat` types)
-2. Gracefully captures any future variants as string values
-3. Prevents runtime errors when new variants are introduced
-4. Allows SDK users to handle unknown variants safely
+### Versioning strategies
 
-<Callout type="info" title="Language-specific union handling">
-  Each language handles these unions differently: - **TypeScript**: Uses native
-  union types with string fallback - **Python**: Leverages `typing.Union` with
-  string fallback - **Go**: Generates helper methods for both known and unknown
-  types - **Java**: Provides type discrimination with generic string handling
-</Callout>
+Common approaches to manage breaking changes:
 
-## TypeScript-specific configuration
+- **Path-based versioning**: `/v1/resource`, `/v2/resource`
+- **Header-based versioning**: `Api-Version: 2023-01-01`
+- **Multiple versions**: Maintain multiple API versions during migration periods
 
-TypeScript SDKs have additional generator options that enable forward compatibility and fault tolerance by default. These options work together to ensure your SDK gracefully handles API evolution.
+### Adding defaults
+
+When making required fields optional, include default values:
 
 ```yaml
-typescript:
-  forwardCompatibleEnumsByDefault: true
-  forwardCompatibleUnionsByDefault: tagged-only
-  laxMode: lax
-  unionStrategy: populated-fields
+properties:
+  status:
+    type: string
+    default: "active"
 ```
 
-### Forward-compatible enums
+### Detecting breaking changes
 
-When `forwardCompatibleEnumsByDefault` is enabled (the default for new TypeScript SDKs), enums used in responses accept unknown values instead of rejecting the response. Unknown values are captured in a type-safe `Unrecognized<string>` wrapper:
-
-```typescript
-const notification = await sdk.notifications.get(id);
-// Before: Error: Expected 'email' | 'sms' | 'push'
-// After:  'email' | 'sms' | 'push' | Unrecognized<string>
-```
-
-### Forward-compatible unions
-
-When `forwardCompatibleUnionsByDefault` is enabled (the default for new TypeScript SDKs), discriminated unions accept unknown values. Unknown variants are captured with their raw data and accessible via the `UNKNOWN` discriminator value:
-
-```typescript
-const account = await sdk.accounts.getLinkedAccount();
-// Before: Error: Unable to deserialize into any union member
-// After:
-//   | { type: "email"; email: string }
-//   | { type: "google"; googleId: string }
-//   | { type: "UNKNOWN"; raw: unknown }
-```
-
-### Lax mode
-
-When `laxMode` is set to `lax` (the default for new TypeScript SDKs), the SDK gracefully handles missing or mistyped fields in responses by applying zero-value defaults and type coercions. This ensures one missing field doesn't break the entire response:
-
-- Missing required strings become `""`
-- Missing required numbers become `0`
-- Missing required booleans become `false`
-- String `"true"` and `"false"` are coerced to booleans
-- Numeric strings are coerced to numbers
-
-Lax mode only affects response deserialization and never lies about types. The SDK types remain accurate.
-
-### Smart union deserialization
-
-When `unionStrategy` is set to `populated-fields` (the default for new TypeScript SDKs), the SDK uses a smarter algorithm to pick the best union variant. Instead of trying each type in order and returning the first valid match, it tries all types and returns the one with the most matching fields.
-
-This prevents issues where one union variant is a subset of another and the wrong variant gets selected due to ordering.
-
-<Callout type="info" title="Per-schema overrides">
-Individual enums and unions can override the global defaults using `x-speakeasy-unknown-values: allow` or `x-speakeasy-unknown-values: disallow` in your OpenAPI spec. See the [TypeScript configuration reference](/docs/speakeasy-reference/generation/ts-config#forward-compatibility) for all available options.
-</Callout>
-
-## Guard-rails for breaking changes
-
-Speakeasy provides several tools to detect and prevent breaking changes:
-
-### Version your API
-
-Create a versioning strategy for your API to manage breaking changes:
-
-- Use path-based versioning (e.g., `/v1/resource`, `/v2/resource`)
-- Include version in request headers (`Api-Version: 2023-01-01`)
-- Maintain multiple API versions simultaneously during migration periods
-
-### Add defaults for optional fields
-
-When making required fields optional:
-
-- Always include default values to maintain backward compatibility
-- Document the default behavior clearly
-- Use the `default` property in your OpenAPI specification:
-  ```yaml
-  properties:
-    status:
-      type: string
-      default: "active"
-  ```
-
-### Open your enums
-
-Convert closed enums to open enums using the Speakeasy extension:
-
-```yaml
-status:
-  type: string
-  x-speakeasy-unknown-values: allow
-  enum:
-    - active
-    - inactive
-    - pending
-```
-
-### Use the OpenAPI diff tool
-
-The [OpenAPI diff tool](/docs/speakeasy-reference/cli/openapi/diff) identifies potential breaking changes between API specification versions:
+The [OpenAPI diff tool](/docs/speakeasy-reference/cli/openapi/diff) identifies potential breaking changes:
 
 ```bash
 speakeasy openapi diff --base v1.yaml --revision v2.yaml
 ```
 
-This highlights changes that might break backward compatibility, such as:
+This highlights changes like removing required fields, changing field types, or modifying oneOf schemas.
 
-- Removing required fields
-- Changing field types
-- Modifying oneOf schemas
+### Automatic SDK versioning
 
-### SDK version management
+Speakeasy manages SDK versions based on the nature of changes:
 
-Speakeasy automatically manages SDK versioning based on the nature of changes:
-
-- Patch version for non-breaking changes
-- Minor version for backward-compatible additions
-- Major version for breaking changes
-
-### Breaking change notifications
+- **Patch**: Non-breaking changes
+- **Minor**: Backward-compatible additions
+- **Major**: Breaking changes
 
 When generating SDKs, Speakeasy detects breaking changes and provides clear notifications about what changed and how to handle the transition.
 
