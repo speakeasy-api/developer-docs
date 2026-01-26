@@ -20,11 +20,12 @@ speakeasy quickstart [flags]
   -f, --from string           template to use for the quickstart command.
                               Create a new sandbox at https://app.speakeasy.com/sandbox
   -h, --help                  help for quickstart
+      --init-git              initialize a git repository in the output directory
   -n, --name string           SDK name in PascalCase (e.g., "MyCompanySDK"). Users access SDK methods with myCompanySDK.DoThing()
   -o, --out-dir string        output directory for the quickstart command
       --output string         how to display output (available options: [summary, console, mermaid]) (default "summary")
   -p, --package-name string   package name for the generated SDK (e.g., "my-company-sdk" for npm, Go module path for Go)
-  -s, --schema string         local filepath, URL, or registry reference (org/workspace/namespace) for the OpenAPI schema
+  -s, --schema string         local filepath, URL, or registry reference for the OpenAPI schema (e.g., ./spec.yaml, https://..., namespace, org/workspace/namespace@tag)
       --skip-compile          skip compilation during generation after setup
   -t, --target string         generation target (available options: [csharp, go, java, mcp-typescript, php, postman, python, ruby, terraform, typescript, unity])
 ```
