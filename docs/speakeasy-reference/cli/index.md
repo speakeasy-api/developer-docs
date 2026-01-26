@@ -52,6 +52,7 @@ speakeasy [flags]
 * [speakeasy bump](/docs/speakeasy-reference/cli/bump)	 - Bumps the version of a Speakeasy Generation Target
 * [speakeasy clean](/docs/speakeasy-reference/cli/clean)	 - Speakeasy clean can be used to clean up cache, stale temp folders, and old CLI binaries.
 * [speakeasy configure](/docs/speakeasy-reference/cli/configure)	 - Configure your Speakeasy SDK Setup.
+* [speakeasy diff](/docs/speakeasy-reference/cli/diff)	 - Compare spec revisions and show SDK changes
 * [speakeasy lint](/docs/speakeasy-reference/cli/lint)	 - Lint/Validate OpenAPI documents and Speakeasy configuration files
 * [speakeasy mcp](/docs/speakeasy-reference/cli/mcp)	 - Commands for MCP server management
 * [speakeasy merge](/docs/speakeasy-reference/cli/merge)	 - Merge multiple OpenAPI documents into a single document
