@@ -10,9 +10,11 @@ The Speakeasy CLI tool provides access to the Speakeasy.com platform
 
 ## Details
 
-# Speakeasy 
+# Speakeasy
 
 A CLI tool for interacting with the [Speakeasy platform](https://www.speakeasy.com/) and its APIs.
+
+AI Agents: run **speakeasy agent context** for structured documentation and project guidance.
 
 Use this CLI to:
 - Lint and validate OpenAPI specs
@@ -46,6 +48,7 @@ speakeasy [flags]
 
 ### Sub Commands
 
+* [speakeasy agent](/docs/speakeasy-reference/cli/agent)	 - Docs & guided workflows for AI coding agents (start here: speakeasy agent context)
 * [speakeasy ask](/docs/speakeasy-reference/cli/ask)	 - Starts a conversation with Speakeasy trained AI
 * [speakeasy auth](/docs/speakeasy-reference/cli/auth)	 - Authenticate the CLI
 * [speakeasy billing](/docs/speakeasy-reference/cli/billing)	 - Manage billing related operations
