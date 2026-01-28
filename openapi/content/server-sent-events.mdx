@@ -3,7 +3,7 @@ title: "Server Sent Events in OpenAPI best practices"
 description: "Comprehensive guide to Server Sent Events in OpenAPI. Best practices for API design, documentation, and implementation."
 ---
 
-import { Table } from "@/mdx/components";
+import { Callout, Table } from "@/mdx/components";
 
 # Server-sent events in OpenAPI
 
@@ -65,7 +65,11 @@ SSE is ideal for simple, efficient, one-way server-to-client communication scena
 
 ## Defining SSE in OpenAPI documents
 
-Server-sent events (SSE) are not natively supported in OpenAPI but can be represented as an endpoint using the `text/event-stream` MIME type to indicate the data format.
+<Callout title="OpenAPI v3.2.0 SSE support" type="info">
+OpenAPI v3.2.0 introduces the `itemSchema` keyword for `text/event-stream` media types, providing first-class support for defining the structure of individual streamed events. See the [itemSchema section](#defining-sse-with-itemschema-in-openapi-32) below.
+</Callout>
+
+In OpenAPI v3.0 and v3.1, server-sent events (SSE) are not natively supported but can be represented as an endpoint using the `text/event-stream` MIME type to indicate the data format. OpenAPI v3.2.0 adds first-class support for SSE with the `itemSchema` keyword.
 
 The event stream format is a UTF-8-encoded text stream with messages separated by a newline (`\n`). Each message may include up to four fields:
 
@@ -146,6 +150,42 @@ eventSource.onerror = function (error) {
   console.error("Error occurred:", error);
 };
 ```
+
+## Defining SSE with itemSchema in OpenAPI 3.2
+
+OpenAPI v3.2.0 introduces the `itemSchema` keyword, which defines the schema for individual events within a `text/event-stream` response. Instead of describing the entire stream as one schema, `itemSchema` describes the structure of each event delivered over the stream.
+
+```yaml filename="openapi.yaml"
+paths:
+  /stock-updates:
+    get:
+      tags:
+        - ServerSentEvents
+      summary: Subscribe to real-time stock market updates
+      responses:
+        "200":
+          description: Stream of real-time stock updates
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              itemSchema:
+                $ref: "#/components/schemas/StockUpdate"
+components:
+  schemas:
+    StockUpdate:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Stock ticker symbol
+        price:
+          type: string
+          description: Current stock price
+          example: "100.25"
+```
+
+In this example, the `schema` describes the overall stream as a string (the raw event stream), while `itemSchema` defines the structure of each individual event within the stream. This separation allows tooling to generate typed handlers for each event.
 
 ## Best practices for SSE design and OpenAPI integration
 
