@@ -438,7 +438,7 @@ const meta = {
                 title: "Ruby [beta]",
                 items: {
                   "methodology-ruby": {
-                    title: "Ruby design [coming soon]",
+                    title: "Ruby design",
                   },
                 },
               },
