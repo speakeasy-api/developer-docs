@@ -20,7 +20,7 @@ import { Table, Callout, Screenshot } from "@/mdx/components";
 <Table 
   data={[
     { language: "TypeScript", manager: "npm", prerequisites: "[Granular access tokens](https://docs.npmjs.com/creating-and-viewing-access-tokens)", notes: "Use granular access tokens with read and write permissions. Classic tokens are deprecated. Supports both SDKs and MCP servers." },
-    { language: "Python", manager: "PyPI", prerequisites: "[API tokens](https://pypi.org/help/#apitoken)", notes: "" },
+    { language: "Python", manager: "PyPI", prerequisites: "[API tokens](https://pypi.org/help/#apitoken) or [Trusted publishing](https://docs.pypi.org/trusted-publishers/)", notes: "Trusted publishing with OIDC is recommended. See the [setup instructions](#python-pypi-trusted-publishing) below." },
     { language: "Go", manager: "GitHub", prerequisites: "[Repo visibility](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility)", notes: "For private repos, add the [Speakeasy app](https://github.com/marketplace/speakeasy-api)." },
     { language: "Java", manager: "Maven", prerequisites: "[Get started with Maven Central](https://central.sonatype.org/publish-ea/publish-ea-guide/) and [verify domain ownership](https://central.sonatype.org/faq/verify-ownership/)", notes: "" },
     { language: "PHP", manager: "Packagist", prerequisites: "[See publishing packages](https://packagist.org/)", notes: "Monorepo setups not permitted. Package must be initially created manually in Packagist." },
@@ -246,6 +246,39 @@ The npm registry requires granular access tokens for publishing packages. Classi
 
 <Callout title="Important">
 Granular tokens expire after the configured period (default 7 days). For CI/CD workflows, set a longer expiration period (up to 1 year) and establish a process to rotate tokens before they expire to avoid publishing failures.
+</Callout>
+
+#### Python: PyPI trusted publishing
+
+PyPI supports [trusted publishing](https://docs.pypi.org/trusted-publishers/) using OpenID Connect (OIDC), which eliminates the need for long-lived API tokens. Instead of storing a `PYPI_TOKEN` secret, the publishing workflow requests a short-lived token from PyPI at publish time, scoped to the specific workflow run.
+
+**Benefits of trusted publishing:**
+- No secrets to manage or rotate
+- Publishing is scoped to a specific GitHub repository and workflow
+- Better auditability with every publish tied to a specific commit and workflow run
+
+**Configuration steps:**
+
+Run the following command to configure trusted publishing:
+
+```bash
+speakeasy configure publishing --pypi-trusted-publishing
+```
+
+This command updates the workflow files to use the `publish-pypi` action and adds the required `id-token: write` permission.
+
+After running the command, configure the trusted publisher on [pypi.org](https://pypi.org):
+
+- Navigate to **Manage** > **Publishing** for the package
+- Select **GitHub Actions** as the trusted publisher
+- Enter the GitHub **owner** and **repository name** for the SDK
+- Set the **workflow name** to the publishing workflow file (typically `sdk_publish.yaml`)
+- Leave the **environment** field blank
+
+For more details, see the [PyPI trusted publishers documentation](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
+
+<Callout title="Tip">
+After verifying that trusted publishing works, remove the `PYPI_TOKEN` secret from the repository settings to reduce the attack surface.
 </Callout>
 
 ## Migrating from a monorepo to a dedicated repository

@@ -224,6 +224,64 @@ secrets:
   ]}
 />
 
+## PyPI trusted publishing job
+
+For Python SDKs using [trusted publishing](/docs/sdks/publish-sdk#python-pypi-trusted-publishing), add a `publish-pypi` job that runs after the main publish job. This job uses OIDC to authenticate with PyPI, eliminating the need for a `PYPI_TOKEN` secret.
+
+```yml
+publish-pypi:
+  needs: publish
+  if: ${{ needs.publish.outputs.python_regenerated == 'true' &&
+          needs.publish.outputs.publish_python == 'true' &&
+          needs.publish.outputs.use_pypi_trusted_publishing == 'true' }}
+  runs-on: ubuntu-latest
+  permissions:
+    id-token: write
+    contents: read
+  steps:
+    - uses: actions/checkout@v4
+    - uses: speakeasy-api/sdk-generation-action/publish-pypi@v15
+      with:
+        python-directory: ${{ needs.publish.outputs.python_directory }}
+        speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+        github_access_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+<Table
+  data={[
+    {
+      name: "python-directory",
+      description:
+        "Directory where the Python SDK was generated. Passed from the publish job outputs.",
+      type: "string",
+      default: "None",
+    },
+    {
+      name: "speakeasy_api_key",
+      description: "API key for authenticating with the Speakeasy CLI.",
+      type: "string",
+      default: "None",
+    },
+    {
+      name: "github_access_token",
+      description:
+        "GitHub access token. Use the built-in GITHUB_TOKEN secret.",
+      type: "string",
+      default: "None",
+    },
+  ]}
+  columns={[
+    { key: "name", header: "Input Name" },
+    { key: "description", header: "Description" },
+    { key: "type", header: "Type" },
+    { key: "default", header: "Default" },
+  ]}
+/>
+
+<Callout title="Important">
+  The `id-token: write` permission is required at the job level for the OIDC token exchange with PyPI. The trusted publisher must also be configured on pypi.org for the target package.
+</Callout>
+
 ## Workflow outputs
 
 The workflow provides outputs that indicate which SDKs were regenerated and can trigger further actions in the pipeline, such as validating, testing, and publishing the SDKs.
@@ -297,6 +355,14 @@ The workflow provides outputs that indicate which SDKs were regenerated and can 
     {
       name: "commit_hash",
       description: "The commit hash generated for the SDK (in direct mode).",
+    },
+    {
+      name: "publish_python",
+      description: "Indicates if the Python SDK should be published.",
+    },
+    {
+      name: "use_pypi_trusted_publishing",
+      description: "Indicates if PyPI trusted publishing is configured for the Python SDK.",
     },
   ]}
   columns={[
