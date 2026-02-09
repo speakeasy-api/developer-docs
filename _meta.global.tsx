@@ -585,6 +585,9 @@ const meta = {
           "remote-mcp-servers": {
             title: "Adapting Speakeasy MCP Servers for Remote Deployment",
           },
+          "eval-command": {
+            title: "Test with the Eval Command",
+          },
           "setting-up-oauth": {
             title: "Add OAuth to an MCP Server",
           },
