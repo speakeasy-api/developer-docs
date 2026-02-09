@@ -20,7 +20,7 @@ speakeasy agent feedback [flags]
       --context-path string   The agent-context path this feedback relates to
   -h, --help                  help for feedback
   -m, --message string        The feedback message
-  -t, --type string           Feedback type: agent_context or general (default "agent_context")
+  -t, --type string           Feedback type: agent_context, missing_guidance, or general (default "agent_context")
 ```
 
 ### Options inherited from parent commands
