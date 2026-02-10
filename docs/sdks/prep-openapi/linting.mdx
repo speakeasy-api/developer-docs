@@ -8,21 +8,30 @@ import { Table } from "@/mdx/components";
 
 # OpenAPI document linting
 
-In addition to running validation, Speakeasy lints OpenAPI documents to ensure stylistic validity. By default, the linter runs using a [recommended set of rules](/docs/linting/linting#speakeasy-recommended), which can be extended with the [available ruleset](/docs/linting/linting#available-rulesets). Custom rules can also be written using the Spectral format.
+The Speakeasy Linter validates OpenAPI 3.x documents for correctness, style, and SDK generation readiness. It is built on top of the open-source [`speakeasy-api/openapi`](https://github.com/speakeasy-api/openapi) linter framework, which provides a fast, index-based validation engine. By default, the linter runs using the [`speakeasy-recommended`](#speakeasy-recommended) ruleset, which can be extended with any of the [available rulesets](#available-rulesets).
 
 The Speakeasy Linter offers:
 
 - Linting and validation of OpenAPI 3.x documents
-- Access to 70+ rules
-- Quick start with five out-the-box rulesets: `speakeasy-recommended`, `speakeasy-generation`, `speakeasy-openapi`, `vacuum`, and `owasp`
-- Reconfiguration of Speakeasy default rules and rulesets
-- Configuration of custom rulesets
-- Definition of new rules using the Spectral rule format
-- Support for custom functions written in Go and JavaScript
+- 90+ built-in rules across six categories: SDK generation, spec correctness, best practices, security, schema validation, and Speakeasy-specific checks
+- Five built-in rulesets: `speakeasy-recommended`, `speakeasy-generation`, `speakeasy-openapi`, `openapi-standard`, and `owasp`
+- Full configuration of rules and rulesets via `lint.yaml`
+- Custom rules written in TypeScript or JavaScript using [`@speakeasy-api/openapi-linter-types`](https://www.npmjs.com/package/@speakeasy-api/openapi-linter-types)
+
+Rules are organized into categories by naming prefix:
+
+| Prefix | Category | Purpose |
+| --- | --- | --- |
+| `generator-*` | SDK Generation | Collision detection, type validation, SDK-specific checks |
+| `semantic-*` | Spec Correctness | Path params, ambiguous paths, operation IDs, security refs |
+| `style-*` | Best Practices | Descriptions, tags, kebab-case paths, trailing slashes |
+| `owasp-*` | Security | OWASP API security best practices |
+| `oas-`/`oas3-` | Schema Validation | OAS-version-specific schema and example checks |
+| `speakeasy-*` | Speakeasy | Speakeasy-specific checks (e.g., document validation) |
 
 ## Usage
 
-Three options are available for running linting:
+Two options are available for running linting:
 
 1. Run manually via the Speakeasy CLI:
 
@@ -49,54 +58,91 @@ By default, these options use the `speakeasy-recommended` ruleset to ensure Open
 
 OpenAPI spec linting is fully configurable. Create custom rulesets by selecting from predefined sets or writing new rules. These custom linting rules work throughout the workflow.
 
-Immediately before SDK generation, the `speakeasy-generation` ruleset is always applied to ensure compatibility with the code generator.
+Immediately before SDK generation, the `speakeasy-generation` ruleset is always applied to ensure compatibility with the code generator. This cannot be overridden.
 
-Configure linting in a `lint.yaml` document in the `.speakeasy` folder. The `.speakeasy` folder can be located in the same directory as the OpenAPI document, the working directory for running the `speakeasy lint` or `speakeasy run` commands, or the home directory.
+Configure linting in a `lint.yaml` file in the `.speakeasy` folder. The `.speakeasy` folder can be located in the same directory as the OpenAPI document or in the working directory for running the `speakeasy lint` or `speakeasy run` commands.
 
-Example linting configuration in a `lint.yaml` file:
+### Basic structure
 
 ```yaml
-lintVersion: 1.0.0
-defaultRuleset: speakeasyBarRuleset
+lintVersion: 2.0.0
+defaultRuleset: myRuleset
 rulesets:
-  barRuleset:
+  myRuleset:
     rulesets:
-      - speakeasy-generation # Use the speakeasy-generation ruleset as a base
-      - customRuleset
+      - speakeasy-recommended  # Extend a built-in ruleset
     rules:
-      validate-enums: {
-          severity: warn, # drop the severity of the `validate-enums` rule to avoid blocking the pipeline
-        }
-  customRuleset:
-    rules:
-      paths-kebab-case: # A custom rule following the spectral format for a rule
-        description: Paths should be kebab-case.
-        message: "{{property}} should be kebab-case (lower-case and separated with hyphens)"
-        severity: warn
-        given: $.paths[*]~
-        then:
-          functionOptions:
-            match: "^(\\/|[a-z0-9-.]+|{[a-zA-Z0-9_]+})+$"
-      contact-properties:
-        description: Contact object must have "name", "url", and "email".
-        given: $.info.contact
-        severity: warn
-        then:
-          - field: name
-            function: truthy
-          - field: url
-            function: truthy
-          - field: email
-            function: truthy
+      - id: generator-validate-enums
+        severity: warn          # Downgrade severity
+      - id: generator-missing-examples
+        disabled: true          # Disable a rule
+customRules:                    # Optional: load custom TypeScript rules
+  paths:
+    - ./rules/*.ts
+  timeout: 30s                  # Per-rule execution timeout (default: 30s)
 ```
 
-A `lint.yaml` document defines a collection of rulesets that can be chained together or used independently. Define any built-in Speakeasy rulesets, create new rules, modify existing rules, or remix available rules to suit specific needs.
+### Configuration fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `lintVersion` | string | Configuration format version. Use `2.0.0`. |
+| `defaultRuleset` | string | Name of the ruleset to use by default. |
+| `rulesets` | map | Map of ruleset names to ruleset definitions. |
+| `customRules` | object | Optional. Paths and timeout for custom TypeScript/JS rules. |
+
+### Ruleset definition
+
+Each ruleset can extend built-in rulesets and override individual rules:
+
+```yaml
+rulesets:
+  myRuleset:
+    rulesets:            # Built-in or other rulesets to extend
+      - speakeasy-recommended
+      - owasp
+    rules:               # Per-rule overrides
+      - id: owasp-string-limit
+        severity: warn   # Downgrade from error to warning
+      - id: owasp-no-numeric-ids
+        disabled: true   # Disable the rule
+```
+
+### Rule override options
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | string | The rule ID to configure. |
+| `severity` | string | Override severity: `error`, `warn`, or `hint`. |
+| `disabled` | bool | Set to `true` to disable the rule. |
+| `match` | string | Regex pattern. When set, the override only applies to errors whose message matches the pattern. |
+
+### Severity levels
+
+| Level | Behavior |
+| --- | --- |
+| `error` | Fails validation. Blocks SDK generation. |
+| `warn` | Warning only. Does not block. |
+| `hint` | Informational. Does not block. |
+
+### Match filters
+
+Match filters allow severity overrides to apply only to errors that match a regex pattern. This is useful for selectively downgrading specific error messages without affecting all errors from a rule.
+
+```yaml
+rules:
+  - id: validation-required-field
+    match: ".*info\\.title is required.*"
+    severity: warn  # Only downgrade this specific message to warning
+```
+
+### Using rulesets
 
 Use rulesets in these ways:
 
-1. Set the `defaultRuleset` in the `lint.yaml` to use by default. This ruleset applies when no ruleset is specified using the `lint` command or `workflow.yaml` file.
-2. Pass a ruleset name to the `lint` command with the `-r` argument, for example, `speakeasy lint openapi -r barRuleset -s openapi.yaml`.
-3. Define the ruleset for a particular source in the `workflow.yaml` file.
+1. Set the `defaultRuleset` in `lint.yaml` to use by default. This ruleset applies when no ruleset is specified using the `lint` command or `workflow.yaml` file.
+2. Pass a ruleset name to the `lint` command with the `-r` argument, for example, `speakeasy lint openapi -r myRuleset -s openapi.yaml`.
+3. Define the ruleset for a particular source in the `workflow.yaml` file:
 
 ```yaml
 workflowVersion: "1.0.0"
@@ -105,22 +151,197 @@ sources:
   api-source:
     inputs:
       - location: ./openapi.yaml
-    ruleset: barRuleset
+    ruleset: myRuleset
+```
+
+### Real-world example
+
+```yaml
+lintVersion: 2.0.0
+defaultRuleset: reviewRuleset
+rulesets:
+  reviewRuleset:
+    rulesets:
+      - speakeasy-recommended
+    rules:
+      - id: generator-missing-error-response
+        disabled: true
+      - id: generator-missing-examples
+        disabled: true
 ```
 
 ## Custom rules
 
-Create custom rules most easily using the [Spectral rule format](https://docs.stoplight.io/docs/spectral/d3482ff0ccae9-rules), which defines the rule and its properties as an object.
+Custom linting rules can be written in TypeScript or JavaScript and loaded alongside built-in rules. Custom rules use the [`@speakeasy-api/openapi-linter-types`](https://www.npmjs.com/package/@speakeasy-api/openapi-linter-types) package.
 
-This format works for overriding built-in rules or defining new rules.
+### Getting started
 
-For more complex rules beyond pattern matching or field existence checking, define custom Go or JavaScript functions.
+**Step 1.** Install the types package in your rules directory:
 
-### Custom Go/JavaScript functions
+```bash
+npm install @speakeasy-api/openapi-linter-types
+```
 
-Speakeasy linting builds on [vacuum](https://github.com/daveshanley/vacuum) and supports custom Go or JavaScript functions in rules. The vacuum documentation explains writing custom functions in [JavaScript](https://quobix.com/vacuum/api/custom-javascript-functions/) and [Go](https://quobix.com/vacuum/api/custom-functions/).
+**Step 2.** Create a rule file (e.g., `rules/require-description.ts`):
 
-After creating custom functions, place them in a directory named `functions` in the `.speakeasy` folder (e.g. `.speakeasy/functions/foo.js`).
+```typescript
+import {
+  Rule,
+  registerRule,
+  createValidationError,
+} from '@speakeasy-api/openapi-linter-types';
+import type {
+  Context,
+  DocumentInfo,
+  RuleConfig,
+  ValidationError,
+} from '@speakeasy-api/openapi-linter-types';
+
+class RequireOperationDescription extends Rule {
+  id(): string {
+    return 'custom-require-operation-description';
+  }
+
+  category(): string {
+    return 'style';
+  }
+
+  description(): string {
+    return 'All operations must have a description field for documentation.';
+  }
+
+  summary(): string {
+    return 'Operations must have a description';
+  }
+
+  run(_ctx: Context, docInfo: DocumentInfo, config: RuleConfig): ValidationError[] {
+    const errors: ValidationError[] = [];
+
+    if (!docInfo.index || !docInfo.index.operations) {
+      return errors;
+    }
+
+    for (const opNode of docInfo.index.operations) {
+      const op = opNode.node;
+      const description = op.getDescription ? op.getDescription() : '';
+
+      if (!description || description === '') {
+        const opId = op.getOperationID ? op.getOperationID() : 'unnamed';
+        errors.push(createValidationError(
+          config.getSeverity(this.defaultSeverity()),
+          this.id(),
+          `Operation "${opId}" is missing a description`,
+          op.getRootNode ? op.getRootNode() : null
+        ));
+      }
+    }
+
+    return errors;
+  }
+}
+
+registerRule(new RequireOperationDescription());
+```
+
+**Step 3.** Configure the linter (`.speakeasy/lint.yaml`):
+
+```yaml
+lintVersion: 2.0.0
+defaultRuleset: myRuleset
+rulesets:
+  myRuleset:
+    rulesets:
+      - speakeasy-recommended
+    rules:
+      - id: custom-require-operation-description
+        severity: error  # Optionally override severity
+customRules:
+  paths:
+    - ./rules/*.ts
+```
+
+### Rule implementation API
+
+Extend the `Rule` base class and implement the required methods:
+
+| Method | Required | Description |
+| --- | --- | --- |
+| `id()` | Yes | Unique identifier. Prefix with `custom-` to avoid collisions. |
+| `category()` | Yes | Category for grouping: `style`, `security`, `semantic`, etc. |
+| `description()` | Yes | Full description of what the rule checks. |
+| `summary()` | Yes | Short summary for display in reports. |
+| `run(ctx, docInfo, config)` | Yes | Main logic. Returns an array of `ValidationError`. |
+| `link()` | No | URL to documentation for this rule. |
+| `defaultSeverity()` | No | Default: `'warn'`. Options: `'error'`, `'warn'`, `'hint'`. |
+| `versions()` | No | OpenAPI versions this rule applies to (e.g., `['3.0', '3.1']`). |
+
+### Accessing document data
+
+The `DocumentInfo` object provides access to the parsed OpenAPI document and pre-computed indices for efficient iteration:
+
+```typescript
+run(ctx: Context, docInfo: DocumentInfo, config: RuleConfig): ValidationError[] {
+  // Access the document root
+  const doc = docInfo.document;
+  const info = doc.getInfo();
+
+  // Access file location
+  const location = docInfo.location;
+
+  // Use the pre-computed index for efficient iteration
+  const index = docInfo.index;
+
+  // All operations in the document
+  for (const opNode of index.operations) {
+    const operation = opNode.node;
+    const path = opNode.locations.path;
+    const method = opNode.locations.method;
+  }
+
+  // All component schemas
+  for (const schemaNode of index.componentSchemas) {
+    const schema = schemaNode.node;
+    const name = schemaNode.locations.name;
+  }
+
+  // Also available: index.inlineSchemas, index.parameters,
+  // index.requestBodies, index.responses, index.headers,
+  // index.securitySchemes, and more
+}
+```
+
+### Creating validation errors
+
+Use `createValidationError()` to create properly formatted errors:
+
+```typescript
+errors.push(createValidationError(
+  config.getSeverity(this.defaultSeverity()),  // Respects user severity overrides
+  this.id(),                                    // Rule ID
+  'Description of the issue',                   // Error message
+  node.getRootNode()                            // YAML/JSON node for line/column info
+));
+```
+
+### Configuring custom rules
+
+Custom rules support all standard configuration options in `lint.yaml`:
+
+```yaml
+rules:
+  # Override severity
+  - id: custom-require-operation-description
+    severity: error
+
+  # Disable a custom rule
+  - id: custom-require-operation-description
+    disabled: true
+
+  # Filter by message pattern
+  - id: custom-require-operation-description
+    match: ".*unnamed.*"
+    severity: hint
+```
 
 ## Available rules
 
@@ -129,544 +350,636 @@ The rules available to the Speakeasy Linter are listed below and can be used in 
 <Table
   data={[
     {
-      ruleId: "openapi-tags-alphabetical",
-      defaultSeverity: "info",
-      description: "Tags must be in alphabetical order.",
+      ruleId: "generator-duplicate-errors",
+      defaultSeverity: "hint",
+      description:
+        "Detect duplicate error schemas that would produce multiple SDK error types with colliding names.",
     },
     {
-      ruleId: "tag-description",
-      defaultSeverity: "warn",
-      description: "Tag must have a description defined.",
+      ruleId: "generator-duplicate-inline-schemas",
+      defaultSeverity: "hint",
+      description:
+        "Detect duplicate inline schemas that would produce multiple generated SDK types with colliding names.",
     },
     {
-      ruleId: "no-$ref-siblings",
+      ruleId: "generator-duplicate-operation-name",
       defaultSeverity: "error",
       description:
-        "$ref values cannot be placed next to other properties (like a description).",
+        "Duplicate operation names can cause SDK method name collisions after naming rules are applied (group + method name).",
     },
     {
-      ruleId: "oas3-unused-component",
-      defaultSeverity: "warn",
-      description: "Check for unused components and bad references.",
-    },
-    {
-      ruleId: "owasp-auth-insecure-schemes",
-      defaultSeverity: "error",
-      description: "Authentication scheme is considered outdated or insecure.",
-    },
-    {
-      ruleId: "no-http-verbs-in-path",
-      defaultSeverity: "warn",
-      description: "Path segments must not contain an HTTP verb.",
-    },
-    {
-      ruleId: "operation-4xx-response",
+      ruleId: "generator-duplicate-path-params",
       defaultSeverity: "warn",
       description:
-        "Make sure operations return at least one `4xx` error response to help with bad requests.",
+        "Path parameters must be unique within the path template.",
     },
     {
-      ruleId: "duplicated-entry-in-enum",
-      defaultSeverity: "error",
-      description: "Enum values must not have duplicate entries.",
-    },
-    {
-      ruleId: "operation-tags",
-      defaultSeverity: "warn",
-      description: "Operation `tags` are missing or empty.",
-    },
-    {
-      ruleId: "owasp-define-error-responses-401",
-      defaultSeverity: "warn",
-      description:
-        "OWASP API Security recommends defining schemas for all responses, even `401 Unauthorized`",
-    },
-    {
-      ruleId: "oas2-anyOf",
+      ruleId: "generator-duplicate-properties",
       defaultSeverity: "error",
       description:
-        "`anyOf` was introduced in OpenAPI 3.0, cannot be used in OpenAPI 2.0 specs",
+        "Property names must be unique and not empty within a schema when converted to field names, accounting for language-specific sanitization rules.",
     },
     {
-      ruleId: "owasp-define-error-responses-429",
+      ruleId: "generator-duplicate-schema-name",
       defaultSeverity: "warn",
       description:
-        "OWASP API Security recommends defining schemas for all responses, even `429 Too Many Requests`.",
+        "Schema names must be unique when converted to class names.",
     },
     {
-      ruleId: "owasp-no-credentials-in-url",
-      defaultSeverity: "error",
-      description:
-        "URL parameters must not contain credentials such as API key, password, or secret.",
-    },
-    {
-      ruleId: "duplicate-tag",
+      ruleId: "generator-duplicate-tag",
       defaultSeverity: "error",
       description:
         "Tag names must be unique when converted to class, field, or file names.",
     },
     {
-      ruleId: "validate-parameters",
-      defaultSeverity: "error",
+      ruleId: "generator-missing-error-response",
+      defaultSeverity: "hint",
       description:
-        "Validate parameters are unique and have a non-empty `name` property when converted to field names.",
+        "Error responses should be defined for all operations to document failure cases.",
     },
     {
-      ruleId: "oas2-operation-formData-consume-check",
+      ruleId: "generator-missing-examples",
+      defaultSeverity: "hint",
+      description:
+        "Examples should be provided where possible to improve API documentation and SDK usability.",
+    },
+    {
+      ruleId: "generator-pagination",
+      defaultSeverity: "hint",
+      description:
+        "Detect operations that appear to support pagination based on request and response patterns.",
+    },
+    {
+      ruleId: "generator-path-params",
+      defaultSeverity: "error",
+      description:
+        "Path parameters must be defined on the operation and used in the path template.",
+    },
+    {
+      ruleId: "generator-retries",
+      defaultSeverity: "hint",
+      description:
+        "Retries should be configured for operations that are safe to retry.",
+    },
+    {
+      ruleId: "generator-validate-composite-schemas",
+      defaultSeverity: "error",
+      description:
+        "Ensure anyOf/allOf/oneOf don't contain duplicate references or identical inline schemas.",
+    },
+    {
+      ruleId: "generator-validate-consts-defaults",
       defaultSeverity: "warn",
       description:
-        "Operations with `in: formData` parameter must include `application/x-www-form-urlencoded` or `multipart/form-data` in their `consumes` property.",
+        "Validate const and default values match their declared schema type.",
     },
     {
-      ruleId: "oas2-discriminator",
-      defaultSeverity: "error",
-      description: "Discriminators are used correctly in schemas.",
-    },
-    {
-      ruleId: "oas2-operation-security-defined",
+      ruleId: "generator-validate-content-type",
       defaultSeverity: "error",
       description:
-        "`security` values must match a scheme defined in `securityDefinitions`.",
+        "Ensure multipart/form-data request schemas are objects as required by OpenAPI.",
     },
     {
-      ruleId: "oas2-oneOf",
+      ruleId: "generator-validate-deprecation",
       defaultSeverity: "error",
       description:
-        "`oneOf` was introduced in OpenAPI 3.0, cannot be used in OpenAPI 2.0 specs.",
+        "Ensure correct usage of x-speakeasy-deprecation-replacement and x-speakeasy-deprecation-message extensions.",
     },
     {
-      ruleId: "operation-tag-defined",
-      defaultSeverity: "warn",
-      description: "Operation tags must be defined in global tags.",
-    },
-    {
-      ruleId: "oas3-example-external-check",
-      defaultSeverity: "warn",
-      description: "Examples cannot use `value` and `externalValue` together.",
-    },
-    {
-      ruleId: "oas2-api-host",
-      defaultSeverity: "info",
-      description: "OpenAPI `host` must be present and a non-empty string.",
-    },
-    {
-      ruleId: "owasp-protection-global-unsafe",
+      ruleId: "generator-validate-enums",
       defaultSeverity: "error",
       description:
-        "API should be protected by a `security` rule at either global or operation level.",
+        "Validate enums for type generation by checking value types, uniqueness, and x-speakeasy-enums definitions.",
     },
     {
-      ruleId: "oas3-schema",
-      defaultSeverity: "error",
-      description: "OpenAPI 3.0 specification is invalid.",
-    },
-    {
-      ruleId: "path-params",
-      defaultSeverity: "error",
-      description: "Path parameters must be defined and valid.",
-    },
-    {
-      ruleId: "owasp-string-limit",
+      ruleId: "generator-validate-extensions",
       defaultSeverity: "error",
       description:
-        "String size should be limited to mitigate resource exhaustion attacks.",
+        "Validate x-speakeasy-globals extension usage by enforcing unique parameter names and avoiding collisions with server variables.",
     },
     {
-      ruleId: "owasp-no-http-basic",
+      ruleId: "generator-validate-parameters",
       defaultSeverity: "error",
       description:
-        "Security scheme uses HTTP Basic. Use a more secure authentication method like OAuth 2.0.",
+        "Validate parameters are unique once converted to field names and have a non-empty name.",
     },
     {
-      ruleId: "oas2-host-not-example",
-      defaultSeverity: "warn",
-      description: "Host URL should not point at example.com.",
-    },
-    {
-      ruleId: "validate-enums",
-      defaultSeverity: "warn",
-      description: "Validate enums are valid for type generation.",
-    },
-    {
-      ruleId: "validate-paths",
-      defaultSeverity: "error",
-      description: "Validate paths conform to RFC 3986.",
-    },
-    {
-      ruleId: "duplicate-properties",
+      ruleId: "generator-validate-paths",
       defaultSeverity: "error",
       description:
-        "Property names must be unique and not empty within an operation when converted to field names.",
+        "Validate paths conform to RFC 3986 and use valid URI template syntax.",
     },
     {
-      ruleId: "validate-composite-schemas",
+      ruleId: "generator-validate-requests",
       defaultSeverity: "error",
       description:
-        "Ensure `anyOf`, `allOf`, and `oneOf` don't contain duplicate references.",
+        "Validate request body content types are valid MIME types.",
     },
     {
-      ruleId: "owasp-protection-global-unsafe-strict",
-      defaultSeverity: "info",
-      description:
-        "Check if the operation is protected at operation level. Otherwise, check the global `security` property.",
-    },
-    {
-      ruleId: "owasp-security-hosts-https-oas3",
+      ruleId: "generator-validate-responses",
       defaultSeverity: "error",
       description:
-        "All server interactions MUST use HTTPS, meaning server URLs should begin `https://`.",
+        "Validate response status codes and content types are syntactically valid.",
     },
     {
-      ruleId: "owasp-jwt-best-practices",
+      ruleId: "generator-validate-security",
       defaultSeverity: "error",
       description:
-        "JWTs must explicitly declare support for RFC 8725 in the description.",
+        "Validate security schemes have supported types, flows, and required fields.",
     },
     {
-      ruleId: "owasp-define-error-responses-500",
+      ruleId: "generator-validate-servers",
+      defaultSeverity: "hint",
+      description:
+        "Validate servers, their variables, and the x-speakeasy-server-id extension.",
+    },
+    {
+      ruleId: "generator-validate-types",
+      defaultSeverity: "error",
+      description:
+        "Ensure schema data types and formats are supported for generation.",
+    },
+    {
+      ruleId: "oas-schema-check",
+      defaultSeverity: "error",
+      description:
+        "Schemas must use type-appropriate constraints and have valid constraint values.",
+    },
+    {
+      ruleId: "oas3-example-missing",
+      defaultSeverity: "hint",
+      description:
+        "Schemas, parameters, headers, and media types should include example values.",
+    },
+    {
+      ruleId: "oas3-no-nullable",
       defaultSeverity: "warn",
       description:
-        "OWASP API Security recommends defining schemas for all responses, even `500 Internal Server Error`.",
+        "The nullable keyword is not supported in OpenAPI 3.1+ and should be replaced with a type array that includes null.",
     },
     {
-      ruleId: "description-duplication",
-      defaultSeverity: "info",
-      description: "Description duplication check.",
-    },
-    {
-      ruleId: "no-script-tags-in-markdown",
-      defaultSeverity: "error",
-      description: "Markdown descriptions must not have `<script>` tags.",
-    },
-    {
-      ruleId: "owasp-rate-limit-retry-after",
-      defaultSeverity: "error",
+      ruleId: "owasp-additional-properties-constrained",
+      defaultSeverity: "hint",
       description:
-        "Ensure that any `429` response contains a `Retry-After` header.",
-    },
-    {
-      ruleId: "oas3-valid-schema-example",
-      defaultSeverity: "warn",
-      description: "If an example has been used, check the schema is valid.",
-    },
-    {
-      ruleId: "typed-enum",
-      defaultSeverity: "warn",
-      description: "Enum values must respect the specified type.",
-    },
-    {
-      ruleId: "operation-operationId",
-      defaultSeverity: "error",
-      description: "Every operation must contain an `operationId`.",
-    },
-    {
-      ruleId: "operation-parameters",
-      defaultSeverity: "error",
-      description: "Operation parameters are unique and non-repeating.",
-    },
-    {
-      ruleId: "validate-requests",
-      defaultSeverity: "error",
-      description: "Validate request content types are valid MIME types.",
-    },
-    {
-      ruleId: "validate-document",
-      defaultSeverity: "error",
-      description: "Document must have a `paths` or `webhooks` object.",
-    },
-    {
-      ruleId: "no-ambiguous-paths",
-      defaultSeverity: "error",
-      description: "Paths need to resolve unambiguously from one another.",
-    },
-    {
-      ruleId: "oas3-api-servers",
-      defaultSeverity: "warn",
-      description: "Check for valid API servers definition.",
-    },
-    {
-      ruleId: "info-contact",
-      defaultSeverity: "warn",
-      description: "Info section is missing contact details.",
-    },
-    {
-      ruleId: "paths-kebab-case",
-      defaultSeverity: "warn",
-      description:
-        "Path segments must only use kebab case (no underscores or uppercase).",
-    },
-    {
-      ruleId: "openapi-tags",
-      defaultSeverity: "warn",
-      description:
-        "Top-level spec `tags` must not be empty and must be an array.",
+        "Schemas with additionalProperties should define maxProperties to limit object size.",
     },
     {
       ruleId: "owasp-array-limit",
       defaultSeverity: "error",
       description:
-        "Array size should be limited to mitigate resource exhaustion attacks.",
+        "Array schemas must specify maxItems to prevent resource exhaustion attacks.",
     },
     {
-      ruleId: "oas-schema-check",
-      defaultSeverity: "error",
-      description: "All document schemas must have a valid type defined.",
-    },
-    {
-      ruleId: "license-url",
-      defaultSeverity: "info",
-      description: "License should contain a URL.",
-    },
-    {
-      ruleId: "oas2-schema",
-      defaultSeverity: "error",
-      description: "OpenAPI 2.0 specification is invalid.",
-    },
-    {
-      ruleId: "operation-success-response",
-      defaultSeverity: "warn",
-      description: "Operation must have at least one `2xx` or `3xx` response.",
-    },
-    {
-      ruleId: "owasp-no-api-keys-in-url",
-      defaultSeverity: "error",
-      description: "API key has been detected in a URL.",
-    },
-    {
-      ruleId: "info-description",
-      defaultSeverity: "error",
-      description: "Info section is missing a description.",
-    },
-    {
-      ruleId: "oas3-missing-example",
-      defaultSeverity: "warn",
-      description: "Ensure everything that can have an example contains one.",
-    },
-    {
-      ruleId: "oas3-host-trailing-slash",
-      defaultSeverity: "warn",
-      description: "Server URL should not contain a trailing slash.",
-    },
-    {
-      ruleId: "owasp-string-restricted",
+      ruleId: "owasp-auth-insecure-schemes",
       defaultSeverity: "error",
       description:
-        "String must specify a `format`, RegEx `pattern`, `enum`, or `const`.",
+        "Authentication schemes using outdated or insecure methods must be avoided.",
     },
     {
-      ruleId: "owasp-no-additionalProperties",
+      ruleId: "owasp-define-error-responses-401",
       defaultSeverity: "warn",
       description:
-        "By default, JSON Schema allows additional properties, which can potentially lead to mass assignment issues.",
+        "Operations should define a 401 Unauthorized response to handle authentication failures.",
     },
     {
-      ruleId: "contact-properties",
-      defaultSeverity: "info",
-      description: "Contact details are incomplete.",
-    },
-    {
-      ruleId: "validate-security",
-      defaultSeverity: "error",
-      description: "Validate security schemes are correct.",
-    },
-    {
-      ruleId: "operation-operationId-unique",
-      defaultSeverity: "error",
-      description: "Every operation must have a unique `operationId`.",
-    },
-    {
-      ruleId: "validate-types",
-      defaultSeverity: "error",
-      description: "Ensure data types are valid for generation.",
-    },
-    {
-      ruleId: "validate-consts-defaults",
-      defaultSeverity: "warn",
-      description: "Ensure `const` and `default` values match their type.",
-    },
-    {
-      ruleId: "operation-singular-tag",
-      defaultSeverity: "warn",
-      description: "Operation cannot have more than a single tag defined.",
-    },
-    {
-      ruleId: "oas2-api-schemes",
+      ruleId: "owasp-define-error-responses-429",
       defaultSeverity: "warn",
       description:
-        "OpenAPI host `schemes` must be present and a non-empty array.",
+        "Operations should define a 429 Too Many Requests response to indicate rate limiting.",
     },
     {
-      ruleId: "validate-anyof",
+      ruleId: "owasp-define-error-responses-500",
       defaultSeverity: "warn",
       description:
-        "`anyOf` should only contain types that are compatible with each other.",
-    },
-    {
-      ruleId: "duplicate-schemas",
-      defaultSeverity: "hint",
-      description: "Inline object schemas must be unique.",
-    },
-    {
-      ruleId: "missing-examples",
-      defaultSeverity: "hint",
-      description: "Examples should be provided where possible.",
-    },
-    {
-      ruleId: "no-eval-in-markdown",
-      defaultSeverity: "error",
-      description: "Markdown descriptions must not have `eval()` statements.",
-    },
-    {
-      ruleId: "oas2-host-trailing-slash",
-      defaultSeverity: "warn",
-      description: "Host URL should not contain a trailing slash.",
-    },
-    {
-      ruleId: "owasp-no-numeric-ids",
-      defaultSeverity: "error",
-      description:
-        "Use random IDs that cannot be guessed. UUIDs are preferred.",
-    },
-    {
-      ruleId: "duplicate-schema-name",
-      defaultSeverity: "error",
-      description: "Schema names must be unique when converted to class names.",
-    },
-    {
-      ruleId: "validate-responses",
-      defaultSeverity: "error",
-      description: "Validate response content types are valid MIME types.",
-    },
-    {
-      ruleId: "path-not-include-query",
-      defaultSeverity: "error",
-      description: "Path must not include query string.",
-    },
-    {
-      ruleId: "path-declarations-must-exist",
-      defaultSeverity: "error",
-      description:
-        "Path parameter declarations must not be empty, for example, `/api/{}` is invalid.",
-    },
-    {
-      ruleId: "owasp-constrained-additionalProperties",
-      defaultSeverity: "warn",
-      description:
-        "By default, JSON Schema allows additional properties, which can potentially lead to mass assignment issues.",
-    },
-    {
-      ruleId: "operation-description",
-      defaultSeverity: "warn",
-      description: "Operation description checks.",
-    },
-    {
-      ruleId: "owasp-integer-format",
-      defaultSeverity: "error",
-      description:
-        "Integers should be limited to mitigate resource exhaustion attacks.",
-    },
-    {
-      ruleId: "owasp-integer-limit",
-      defaultSeverity: "error",
-      description:
-        "Integers should be limited with `min` or `max` values to mitigate resource exhaustion attacks.",
-    },
-    {
-      ruleId: "validate-deprecation",
-      defaultSeverity: "error",
-      description:
-        "Ensure correct usage of `x-speakeasy-deprecation-replacement` and `x-speakeasy-deprecation-message` extensions.",
-    },
-    {
-      ruleId: "validate-json-schema",
-      defaultSeverity: "error",
-      description: "Validate OpenAPI document against JSON Schema.",
-    },
-    {
-      ruleId: "validate-content-type",
-      defaultSeverity: "error",
-      description: "Validate content type schemas.",
+        "Operations should define a 500 Internal Server Error response to handle unexpected failures.",
     },
     {
       ruleId: "owasp-define-error-validation",
       defaultSeverity: "warn",
       description:
-        "Missing error response for `400`, `422`, or `4XX`. Ensure all errors are documented.",
+        "Operations should define validation error responses (400, 422, or 4XX).",
+    },
+    {
+      ruleId: "owasp-integer-format",
+      defaultSeverity: "error",
+      description:
+        "Integer schemas must specify a format of int32 or int64.",
+    },
+    {
+      ruleId: "owasp-integer-limit",
+      defaultSeverity: "error",
+      description:
+        "Integer schemas must specify minimum and maximum values to prevent unbounded inputs.",
+    },
+    {
+      ruleId: "owasp-jwt-best-practices",
+      defaultSeverity: "error",
+      description:
+        "Security schemes using OAuth2 or JWT must declare support for RFC8725.",
+    },
+    {
+      ruleId: "owasp-no-additional-properties",
+      defaultSeverity: "error",
+      description:
+        "Object schemas must not allow arbitrary additional properties.",
+    },
+    {
+      ruleId: "owasp-no-api-keys-in-url",
+      defaultSeverity: "error",
+      description:
+        "API keys must not be passed via URL parameters as they are logged and cached.",
+    },
+    {
+      ruleId: "owasp-no-credentials-in-url",
+      defaultSeverity: "error",
+      description:
+        "URL parameters must not contain credentials like API keys, passwords, or secrets.",
+    },
+    {
+      ruleId: "owasp-no-http-basic",
+      defaultSeverity: "error",
+      description:
+        "Security schemes must not use HTTP Basic authentication without additional security layers.",
+    },
+    {
+      ruleId: "owasp-no-numeric-ids",
+      defaultSeverity: "error",
+      description:
+        "Resource identifiers must use random values like UUIDs instead of sequential numeric IDs.",
+    },
+    {
+      ruleId: "owasp-protection-global-safe",
+      defaultSeverity: "hint",
+      description:
+        "Safe operations (GET, HEAD) should be protected by security schemes or explicitly marked as public.",
+    },
+    {
+      ruleId: "owasp-protection-global-unsafe",
+      defaultSeverity: "error",
+      description:
+        "Unsafe operations (POST, PUT, PATCH, DELETE) must be protected by security schemes.",
+    },
+    {
+      ruleId: "owasp-protection-global-unsafe-strict",
+      defaultSeverity: "hint",
+      description:
+        "Unsafe operations must be protected by non-empty security schemes without explicit opt-outs.",
     },
     {
       ruleId: "owasp-rate-limit",
       defaultSeverity: "error",
       description:
-        "Define proper rate limiting to avoid attackers overloading the API.",
+        "2XX and 4XX responses must define rate limiting headers.",
     },
     {
-      ruleId: "oas3-parameter-description",
-      defaultSeverity: "warn",
-      description: "Parameter description checks.",
-    },
-    {
-      ruleId: "oas3-host-not-example.com",
-      defaultSeverity: "warn",
-      description: "Server URL should not point at example.com.",
-    },
-    {
-      ruleId: "component-description",
-      defaultSeverity: "warn",
-      description: "Component description check.",
-    },
-    {
-      ruleId: "oas3-operation-security-defined",
+      ruleId: "owasp-rate-limit-retry-after",
       defaultSeverity: "error",
       description:
-        "`security` values must match a scheme defined in `components.securitySchemes`.",
+        "429 Too Many Requests responses must include a Retry-After header.",
     },
     {
-      ruleId: "path-keys-no-trailing-slash",
-      defaultSeverity: "warn",
-      description: "Path must not end with a slash.",
-    },
-    {
-      ruleId: "duplicate-operation-name",
+      ruleId: "owasp-security-hosts-https-oas3",
       defaultSeverity: "error",
       description:
-        "Duplicate operation names can cause SDK method name collisions. An SDK method name combines two parts: `group` and `methodName`, forming `sdk.{group}.{methodName}()`. The `methodName` is derived from `operationId` but can be overridden with `x-speakeasy-name-override`; if neither is provided, it falls back to a name generated from the HTTP path and HTTP method. The optional `group` comes from `x-speakeasy-group`; if absent, `tags` may be used.",
+        "Server URLs must begin with https://.",
     },
     {
-      ruleId: "info-license",
-      defaultSeverity: "info",
-      description: "Info section should contain a license.",
-    },
-    {
-      ruleId: "owasp-protection-global-safe",
-      defaultSeverity: "info",
-      description:
-        "Check if the operation is protected at operation level. Otherwise, check the global `security` property.",
-    },
-    {
-      ruleId: "operation-operationId-valid-in-url",
-      defaultSeverity: "error",
-      description: "`operationId` must use URL-friendly characters.",
-    },
-    {
-      ruleId: "validate-servers",
+      ruleId: "owasp-string-limit",
       defaultSeverity: "error",
       description:
-        "Validate servers, variables, and `x-speakeasy-server-id` extension.",
+        "String schemas must specify maxLength, const, or enum to prevent unbounded data.",
     },
     {
-      ruleId: "validate-extensions",
+      ruleId: "owasp-string-restricted",
       defaultSeverity: "error",
-      description: "Validate `x-speakeasy-globals` extension usage.",
+      description:
+        "String schemas must specify format, const, enum, or pattern to restrict content.",
     },
     {
-      ruleId: "oas2-unused-definition",
+      ruleId: "semantic-duplicated-enum",
       defaultSeverity: "warn",
-      description: "Check for unused definitions and bad references.",
+      description:
+        "Enum arrays should not contain duplicate values.",
     },
     {
-      ruleId: "oas2-parameter-description",
+      ruleId: "semantic-link-operation",
+      defaultSeverity: "error",
+      description:
+        "Link operationId must reference an existing operation in the API specification.",
+    },
+    {
+      ruleId: "semantic-no-ambiguous-paths",
+      defaultSeverity: "error",
+      description:
+        "Path definitions must be unambiguous and distinguishable from each other.",
+    },
+    {
+      ruleId: "semantic-no-eval-in-markdown",
+      defaultSeverity: "error",
+      description:
+        "Markdown descriptions must not contain eval() statements.",
+    },
+    {
+      ruleId: "semantic-no-script-tags-in-markdown",
+      defaultSeverity: "error",
+      description:
+        "Markdown descriptions must not contain <script> tags.",
+    },
+    {
+      ruleId: "semantic-operation-id-valid-in-url",
+      defaultSeverity: "error",
+      description:
+        "Operation IDs must use URL-friendly characters.",
+    },
+    {
+      ruleId: "semantic-operation-operation-id",
       defaultSeverity: "warn",
-      description: "Parameter description checks.",
+      description:
+        "Operations should define an operationId for consistent referencing.",
+    },
+    {
+      ruleId: "semantic-path-declarations",
+      defaultSeverity: "error",
+      description:
+        "Path parameter declarations must not be empty.",
+    },
+    {
+      ruleId: "semantic-path-params",
+      defaultSeverity: "error",
+      description:
+        "Path template variables must have corresponding parameter definitions.",
+    },
+    {
+      ruleId: "semantic-path-query",
+      defaultSeverity: "error",
+      description:
+        "Paths must not include query strings. Query parameters should be defined in the parameters array.",
+    },
+    {
+      ruleId: "semantic-typed-enum",
+      defaultSeverity: "warn",
+      description:
+        "Enum values must match the specified type.",
+    },
+    {
+      ruleId: "semantic-unused-component",
+      defaultSeverity: "warn",
+      description:
+        "Components that are declared but never referenced should be removed.",
+    },
+    {
+      ruleId: "speakeasy-validate-document",
+      defaultSeverity: "error",
+      description:
+        "Document must have a paths or webhooks object with at least one entry.",
+    },
+    {
+      ruleId: "style-component-description",
+      defaultSeverity: "hint",
+      description:
+        "Reusable components should include descriptions.",
+    },
+    {
+      ruleId: "style-contact-properties",
+      defaultSeverity: "warn",
+      description:
+        "The contact object should include name, url, and email properties.",
+    },
+    {
+      ruleId: "style-description-duplication",
+      defaultSeverity: "warn",
+      description:
+        "Description and summary fields should not contain identical text.",
+    },
+    {
+      ruleId: "style-info-contact",
+      defaultSeverity: "warn",
+      description:
+        "The info section should include a contact object.",
+    },
+    {
+      ruleId: "style-info-description",
+      defaultSeverity: "warn",
+      description:
+        "The info section should include a description field.",
+    },
+    {
+      ruleId: "style-info-license",
+      defaultSeverity: "hint",
+      description:
+        "The info section should include a license object.",
+    },
+    {
+      ruleId: "style-license-url",
+      defaultSeverity: "hint",
+      description:
+        "The license object should include a URL pointing to the full license text.",
+    },
+    {
+      ruleId: "style-no-ref-siblings",
+      defaultSeverity: "warn",
+      description:
+        "In OpenAPI 3.0.x, a $ref field should not have sibling properties alongside it.",
+    },
+    {
+      ruleId: "style-no-verbs-in-path",
+      defaultSeverity: "warn",
+      description:
+        "Path segments should not contain HTTP verbs.",
+    },
+    {
+      ruleId: "style-oas3-api-servers",
+      defaultSeverity: "warn",
+      description:
+        "OpenAPI 3.x specifications should define at least one server with a valid URL.",
+    },
+    {
+      ruleId: "style-oas3-host-not-example",
+      defaultSeverity: "warn",
+      description:
+        "Server URLs should not point to example.com domains.",
+    },
+    {
+      ruleId: "style-oas3-host-trailing-slash",
+      defaultSeverity: "warn",
+      description:
+        "Server URLs should not end with a trailing slash.",
+    },
+    {
+      ruleId: "style-oas3-parameter-description",
+      defaultSeverity: "warn",
+      description:
+        "Parameters should include descriptions that explain their purpose.",
+    },
+    {
+      ruleId: "style-openapi-tags",
+      defaultSeverity: "warn",
+      description:
+        "The specification should define a non-empty tags array at the root level.",
+    },
+    {
+      ruleId: "style-operation-description",
+      defaultSeverity: "warn",
+      description:
+        "Operations should include either a description or summary field.",
+    },
+    {
+      ruleId: "style-operation-error-response",
+      defaultSeverity: "warn",
+      description:
+        "Operations should define at least one 4xx error response.",
+    },
+    {
+      ruleId: "style-operation-singular-tag",
+      defaultSeverity: "warn",
+      description:
+        "Operations should be associated with only a single tag.",
+    },
+    {
+      ruleId: "style-operation-success-response",
+      defaultSeverity: "warn",
+      description:
+        "Operations should define at least one 2xx or 3xx response code.",
+    },
+    {
+      ruleId: "style-operation-tag-defined",
+      defaultSeverity: "warn",
+      description:
+        "Operation tags should be declared in the global tags array.",
+    },
+    {
+      ruleId: "style-operation-tags",
+      defaultSeverity: "warn",
+      description:
+        "Operations should have at least one tag.",
+    },
+    {
+      ruleId: "style-path-trailing-slash",
+      defaultSeverity: "warn",
+      description:
+        "Path definitions should not end with a trailing slash.",
+    },
+    {
+      ruleId: "style-paths-kebab-case",
+      defaultSeverity: "warn",
+      description:
+        "Path segments should use kebab-case for consistency.",
+    },
+    {
+      ruleId: "style-tag-description",
+      defaultSeverity: "hint",
+      description:
+        "Tags should include descriptions.",
+    },
+    {
+      ruleId: "style-tags-alphabetical",
+      defaultSeverity: "warn",
+      description:
+        "Tags should be listed in alphabetical order.",
+    },
+  ]}
+  columns={[
+    { key: "ruleId", header: "Rule ID" },
+    { key: "defaultSeverity", header: "Default Severity" },
+    { key: "description", header: "Description" },
+  ]}
+/>
+
+### Validation errors
+
+In addition to linting rules, the following validation errors may be reported when parsing the OpenAPI document:
+
+<Table
+  data={[
+    {
+      ruleId: "validation-required-field",
+      defaultSeverity: "error",
+      description: "Required fields must be present in the document.",
+    },
+    {
+      ruleId: "validation-type-mismatch",
+      defaultSeverity: "error",
+      description: "Values must match the schema types defined in the specification.",
+    },
+    {
+      ruleId: "validation-duplicate-key",
+      defaultSeverity: "error",
+      description: "Duplicate keys are not allowed in objects.",
+    },
+    {
+      ruleId: "validation-invalid-format",
+      defaultSeverity: "error",
+      description: "Values must match the specified format.",
+    },
+    {
+      ruleId: "validation-empty-value",
+      defaultSeverity: "error",
+      description: "Values must not be empty when the field requires content.",
+    },
+    {
+      ruleId: "validation-invalid-reference",
+      defaultSeverity: "error",
+      description: "References must resolve to existing components or locations.",
+    },
+    {
+      ruleId: "validation-invalid-syntax",
+      defaultSeverity: "error",
+      description: "Documents must be valid YAML or JSON.",
+    },
+    {
+      ruleId: "validation-invalid-schema",
+      defaultSeverity: "error",
+      description: "Schemas must be valid according to the OpenAPI/JSON Schema rules.",
+    },
+    {
+      ruleId: "validation-invalid-target",
+      defaultSeverity: "error",
+      description: "Validation targets must exist and be valid for the context.",
+    },
+    {
+      ruleId: "validation-allowed-values",
+      defaultSeverity: "error",
+      description: "Values must be one of the allowed values.",
+    },
+    {
+      ruleId: "validation-mutually-exclusive-fields",
+      defaultSeverity: "error",
+      description: "Mutually exclusive fields cannot be used together.",
+    },
+    {
+      ruleId: "validation-operation-not-found",
+      defaultSeverity: "error",
+      description: "Referenced operations must exist in the specification.",
+    },
+    {
+      ruleId: "validation-operation-id-unique",
+      defaultSeverity: "error",
+      description: "Operation IDs must be unique across the specification.",
+    },
+    {
+      ruleId: "validation-operation-parameters",
+      defaultSeverity: "error",
+      description: "Operation parameters must be valid and correctly defined.",
+    },
+    {
+      ruleId: "validation-scheme-not-found",
+      defaultSeverity: "error",
+      description: "Referenced security schemes must be defined.",
+    },
+    {
+      ruleId: "validation-tag-not-found",
+      defaultSeverity: "error",
+      description: "Operation tags should be defined in the top-level tags array.",
+    },
+    {
+      ruleId: "validation-supported-version",
+      defaultSeverity: "error",
+      description: "The document must use a supported OpenAPI version.",
+    },
+    {
+      ruleId: "validation-circular-reference",
+      defaultSeverity: "error",
+      description: "Schemas must not contain circular references that cannot be resolved.",
     },
   ]}
   columns={[
@@ -678,228 +991,361 @@ The rules available to the Speakeasy Linter are listed below and can be used in 
 
 ## Available rulesets
 
-The rulesets available to the Speakeasy Linter are listed below and can be chained in custom rules. These rulesets will be used by default when custom linting configuration is not provided.
+The built-in rulesets available to the Speakeasy Linter are listed below and can be composed in custom rulesets.
 
 ### speakeasy-recommended
 
-The Speakeasy Linter uses the `speakeasy-recommended` ruleset by default when no custom ruleset is provided. This ruleset is recommended to ensure OpenAPI documents meet the Speakeasy quality bar.
+The default ruleset. Includes all SDK generation rules, OpenAPI compliance rules, and select style and quality rules. Recommended for ensuring OpenAPI documents meet the Speakeasy quality bar.
 
 <Table
   data={[
-    { ruleId: "duplicate-schema-name" },
-    { ruleId: "duplicate-operation-name" },
-    { ruleId: "duplicate-properties" },
-    { ruleId: "validate-anyof" },
-    { ruleId: "validate-document" },
-    { ruleId: "validate-enums" },
-    { ruleId: "validate-extensions" },
-    { ruleId: "validate-json-schema" },
-    { ruleId: "validate-parameters" },
-    { ruleId: "validate-requests" },
-    { ruleId: "validate-responses" },
-    { ruleId: "validate-composite-schemas" },
-    { ruleId: "validate-security" },
-    { ruleId: "validate-servers" },
-    { ruleId: "validate-types" },
-    { ruleId: "validate-paths" },
-    { ruleId: "validate-deprecation" },
-    { ruleId: "duplicate-tag" },
-    { ruleId: "validate-consts-defaults" },
-    { ruleId: "validate-content-type" },
-    { ruleId: "duplicate-schemas" },
-    { ruleId: "missing-examples" },
-    { ruleId: "path-params" },
-    { ruleId: "path-declarations-must-exist" },
-    { ruleId: "path-not-include-query" },
-    { ruleId: "oas3-operation-security-defined" },
-    { ruleId: "typed-enum" },
-    { ruleId: "no-eval-in-markdown" },
-    { ruleId: "no-script-tags-in-markdown" },
-    { ruleId: "operation-operationId-unique" },
-    { ruleId: "operation-success-response" },
-    { ruleId: "oas3-unused-component" },
-    { ruleId: "oas3-host-not-example.com" },
-    { ruleId: "operation-operationId" },
-    { ruleId: "duplicated-entry-in-enum" },
-    { ruleId: "operation-tag-defined" },
+    { ruleId: "generator-duplicate-schema-name", severity: "warn" },
+    { ruleId: "generator-duplicate-operation-name", severity: "error" },
+    { ruleId: "generator-duplicate-properties", severity: "error" },
+    { ruleId: "generator-duplicate-path-params", severity: "warn" },
+    { ruleId: "generator-duplicate-tag", severity: "error" },
+    { ruleId: "generator-duplicate-errors", severity: "hint" },
+    { ruleId: "generator-duplicate-inline-schemas", severity: "hint" },
+    { ruleId: "generator-validate-types", severity: "error" },
+    { ruleId: "generator-validate-composite-schemas", severity: "error" },
+    { ruleId: "generator-validate-consts-defaults", severity: "warn" },
+    { ruleId: "generator-validate-content-type", severity: "error" },
+    { ruleId: "generator-validate-enums", severity: "error" },
+    { ruleId: "generator-validate-extensions", severity: "error" },
+    { ruleId: "generator-validate-parameters", severity: "error" },
+    { ruleId: "generator-validate-paths", severity: "error" },
+    { ruleId: "generator-validate-requests", severity: "error" },
+    { ruleId: "generator-validate-responses", severity: "error" },
+    { ruleId: "generator-validate-security", severity: "error" },
+    { ruleId: "generator-validate-servers", severity: "hint" },
+    { ruleId: "generator-validate-deprecation", severity: "error" },
+    { ruleId: "generator-path-params", severity: "error" },
+    { ruleId: "generator-missing-error-response", severity: "hint" },
+    { ruleId: "generator-missing-examples", severity: "hint" },
+    { ruleId: "generator-pagination", severity: "hint" },
+    { ruleId: "generator-retries", severity: "hint" },
+    { ruleId: "speakeasy-validate-document", severity: "error" },
+    { ruleId: "semantic-path-declarations", severity: "error" },
+    { ruleId: "semantic-path-query", severity: "error" },
+    { ruleId: "semantic-typed-enum", severity: "warn" },
+    { ruleId: "semantic-no-eval-in-markdown", severity: "error" },
+    { ruleId: "semantic-no-script-tags-in-markdown", severity: "error" },
+    { ruleId: "semantic-unused-component", severity: "warn" },
+    { ruleId: "semantic-operation-operation-id", severity: "warn" },
+    { ruleId: "semantic-duplicated-enum", severity: "warn" },
+    { ruleId: "style-operation-success-response", severity: "warn" },
+    { ruleId: "style-oas3-host-not-example", severity: "warn" },
+    { ruleId: "style-operation-tag-defined", severity: "warn" },
   ]}
-  columns={[{ key: "ruleId", header: "Rule ID" }]}
+  columns={[
+    { key: "ruleId", header: "Rule ID" },
+    { key: "severity", header: "Severity" },
+  ]}
 />
 
 ### speakeasy-generation
 
-The `speakeasy-generation` ruleset is used when generating an SDK from an OpenAPI document. This set of rules _must_ pass to successfully generate an SDK from an OpenAPI document. This ruleset can't be overridden or reconfigured when using the generator.
+The minimum set of rules required for successful SDK generation. This ruleset is **always applied before generation** and cannot be overridden or reconfigured when using the generator.
 
-Use the `speakeasy-generation` ruleset as appropriate to configure the linter to ensure an OpenAPI document is ready for generation.
+Use this as a base when you want a lean ruleset that only enforces what's strictly necessary for generation.
 
 <Table
   data={[
-    { ruleId: "duplicate-schema-name" },
-    { ruleId: "duplicate-operation-name" },
-    { ruleId: "duplicate-properties" },
-    { ruleId: "validate-anyof" },
-    { ruleId: "validate-document" },
-    { ruleId: "validate-enums" },
-    { ruleId: "validate-extensions" },
-    { ruleId: "validate-json-schema" },
-    { ruleId: "validate-parameters" },
-    { ruleId: "validate-requests" },
-    { ruleId: "validate-responses" },
-    { ruleId: "validate-composite-schemas" },
-    { ruleId: "validate-security" },
-    { ruleId: "validate-servers" },
-    { ruleId: "validate-types" },
-    { ruleId: "validate-paths" },
-    { ruleId: "validate-deprecation" },
-    { ruleId: "duplicate-tag" },
-    { ruleId: "validate-consts-defaults" },
-    { ruleId: "validate-content-type" },
-    { ruleId: "path-params" },
-    { ruleId: "path-declarations-must-exist" },
-    { ruleId: "path-not-include-query" },
-    { ruleId: "oas3-operation-security-defined" },
-    { ruleId: "typed-enum" },
-    { ruleId: "no-eval-in-markdown" },
-    { ruleId: "no-script-tags-in-markdown" },
-    { ruleId: "operation-operationId-unique" },
+    { ruleId: "generator-duplicate-schema-name", severity: "warn" },
+    { ruleId: "generator-duplicate-operation-name", severity: "error" },
+    { ruleId: "generator-duplicate-properties", severity: "error" },
+    { ruleId: "generator-duplicate-path-params", severity: "warn" },
+    { ruleId: "generator-duplicate-tag", severity: "error" },
+    { ruleId: "generator-duplicate-errors", severity: "hint" },
+    { ruleId: "generator-duplicate-inline-schemas", severity: "hint" },
+    { ruleId: "generator-validate-types", severity: "error" },
+    { ruleId: "generator-validate-composite-schemas", severity: "error" },
+    { ruleId: "generator-validate-consts-defaults", severity: "warn" },
+    { ruleId: "generator-validate-content-type", severity: "error" },
+    { ruleId: "generator-validate-enums", severity: "error" },
+    { ruleId: "generator-validate-extensions", severity: "error" },
+    { ruleId: "generator-validate-parameters", severity: "error" },
+    { ruleId: "generator-validate-paths", severity: "error" },
+    { ruleId: "generator-validate-requests", severity: "error" },
+    { ruleId: "generator-validate-responses", severity: "error" },
+    { ruleId: "generator-validate-security", severity: "error" },
+    { ruleId: "generator-validate-servers", severity: "hint" },
+    { ruleId: "generator-validate-deprecation", severity: "error" },
+    { ruleId: "generator-path-params", severity: "error" },
+    { ruleId: "generator-missing-error-response", severity: "hint" },
+    { ruleId: "generator-pagination", severity: "hint" },
+    { ruleId: "generator-retries", severity: "hint" },
+    { ruleId: "speakeasy-validate-document", severity: "error" },
+    { ruleId: "semantic-path-declarations", severity: "error" },
+    { ruleId: "semantic-path-query", severity: "error" },
+    { ruleId: "semantic-typed-enum", severity: "warn" },
+    { ruleId: "semantic-no-eval-in-markdown", severity: "error" },
+    { ruleId: "semantic-no-script-tags-in-markdown", severity: "error" },
+    { ruleId: "style-operation-success-response", severity: "warn" },
   ]}
-  columns={[{ key: "ruleId", header: "Rule ID" }]}
+  columns={[
+    { key: "ruleId", header: "Rule ID" },
+    { key: "severity", header: "Severity" },
+  ]}
 />
 
 ### speakeasy-openapi
 
-The `speakeasy-openapi` ruleset is a minimal set of rules recommended to ensure OpenAPI documents are generally valid and ready to be used by most of the OpenAPI ecosystem.
+A broader set of rules for general OpenAPI compliance. Builds on `speakeasy-generation` with additional quality rules like unused component detection, example validation, and link operation validation. Note that Speakeasy-specific rules like `generator-validate-enums` and `generator-validate-extensions` are not included in this ruleset.
 
 <Table
   data={[
-    { ruleId: "validate-anyof" },
-    { ruleId: "validate-document" },
-    { ruleId: "validate-json-schema" },
-    { ruleId: "validate-parameters" },
-    { ruleId: "validate-requests" },
-    { ruleId: "validate-responses" },
-    { ruleId: "validate-composite-schemas" },
-    { ruleId: "validate-security" },
-    { ruleId: "validate-servers" },
-    { ruleId: "validate-types" },
-    { ruleId: "validate-paths" },
-    { ruleId: "validate-deprecation" },
-    { ruleId: "validate-consts-defaults" },
-    { ruleId: "validate-content-type" },
-    { ruleId: "duplicate-schemas" },
-    { ruleId: "missing-examples" },
-    { ruleId: "path-params" },
-    { ruleId: "path-declarations-must-exist" },
-    { ruleId: "path-not-include-query" },
-    { ruleId: "oas3-operation-security-defined" },
-    { ruleId: "typed-enum" },
-    { ruleId: "no-eval-in-markdown" },
-    { ruleId: "no-script-tags-in-markdown" },
-    { ruleId: "operation-operationId-unique" },
-    { ruleId: "operation-success-response" },
-    { ruleId: "oas3-unused-component" },
-    { ruleId: "oas3-host-not-example.com" },
-    { ruleId: "operation-operationId" },
-    { ruleId: "duplicated-entry-in-enum" },
-    { ruleId: "operation-tag-defined" },
+    { ruleId: "generator-duplicate-schema-name", severity: "warn" },
+    { ruleId: "generator-duplicate-operation-name", severity: "error" },
+    { ruleId: "generator-duplicate-properties", severity: "error" },
+    { ruleId: "generator-duplicate-path-params", severity: "warn" },
+    { ruleId: "generator-duplicate-tag", severity: "error" },
+    { ruleId: "generator-duplicate-errors", severity: "hint" },
+    { ruleId: "generator-duplicate-inline-schemas", severity: "hint" },
+    { ruleId: "generator-validate-types", severity: "error" },
+    { ruleId: "generator-validate-composite-schemas", severity: "error" },
+    { ruleId: "generator-validate-consts-defaults", severity: "warn" },
+    { ruleId: "generator-validate-content-type", severity: "error" },
+    { ruleId: "generator-validate-parameters", severity: "error" },
+    { ruleId: "generator-validate-paths", severity: "error" },
+    { ruleId: "generator-validate-requests", severity: "error" },
+    { ruleId: "generator-validate-responses", severity: "error" },
+    { ruleId: "generator-validate-security", severity: "error" },
+    { ruleId: "generator-validate-servers", severity: "hint" },
+    { ruleId: "generator-validate-deprecation", severity: "error" },
+    { ruleId: "generator-path-params", severity: "error" },
+    { ruleId: "generator-missing-error-response", severity: "hint" },
+    { ruleId: "generator-missing-examples", severity: "hint" },
+    { ruleId: "generator-pagination", severity: "hint" },
+    { ruleId: "generator-retries", severity: "hint" },
+    { ruleId: "speakeasy-validate-document", severity: "error" },
+    { ruleId: "semantic-path-declarations", severity: "error" },
+    { ruleId: "semantic-path-query", severity: "error" },
+    { ruleId: "semantic-typed-enum", severity: "warn" },
+    { ruleId: "semantic-no-eval-in-markdown", severity: "error" },
+    { ruleId: "semantic-no-script-tags-in-markdown", severity: "error" },
+    { ruleId: "semantic-unused-component", severity: "warn" },
+    { ruleId: "semantic-operation-operation-id", severity: "warn" },
+    { ruleId: "semantic-duplicated-enum", severity: "warn" },
+    { ruleId: "semantic-link-operation", severity: "error" },
+    { ruleId: "style-operation-success-response", severity: "warn" },
+    { ruleId: "style-oas3-host-not-example", severity: "warn" },
+    { ruleId: "style-operation-tag-defined", severity: "warn" },
+    { ruleId: "oas3-example-missing", severity: "hint" },
   ]}
-  columns={[{ key: "ruleId", header: "Rule ID" }]}
+  columns={[
+    { key: "ruleId", header: "Rule ID" },
+    { key: "severity", header: "Severity" },
+  ]}
 />
 
-### vacuum
+### openapi-standard
 
-The `vacuum` ruleset is provided by the [vacuum project](https://github.com/daveshanley/vacuum), which the Speakeasy Linter is built on top of. This set of rules is recommended to ensure OpenAPI documents meet the vacuum quality bar.
+The most comprehensive ruleset. Includes most generator rules plus every built-in rule from the linter library: full semantic, style, and OAS-version-specific rules. Speakeasy-specific rules like `generator-validate-enums` and `generator-validate-extensions` are not included. Use this when you want maximum validation coverage.
 
 <Table
   data={[
-    { ruleId: "operation-success-response" },
-    { ruleId: "operation-operationId-unique" },
-    { ruleId: "operation-operationId" },
-    { ruleId: "operation-parameters" },
-    { ruleId: "operation-singular-tag" },
-    { ruleId: "operation-tag-defined" },
-    { ruleId: "path-params" },
-    { ruleId: "contact-properties" },
-    { ruleId: "info-contact" },
-    { ruleId: "info-description" },
-    { ruleId: "info-license" },
-    { ruleId: "license-url" },
-    { ruleId: "openapi-tags-alphabetical" },
-    { ruleId: "openapi-tags" },
-    { ruleId: "operation-tags" },
-    { ruleId: "operation-description" },
-    { ruleId: "component-description" },
-    { ruleId: "operation-operationId-valid-in-url" },
-    { ruleId: "path-declarations-must-exist" },
-    { ruleId: "path-keys-no-trailing-slash" },
-    { ruleId: "path-not-include-query" },
-    { ruleId: "tag-description" },
-    { ruleId: "no-$ref-siblings" },
-    { ruleId: "oas3-unused-component" },
-    { ruleId: "oas2-unused-definition" },
-    { ruleId: "oas2-api-host" },
-    { ruleId: "oas2-api-schemes" },
-    { ruleId: "oas2-discriminator" },
-    { ruleId: "oas2-host-not-example" },
-    { ruleId: "oas3-host-not-example.com" },
-    { ruleId: "oas2-host-trailing-slash" },
-    { ruleId: "oas3-host-trailing-slash" },
-    { ruleId: "oas2-parameter-description" },
-    { ruleId: "oas3-parameter-description" },
-    { ruleId: "oas3-operation-security-defined" },
-    { ruleId: "oas2-operation-security-defined" },
-    { ruleId: "typed-enum" },
-    { ruleId: "duplicated-entry-in-enum" },
-    { ruleId: "no-eval-in-markdown" },
-    { ruleId: "no-script-tags-in-markdown" },
-    { ruleId: "description-duplication" },
-    { ruleId: "oas3-api-servers" },
-    { ruleId: "oas2-operation-formData-consume-check" },
-    { ruleId: "oas2-anyOf" },
-    { ruleId: "oas2-oneOf" },
-    { ruleId: "no-ambiguous-paths" },
-    { ruleId: "no-http-verbs-in-path" },
-    { ruleId: "paths-kebab-case" },
-    { ruleId: "operation-4xx-response" },
-    { ruleId: "oas2-schema" },
-    { ruleId: "oas3-schema" },
-    { ruleId: "oas3-valid-schema-example" },
-    { ruleId: "oas3-missing-example" },
-    { ruleId: "oas3-example-external-check" },
-    { ruleId: "oas-schema-check" },
+    { ruleId: "generator-duplicate-schema-name", severity: "warn" },
+    { ruleId: "generator-duplicate-operation-name", severity: "error" },
+    { ruleId: "generator-duplicate-properties", severity: "error" },
+    { ruleId: "generator-duplicate-path-params", severity: "warn" },
+    { ruleId: "generator-duplicate-tag", severity: "error" },
+    { ruleId: "generator-duplicate-errors", severity: "hint" },
+    { ruleId: "generator-duplicate-inline-schemas", severity: "hint" },
+    { ruleId: "generator-validate-types", severity: "error" },
+    { ruleId: "generator-validate-composite-schemas", severity: "error" },
+    { ruleId: "generator-validate-consts-defaults", severity: "warn" },
+    { ruleId: "generator-validate-content-type", severity: "error" },
+    { ruleId: "generator-validate-parameters", severity: "error" },
+    { ruleId: "generator-validate-paths", severity: "error" },
+    { ruleId: "generator-validate-requests", severity: "error" },
+    { ruleId: "generator-validate-responses", severity: "error" },
+    { ruleId: "generator-validate-security", severity: "error" },
+    { ruleId: "generator-validate-servers", severity: "hint" },
+    { ruleId: "generator-validate-deprecation", severity: "error" },
+    { ruleId: "generator-path-params", severity: "error" },
+    { ruleId: "generator-missing-error-response", severity: "hint" },
+    { ruleId: "generator-missing-examples", severity: "hint" },
+    { ruleId: "generator-pagination", severity: "hint" },
+    { ruleId: "generator-retries", severity: "hint" },
+    { ruleId: "speakeasy-validate-document", severity: "error" },
+    { ruleId: "semantic-duplicated-enum", severity: "warn" },
+    { ruleId: "semantic-typed-enum", severity: "warn" },
+    { ruleId: "semantic-unused-component", severity: "warn" },
+    { ruleId: "semantic-no-ambiguous-paths", severity: "error" },
+    { ruleId: "semantic-path-declarations", severity: "error" },
+    { ruleId: "semantic-path-params", severity: "error" },
+    { ruleId: "semantic-path-query", severity: "error" },
+    { ruleId: "semantic-link-operation", severity: "error" },
+    { ruleId: "semantic-operation-id-valid-in-url", severity: "error" },
+    { ruleId: "semantic-operation-operation-id", severity: "warn" },
+    { ruleId: "semantic-no-eval-in-markdown", severity: "error" },
+    { ruleId: "semantic-no-script-tags-in-markdown", severity: "error" },
+    { ruleId: "oas-schema-check", severity: "error" },
+    { ruleId: "oas3-example-missing", severity: "hint" },
+    { ruleId: "oas3-no-nullable", severity: "warn" },
+    { ruleId: "style-component-description", severity: "hint" },
+    { ruleId: "style-no-ref-siblings", severity: "warn" },
+    { ruleId: "style-contact-properties", severity: "warn" },
+    { ruleId: "style-description-duplication", severity: "warn" },
+    { ruleId: "style-info-contact", severity: "warn" },
+    { ruleId: "style-info-description", severity: "warn" },
+    { ruleId: "style-info-license", severity: "hint" },
+    { ruleId: "style-license-url", severity: "hint" },
+    { ruleId: "style-no-verbs-in-path", severity: "warn" },
+    { ruleId: "style-path-trailing-slash", severity: "warn" },
+    { ruleId: "style-paths-kebab-case", severity: "warn" },
+    { ruleId: "style-operation-description", severity: "warn" },
+    { ruleId: "style-operation-error-response", severity: "warn" },
+    { ruleId: "style-operation-singular-tag", severity: "warn" },
+    { ruleId: "style-operation-success-response", severity: "warn" },
+    { ruleId: "style-operation-tag-defined", severity: "warn" },
+    { ruleId: "style-operation-tags", severity: "warn" },
+    { ruleId: "style-openapi-tags", severity: "warn" },
+    { ruleId: "style-tag-description", severity: "hint" },
+    { ruleId: "style-tags-alphabetical", severity: "warn" },
+    { ruleId: "style-oas3-api-servers", severity: "warn" },
+    { ruleId: "style-oas3-host-not-example", severity: "warn" },
+    { ruleId: "style-oas3-host-trailing-slash", severity: "warn" },
+    { ruleId: "style-oas3-parameter-description", severity: "warn" },
   ]}
-  columns={[{ key: "ruleId", header: "Rule ID" }]}
+  columns={[
+    { key: "ruleId", header: "Rule ID" },
+    { key: "severity", header: "Severity" },
+  ]}
 />
 
 ### owasp
 
-The `owasp` ruleset is recommended to ensure OpenAPI documents meet the [Open Worldwide Application Security Project (OWASP)](https://owasp.org/www-project-api-security/) quality bar.
+OWASP API Security rules. Covers authentication, rate limiting, input validation, and data exposure. Can be combined with other rulesets:
+
+```yaml
+rulesets:
+  secureRuleset:
+    rulesets:
+      - speakeasy-recommended
+      - owasp
+```
 
 <Table
   data={[
-    { ruleId: "owasp-protection-global-unsafe" },
-    { ruleId: "owasp-protection-global-unsafe-strict" },
-    { ruleId: "owasp-protection-global-safe" },
-    { ruleId: "owasp-define-error-responses-401" },
-    { ruleId: "owasp-define-error-responses-500" },
-    { ruleId: "owasp-rate-limit" },
-    { ruleId: "owasp-rate-limit-retry-after" },
-    { ruleId: "owasp-define-error-responses-429" },
-    { ruleId: "owasp-array-limit" },
-    { ruleId: "owasp-jwt-best-practices" },
-    { ruleId: "owasp-auth-insecure-schemes" },
-    { ruleId: "owasp-no-numeric-ids" },
-    { ruleId: "owasp-no-http-basic" },
-    { ruleId: "owasp-define-error-validation" },
-    { ruleId: "owasp-no-api-keys-in-url" },
-    { ruleId: "owasp-no-credentials-in-url" },
-    { ruleId: "owasp-string-limit" },
-    { ruleId: "owasp-string-restricted" },
-    { ruleId: "owasp-integer-format" },
-    { ruleId: "owasp-integer-limit" },
-    { ruleId: "owasp-no-additionalProperties" },
-    { ruleId: "owasp-constrained-additionalProperties" },
-    { ruleId: "owasp-security-hosts-https-oas3" },
+    { ruleId: "owasp-no-numeric-ids", severity: "error" },
+    { ruleId: "owasp-no-http-basic", severity: "error" },
+    { ruleId: "owasp-no-api-keys-in-url", severity: "error" },
+    { ruleId: "owasp-no-credentials-in-url", severity: "error" },
+    { ruleId: "owasp-auth-insecure-schemes", severity: "error" },
+    { ruleId: "owasp-jwt-best-practices", severity: "error" },
+    { ruleId: "owasp-protection-global-unsafe", severity: "error" },
+    { ruleId: "owasp-protection-global-unsafe-strict", severity: "hint" },
+    { ruleId: "owasp-protection-global-safe", severity: "hint" },
+    { ruleId: "owasp-define-error-validation", severity: "warn" },
+    { ruleId: "owasp-define-error-responses-401", severity: "warn" },
+    { ruleId: "owasp-define-error-responses-500", severity: "warn" },
+    { ruleId: "owasp-define-error-responses-429", severity: "warn" },
+    { ruleId: "owasp-rate-limit", severity: "error" },
+    { ruleId: "owasp-rate-limit-retry-after", severity: "error" },
+    { ruleId: "owasp-array-limit", severity: "error" },
+    { ruleId: "owasp-string-limit", severity: "error" },
+    { ruleId: "owasp-string-restricted", severity: "error" },
+    { ruleId: "owasp-integer-format", severity: "error" },
+    { ruleId: "owasp-integer-limit", severity: "error" },
+    { ruleId: "owasp-no-additional-properties", severity: "error" },
+    { ruleId: "owasp-additional-properties-constrained", severity: "hint" },
+    { ruleId: "owasp-security-hosts-https-oas3", severity: "error" },
   ]}
-  columns={[{ key: "ruleId", header: "Rule ID" }]}
+  columns={[
+    { key: "ruleId", header: "Rule ID" },
+    { key: "severity", header: "Severity" },
+  ]}
 />
+
+## `openapi` CLI
+
+The [`openapi` CLI](https://github.com/speakeasy-api/openapi) is a standalone, open-source tool for working with OpenAPI specifications. It shares the same core linting engine as the Speakeasy Linter but does not include the Speakeasy-specific generation rules (`generator-*`). It is a good option for teams that want OpenAPI linting without the full Speakeasy generation pipeline.
+
+| | Speakeasy CLI | `openapi` CLI |
+| --- | --- | --- |
+| **Generation gating** | `speakeasy-generation` ruleset enforced before SDK generation | No generation gating |
+| **Built-in rulesets** | `speakeasy-recommended`, `speakeasy-generation`, `speakeasy-openapi`, `openapi-standard`, `owasp` | `all`, `recommended`, `security` |
+| **Config format** | `.speakeasy/lint.yaml` with `lintVersion`/`rulesets`/`customRules` | `lint.yaml` with `extends`/`custom_rules` |
+
+### Installation
+
+**Homebrew (macOS/Linux):**
+
+```bash
+brew install openapi
+```
+
+**Go Install:**
+
+```bash
+go install github.com/speakeasy-api/openapi/cmd/openapi@latest
+```
+
+**Script Installation (Linux/macOS):**
+
+```bash
+curl -fsSL https://go.speakeasy.com/openapi.sh | bash
+```
+
+**Script Installation (Windows/PowerShell):**
+
+```powershell
+iwr -useb https://go.speakeasy.com/openapi.ps1 | iex
+```
+
+### Linting usage
+
+```bash
+# Lint an OpenAPI specification
+openapi spec lint api.yaml
+
+# Lint with a specific config file
+openapi spec lint --config lint.yaml api.yaml
+
+# Output as JSON
+openapi spec lint --format json api.yaml
+
+# Disable specific rules
+openapi spec lint --disable semantic-path-params api.yaml
+```
+
+### Built-in rulesets
+
+The `openapi` CLI has its own built-in rulesets:
+
+| Ruleset | Description |
+| --- | --- |
+| `all` | All available rules (default) |
+| `recommended` | Balanced set: semantic rules + essential style + basic security |
+| `security` | Comprehensive OWASP security rules |
+
+Configuration uses its own format (`extends` and `custom_rules` rather than the Speakeasy `lintVersion`/`rulesets`/`customRules` format):
+
+```yaml
+extends: recommended
+
+rules:
+  - id: semantic-path-params
+    severity: error
+
+custom_rules:
+  paths:
+    - ./rules/*.ts
+```
+
+By default, the CLI loads config from `~/.openapi/lint.yaml` unless `--config` is provided.
+
+### Beyond linting
+
+The `openapi` CLI also provides additional tools:
+
+- `openapi spec validate` - Validate against the OpenAPI specification
+- `openapi spec bundle` - Bundle external references into components
+- `openapi spec inline` - Inline all references
+- `openapi spec upgrade` - Upgrade to the latest OpenAPI version
+- `openapi spec explore` - Interactively explore a spec in the terminal
+- `openapi spec clean` - Remove unused components
+- `openapi spec optimize` - Deduplicate inline schemas
+- `openapi swagger upgrade` - Upgrade Swagger 2.0 to OpenAPI 3.0
