@@ -1,5 +1,5 @@
 export default {
   "methodology-ruby": {
-    title: "Coming Soon",
+    title: "Ruby Design",
   },
 };

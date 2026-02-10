@@ -27,7 +27,7 @@ export default {
         title: "Swift [Alpha]",
     },
     ruby: {
-        title: "Ruby [Alpha]",
+        title: "Ruby",
     },
     unity: {
         title: "Unity [Beta]",
