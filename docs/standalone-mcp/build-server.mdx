@@ -246,6 +246,51 @@ You can further limit the subset of tools mounted on an MCP server by specifying
 }
 ```
 
+### Progressive discovery with dynamic mode
+
+MCP servers with many tools can bloat LLM context windows, leading to increased token usage and tool confusion. Dynamic mode solves this by exposing only a small set of meta-tools that let agents progressively discover and invoke tools on demand.
+
+To enable dynamic mode, pass the `--mode dynamic` flag when starting your server:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["your-npm-package@latest", "start", "--mode", "dynamic"],
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```
+
+In dynamic mode, the server registers only the following meta-tools instead of every individual tool:
+
+- **`list_tools`**: Lists all available tools with their names and descriptions.
+- **`describe_tool`**: Returns the input schema for one or more tools by name.
+- **`execute_tool`**: Executes a tool by name with the provided input parameters.
+- **`list_scopes`**: Lists the scopes available on the server. Only registered if the server has scopes defined.
+
+This approach significantly reduces the number of tokens sent to the LLM on each request, which is especially useful for servers with a large number of tools.
+
+You can combine dynamic mode with scope and tool filters:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["your-npm-package@latest", "start", "--mode", "dynamic", "--scope", "read"],
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```
+
 ## Distribution and hosting options
 
 Speakeasy generates MCP servers with three primary distribution methods. You can distribute your server as an npm package, a Cloudflare Worker, or an MCPB file. These methods aren't mutually exclusive — most customers use all three approaches to serve different use cases.
