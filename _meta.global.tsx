@@ -661,6 +661,9 @@ const meta = {
               "terraform-config": {
                 title: "Terraform Configuration",
               },
+              "mcp-server-config": {
+                title: "MCP Server Configuration",
+              },
             },
           },
           supported: {
