@@ -37,3 +37,4 @@ speakeasy agent [flags]
 
 * [speakeasy agent context](/docs/speakeasy-reference/cli/agent/context)	 - Browse agent context documentation
 * [speakeasy agent feedback](/docs/speakeasy-reference/cli/agent/feedback)	 - Submit feedback on agent context content
+* [speakeasy agent setup-skills](/docs/speakeasy-reference/cli/agent/setup-skills)	 - Install Speakeasy agent skills for AI coding assistants
