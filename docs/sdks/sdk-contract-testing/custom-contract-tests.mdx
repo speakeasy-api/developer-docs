@@ -468,6 +468,116 @@ The workflow generates the test shown below:
     require.NoError(t, err)
     assert.Equal(t, 200, deleteRes.HTTPMeta.Response.StatusCode)
   }`,
+},
+    {
+      label: "Ruby",
+      language: "ruby",
+      code: `# test/test_sdk.rb
+
+  require_relative "../lib/openapi"
+  require_relative "test_client"
+  require "minitest/autorun"
+
+  module OpenApiSDK
+    class TestSDK < Minitest::Test
+
+      def test_sdk_user_lifecycle
+        test_http_client = create_test_http_client("user-lifecycle")
+
+        s = ::OpenApiSDK::SDK.new(
+          server_url: ENV.fetch("TEST_SERVER_URL", "http://localhost:18080"),
+          client: test_http_client
+        )
+        refute_nil(s)
+
+        req = Models::Shared::BaseUser.new(
+          email: "Trystan_Crooks@hotmail.com",
+          first_name: "Trystan",
+          last_name: "Crooks",
+          age: 32,
+          postal_code: "94110",
+          metadata: Models::Shared::Metadata.new(
+            allergies: "none",
+            additional_properties: {
+              "color" => "red",
+              "height" => "182",
+              "weight" => "77",
+              "is_smoking" => "true"
+            }
+          )
+        )
+        create_res = s.create_user(request: req)
+        refute_nil(create_res)
+        assert_equal(200, create_res.status_code)
+        refute_nil(create_res.user)
+        assert_equal("Trystan_Crooks@hotmail.com", create_res.user.email)
+        refute_nil(create_res.user.postal_code)
+        assert_equal("94110", create_res.user.postal_code)
+
+        get_res = s.get_user(id: create_res.user.id)
+        refute_nil(get_res)
+        assert_equal(200, get_res.status_code)
+        refute_nil(get_res.user)
+        assert_equal("Trystan_Crooks@hotmail.com", get_res.user.email)
+        refute_nil(get_res.user.first_name)
+        assert_equal("Trystan", get_res.user.first_name)
+        refute_nil(get_res.user.last_name)
+        assert_equal("Crooks", get_res.user.last_name)
+        refute_nil(get_res.user.age)
+        assert_equal(32, get_res.user.age)
+        refute_nil(get_res.user.postal_code)
+        assert_equal("94110", get_res.user.postal_code)
+
+        user = get_res.user
+        user.postal_code = "94107"
+        user.age = get_res.user.age
+
+        update_res = s.update_user(id: create_res.user.id, user: user)
+        refute_nil(update_res)
+        assert_equal(200, update_res.status_code)
+        refute_nil(update_res.user)
+        assert_equal("Trystan_Crooks@hotmail.com", update_res.user.email)
+        refute_nil(update_res.user.first_name)
+        assert_equal("Trystan", update_res.user.first_name)
+        refute_nil(update_res.user.last_name)
+        assert_equal("Crooks", update_res.user.last_name)
+        refute_nil(update_res.user.age)
+        assert_equal(32, update_res.user.age)
+        refute_nil(update_res.user.postal_code)
+        assert_equal("94107", update_res.user.postal_code)
+
+        update_again_res = s.update_user(
+          id: create_res.user.id,
+          user: Models::Shared::User.new(
+            id: create_res.user.id,
+            email: update_res.user.email,
+            first_name: update_res.user.first_name,
+            last_name: update_res.user.last_name,
+            age: 33,
+            postal_code: "94110",
+            metadata: update_res.user.metadata
+          )
+        )
+        refute_nil(update_again_res)
+        assert_equal(200, update_again_res.status_code)
+        refute_nil(update_again_res.user)
+        assert_equal("Trystan_Crooks@hotmail.com", update_again_res.user.email)
+        refute_nil(update_again_res.user.first_name)
+        assert_equal("Trystan", update_again_res.user.first_name)
+        refute_nil(update_again_res.user.last_name)
+        assert_equal("Crooks", update_again_res.user.last_name)
+        refute_nil(update_again_res.user.age)
+        assert_equal(33, update_again_res.user.age)
+        refute_nil(update_again_res.user.postal_code)
+        assert_equal("94110", update_again_res.user.postal_code)
+
+        delete_res = s.delete_user(id: create_res.user.id)
+        refute_nil(delete_res)
+        assert_equal(200, delete_res.status_code)
+      end
+
+    end
+  end`,
 }
 ]}
 />
