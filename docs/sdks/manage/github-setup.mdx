@@ -14,6 +14,17 @@ The [Speakeasy CLI](https://github.com/speakeasy-api/speakeasy) and the Speakeas
 - Validating the OpenAPI document.
 - Generating SDKs for multiple languages.
 - Committing the generated SDKs to the repository or opening a pull request (PR).
+- Publishing SDKs to package registries (when configured in `direct` mode).
+
+## Workflow modes and publishing
+
+The `mode` input on the `sdk_generation.yaml` workflow controls how generated SDKs are delivered and published:
+
+- **`direct` mode**: The `sdk_generation.yaml` workflow handles both generation and publishing in a single run. After generating the SDK, the workflow commits the changes directly to the branch and publishes the package to the configured registry (npm, PyPI, Maven, NuGet, etc.). No separate publish workflow is needed.
+- **`pr` mode**: Generation and publishing run as separate workflows. The `sdk_generation.yaml` workflow generates the SDK and opens a pull request. A separate `sdk_publish.yaml` workflow handles publishing to package registries and runs when the PR is merged.
+- **`test` mode**: The workflow runs through generation without modifying any GitHub state. No commits, PRs, or publishing occurs.
+
+When configuring publishing with `speakeasy configure publishing`, both `sdk_generation.yaml` and `sdk_publish.yaml` are created. In `direct` mode, `sdk_generation.yaml` contains the full pipeline including the publish step, and `sdk_publish.yaml` is not triggered. In `pr` mode, `sdk_publish.yaml` runs after the generated PR is merged to publish the new SDK version.
 
 <Callout title="Warning" type="warning">
   Branches and pull requests created by the GitHub action are owned by it. Any
@@ -71,7 +82,7 @@ Run the Speakeasy CLI to configure the SDK generation workflow. This command cre
 speakeasy configure github
 ```
 
-After running the command, `.speakeasy/workflow.yaml` and `.github/workflows/sdk_generation.yaml` will be created. These files define the SDK generation workflow and the associated GitHub Action.
+After running the command, `.speakeasy/workflow.yaml` and `.github/workflows/sdk_generation.yaml` will be created. These files define the SDK generation workflow and the associated GitHub Action. If publishing is configured, `.github/workflows/sdk_publish.yaml` will also be created for use in `pr` mode (see [Workflow modes and publishing](#workflow-modes-and-publishing) above).
 
 <Screenshot
   variant="cli"
