@@ -7,17 +7,17 @@ import { Callout } from "@/mdx/components";
 
 # Generating an OpenAPI document and SDK from Spring Boot
 
-You have a Spring Boot API and need to generate SDKs or API documentation for other teams. Rather than writing and maintaining separate OpenAPI documents, we will walk through how to generate them directly from your Spring Boot code and then use them to create and customize an SDK.
+This guide demonstrates how to generate OpenAPI documents directly from Spring Boot code and use them to create and customize SDKs. Rather than writing and maintaining separate OpenAPI documents, this approach extracts specifications from the application code itself.
 
-We'll work with real code you can run locally, building a simple bookstore API to demonstrate how to properly document API structures, including inheritance between models, endpoint definitions, response types, and error handling. The examples illustrate how Spring Boot annotations map to OpenAPI concepts, so you can see how your code translates into API specifications.
+The guide uses a simple bookstore API example to demonstrate how to properly document API structures, including inheritance between models, endpoint definitions, response types, and error handling. The examples illustrate how Spring Boot annotations map to OpenAPI concepts and how code translates into API specifications.
 
 <Callout title="Example repository" type="info">
-  The example below will guide you through the process of creating a Spring Boot
+  This guide walks through creating a Spring Boot
   project, adding the necessary dependencies, writing Spring Boot controllers
-  with OpenAPI annotations, and generating an OpenAPI document from it. To skip
-  this setup and follow along with our example, clone the [example
+  with OpenAPI annotations, and generating an OpenAPI document. To skip
+  this setup, clone the [example
   application](https://github.com/speakeasy-api/examples/tree/main/framework-springboot).
-  The example uses Java 21.
+  The example uses Java 25 and Spring Boot 4.0.3.
 </Callout>
 
 ## Setting up a Spring Boot project
@@ -25,8 +25,8 @@ We'll work with real code you can run locally, building a simple bookstore API t
 First, create a new Spring Boot project using [Spring Initializr](https://start.spring.io/). Select the following options:
 
 - Project: Maven
-- Language: Java
-- Spring Boot: 3.5.x (or the latest stable version)
+- Spring Boot: 4.0.x (or the latest stable version)
+- Java: 25 (or the latest LTS version)
 - Project Metadata: Fill in as appropriate
 - Dependencies: Spring Web
 
@@ -40,7 +40,7 @@ Open the `pom.xml` file and add the following dependency:
 <dependency>
     <groupId>org.springdoc</groupId>
     <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-    <version>2.8.8</version>
+    <version>3.0.1</version>
 </dependency>
 ```
 
@@ -49,28 +49,31 @@ Open the `pom.xml` file and add the following dependency:
 Open the `src/main/resources/application.properties` file and add the following configuration:
 
 ```properties filename="application.properties"
+spring.application.name=bookstore-api
+
 # Specify the path of the OpenAPI documentation
 springdoc.api-docs.path=/api-docs
 
+# Specify the OpenAPI version to use (e.g., OPENAPI_3_0 or OPENAPI_3_1)
 springdoc.api-docs.version=OPENAPI_3_1
 
-# Specify the path of the Swagger UI
-springdoc.swagger-ui.path=/swagger-ui.html
+# Disable the Swagger UI, we only want the OpenAPI
+springdoc.swagger-ui.enabled=false
 ```
 
-These properties configure the application name that identifies your service, the endpoint where the OpenAPI document will be available (`/api-docs`), the version of the OpenAPI document to generate, and the URL path where you can access the Swagger UI documentation (`/swagger-ui.html`).
+These properties configure the endpoint where the OpenAPI document will be available (`/api-docs`). Spring Boot 4.0 with springdoc-openapi 3.0.1 defaults to OpenAPI 3.1, so while there's no need to explicitly configure the version, it doesn't hurt to be specific.
 
-After starting your application, you can view the OpenAPI document at `http://localhost:8080/api-docs` and access the interactive Swagger UI at `http://localhost:8080/swagger-ui.html`.
+After starting your application, you can view the OpenAPI document at `http://localhost:8080/api-docs` for JSON or `http://localhost:8080/api-docs.yaml` for YAML.
 
 ## Writing a Spring Boot application
 
-You can find all the code for this step in the example application.
+All the code for this step is available in the example application.
 
-Open the `src/main/java/com/bookstore/BookstoreApplication.java` file in your text editor to see where to begin when adding OpenAPI annotations to your project.
+The `src/main/java/com/bookstore/BookstoreApplication.java` file contains the starting point for adding OpenAPI annotations to the project.
 
 ### Defining the main application configuration with annotations
 
-The `BookstoreApplication` class is the entry point for the API, and it's also where we define the main OpenAPI documentation properties:
+The `BookstoreApplication` class is the entry point for the API, and it's also where the main OpenAPI documentation properties are defined:
 
 ```java filename="BookstoreApplication.java"
 package com.bookstore;
@@ -122,7 +125,7 @@ The `@Server` annotation defines available endpoints for the API. In the example
 
 ### Defining data models with annotations
 
-Next, let's look at how you can use OpenAPI annotations to describe API data structures in the `Models.java` file:
+OpenAPI annotations can be used to describe API data structures in the `Models.java` file:
 
 ```java filename="Models.java"
 package com.bookstore;
@@ -207,9 +210,9 @@ The `@Schema` annotation can be used at both the class and field levels:
 - At the class level, `@Schema` describes what a `Publication`, `Book`, or `Magazine` represents in the API.
 - At the field level, fields like `id` and `author` are documented with a description and example values.
 
-The `Publication` class acts as the base schema in the OpenAPI specification. By using `@JsonTypeInfo` and `@JsonSubTypes`, we tell OpenAPI that a `Publication` can be either a `Book` or `Magazine`. This polymorphism is reflected in the OpenAPI document as a `oneOf` schema, allowing endpoints to accept or return either type. API clients will include a `type` field set to either `BOOK` or `MAGAZINE` to identify the publication type.
+The `Publication` class acts as the base schema in the OpenAPI specification. By using `@JsonTypeInfo` and `@JsonSubTypes`, the annotations specify that a `Publication` can be either a `Book` or `Magazine`. This polymorphism is reflected in the OpenAPI document as a `oneOf` schema, allowing endpoints to accept or return either type. API clients will include a `type` field set to either `BOOK` or `MAGAZINE` to identify the publication type.
 
-Here's how we define an `Order` class that references the `Publication` schema:
+The `Order` class can be defined to reference the `Publication` schema:
 
 ```java filename="Models.java"
 @Schema(description = "Customer order for publications")
@@ -233,9 +236,9 @@ class Order {
 }
 ```
 
-The `Order` class uses the `@Schema` annotation to document the `items` field, which references the `Publication` schema. This tells OpenAPI that `Orders` can contain an array of either books or magazines, using the polymorphic structure defined earlier.
+The `Order` class uses the `@Schema` annotation to document the `items` field, which references the `Publication` schema. This indicates to OpenAPI that `Orders` can contain an array of either books or magazines, using the polymorphic structure defined earlier.
 
-For the order status, we use an enumeration:
+For the order status, an enumeration is used:
 
 ```java filename="Models.java"
 @Schema(description = "Status of an order")
@@ -246,24 +249,41 @@ enum OrderStatus {
 
 This appears in the OpenAPI document as a string field with a set of allowed values.
 
-Finally, we define an error response model:
+An error response can be defined using a Java record, which is a concise way to define immutable data carriers introduced in Java 14 and stable since Java 16. This error response follows the RFC 7807 Problem Details standard:
 
 ```java filename="Models.java"
-@Schema(description = "Error response with code and message")
-class ErrorResponse {
-    @Schema(description = "Error code", example = "NOT_FOUND")
-    private String code;
-
-    @Schema(description = "Error message", example = "Publication with ID 123 not found")
-    private String message;
-
-    // Constructor, getters, and setters omitted for brevity
-}
+@Schema(description = "Represents an RFC 7807 Problem Details error response")
+public record ErrorResponse(
+    @Schema(description = "A URI reference that identifies the problem type", 
+            example = "https://api.bookstore.example.com/problems/resource-not-found")
+    String type,
+    @Schema(description = "A short, human-readable summary of the problem type", 
+            example = "Resource Not Found")
+    String title,
+    @Schema(description = "The HTTP status code", example = "404")
+    int status,
+    @Schema(description = "A human-readable explanation specific to this occurrence", 
+            example = "The publication with ID '123e4567-e89b-12d3-a456-426614174000' was not found")
+    String detail,
+    @Schema(description = "A URI reference that identifies the specific occurrence of the problem", 
+            example = "/publications/123e4567-e89b-12d3-a456-426614174000", nullable = true)
+    String instance
+) {}
 ```
+
+The ErrorResponse follows RFC 7807 Problem Details, which defines a standard format for HTTP API error responses. Key fields include:
+
+- `type`: A URI that identifies the problem type (e.g., `https://api.bookstore.example.com/problems/out-of-stock`)
+- `title`: A human-readable summary that remains consistent for this error type
+- `status`: The HTTP status code for this occurrence
+- `detail`: A specific explanation of what went wrong
+- `instance`: A URI identifying where this specific error occurred
+
+Each of these properties is described and has generic example values provided, which can be overridden at the controller level when returning specific errors.
 
 ### Defining API endpoints with annotations
 
-Now, let's define the API endpoints in the `PublicationsController.java` file:
+The API endpoints are defined in the `PublicationsController.java` file:
 
 ```java filename="PublicationsController.java"
 package com.bookstore;
@@ -277,6 +297,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -302,23 +323,34 @@ For each endpoint method, we use annotations to document their purpose and respo
     @ApiResponse(responseCode = "200", description = "Successful operation",
                  content = @Content(schema = @Schema(oneOf = {Book.class, Magazine.class}))),
     @ApiResponse(responseCode = "404", description = "Publication not found",
-                 content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+                 content = @Content(mediaType = "application/problem+json", 
+                                    schema = @Schema(implementation = ProblemDetail.class)))
 })
 @GetMapping("/{id}")
 public ResponseEntity<?> getPublication(
     @Parameter(description = "ID of the publication to return", required = true)
     @PathVariable String id) {
-    // Implementation omitted for brevity
+    if ("123".equals(id)) {
+        return ResponseEntity.ok(new Book("123", "Spring Boot in Action", 
+            "2015-10-01", 39.99f, "Craig Walls", "978-1617292545"));
+    } else {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.NOT_FOUND, "Publication not found");
+        problem.setTitle("Publication Not Found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
 }
 ```
 
 The `@Operation` and `@ApiResponses` annotations document what the endpoint does and what responses to expect. For example, `getPublication` is annotated to show that it returns a publication successfully (`200` status) or returns an error (`404` status) when the publication isn't found.
 
+Spring Boot 4.0 includes enhanced support for [RFC 7807 Problem Details](https://datatracker.ietf.org/doc/html/rfc7807), a [standardized format for HTTP API error responses](/api-design/errors#rfc-9457---problem-details-for-http-apis). The `ProblemDetail` class provides a consistent structure for error responses with fields like `type`, `title`, `status`, `detail`, and optional extension properties. The media type `application/problem+json` indicates this standardized format.
+
 The `@Parameter` annotation describes the requirements for input parameters, such as the ID path parameter in this example.
 
 ## Examining the generated OpenAPI document
 
-Now that we've built the Spring Boot application, let's generate and examine the OpenAPI document to understand how the Java code translates into API specifications.
+After building the Spring Boot application, the OpenAPI document can be generated and examined to understand how the Java code translates into API specifications.
 
 First, install the necessary dependencies in the project and start the application with the following commands:
 
@@ -333,9 +365,9 @@ Download the OpenAPI document while running the application:
 curl http://localhost:8080/api-docs.yaml -o openapi.yaml
 ```
 
-This command saves the OpenAPI document as `openapi.yaml` in your current directory.
+This command saves the OpenAPI document as `openapi.yaml` in the current directory.
 
-Let's explore the generated OpenAPI document to see how the Spring Boot annotations translate into an OpenAPI specification.
+The generated OpenAPI document can be explored to see how the Spring Boot annotations translate into an OpenAPI specification.
 
 ### The OpenAPI Specification version information
 
@@ -384,7 +416,7 @@ servers:
 
 ### Polymorphic models
 
-One of the more complex aspects of the API is how polymorphic models are represented. The `Publication` class has been translated into a schema that supports polymorphism through a discriminator:
+One of the more complex aspects of the API is how polymorphic models are represented. The `Publication` class is translated into a schema that supports polymorphism through a discriminator:
 
 ```yaml filename="openapi.yaml"
 Publication:
@@ -436,7 +468,7 @@ Key aspects to notice:
 
 ### API endpoints
 
-Finally, let's examine how controller methods translate into API endpoints. Here's how the `getPublication` endpoint appears in the OpenAPI document:
+Controller methods translate into API endpoints. The `getPublication` endpoint appears in the OpenAPI document as follows:
 
 ```yaml filename="openapi.yaml"
 /publications/{id}:
@@ -466,9 +498,9 @@ Finally, let's examine how controller methods translate into API endpoints. Here
       "404":
         description: Publication not found
         content:
-          application/json:
+          application/problem+json:
             schema:
-              $ref: "#/components/schemas/ErrorResponse"
+              $ref: "#/components/schemas/ProblemDetail"
 ```
 
 The mapping is clear:
@@ -479,23 +511,23 @@ The mapping is clear:
 
 ## Creating an SDK from the OpenAPI document
 
-Now that we have an OpenAPI document for the Spring Boot API, we can create an SDK using Speakeasy.
+After generating an OpenAPI document for the Spring Boot API, an SDK can be created using Speakeasy.
 
-First, make sure you have Speakeasy installed:
+First, ensure Speakeasy is installed:
 
 ```bash filename="Terminal"
 speakeasy --version
 ```
 
-Now, generate a TypeScript SDK using the following command:
+Generate a TypeScript SDK using the following command:
 
 ```bash filename="Terminal"
 speakeasy quickstart
 ```
 
-Follow the onscreen prompts to provide the configuration details for the new SDK, such as the name, schema location, and output path. Enter `openapi.yaml` when prompted for the OpenAPI document location and select your preferred language (for example, TypeScript) when prompted for which language you would like to generate.
+Follow the onscreen prompts to provide the configuration details for the new SDK, such as the name, schema location, and output path. Enter `openapi.yaml` when prompted for the OpenAPI document location and select the preferred language (for example, TypeScript) when prompted.
 
-You'll see the steps taken by Speakeasy to create the SDK in the terminal:
+The terminal will display the steps taken by Speakeasy to create the SDK:
 
 ```bash filename="Terminal"
 │ Workflow - running
@@ -522,18 +554,18 @@ You'll see the steps taken by Speakeasy to create the SDK in the terminal:
 │       └─Uploading Code Samples - success
 ```
 
-Speakeasy [validates](/docs/sdks/core-concepts#validation) the OpenAPI document to check that it's ready for code generation. Validation issues will be printed in the terminal. The generated SDK will be saved as a folder in your project.
+Speakeasy [validates](/docs/sdks/core-concepts#validation) the OpenAPI document to check that it's ready for code generation. Validation issues will be printed in the terminal. The generated SDK will be saved as a folder in the project.
 
-If you get ESLint styling errors, run the `speakeasy quickstart` command from outside your project.
+If ESLint styling errors occur, run the `speakeasy quickstart` command from outside the project.
 
-Speakeasy also suggests improvements for your SDK using [Speakeasy Suggest](/docs/prep-openapi/maintenance), which is an AI-powered tool in Speakeasy Studio. You can see suggestions by opening the link to your Speakeasy Studio workspace in the terminal:
+Speakeasy also suggests improvements for the SDK using [Speakeasy Suggest](/docs/prep-openapi/maintenance), an AI-powered tool in Speakeasy Studio. Suggestions can be viewed by opening the link to the Speakeasy Studio workspace in the terminal:
 
 ![Speakeasy Suggestions in Speakeasy Studio](/assets/openapi/springboot/speakeasy-suggestions.png)
 
-After running this command, you'll find the generated SDK code in the specified output directory. This SDK can be used by clients to interact with your Spring Boot API in a type safe manner.
+After running this command, the generated SDK code will be in the specified output directory. This SDK can be used by clients to interact with the Spring Boot API in a type-safe manner.
 
-In the SDK `README.md` file, you'll find documentation about your Speakeasy SDK. TypeScript SDKs generated with Speakeasy include an installable [Model Context Protocol (MCP) server](/docs/standalone-mcp/build-server) where the various SDK methods are exposed as tools that AI applications can invoke.
-Your SDK documentation includes instructions for installing the MCP server.
+The SDK `README.md` file contains documentation about the Speakeasy SDK. TypeScript SDKs generated with Speakeasy include an installable [Model Context Protocol (MCP) server](/docs/standalone-mcp/build-server) where the various SDK methods are exposed as tools that AI applications can invoke.
+The SDK documentation includes instructions for installing the MCP server.
 
 Note that the SDK is not ready for production use. To get it production-ready, follow the steps outlined in your Speakeasy workspace.
 
@@ -602,7 +634,7 @@ After recreating the SDK using Speakeasy:
 speakeasy quickstart
 ```
 
-The created SDK now includes retry logic for the `listPublications` operation, automatically handling network errors and `5XX` responses.
+The generated SDK now includes retry logic for the `listPublications` operation, automatically handling network errors and `5XX` responses.
 
 ### Issues and feedback
 
