@@ -1,0 +1,211 @@
+---
+title: "Merge multiple OpenAPI documents"
+description: "Combine multiple OpenAPI 3.x documents into a single unified spec for SDK generation using the Speakeasy workflow or CLI."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Merge multiple OpenAPI documents
+
+When an API is split across multiple OpenAPI documents, such as separate specs for different microservices or API modules, Speakeasy can merge them into a single unified document. This merged output can then drive SDK generation, documentation, and other downstream workflows.
+
+## Using the CLI
+
+Merge documents directly from the command line:
+
+```bash
+speakeasy merge \
+  -s service-a.yaml \
+  -s service-b.yaml \
+  -o merged.yaml
+```
+
+The output format is determined by the file extension of the `-o` flag: `.yaml`/`.yml` produces YAML, `.json` produces JSON.
+
+## In workflow files
+
+For repeatable merges tied to SDK generation, define multiple inputs in a source within the `workflow.yaml` file:
+
+```yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  my-source:
+    inputs:
+      - location: ./service-a.yaml
+      - location: ./service-b.yaml
+    overlays:
+      - location: ./overlay.yaml
+targets:
+  my-sdk:
+    target: typescript
+    source: my-source
+```
+
+When `speakeasy run` executes, the inputs are merged in order, overlays are applied to the merged result, and the final document is passed to each target for generation.
+
+## Merge order matters
+
+Documents are merged **sequentially**. The first document forms the base, then each subsequent document is merged into it in order. For most fields, **last wins**: if two documents define the same field, the value from the later document takes precedence.
+
+Place your primary or most authoritative spec first, then list more specific documents after.
+
+## Namespaces
+
+When merging documents that have overlapping component names, assign a **model namespace** to each input to prevent naming collisions:
+
+```yaml
+sources:
+  my-source:
+    inputs:
+      - location: service-a.yaml
+        modelNamespace: serviceA
+      - location: service-b.yaml
+        modelNamespace: serviceB
+```
+
+With namespaces, all component names from each document are prefixed. For example, a `User` schema in a document with namespace `serviceA` becomes `serviceA_User` in the merged output. All `$ref` references are updated automatically.
+
+Speakeasy adds two extensions to each namespaced component:
+
+- `x-speakeasy-name-override` preserves the original name for serialization
+- `x-speakeasy-model-namespace` records which namespace the component belongs to
+
+After merging, a deduplication pass collapses equivalent namespaced components back to a single entry where possible.
+
+**Namespace rules:**
+
+- Allowed characters: letters, numbers, underscores, hyphens, dots (`[a-zA-Z0-9_\-\.]+`)
+- Forward slashes are not allowed
+- Either every input must have a namespace, or none of them should
+- An empty string namespace skips prefixing for that document's components
+
+<Callout title="Tip" type="info">
+For more granular control, apply the `x-speakeasy-model-namespace` extension directly to individual schemas instead of using `modelNamespace` in the workflow file.
+</Callout>
+
+## How each section merges
+
+### Info
+
+| Field | Strategy |
+| --- | --- |
+| `title` | Last wins |
+| `version` | Last wins |
+| `description` | **Appended** from all documents, deduplicated |
+| `summary` | **Appended** from all documents, deduplicated |
+| `contact` | Last wins |
+| `license` | Last wins |
+| `termsOfService` | Last wins |
+
+The OpenAPI version (for example, `3.0.1` vs `3.1.0`) resolves to the **highest version** across all inputs.
+
+### Paths and operations
+
+When two documents define the same path, merging depends on whether HTTP methods conflict:
+
+- **Different methods on the same path** merge together. If doc A defines `GET /users` and doc B defines `POST /users`, the merged spec has both.
+- **Same method on the same path with identical content** uses last wins.
+- **Same method on the same path with different content** creates **fragment paths**:
+
+```
+/users        non-conflicting methods stay here
+/users#svcA   conflicting operations from document A
+/users#svcB   conflicting operations from document B
+```
+
+Without namespaces, the suffix is a numeric counter (`#1`, `#2`).
+
+<Callout title="Note" type="info">
+Two operations are considered identical if they are structurally the same after ignoring `description` and `summary` fields. Operations that differ only in descriptions are not treated as a conflict.
+</Callout>
+
+### Tags
+
+Tags merge **case-insensitively**. `Pets` and `pets` are treated as the same tag.
+
+| Scenario | Result |
+| --- | --- |
+| Same name, same content | Last wins |
+| Same name (case-insensitive), different content | Both kept, suffixed with namespace or counter |
+| Differs only in description/summary | Not a conflict, last description wins |
+
+After merging, all operation-level tag references are normalized to match the casing of the document-level tag definitions.
+
+### Servers
+
+If the incoming document's servers share URLs with the existing merged servers, they merge at the document level. If the incoming servers have **different URLs**, they are moved to **operation-level servers** on the operations from that document. This ensures each operation retains access to the correct server URL.
+
+### Components
+
+All component types merge: schemas, parameters, responses, request bodies, headers, examples, links, callbacks, and path items.
+
+When a component with the same name already exists:
+
+1. The incoming component **replaces** the existing one (last wins)
+2. If the components differ structurally (ignoring description/summary), a warning is reported
+
+With namespaces, components are prefixed to avoid collisions entirely.
+
+### Security schemes
+
+Security schemes use **type-aware merging**:
+
+| Scheme type | Mergeable when |
+| --- | --- |
+| OAuth2 | Same flow types with matching URLs (authorization, token, refresh) |
+| HTTP | Same scheme and bearer format |
+| API Key | Same name and location (`in`) |
+| OpenID Connect | Same `openIdConnectUrl` |
+| Mutual TLS | Always mergeable |
+
+When OAuth2 schemes are mergeable, their **scopes are unioned** across all documents. Document-level `security` requirements use last-wins semantics.
+
+### Extensions
+
+Custom extensions (`x-*`) merge recursively. If two documents define different values for the same key, the last value wins and a warning is logged.
+
+### Webhooks
+
+Webhooks from all documents are combined. Conflicting webhook paths follow the same resolution as regular paths.
+
+## OperationID handling
+
+After merging, duplicate `operationId` values are automatically suffixed:
+
+- With namespaces: `listUsers_serviceA`, `listUsers_serviceB`
+- Without namespaces: `listUsers_1`, `listUsers_2`
+
+There is no need to manually ensure unique operation IDs across input documents.
+
+## Reference handling
+
+All `$ref` references are updated during the merge to remain valid. This includes schema references, parameter references, nested property references, and security requirement keys. When namespaces are enabled, references are rewritten to point to the prefixed component names.
+
+## Resolving and bundling mode
+
+The `--resolve` flag inlines all local `$ref` references in a single document instead of merging multiple documents:
+
+```bash
+speakeasy merge -s spec.yaml -o bundled.yaml --resolve
+```
+
+This produces a self-contained spec with all references inlined and unused components removed.
+
+## Tips for better merges
+
+1. **Use namespaces** when merging documents with overlapping component names to prevent silent overwrites.
+2. **Put your primary spec first.** Place documents in order of increasing priority since most fields use last-wins.
+3. **Keep operation IDs unique across documents** when possible for cleaner output.
+4. **Avoid conflicting paths when possible.** Fragment paths (`/users#svcA`) work but may not be supported by all downstream tools outside Speakeasy.
+5. **Align tag names and casing** across documents to avoid unnecessary suffixing.
+6. **Use overlays for post-merge adjustments.** In a workflow, overlays apply after merging. Use them to clean up or adjust the merged output.
+
+## Caveats and limitations
+
+- **OpenAPI 3.x only.** Swagger 2.0 documents are not supported for merging and will be rejected. Convert them first using `speakeasy openapi transform convert-swagger`.
+- **Last-wins can silently overwrite.** Without namespaces, if two documents define a component with the same name but different content, the later one replaces the earlier one with only a warning. Use namespaces to prevent this.
+- **Description/summary differences are ignored for conflict detection.** Two operations or components that differ only in descriptions are treated as equivalent. The last document's descriptions win without warning.
+- **Fragment paths may not be universally supported.** The `path#suffix` syntax is valid in OpenAPI but may not be handled correctly by tools outside Speakeasy.
+- **Server merging can move servers to operation level.** If documents have incompatible global server lists, servers may end up at the operation level in the merged output.
+- **Namespace count is all-or-nothing.** You cannot namespace some documents and not others.

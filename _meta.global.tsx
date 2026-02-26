@@ -48,6 +48,26 @@ const meta = {
           },
           "prep-openapi": {
             title: "Prepare OpenAPI Spec",
+            items: {
+              "best-practices": {
+                title: "Best Practices",
+              },
+              linting: {
+                title: "Linting",
+              },
+              merge: {
+                title: "Merge Documents",
+              },
+              overlays: {
+                title: "Overlays",
+              },
+              transformations: {
+                title: "Transformations",
+              },
+              maintenance: {
+                title: "Maintenance",
+              },
+            },
           },
           customize: {
             title: "Customize",
