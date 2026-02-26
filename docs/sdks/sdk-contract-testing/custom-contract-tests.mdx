@@ -578,6 +578,139 @@ The workflow generates the test shown below:
 
     end
   end`,
+},
+    {
+      label: "C#",
+      language: "csharp",
+      code: `// Tests/SDKTests.cs
+
+  using Openapi;
+  using Openapi.Models.Components;
+  using Openapi.Utils;
+  using Newtonsoft.Json;
+  using System;
+  using System.Collections.Generic;
+  using System.Linq;
+  using System.Net;
+  using System.Numerics;
+  using System.Threading.Tasks;
+  using Xunit;
+
+  public class SDKTests
+  {
+      [Fact]
+      public async Task TestSDK_UserLifecycle()
+      {
+          var testHttpClient = CommonHelpers.CreateTestHTTPClient("user-lifecycle");
+          var sdk = new SDK(
+              serverUrl: Environment.GetEnvironmentVariable("TEST_SERVER_URL") ?? "http://localhost:18080",
+              client: testHttpClient
+          );
+
+          var createRes = await sdk.CreateUserAsync(new BaseUser() {
+              Email = "Trystan_Crooks@hotmail.com",
+              FirstName = "Trystan",
+              LastName = "Crooks",
+              Age = 32D,
+              PostalCode = "94110",
+              Metadata = new Metadata() {
+                  Allergies = "none",
+                  AdditionalProperties = new Dictionary<string, string>() {
+                      { "color", "red" },
+                      { "height", "182" },
+                      { "weight", "77" },
+                      { "is_smoking", "true" },
+                  },
+              },
+          });
+          Assert.Equal(200, (int)createRes.HttpMeta.Response.StatusCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Trystan_Crooks@hotmail.com"),
+              CommonHelpers.NormalizeDateTimeStrings(createRes.User.Email));
+          Assert.NotNull(createRes.User.PostalCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("94110"),
+              CommonHelpers.NormalizeDateTimeStrings(createRes.User.PostalCode));
+
+          var getRes = await sdk.GetUserAsync(id: createRes.User.Id);
+          Assert.Equal(200, (int)getRes.HttpMeta.Response.StatusCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Trystan_Crooks@hotmail.com"),
+              CommonHelpers.NormalizeDateTimeStrings(getRes.User.Email));
+          Assert.NotNull(getRes.User.FirstName);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Trystan"),
+              CommonHelpers.NormalizeDateTimeStrings(getRes.User.FirstName));
+          Assert.NotNull(getRes.User.LastName);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Crooks"),
+              CommonHelpers.NormalizeDateTimeStrings(getRes.User.LastName));
+          Assert.NotNull(getRes.User.Age);
+          Assert.Equal(32D, getRes.User.Age);
+          Assert.NotNull(getRes.User.PostalCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("94110"),
+              CommonHelpers.NormalizeDateTimeStrings(getRes.User.PostalCode));
+
+          var user = getRes.User;
+          user.PostalCode = "94107";
+          user.Age = getRes.User.Age;
+
+          var updateRes = await sdk.UpdateUserAsync(id: createRes.User.Id, user: user);
+          Assert.Equal(200, (int)updateRes.HttpMeta.Response.StatusCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Trystan_Crooks@hotmail.com"),
+              CommonHelpers.NormalizeDateTimeStrings(updateRes.User.Email));
+          Assert.NotNull(updateRes.User.FirstName);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Trystan"),
+              CommonHelpers.NormalizeDateTimeStrings(updateRes.User.FirstName));
+          Assert.NotNull(updateRes.User.LastName);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Crooks"),
+              CommonHelpers.NormalizeDateTimeStrings(updateRes.User.LastName));
+          Assert.NotNull(updateRes.User.Age);
+          Assert.Equal(32D, updateRes.User.Age);
+          Assert.NotNull(updateRes.User.PostalCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("94107"),
+              CommonHelpers.NormalizeDateTimeStrings(updateRes.User.PostalCode));
+
+          var updateAgainRes = await sdk.UpdateUserAsync(
+              id: createRes.User.Id,
+              user: new User() {
+                  Id = createRes.User.Id,
+                  Email = updateRes.User.Email,
+                  FirstName = updateRes.User.FirstName,
+                  LastName = updateRes.User.LastName,
+                  Age = 33D,
+                  PostalCode = "94110",
+                  Metadata = updateRes.User.Metadata,
+              }
+          );
+          Assert.Equal(200, (int)updateAgainRes.HttpMeta.Response.StatusCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Trystan_Crooks@hotmail.com"),
+              CommonHelpers.NormalizeDateTimeStrings(updateAgainRes.User.Email));
+          Assert.NotNull(updateAgainRes.User.FirstName);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Trystan"),
+              CommonHelpers.NormalizeDateTimeStrings(updateAgainRes.User.FirstName));
+          Assert.NotNull(updateAgainRes.User.LastName);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("Crooks"),
+              CommonHelpers.NormalizeDateTimeStrings(updateAgainRes.User.LastName));
+          Assert.NotNull(updateAgainRes.User.Age);
+          Assert.Equal(33D, updateAgainRes.User.Age);
+          Assert.NotNull(updateAgainRes.User.PostalCode);
+          Assert.Equal(
+              CommonHelpers.NormalizeDateTimeStrings("94110"),
+              CommonHelpers.NormalizeDateTimeStrings(updateAgainRes.User.PostalCode));
+
+          var deleteRes = await sdk.DeleteUserAsync(id: createRes.User.Id);
+          Assert.Equal(200, (int)deleteRes.HttpMeta.Response.StatusCode);
+      }
+  }`,
 }
 ]}
 />
