@@ -1,6 +1,6 @@
 # setup-skills  
-`speakeasy agent setup-skills`  
 
+`speakeasy agent setup-skills`  
 
 Install Speakeasy agent skills for AI coding assistants  
 
@@ -29,4 +29,4 @@ speakeasy agent setup-skills [flags]
 
 ### Parent Command
 
-* [speakeasy agent](/docs/speakeasy-reference/cli/agent)	 - Docs & guided workflows for AI coding agents (start here: speakeasy agent context)
+* [speakeasy agent](/docs/speakeasy-reference/cli/agent)  - Docs & guided workflows for AI coding agents (start here: speakeasy agent context)

@@ -1,0 +1,167 @@
+---
+title: Using environments with the Vercel AI SDK
+description: |
+  Learn how to use Gram environments with the Vercel AI SDK to manage authentication and configuration.
+---
+
+[Environments](/docs/mcp/secure/environments) in Gram manage authentication credentials, API keys, and configuration variables for [toolsets](/docs/mcp/reference/concepts/toolsets). When building agent applications with the Vercel AI SDK or other AI frameworks, environments provide a secure way to manage the credentials needed to execute tools.
+
+## Overview
+
+Environments enable secure credential management without hardcoding sensitive information. They work by:
+
+- Storing credentials and configuration in Gram's secure environment system
+- Binding tools to a specific environment at initialization
+- Executing all tool calls using the credentials from that environment
+
+This approach is particularly useful for:
+
+- **Multi-environment deployments**: Separate development, staging, and production credentials
+- **Team collaboration**: Share toolsets without exposing credentials
+- **Enterprise security**: Centralized credential management and rotation
+
+Learn more about [environment concepts](/docs/mcp/secure/environments) and how to [configure environments](/docs/mcp/build/gram-functions/configuring-environments).
+
+## Using environments with Vercel AI SDK
+
+The Vercel AI SDK integration demonstrates how to bind tools to a specific environment. The `environment` parameter in the `tools()` method determines which credentials the tools will use at runtime.
+
+```ts filename="vercel-example.ts" {15}
+import { generateText } from "ai";
+import { VercelAdapter } from "@gram-ai/sdk/vercel";
+import { createOpenAI } from "@ai-sdk/openai";
+
+const key = process.env.GRAM_API_KEY;
+const vercelAdapter = new VercelAdapter({ apiKey: key });
+
+const openai = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const tools = await vercelAdapter.tools({
+  project: "acme",
+  toolset: "marketing",
+  environment: "production",
+});
+
+const result = await generateText({
+  model: openai("gpt-4"),
+  tools,
+  maxSteps: 5,
+  prompt: "Can you tell me what tools you have available?",
+});
+
+console.log(result.text);
+```
+
+In this example, all tools in the `marketing` toolset execute using credentials from the `production` environment. This keeps production API keys secure and separate from development credentials.
+
+See the [Vercel AI SDK integration guide](/docs/mcp/build/integrate/api-clients/using-vercel-ai-sdk-with-gram-mcp-servers) for complete setup instructions.
+
+## Using environments with OpenAI Agents SDK
+
+The OpenAI Agents SDK follows the same pattern, binding tools to an environment at initialization:
+
+```py filename="openai-agents-example.py" {17}
+import asyncio
+import os
+from agents import Agent, Runner, set_default_openai_key
+from gram_ai.openai_agents import GramOpenAIAgents
+
+key = os.getenv("GRAM_API_KEY")
+
+gram = GramOpenAIAgents(api_key=key)
+
+set_default_openai_key(os.getenv("OPENAI_API_KEY"))
+
+agent = Agent(
+    name="Assistant",
+    tools=gram.tools(
+        project="acme",
+        toolset="marketing",
+        environment="production",
+    ),
+)
+
+
+async def main():
+    result = await Runner.run(
+        agent,
+        "Can you tell me what tools you have available?",
+    )
+    print(result.final_output)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+The Python SDK provides the same environment binding capabilities, ensuring consistent credential management across different programming languages.
+
+Learn more about [using the OpenAI Agents SDK with Gram](/docs/mcp/build/integrate/agents/using-openai-agents-sdk-with-gram-mcp-servers).
+
+## Bring your own environment variables
+
+For applications where end users provide their own credentials, pass environment variables directly to the SDK adapter instead of referencing a managed environment. This is common when:
+
+- Building multi-tenant applications where each user has their own API keys
+- Creating developer tools where users supply their own credentials
+- Distributing applications that integrate with user-owned services
+
+### TypeScript example
+
+```ts filename="byo-env-vars.ts" {5-8}
+import { VercelAdapter } from "@gram-ai/sdk/vercel";
+
+const vercelAdapter = new VercelAdapter({
+  apiKey: process.env.GRAM_API_KEY,
+  environmentVariables: {
+    ACME_API_KEY: process.env.ACME_API_KEY,
+    ACME_SERVER_URL: "https://janesmith.acme.com",
+  },
+});
+```
+
+The `environmentVariables` object accepts any key-value pairs that the toolset's functions require. This approach bypasses Gram's environment system entirely, using credentials provided at runtime instead.
+
+### Python example
+
+```py filename="byo-env-vars.py" {6-9}
+import os
+from gram_ai.openai_agents import GramOpenAIAgents
+
+gram = GramOpenAIAgents(
+    api_key=os.getenv("GRAM_API_KEY"),
+    environment_variables= {
+        "ACME_API_KEY": os.getenv("ACME_API_KEY"),
+        "ACME_SERVER_URL": "https://janesmith.acme.com",
+    }
+)
+```
+
+Both SDK adapters support the same `environment_variables` parameter, providing flexibility in how credentials are managed.
+
+## Choosing between environments and direct variables
+
+Consider these factors when deciding between managed environments and direct variables:
+
+**Use managed environments when:**
+- Deploying applications with fixed credentials
+- Managing multiple environments (dev, staging, production)
+- Sharing toolsets across teams without exposing credentials
+- Implementing centralized credential rotation
+
+**Use direct variables when:**
+- Building multi-tenant applications
+- Creating end-user tools where users supply credentials
+- Testing with dynamic credential sets
+- Implementing user-specific customizations
+
+Both approaches can be combined in the same application for different use cases.
+
+## Next steps
+
+- Learn about [environment concepts and management](/docs/mcp/secure/environments)
+- Explore [other AI framework integrations](/docs/mcp/build/integrate/api-clients/using-anthropic-api-with-gram-mcp-servers)
+- Set up [API keys](/docs/mcp/secure/api-keys) for Gram SDK access
+- Read about [toolset organization](/docs/mcp/reference/concepts/toolsets)

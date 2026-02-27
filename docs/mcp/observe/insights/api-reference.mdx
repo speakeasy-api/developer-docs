@@ -1,0 +1,418 @@
+---
+title: API reference
+description: Programmatic access to Insights telemetry data via the Gram API.
+---
+
+import { Callout } from "@/mdx/components";
+
+<Callout type="warning">
+  The Insights API is currently in beta. The API surface may change as development continues.
+</Callout>
+
+<Callout type="info">
+  These endpoints are part of the Gram OpenAPI specification, available at [app.getgram.ai/openapi.yaml](https://app.getgram.ai/openapi.yaml).
+</Callout>
+
+## Authentication
+
+All requests require authentication headers:
+
+| Header | Description |
+| ------ | ----------- |
+| `Gram-Key` | API key with `Consumer` or `Producer` scope |
+| `Gram-Project` | Project identifier (slug) |
+
+```bash
+curl -X POST "https://app.getgram.ai/rpc/telemetry.searchLogs" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{"limit": 50}'
+```
+
+---
+
+## Search logs
+
+```bash
+POST https://app.getgram.ai/rpc/telemetry.searchLogs
+```
+
+Search and list telemetry logs that match a search filter.
+
+### Request body
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `limit` | number | Number of items to return (1-1000, default: 50) |
+| `sort` | string | Sort order: `asc` or `desc` (default: `desc`) |
+| `cursor` | string | Cursor for pagination |
+| `filter` | object | Filter criteria (see below) |
+
+### Filter parameters
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `from` | string | Start time in ISO 8601 format |
+| `to` | string | End time in ISO 8601 format |
+| `deployment_id` | string | Filter by deployment ID (UUID) |
+| `function_id` | string | Filter by function ID (UUID) |
+| `gram_urn` | string | Filter by single Gram URN |
+| `gram_urns` | string[] | Filter by multiple Gram URNs |
+| `trace_id` | string | Filter by trace ID (32 hex characters) |
+| `severity_text` | string | Filter by severity: `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL` |
+| `http_status_code` | number | Filter by HTTP status code |
+| `http_route` | string | Filter by HTTP route |
+| `http_method` | string | Filter by HTTP method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS` |
+| `service_name` | string | Filter by service name |
+| `gram_chat_id` | string | Filter by chat session ID |
+| `user_id` | string | Filter by user ID |
+| `external_user_id` | string | Filter by external user ID |
+
+### Response
+
+```json
+{
+  "logs": [
+    {
+      "id": "uuid",
+      "time_unix_nano": 1734605400000000000,
+      "observed_time_unix_nano": 1734605400000000000,
+      "severity_text": "INFO",
+      "body": "GET /api/users -> 200 (45.23ms)",
+      "trace_id": "abc123def456789012345678901234ab",
+      "span_id": "1234567890abcdef",
+      "attributes": {
+        "http.server.url": "https://api.example.com",
+        "http.route": "/api/users",
+        "http.request.method": "GET",
+        "http.response.status_code": 200,
+        "http.duration_ms": 45.23
+      },
+      "resource_attributes": {
+        "service.name": "gram-server",
+        "gram.project.id": "project-uuid",
+        "gram.deployment.id": "deployment-uuid",
+        "gram.tool.urn": "urn:gram:tool:example"
+      },
+      "service": {
+        "name": "gram-server",
+        "version": "1.0.0"
+      }
+    }
+  ],
+  "next_cursor": "cursor-string",
+  "enabled": true
+}
+```
+
+### Log record fields
+
+| Field | Description |
+| ----- | ----------- |
+| `id` | Unique identifier for the log entry |
+| `time_unix_nano` | When the event occurred (Unix nanoseconds) |
+| `observed_time_unix_nano` | When the event was observed (Unix nanoseconds) |
+| `severity_text` | Log severity level |
+| `body` | The primary log message |
+| `trace_id` | W3C trace ID for distributed tracing |
+| `span_id` | W3C span ID |
+| `attributes` | Log-level structured data |
+| `resource_attributes` | Metadata about who/where generated the log |
+| `service` | Service name and version |
+
+### Example: Filter by user
+
+```bash
+curl -X POST "https://app.getgram.ai/rpc/telemetry.searchLogs" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{
+    "limit": 100,
+    "filter": {
+      "user_id": "user-123"
+    }
+  }'
+```
+
+### Example: Filter by time range and severity
+
+```bash
+curl -X POST "https://app.getgram.ai/rpc/telemetry.searchLogs" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{
+    "filter": {
+      "from": "2025-12-01T00:00:00Z",
+      "to": "2025-12-15T23:59:59Z",
+      "severity_text": "ERROR"
+    }
+  }'
+```
+
+---
+
+## Search tool calls
+
+```bash
+POST https://app.getgram.ai/rpc/telemetry.searchToolCalls
+```
+
+Search and list tool call summaries grouped by trace ID. This endpoint aggregates logs into tool call summaries for a high-level view.
+
+### Request body
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `limit` | number | Number of items to return (1-1000, default: 50) |
+| `sort` | string | Sort order: `asc` or `desc` (default: `desc`) |
+| `cursor` | string | Cursor for pagination |
+| `filter` | object | Filter criteria (see below) |
+
+### Filter parameters
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `from` | string | Start time in ISO 8601 format |
+| `to` | string | End time in ISO 8601 format |
+| `deployment_id` | string | Filter by deployment ID (UUID) |
+| `function_id` | string | Filter by function ID (UUID) |
+| `gram_urn` | string | Filter by Gram URN |
+
+### Response
+
+```json
+{
+  "tool_calls": [
+    {
+      "trace_id": "abc123def456789012345678901234ab",
+      "start_time_unix_nano": 1734605400000000000,
+      "log_count": 5,
+      "http_status_code": 200,
+      "gram_urn": "urn:gram:tool:example"
+    }
+  ],
+  "next_cursor": "cursor-string",
+  "enabled": true
+}
+```
+
+### Tool call summary fields
+
+| Field | Description |
+| ----- | ----------- |
+| `trace_id` | Trace ID grouping related logs |
+| `start_time_unix_nano` | Earliest log timestamp (Unix nanoseconds) |
+| `log_count` | Total number of logs in this tool call |
+| `http_status_code` | HTTP status code (if applicable) |
+| `gram_urn` | Gram URN for this tool call |
+
+---
+
+## Get project metrics summary
+
+```bash
+POST https://app.getgram.ai/rpc/telemetry.getProjectMetricsSummary
+```
+
+Get aggregated metrics for an entire project within a time range.
+
+### Request body
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `from` | string | Yes | Start time in ISO 8601 format |
+| `to` | string | Yes | End time in ISO 8601 format |
+
+### Response
+
+```json
+{
+  "metrics": {
+    "first_seen_unix_nano": "1734519000000000000",
+    "last_seen_unix_nano": "1734605400000000000",
+    "total_input_tokens": 125000,
+    "total_output_tokens": 87500,
+    "total_tokens": 212500,
+    "avg_tokens_per_request": 425.0,
+    "total_chat_requests": 500,
+    "avg_chat_duration_ms": 2340.5,
+    "finish_reason_stop": 350,
+    "finish_reason_tool_calls": 150,
+    "total_tool_calls": 1250,
+    "tool_call_success": 1200,
+    "tool_call_failure": 50,
+    "avg_tool_duration_ms": 145.2,
+    "total_chats": 500,
+    "distinct_models": 3,
+    "distinct_providers": 2,
+    "models": [
+      {"name": "gpt-4", "count": 300},
+      {"name": "claude-3-sonnet", "count": 150}
+    ],
+    "tools": [
+      {
+        "urn": "urn:gram:tool:search",
+        "count": 500,
+        "success_count": 485,
+        "failure_count": 15
+      }
+    ]
+  },
+  "enabled": true
+}
+```
+
+### Metrics fields
+
+#### Timestamps
+
+| Field | Description |
+| ----- | ----------- |
+| `first_seen_unix_nano` | Earliest activity timestamp (Unix nanoseconds, as string) |
+| `last_seen_unix_nano` | Latest activity timestamp (Unix nanoseconds, as string) |
+
+#### Token usage
+
+| Field | Description |
+| ----- | ----------- |
+| `total_input_tokens` | Sum of input tokens consumed |
+| `total_output_tokens` | Sum of output tokens consumed |
+| `total_tokens` | Total tokens (input + output) |
+| `avg_tokens_per_request` | Average tokens per chat request |
+
+#### Chat requests
+
+| Field | Description |
+| ----- | ----------- |
+| `total_chat_requests` | Total number of chat requests |
+| `avg_chat_duration_ms` | Average chat request duration (milliseconds) |
+| `finish_reason_stop` | Requests that completed naturally |
+| `finish_reason_tool_calls` | Requests that resulted in tool calls |
+
+#### Tool calls
+
+| Field | Description |
+| ----- | ----------- |
+| `total_tool_calls` | Total number of tool calls |
+| `tool_call_success` | Successful tool calls (2xx status) |
+| `tool_call_failure` | Failed tool calls (4xx/5xx status) |
+| `avg_tool_duration_ms` | Average tool call duration (milliseconds) |
+
+#### Cardinality
+
+| Field | Description |
+| ----- | ----------- |
+| `total_chats` | Number of unique chat sessions |
+| `distinct_models` | Number of distinct LLM models used |
+| `distinct_providers` | Number of distinct providers used |
+
+#### Breakdowns
+
+| Field | Description |
+| ----- | ----------- |
+| `models` | Array of `{name, count}` objects |
+| `tools` | Array of `{urn, count, success_count, failure_count}` objects |
+
+### Example
+
+```bash
+curl -X POST "https://app.getgram.ai/rpc/telemetry.getProjectMetricsSummary" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{
+    "from": "2025-12-01T00:00:00Z",
+    "to": "2025-12-31T23:59:59Z"
+  }'
+```
+
+---
+
+## Get user metrics summary
+
+```bash
+POST https://app.getgram.ai/rpc/telemetry.getUserMetricsSummary
+```
+
+Get aggregated metrics for a specific user within a time range.
+
+### Request body
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `from` | string | Yes | Start time in ISO 8601 format |
+| `to` | string | Yes | End time in ISO 8601 format |
+| `user_id` | string | No | User ID (mutually exclusive with `external_user_id`) |
+| `external_user_id` | string | No | External user ID (mutually exclusive with `user_id`) |
+
+<Callout type="info">
+  Provide either `user_id` or `external_user_id`, not both. If neither is provided, returns metrics for all users.
+</Callout>
+
+### Response
+
+The response structure is identical to the project metrics summary.
+
+### Example
+
+```bash
+curl -X POST "https://app.getgram.ai/rpc/telemetry.getUserMetricsSummary" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{
+    "from": "2025-12-01T00:00:00Z",
+    "to": "2025-12-31T23:59:59Z",
+    "user_id": "user-123"
+  }'
+```
+
+---
+
+## Pagination
+
+All search endpoints use cursor-based pagination:
+
+1. Set `limit` to control page size (maximum 1000)
+2. Use `sort` for ordering (`desc` for newest first, `asc` for oldest first)
+3. Check `next_cursor` in the response for more results
+4. Pass the `next_cursor` value as `cursor` in the next request
+
+<Callout type="info">
+  The cursor is an opaque string encoding the position in the result set. Always use the cursor from the previous response rather than constructing one manually.
+</Callout>
+
+### Example: Paginated query
+
+```bash
+# First request
+curl -X POST "https://app.getgram.ai/rpc/telemetry.searchLogs" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{"limit": 50}'
+
+# Next page (use next_cursor from previous response)
+curl -X POST "https://app.getgram.ai/rpc/telemetry.searchLogs" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{"limit": 50, "cursor": "previous-cursor-value"}'
+```
+
+---
+
+## Error handling
+
+The API returns standard HTTP status codes:
+
+| Status | Description |
+| ------ | ----------- |
+| `200` | Success |
+| `400` | Bad request (invalid parameters) |
+| `401` | Unauthorized (missing or invalid credentials) |
+| `403` | Forbidden (insufficient permissions) |
+| `500` | Internal server error |

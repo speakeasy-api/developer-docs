@@ -1,0 +1,31 @@
+---
+title: Interfaces
+asIndexPage: true
+---
+
+- [AttachmentsConfig](/docs/mcp/gram-elements/api-reference/interfaces/attachments-config)
+- [CalendarProps](/docs/mcp/gram-elements/api-reference/interfaces/calendar-props)
+- [CassetteMessage](/docs/mcp/gram-elements/api-reference/interfaces/cassette-message)
+- [Cassette](/docs/mcp/gram-elements/api-reference/interfaces/cassette)
+- [ComponentOverrides](/docs/mcp/gram-elements/api-reference/interfaces/component-overrides)
+- [ComposerConfig](/docs/mcp/gram-elements/api-reference/interfaces/composer-config)
+- [Dimension](/docs/mcp/gram-elements/api-reference/interfaces/dimension)
+- [Dimensions](/docs/mcp/gram-elements/api-reference/interfaces/dimensions)
+- [ElementsConfig](/docs/mcp/gram-elements/api-reference/interfaces/elements-config)
+- [ErrorContext](/docs/mcp/gram-elements/api-reference/interfaces/error-context)
+- [ErrorTrackingConfigOption](/docs/mcp/gram-elements/api-reference/interfaces/error-tracking-config-option)
+- [HistoryConfig](/docs/mcp/gram-elements/api-reference/interfaces/history-config)
+- [ModalConfig](/docs/mcp/gram-elements/api-reference/interfaces/modal-config)
+- [ModelConfig](/docs/mcp/gram-elements/api-reference/interfaces/model-config)
+- [Plugin](/docs/mcp/gram-elements/api-reference/interfaces/plugin)
+- [ReplayOptions](/docs/mcp/gram-elements/api-reference/interfaces/replay-options)
+- [ShareButtonProps](/docs/mcp/gram-elements/api-reference/interfaces/share-button-props)
+- [SidecarConfig](/docs/mcp/gram-elements/api-reference/interfaces/sidecar-config)
+- [Suggestion](/docs/mcp/gram-elements/api-reference/interfaces/suggestion)
+- [ThemeConfig](/docs/mcp/gram-elements/api-reference/interfaces/theme-config)
+- [TimeRangePickerProps](/docs/mcp/gram-elements/api-reference/interfaces/time-range-picker-props)
+- [TimeRangePreset](/docs/mcp/gram-elements/api-reference/interfaces/time-range-preset)
+- [TimeRange](/docs/mcp/gram-elements/api-reference/interfaces/time-range)
+- [ToolMentionsConfig](/docs/mcp/gram-elements/api-reference/interfaces/tool-mentions-config)
+- [ToolsConfig](/docs/mcp/gram-elements/api-reference/interfaces/tools-config)
+- [WelcomeConfig](/docs/mcp/gram-elements/api-reference/interfaces/welcome-config)

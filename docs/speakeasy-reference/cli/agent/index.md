@@ -3,8 +3,8 @@ asIndexPage: true
 ---
 
 # agent  
-`speakeasy agent`  
 
+`speakeasy agent`  
 
 Docs & guided workflows for AI coding agents (start here: speakeasy agent context)  
 
@@ -32,9 +32,9 @@ speakeasy agent [flags]
 
 ### Parent Command
 
-* [speakeasy](/docs/speakeasy-reference/cli/getting-started)	 - The Speakeasy CLI tool provides access to the Speakeasy.com platform
+* [speakeasy](/docs/speakeasy-reference/cli/getting-started)  - The Speakeasy CLI tool provides access to the Speakeasy.com platform
+
 ### Sub Commands
 
-* [speakeasy agent context](/docs/speakeasy-reference/cli/agent/context)	 - Browse agent context documentation
-* [speakeasy agent feedback](/docs/speakeasy-reference/cli/agent/feedback)	 - Submit feedback on agent context content
-* [speakeasy agent setup-skills](/docs/speakeasy-reference/cli/agent/setup-skills)	 - Install Speakeasy agent skills for AI coding assistants
+* [speakeasy agent context](/docs/speakeasy-reference/cli/agent/context)  - Browse agent context documentation
+* [speakeasy agent feedback](/docs/speakeasy-reference/cli/agent/feedback)  - Submit feedback on agent context content

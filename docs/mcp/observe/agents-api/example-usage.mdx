@@ -1,0 +1,272 @@
+---
+title: "Gram Agents API usage examples"
+description: "Examples demonstrating different ways to use the Gram Agents API."
+sidebar:
+  order: 3
+---
+
+The following examples demonstrate different ways to use the Gram Agents API. All examples use the API endpoint at `https://app.getgram.ai/rpc/agents.response`.
+
+## Basic request
+
+A simple synchronous request with a single toolset:
+
+```python
+import os
+import requests
+
+url = "https://app.getgram.ai/rpc/agents.response"
+
+headers = {
+    "Content-Type": "application/json",
+    "Gram-Key": os.getenv("GRAM_API_KEY"),
+    "Gram-Project": "default",
+}
+
+payload = {
+    "model": "openai/gpt-4o",
+    "instructions": "You are a helpful assistant.",
+    "input": "What information can you retrieve about my account?",
+    "toolsets": [
+        {
+            "toolset_slug": "my-api",
+            "environment_slug": "my-env",
+            "headers": {}
+        },
+    ],
+}
+
+response = requests.post(url, headers=headers, json=payload)
+data = response.json()
+
+print(data["output"][-1]["content"][-1]["text"])
+```
+
+## Multiple toolsets
+
+Combine multiple toolsets in a single request to give the agent access to different APIs:
+
+```python
+payload = {
+    "model": "openai/gpt-4o",
+    "instructions": "You are a helpful assistant with access to multiple services.",
+    "input": "Find the user's email and look up their payment history.",
+    "toolsets": [
+        {
+            "toolset_slug": "user-api",
+            "environment_slug": "my-env",
+            "headers": {}
+        },
+        {
+            "toolset_slug": "payments-api",
+            "environment_slug": "my-env",
+            "headers": {}
+        },
+    ],
+}
+```
+
+## Sub-agents
+
+Define specialized sub-agents for complex workflows. Each sub-agent can have its own toolsets and instructions:
+
+```python
+payload = {
+    "model": "openai/gpt-4o",
+    "async": True,
+    "instructions": "You are a coordinator that delegates tasks to specialized agents.",
+    "input": "Get user details and their payment history, then summarize.",
+    "sub_agents": [
+        {
+            "name": "User Agent",
+            "description": "Handles user-related operations.",
+            "instructions": "Fetch user information using the provided tools.",
+            "toolsets": [
+                {
+                    "toolset_slug": "user-api",
+                    "environment_slug": "my-env",
+                    "headers": {}
+                },
+            ]
+        },
+        {
+            "name": "Payments Agent",
+            "description": "Handles payment-related operations.",
+            "tools": [
+                "tools:http:payments:get_charges",
+                "tools:http:payments:get_refunds",
+            ],
+            "environment_slug": "my-env",
+        },
+    ],
+}
+```
+
+Sub-agents can be configured with either:
+- `toolsets`: Full toolset references
+- `tools`: Specific tool URNs for fine-grained control
+
+## Asynchronous execution
+
+For longer-running tasks, use async mode and poll for results:
+
+```python
+import os
+import time
+import requests
+
+url = "https://app.getgram.ai/rpc/agents.response"
+
+headers = {
+    "Content-Type": "application/json",
+    "Gram-Key": os.getenv("GRAM_API_KEY"),
+    "Gram-Project": "default",
+}
+
+payload = {
+    "model": "openai/gpt-4o",
+    "async": True,
+    "instructions": "You are a helpful assistant.",
+    "input": "Analyze the data and provide a summary.",
+    "toolsets": [
+        {
+            "toolset_slug": "analytics-api",
+            "environment_slug": "my-env",
+            "headers": {}
+        },
+    ],
+}
+
+# Start the async request
+response = requests.post(url, headers=headers, json=payload)
+data = response.json()
+response_id = data["id"]
+
+print(f"Response ID: {response_id}")
+
+# Poll for completion
+poll_url = f"https://app.getgram.ai/rpc/agents.response?response_id={response_id}"
+
+while True:
+    time.sleep(5)
+    poll_response = requests.get(poll_url, headers=headers)
+    poll_data = poll_response.json()
+    status = poll_data.get("status")
+
+    print(f"Status: {status}")
+
+    if status != "in_progress":
+        print(poll_data["output"][-1]["content"][-1]["text"])
+        break
+```
+
+## Multi-turn conversations with previous_response_id
+
+Chain responses together using `previous_response_id` to build conversational agents:
+
+```python
+import os
+import requests
+
+url = "https://app.getgram.ai/rpc/agents.response"
+
+headers = {
+    "Content-Type": "application/json",
+    "Gram-Key": os.getenv("GRAM_API_KEY"),
+    "Gram-Project": "default",
+}
+
+payload = {
+    "model": "openai/gpt-4o",
+    "instructions": "You are a helpful assistant.",
+    "input": "Get the details of organization 'acme-corp'.",
+    "toolsets": [
+        {
+            "toolset_slug": "org-api",
+            "environment_slug": "my-env",
+            "headers": {}
+        },
+    ],
+}
+
+# First turn
+response = requests.post(url, headers=headers, json=payload)
+data = response.json()
+
+print("Turn 1:", data["output"][-1]["content"][-1]["text"])
+
+# Second turn - reference the previous response
+payload["previous_response_id"] = data["id"]
+payload["input"] = "What workspaces are in that organization?"
+
+response = requests.post(url, headers=headers, json=payload)
+data = response.json()
+
+print("Turn 2:", data["output"][-1]["content"][-1]["text"])
+```
+
+## Multi-turn conversations with message history
+
+Alternatively, pass the full conversation history in the `input` field:
+
+```python
+# First turn
+payload = {
+    "model": "openai/gpt-4o",
+    "instructions": "You are a helpful assistant.",
+    "input": [
+        {"role": "user", "content": "Get the details of organization 'acme-corp'."}
+    ],
+    "toolsets": [
+        {
+            "toolset_slug": "org-api",
+            "environment_slug": "my-env",
+            "headers": {}
+        },
+    ],
+}
+
+response = requests.post(url, headers=headers, json=payload)
+data = response.json()
+
+# Second turn - include previous output in context
+payload["input"] = [
+    *data["output"],
+    {"role": "user", "content": "What workspaces are in that organization?"}
+]
+
+response = requests.post(url, headers=headers, json=payload)
+```
+
+## Disable response storage
+
+Use `store: false` to prevent the response from being saved:
+
+```python
+payload = {
+    "model": "openai/gpt-4o",
+    "instructions": "You are a helpful assistant.",
+    "input": "Process this sensitive request.",
+    "store": False,
+    "toolsets": [
+        {
+            "toolset_slug": "my-api",
+            "environment_slug": "my-env",
+            "headers": {}
+        },
+    ],
+}
+
+response = requests.post(url, headers=headers, json=payload)
+data = response.json()
+
+# Response is available immediately but will be deleted shortly after
+print(data["output"][-1]["content"][-1]["text"])
+```
+
+Note that `store: false` requires synchronous execution (`async: false` or omitted).
+
+## More examples
+
+Additional examples are available in the [Gram examples repository](https://github.com/speakeasy-api/gram/tree/main/examples/agentsapi).
+
