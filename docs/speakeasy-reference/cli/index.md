@@ -61,6 +61,7 @@ speakeasy [flags]
 * [speakeasy merge](/docs/speakeasy-reference/cli/merge)	 - Merge multiple OpenAPI documents into a single document
 * [speakeasy openapi](/docs/speakeasy-reference/cli/openapi)	 - Utilities for working with OpenAPI documents
 * [speakeasy overlay](/docs/speakeasy-reference/cli/overlay)	 - Work with OpenAPI Overlays
+* [speakeasy patches](/docs/speakeasy-reference/cli/patches)	 - Debug and inspect pristine vs patched SDK files
 * [speakeasy pull](/docs/speakeasy-reference/cli/pull)	 - Pull a spec from the registry or list available specs/tags
 * [speakeasy quickstart](/docs/speakeasy-reference/cli/quickstart)	 - Guided setup to help you create a new SDK in minutes.
 * [speakeasy repro](/docs/speakeasy-reference/cli/repro)	 - Reproduce a failed generation locally
