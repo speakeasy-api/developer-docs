@@ -527,7 +527,7 @@ const meta = {
               "publish-terraform": {
                 title: "Publish Terraform Provider",
               },
-              customize: {
+              "customize-terraform": {
                 title: "Customize Terraform",
                 items: {
                   index: {
@@ -565,7 +565,7 @@ const meta = {
                   },
                 },
               },
-              guides: {
+              "terraform-guides": {
                 title: "Guides",
               },
             },
@@ -654,7 +654,7 @@ const meta = {
             title: "Standalone MCP",
             display: "children",
             items: {
-              introduction: {
+              overview: {
                 title: "Introduction",
               },
               "build-server": {
@@ -696,7 +696,7 @@ const meta = {
               layout: "full",
             },
           },
-          introduction: {
+          "why-gram": {
             title: "Why Gram?",
           },
           "getting-started": {
@@ -1031,7 +1031,7 @@ const meta = {
             title: "Elements",
             display: "children",
             items: {
-              introduction: {
+              "elements-overview": {
                 title: "Introduction",
                 theme: {
                   layout: "full",
