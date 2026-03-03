@@ -149,7 +149,7 @@ The generated MCP server includes a comprehensive file structure with TypeScript
 
 ## Running your MCP server locally
 
-You can run your MCP server from the generated code, a published npm package, or the generated Desktop Extensions (DXT) package.
+You can run your MCP server from the generated code, a published npm package, or the generated MCP Bundle (MCPB) package.
 
 ### Local development setup
 
@@ -196,12 +196,12 @@ Once you've published your MCP server to npm (following our [SDK publishing guid
 
 **Note:** You must first publish your package to npm before you can test it using this configuration.
 
-### Using the generated DXT
+### Using the generated MCPB
 
-For the most user-friendly testing experience, use the generated DXT package. Claude Desktop and other MCP clients can load DXT files directly:
+For the most user-friendly testing experience, use the generated MCPB package. Claude Desktop and other MCP clients can load MCPB files directly:
 
-- **Locate your generated DXT file** in the output directory (it typically has a `.dxt` extension).
-- **Install the DXT** in your MCP client following the client's installation process.
+- **Locate your generated MCPB file** in the output directory (it typically has a `.mcpb` extension).
+- **Install the MCPB** in your MCP client following the client's installation process.
 - **Configure environment variables** if your server requires authentication.
 
 ## Advanced configuration
@@ -246,9 +246,54 @@ You can further limit the subset of tools mounted on an MCP server by specifying
 }
 ```
 
+### Progressive discovery with dynamic mode
+
+MCP servers with many tools can bloat LLM context windows, leading to increased token usage and tool confusion. Dynamic mode solves this by exposing only a small set of meta-tools that let agents progressively discover and invoke tools on demand.
+
+To enable dynamic mode, pass the `--mode dynamic` flag when starting your server:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["your-npm-package@latest", "start", "--mode", "dynamic"],
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```
+
+In dynamic mode, the server registers only the following meta-tools instead of every individual tool:
+
+- **`list_tools`**: Lists all available tools with their names and descriptions.
+- **`describe_tool`**: Returns the input schema for one or more tools by name.
+- **`execute_tool`**: Executes a tool by name with the provided input parameters.
+- **`list_scopes`**: Lists the scopes available on the server. Only registered if the server has scopes defined.
+
+This approach significantly reduces the number of tokens sent to the LLM on each request, which is especially useful for servers with a large number of tools.
+
+You can combine dynamic mode with scope and tool filters:
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "command": "npx",
+      "args": ["your-npm-package@latest", "start", "--mode", "dynamic", "--scope", "read"],
+      "env": {
+        "API_TOKEN": "your-api-token-here"
+      }
+    }
+  }
+}
+```
+
 ## Distribution and hosting options
 
-Speakeasy generates MCP servers with three primary distribution methods. You can distribute your server as an npm package, a Cloudflare Worker, or a DXT file. These methods aren't mutually exclusive — most customers use all three approaches to serve different use cases.
+Speakeasy generates MCP servers with three primary distribution methods. You can distribute your server as an npm package, a Cloudflare Worker, or an MCPB file. These methods aren't mutually exclusive — most customers use all three approaches to serve different use cases.
 
 ### Distribute your MCP server on npm
 
@@ -286,28 +331,28 @@ Cloudflare hosting enables OAuth authentication flows and eliminates the need fo
 
 Follow the [Cloudflare deployment guide](/docs/standalone-mcp/cloudflare-deployment) for detailed instructions on using Cloudflare hosting.
 
-### Generate your MCP server as a DXT file
+### Generate your MCP server as an MCPB file
 
-In addition to a drag-and-drop experience for end users (particularly in Claude Desktop), DXT provides the following benefits:
+In addition to a drag-and-drop experience for end users (particularly in Claude Desktop), MCPB provides the following benefits:
 
 - **User-friendly installation:** Drag-and-drop installation in Claude Desktop.
 - **Guided setup:** Nicely prompts end-users for API keys and auth credentials.
 - **Self-contained format:** All dependencies and metadata bundled together.
 - **Cross-platform compatibility:** Works across different operating systems and MCP clients.
 
-Speakeasy automatically generates [Anthropic Desktop Extensions (`.dxt` files)](https://github.com/anthropics/dxt) as part of MCP server generation. The DXT includes:
+Speakeasy automatically generates [MCP Bundle (`.mcpb` files)](https://github.com/anthropics/dxt) as part of MCP server generation. The MCPB includes:
 
 - **A `manifest.json` file**, containing metadata describing your MCP server
 - **All the necessary server files**, packaged for distribution
 - **Tool descriptions and parameters**, automatically inferred from your OpenAPI document
 - **Icon and branding assets**, if provided
 
-You can customize the generated DXT manifest through the `gen.yaml` configuration file:
+You can customize the generated MCPB manifest through the `gen.yaml` configuration file:
 
 ```yaml
 targets:
   mcp-typescript:
-    dxtManifestOverlay:
+    mcpbManifestOverlay:
       icon: "https://example.com/my-icon.png"
       displayName: "My Custom API Tools"
       description: "Custom description for my MCP server"
@@ -317,6 +362,29 @@ targets:
 ### Hybrid distribution strategy
 
 You can use all three distribution methods simultaneously, giving users the flexibility to choose their preferred installation method based on their specific needs and technical requirements.
+
+## Response validation
+
+By default, Speakeasy-generated MCP servers skip structured deserialization and Zod validation on HTTP responses. Instead, the raw response data is passed through directly as MCP tool results. This default behavior provides forward compatibility, allowing MCP tool calls to return data even if the API response doesn't perfectly match the OpenAPI JSON Schema.
+
+You can control this behavior using the `validateResponse` flag in `gen.yaml`:
+
+```yaml
+mcp-typescript:
+  validateResponse: false
+```
+
+When `validateResponse` is set to `false` (the default for new servers), no Zod schema validation is performed on HTTP response data. The raw data is passed through as MCP tool results, with minimal processing such as base64 encoding for binary image and audio data.
+
+When `validateResponse` is set to `true`, HTTP responses are validated using generated Zod schemas before being returned as tool results. This provides strict type checking but may cause tool calls to fail if the API response contains fields or values that don't conform to the OpenAPI specification.
+
+Disabling validation is useful when:
+
+- The API may return additional fields not described in the OpenAPI specification.
+- There is little value in blocking LLM agents from reading data that may have minor schema inconsistencies.
+- You want to maximize the reliability of your MCP server by allowing it to handle API evolution gracefully.
+
+For more details on this and other MCP server configuration options, see the [MCP server configuration reference](/docs/speakeasy-reference/generation/mcp-server-config).
 
 ## Best practices
 
@@ -328,8 +396,8 @@ When building MCP servers with Speakeasy:
 - **Test thoroughly:** Verify that your MCP server works with different clients.
 - **Version your APIs:** Use semantic versioning for your OpenAPI documents.
 - **Monitor performance:** Track the usage and performance of your MCP tools.
-- **Provide clear branding:** Include a `.png` icon file in your project for automatic [DXT](https://www.anthropic.com/engineering/desktop-extensions) icon detection.
-- **Customize DXT metadata:** Use `dxtManifestOverlay` in `gen.yaml` to provide custom display names and descriptions.
+- **Provide clear branding:** Include a `.png` icon file in your project for automatic [MCPB](https://www.anthropic.com/engineering/desktop-extensions) icon detection.
+- **Customize MCPB metadata:** Use `mcpbManifestOverlay` in `gen.yaml` to provide custom display names and descriptions.
 
 ## Next steps
 

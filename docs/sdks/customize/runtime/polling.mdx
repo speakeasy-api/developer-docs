@@ -155,17 +155,38 @@ The `WaitForCompleted` polling method makes at most 120 API operation requests. 
 
 ### successCriteria
 
-Configure the polling method success criteria. This configuration is required for all polling methods. The criteria themselves are a limited subset of [OpenAPI Arazzo criterion](https://spec.openapis.org/arazzo/latest.html#criterion-object). Each condition is a logical AND operation, evaluated in configuration order.
+Configure the polling method success criteria. This configuration is required for all polling methods and is a limited subset of [OpenAPI Arazzo criterion](https://spec.openapis.org/arazzo/latest.html#criterion-object). Each criterion is evaluated in configuration order as a logical AND with prior criterion.
 
-Supported conditions include:
+Supported criterion contexts include:
 
-- `$statusCode`: HTTP status code. Must be defined before response body conditions.
+- `$statusCode`: HTTP status code. Must be defined before response body context.
 - `$response.body`: HTTP response body data. A value within the data is defined with a JSONPath expression.
 
-Supported operators include:
+Supported criterion types include:
+
+- `simple`: Assert against a context value using logical operators, such as equals. Default when no `type` is defined.
+- `regex`: Assert against a context value using a regular expression pattern.
+
+#### simple criterion
+
+Define context, logical operator, and the value via `condition`.
+
+Supported `simple` type logical operators include:
 
 - `==`: Equals
 - `!=`: Not Equals
+
+In this example:
+
+```yaml
+x-speakeasy-polling:
+  - name: WaitForCompleted
+    successCriteria:
+      - condition: $statusCode == 200
+      - condition: $response.body#/status == "completed"
+```
+
+The `WaitForCompleted` polling method waits until both the HTTP status code is 200 and the HTTP response body `status` property is `completed`.
 
 Certain language implementations, such as Go, also support using error status codes as success criteria. In these cases any SDK error that would have been returned to the SDK client are swallowed instead.
 
@@ -179,3 +200,26 @@ x-speakeasy-polling:
 ```
 
 The `WaitForNotFound` polling method immediately returns without error when the API operation returns a 404 Not Found HTTP status code.
+
+#### regex criterion
+
+Define context via `context` and the regular expression pattern via `condition`.
+
+<Callout title="Note" type="info">
+  The regular expression pattern must be compatible with the target language.
+  For example, the Go language uses the RE2 regular expression engine.
+</Callout>
+
+In this example:
+
+```yaml
+x-speakeasy-polling:
+  - name: WaitForCompleted
+    successCriteria:
+      - condition: $statusCode == 200
+      - context: $response.body#/status
+        condition: "^(completed|ready)$"
+        type: regex
+```
+
+The `WaitForCompleted` polling method waits until both the HTTP status code is 200 and the HTTP response body `status` property is either `completed` or `ready`.

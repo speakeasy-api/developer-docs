@@ -6,7 +6,12 @@ Visualize the changes between two OpenAPI documents
 
 ## Details
 
-Visualize the changes between two OpenAPI documents
+Visualize the **raw OpenAPI schema changes** between two documents - paths added/removed,
+operations changed, properties modified, etc.
+
+This is different from `speakeasy diff` which shows SDK-level changes (how generated
+SDK methods and types would differ). Use this command when you want to see the raw
+specification differences.
 
 ## Usage
 

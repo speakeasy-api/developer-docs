@@ -14,7 +14,9 @@ Speakeasy currently supports the following transformations:
 - **Filter operations:** Filters operations down to a defined set of operation IDs
 - **Cleanup:** Reformats the document for better readability and compliance with various parsing tools
 - **Format:** Changes the order of keys at various levels in the document for improved human readability
-- **Convert Swagger to OpenAPI:** Converts a Swagger 2.0 document to an OpenAPI 3.0.x document
+- **Convert Swagger to OpenAPI:** Converts a Swagger 2.0 document to an OpenAPI 3.0.x document (automatically applied in workflows when a Swagger 2.0 document is detected)
+- **Normalize:** Normalizes the document structure (for example, converting `prefixItems` to simple string types)
+- **Snip:** Removes or keeps specific operations by operation ID or path and method
 
 ## Transformations vs. overlays
 
@@ -42,12 +44,14 @@ Apply a transformation to an OpenAPI document with the `speakeasy openapi transf
 - `speakeasy openapi transform cleanup -s openapi.yaml`
 - `speakeasy openapi transform format -s openapi.yaml`
 - `speakeasy openapi transform convert-swagger -s swagger.yaml`
+- `speakeasy openapi transform normalize -s openapi.yaml`
+- `speakeasy openapi snip -s openapi.yaml`
 
 ### In workflow files
 
 The greatest utility comes from using transformations in the `workflow.yaml` file. This keeps the OpenAPI document always up to date with desired transformations, though it requires more initial setup.
 
-Note that the `convert-swagger` transformation cannot be applied as part of a workflow.
+Swagger 2.0 documents are automatically detected and converted to OpenAPI 3.x during workflow execution. This conversion runs after overlay operations but before other transformations. There is no need to add a `convert-swagger` step to a workflow — it happens implicitly whenever a Swagger 2.0 source document is detected.
 
 ### Remove unused components
 
@@ -127,4 +131,35 @@ sources:
           include: true
       - cleanup: true
       - format: true
+```
+
+### Convert Swagger to OpenAPI
+
+Convert a Swagger 2.0 document to an OpenAPI 3.x document. In workflows, this conversion is applied automatically when a Swagger 2.0 source document is detected — no manual configuration is needed. To convert explicitly using the CLI:
+
+```bash
+speakeasy openapi transform convert-swagger --schema swagger.yaml --out openapi.yaml
+```
+
+### Normalize
+
+Normalize the structure of the OpenAPI document. This transformation simplifies certain patterns in the document, such as converting `prefixItems` to simple string types.
+
+```yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  api-source:
+    inputs:
+      - location: ./openapi.yaml
+    transformations:
+      - normalize: true
+```
+
+### Snip
+
+Remove or keep specific operations by operation ID or path and method. This is available as a standalone CLI command:
+
+```bash
+speakeasy openapi snip -s openapi.yaml
 ```

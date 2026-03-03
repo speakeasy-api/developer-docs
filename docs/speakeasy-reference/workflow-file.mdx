@@ -4,7 +4,6 @@ slug: /workflow-file-reference/
 sidbar_label: Workflow File Reference
 ---
 
-import Image from "next/image";
 import { Callout } from "@/mdx/components";
 
 # Speakeasy Workflow File
@@ -14,8 +13,6 @@ For most use cases we recommend interacting with the Speakeasy workflow file (`w
 This command has subcommands to configure sources, targets, github setup and package publishing. All new targets created through `speakeasy quickstart` will automatically have a workflow
 file created in the `.speakeasy/` folder in the root of their target directory.
 <br/>
-For editing the workflow file manually, <Image src="/assets/vscode.svg" alt="VS Code" width="20" height="20" className="inline-block! w-auto! size-5 mx-2! my-0" /> [Speakeasy's VSCode extension](https://marketplace.visualstudio.com/items?itemName=Speakeasy.speakeasy-vscode-extension) provides syntax highlighting and autocompletion for the workflow file,
-in addition to linting for OpenAPI documents, and our other supported file types.
 
 </Callout>
 
@@ -82,7 +79,9 @@ Each Source is given a name. In this example the name is `my-source`. This name 
 
 ### Inputs
 
-Each Source has a list of inputs. Each input is an OpenAPI document or Overlay. The OpenAPI documents and Overlays are merged together to create a single OpenAPI document.
+Each Source has a list of inputs. Each input is an OpenAPI document or Overlay. The OpenAPI documents and Overlays are merged together to create a single OpenAPI document. For a detailed guide on how merging works, including merge order, conflict resolution, and namespaces, see [Merge multiple OpenAPI documents](/docs/sdks/prep-openapi/merge).
+
+Swagger 2.0 documents are also supported as inputs. When a Swagger 2.0 document is detected, Speakeasy automatically converts it to OpenAPI 3.x before processing. See [Transformations](/docs/sdks/prep-openapi/transformations#convert-swagger-to-openapi) for details.
 
 ```yaml
     inputs:
@@ -101,6 +100,70 @@ authentication may need to be provided.
       - location: ./another-openapi.yaml
       # .... more openapi documents can be added here
 ```
+
+### Model namespace
+
+When merging multiple OpenAPI documents, schema components with the same name can cause naming conflicts in generated code. The `modelNamespace` option allows each input document to specify a namespace for its schema components, ensuring unique names in the merged output.
+
+```yaml
+sources:
+  merged-api:
+    inputs:
+      - location: service-a.yaml
+        modelNamespace: serviceA
+      - location: service-b.yaml
+        modelNamespace: serviceB
+```
+
+When `modelNamespace` is specified, the merge process automatically adds `x-speakeasy-name-override` and `x-speakeasy-model-namespace` extensions to each schema component from that input. This preserves the original schema name for serialization while placing the generated model in a separate namespace to avoid conflicts.
+
+For example, if both `service-a.yaml` and `service-b.yaml` define a `Pet` schema:
+
+```yaml
+# service-a.yaml
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+```
+
+```yaml
+# service-b.yaml
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        species:
+          type: string
+```
+
+The merged output will contain both schemas with unique names and namespace extensions:
+
+```yaml
+# merged.yaml
+components:
+  schemas:
+    serviceA_Pet:
+      x-speakeasy-name-override: Pet
+      x-speakeasy-model-namespace: serviceA
+      type: object
+      properties:
+        name:
+          type: string
+    serviceB_Pet:
+      x-speakeasy-name-override: Pet
+      x-speakeasy-model-namespace: serviceB
+      type: object
+      properties:
+        species:
+          type: string
+```
+
+For more granular control over which schemas belong to which namespace, apply the `x-speakeasy-model-namespace` extension directly to individual schemas in the OpenAPI document instead of using `modelNamespace` in the workflow file.
 
 ### Transformations
 

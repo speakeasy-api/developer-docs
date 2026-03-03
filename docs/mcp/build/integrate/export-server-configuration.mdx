@@ -1,0 +1,214 @@
+---
+title: "Export MCP server configuration"
+description: "Learn how to export MCP server configuration as JSON for documentation and integration purposes."
+sidebar:
+  order: 4
+---
+
+Gram provides an API endpoint to export MCP server configuration as JSON. This is useful for:
+
+- **Documentation**: Generate up-to-date API documentation for an MCP server
+- **Integration**: Share configuration with external systems or tools
+- **Backup**: Keep a record of server configuration
+- **Automation**: Programmatically access server details for CI/CD pipelines
+
+## Prerequisites
+
+- A [Gram account](https://app.getgram.ai) with an MCP server configured
+- An [API key](/docs/mcp/secure/api-keys) with `consumer` scope
+
+## Authentication
+
+The export endpoint supports two authentication methods:
+
+### API key authentication (recommended for automation)
+
+Use a Gram API key with `consumer` scope. This method is ideal for CI/CD pipelines and programmatic access.
+
+Required headers:
+- `Gram-Key`: The API key
+- `Gram-Project`: The project slug
+
+### Session authentication
+
+For browser-based access, the endpoint also accepts session cookies. This is used automatically when accessing from the Gram dashboard.
+
+## Export endpoint
+
+### Request
+
+```http
+POST https://app.getgram.ai/rpc/mcpMetadata.export
+Content-Type: application/json
+Gram-Key: YOUR_API_KEY
+Gram-Project: YOUR_PROJECT_SLUG
+```
+
+### Request body
+
+```json
+{
+  "mcp_slug": "my-mcp-server"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mcp_slug` | string | The MCP server slug from the install URL (e.g., for `https://mcp.getgram.ai/my-mcp-server`, use `my-mcp-server`) |
+
+### Response
+
+The endpoint returns a comprehensive JSON object containing all server configuration details:
+
+```json
+{
+  "name": "My API Server",
+  "slug": "my-api-server",
+  "server_url": "https://mcp.getgram.ai/mcp/org-123-my-api-server",
+  "description": "A description of the MCP server",
+  "documentation_url": "https://docs.example.com",
+  "instructions": "Instructions for using this server",
+  "tools": [
+    {
+      "name": "get_users",
+      "description": "Retrieve a list of users",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of users to return"
+          }
+        }
+      }
+    }
+  ],
+  "authentication": {
+    "required": true,
+    "headers": [
+      {
+        "name": "Mcp-Speakeasy-Api-Key",
+        "display_name": "API Key"
+      }
+    ]
+  }
+}
+```
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Display name of the MCP server |
+| `slug` | string | URL-friendly identifier |
+| `server_url` | string | Full URL of the MCP server endpoint |
+| `description` | string | Server description (optional) |
+| `documentation_url` | string | External documentation URL (optional) |
+| `instructions` | string | Usage instructions for AI assistants (optional) |
+| `tools` | array | List of available tools with their schemas |
+| `authentication` | object | Authentication requirements |
+
+## Example: Export with cURL
+
+```bash
+curl -X POST https://app.getgram.ai/rpc/mcpMetadata.export \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: YOUR_API_KEY" \
+  -H "Gram-Project: YOUR_PROJECT_SLUG" \
+  -d '{"mcp_slug": "my-mcp-server"}'
+```
+
+## Example: Export with Python
+
+```python
+import requests
+
+response = requests.post(
+    "https://app.getgram.ai/rpc/mcpMetadata.export",
+    headers={
+        "Content-Type": "application/json",
+        "Gram-Key": "YOUR_API_KEY",
+        "Gram-Project": "YOUR_PROJECT_SLUG",
+    },
+    json={"mcp_slug": "my-mcp-server"}
+)
+
+config = response.json()
+print(f"Server: {config['name']}")
+print(f"Tools: {len(config['tools'])}")
+```
+
+## Example: Export with JavaScript
+
+```javascript
+const response = await fetch('https://app.getgram.ai/rpc/mcpMetadata.export', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Gram-Key': 'YOUR_API_KEY',
+    'Gram-Project': 'YOUR_PROJECT_SLUG',
+  },
+  body: JSON.stringify({ mcp_slug: 'my-mcp-server' })
+});
+
+const config = await response.json();
+console.log(`Server: ${config.name}`);
+console.log(`Tools: ${config.tools.length}`);
+```
+
+## Using the dashboard
+
+Export server configuration directly from the Gram dashboard:
+
+- Navigate to the MCP server in the dashboard
+- Click the **Export JSON** button in the header
+- Copy the JSON to clipboard or download as a file
+
+## Error responses
+
+| Status Code | Description |
+|-------------|-------------|
+| 401 | Unauthorized - Invalid or missing API key |
+| 404 | MCP server not found or MCP is not enabled |
+
+## Use cases
+
+### Generate API documentation
+
+Use the exported configuration to automatically generate documentation:
+
+```python
+config = export_mcp_config("my-mcp-server")
+
+# Generate markdown documentation
+doc = f"# {config['name']}\n\n"
+doc += f"{config.get('description', '')}\n\n"
+doc += "## Available Tools\n\n"
+
+for tool in config['tools']:
+    doc += f"### {tool['name']}\n"
+    doc += f"{tool.get('description', '')}\n\n"
+```
+
+### CI/CD integration
+
+Validate MCP server configuration in a deployment pipeline:
+
+```yaml
+# GitHub Actions example
+- name: Export MCP Config
+  run: |
+    curl -X POST https://app.getgram.ai/rpc/mcpMetadata.export \
+      -H "Content-Type: application/json" \
+      -H "Gram-Key: ${{ secrets.GRAM_API_KEY }}" \
+      -H "Gram-Project: ${{ vars.GRAM_PROJECT_SLUG }}" \
+      -d '{"mcp_slug": "my-mcp-server"}' \
+      -o mcp-config.json
+
+    # Validate tool count
+    TOOL_COUNT=$(jq '.tools | length' mcp-config.json)
+    if [ "$TOOL_COUNT" -lt 1 ]; then
+      echo "Error: No tools found in MCP server"
+      exit 1
+    fi
+```

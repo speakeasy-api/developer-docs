@@ -29,6 +29,7 @@ speakeasy run [flags]
 ### Options
 
 ```
+  -y, --auto-yes                  auto confirm all prompts
   -d, --debug                     enable writing debug files with broken code
       --github                    kick off a generation run in GitHub for the repository pertaining to your current directory
       --github-repos string       GLOBAL: run SDK generation across your entire Speakeasy workspace/account, independent of your current directory. Use 'all' for all connected repos or a comma-separated list of GitHub repo URLs

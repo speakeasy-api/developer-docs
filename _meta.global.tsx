@@ -6,7 +6,7 @@ export const docsIntroItems = {
     title: "__INKEEP_SEARCH_DOCS__",
   },
   index: {
-    title: "Home",
+    display: "hidden",
     theme: {
       layout: "full",
       toc: false,
@@ -27,24 +27,680 @@ const meta = {
     items: {
       ...docsIntroItems,
       /*
-      HOSTED MCP
+        SDKs
       */
-      "managed-mcp-section": {
-        type: "separator",
-        title: <SidebarSeparator>{"Gram (MCP Cloud)"}</SidebarSeparator>,
-      },
-      gram: {
-        title: "Gram (MCP Cloud)",
+      "sdks-section": {
+            type: "separator",
+            title: <SidebarSeparator>{"SDKs"}</SidebarSeparator>,
+          },
+          sdks: {
+            title: "SDKs",
+            display: "children",
+            items: {
+              introduction: {
+                title: "Introduction",
+              },
+              "core-concepts": {
+                title: "Core Concepts",
+              },
+              "create-client-sdks": {
+                title: "Generate SDKs",
+              },
+              "prep-openapi": {
+                title: "Prepare OpenAPI Spec",
+                items: {
+                  "best-practices": {
+                    title: "Best Practices",
+                  },
+                  linting: {
+                    title: "Linting",
+                  },
+                  merge: {
+                    title: "Merge Documents",
+                  },
+                  overlays: {
+                    title: "Overlays",
+                  },
+                  transformations: {
+                    title: "Transformations",
+                  },
+                  maintenance: {
+                    title: "Maintenance",
+                  },
+                },
+              },
+              customize: {
+                title: "Customize",
+                items: {
+                  basics: {
+                    title: "Customization Basics",
+                  },
+                  structure: {
+                    title: "Structure",
+                  },
+                  "data-model": {
+                    title: "Data Model",
+                    items: {
+                      types: {
+                        title: "Types",
+                      },
+                      enums: {
+                        title: "Enums",
+                      },
+                      "oneof-schemas": {
+                        title: "OneOf",
+                      },
+                      "allof-schemas": {
+                        title: "AllOf",
+                      },
+                      "complex-numbers": {
+                        title: "Complex Numbers",
+                      },
+                      additionalproperties: {
+                        title: "Additional Properties",
+                      },
+                    },
+                  },
+                  methods: {
+                    title: "Customize methods",
+                  },
+                  responses: {
+                    title: "Responses & Error Handling",
+                    items: {
+                      responses: {
+                        title: "Customize Responses",
+                      },
+                      errors: {
+                        title: "Error Handling",
+                      },
+                    },
+                  },
+                  globals: {
+                    title: "Global Parameters",
+                  },
+                  servers: {
+                    title: "Configure servers",
+                  },
+                  deprecations: {
+                    title: "Deprecations",
+                  },
+                  authentication: {
+                    title: "Security & Authentication",
+                    items: {
+                      overview: {
+                        title: "Overview",
+                      },
+                      configuration: {
+                        title: "Configuration Options",
+                      },
+                      "simple-schemes": {
+                        title: "Standard security schemes",
+                      },
+                      oauth: {
+                        title: "OAuth 2.0 Authentication",
+                      },
+                      "custom-security-schemes": {
+                        title: "Custom Security Schemes",
+                      },
+                      "security-callbacks": {
+                        title: "Security Callbacks",
+                      },
+                    },
+                  },
+                  runtime: {
+                    title: "SDK Behavior",
+                    items: {
+                      retries: {
+                        title: "Enable Retries",
+                      },
+                      timeouts: {
+                        title: "Enable Timeouts",
+                      },
+                      pagination: {
+                        title: "Enable Pagination",
+                      },
+                      polling: {
+                        title: "Enable Polling",
+                      },
+                      streaming: {
+                        title: "Enable Streaming",
+                      },
+                      "server-sent-events": {
+                        title: "Enable Server-Sent Events",
+                      },
+                      "jsonl-events": {
+                        title: "Enable JSON Lines Responses",
+                      },
+                      "custom-http-client": {
+                        title: "Customize HTTP Client",
+                      },
+                      "override-accept-headers": {
+                        title: "Override accept headers",
+                      },
+                    },
+                  },
+                  webhooks: {
+                    title: "Add webhooks to your SDKs",
+                  },
+                  code: {
+                    title: "Modify SDK code",
+                    items: {
+                      "sdk-hooks": {
+                        title: "Hooks",
+                      },
+                      "custom-code": {
+                        title: "Custom code",
+                        items: {
+                          "custom-code": {
+                            title: "Overview",
+                          },
+                          "custom-code-best-practices": {
+                            title: "Best practices",
+                          },
+                          "custom-code-reference": {
+                            title: "Technical reference",
+                          },
+                          genignore: {
+                            title: "Ignoring files",
+                          },
+                        },
+                      },
+                      "code-regions": {
+                        title: "Code regions",
+                        items: {
+                          overview: {
+                            title: "Custom code regions",
+                          },
+                          python: {
+                            title: "Python",
+                          },
+                          typescript: {
+                            title: "TypeScript",
+                          },
+                          java: {
+                            title: "Java",
+                          },
+                        },
+                      },
+                    },
+                  },
+                  typescript: {
+                    title: "TypeScript",
+                    items: {
+                      "additional-index-exports": {
+                        title: "Additional index exports",
+                      },
+                      "configuring-module-format": {
+                        title: "Configuring Module Format",
+                      },
+                      "disabling-barrel-files": {
+                        title: "Disabling Barrel Files",
+                      },
+                      "model-validation-and-serialization": {
+                        title: "Model validation and serialization",
+                      },
+                      "property-naming": {
+                        title: "Control property casing: snake, camel",
+                      },
+                      "react-hooks": {
+                        title: "Generating React Hooks from OpenAPI",
+                      },
+                    },
+                  },
+                },
+              },
+              manage: {
+                title: "Manage",
+                items: {
+                  versioning: {
+                    title: "Version Control",
+                  },
+                  "sdk-changelogs": {
+                    title: "SDK Changelogs",
+                  },
+                  "github-setup": {
+                    title: "Github Setup",
+                  },
+                  "sdk-sandbox": {
+                    title: "Enable Sandbox",
+                  },
+                  migrate: {
+                    title: "Migrate",
+                  },
+                  "forward-compatibility": {
+                    title: "Forward Compatibility",
+                  },
+                  "breaking-changes": {
+                    title: "Handle Breaking Changes",
+                  },
+                },
+              },
+              "publish-sdk": {
+                title: "Publish SDK",
+              },
+              "sdk-contract-testing": {
+                title: "SDK Contract Testing",
+                items: {
+                  "bootstrapping-test-generation": {
+                    title: "Bootstrapping SDK Tests",
+                  },
+                  "customizing-sdk-tests": {
+                    title: "Customizing SDK Tests",
+                  },
+                  "github-actions": {
+                    title: "Testing in Github Actions",
+                  },
+                  "openapi-in-tests": {
+                    title: "OpenAPI data in Tests",
+                  },
+                  "running-tests": {
+                    title: "Running SDK Tests",
+                  },
+                  "custom-contract-tests": {
+                    title: "Custom Contract Tests",
+                  },
+                },
+              },
+              "sdk-docs": {
+                title: "SDK Documentation",
+                items: {
+                  "edit-readme": {
+                    title: "Edit README",
+                  },
+                  integrations: {
+                    title: "Integrate with docs provider",
+                    items: {
+                      readme: {
+                        title: "README.com",
+                      },
+                      mintlify: {
+                        title: "Mintlify",
+                      },
+                      scalar: {
+                        title: "Scalar",
+                      },
+                      bump: {
+                        title: "Bump.sh",
+                      },
+                    },
+                  },
+                  "code-samples": {
+                    title: "Code Samples",
+                    items: {
+                      "generate-code-samples": {
+                        title: "Generate Code Samples",
+                      },
+                      "code-samples-api": {
+                        title: "Code Samples API",
+                      },
+                      "automated-code-sample-urls": {
+                        title: "Automated Code Sample URLs",
+                      },
+                    },
+                  },
+                  "snippet-ai": {
+                    title: "SnippetAI",
+                    display: "hidden",
+                    items: {
+                      overview: {
+                        title: "Overview",
+                      },
+                      "integrate-via-react": {
+                        title: "Integrate via React",
+                      },
+                      "integrate-via-web-component": {
+                        title: "Integrate via Web Component",
+                      },
+                      "integrate-via-script": {
+                        title: "Integrate via Script",
+                      },
+                    },
+                  },
+                },
+              },
+              languages: {
+                title: "Language Design",
+                items: {
+                  philosophy: {
+                    title: "Design philosophy",
+                  },
+                  maturity: {
+                    title: "Maturity",
+                  },
+                  typescript: {
+                    title: "TypeScript",
+                    items: {
+                      "methodology-ts": {
+                        title: "TypeScript design",
+                      },
+                      "oss-comparison-ts": {
+                        title: "Speakeasy vs. OSS generators",
+                      },
+                      "migrating-from-oss": {
+                        title: "Migrating from OpenAPI Generator to Speakeasy",
+                      },
+                      "feature-support": {
+                        title: "Feature reference",
+                      },
+                      "standalone-functions": {
+                        title: "Standalone functions",
+                      },
+                      "dependency-management": {
+                        title: "Dependency management",
+                      },
+                    },
+                  },
+                  python: {
+                    title: "Python",
+                    items: {
+                      "methodology-python": {
+                        title: "Python design",
+                      },
+                      "oss-comparison-python": {
+                        title: "Speakeasy vs. OSS generators",
+                      },
+                      "feature-support": {
+                        title: "Feature reference",
+                      },
+                    },
+                  },
+                  golang: {
+                    title: "Go",
+                    items: {
+                      "methodology-go": {
+                        title: "Go design",
+                      },
+                      "oss-comparison-go": {
+                        title: "Speakeasy vs. OSS generators",
+                      },
+                      "feature-support": {
+                        title: "Feature reference",
+                      },
+                    },
+                  },
+                  java: {
+                    title: "Java",
+                    items: {
+                      "methodology-java": {
+                        title: "Java design",
+                      },
+                      "oss-comparison-java": {
+                        title: "Speakeasy vs. OSS generators",
+                      },
+                      "feature-support": {
+                        title: "Feature reference",
+                      },
+                    },
+                  },
+                  csharp: {
+                    title: "C#",
+                    items: {
+                      "methodology-csharp": {
+                        title: "C# design",
+                      },
+                      "oss-comparison-csharp": {
+                        title: "Speakeasy vs. OSS generators",
+                      },
+                    },
+                  },
+                  php: {
+                    title: "PHP",
+                    items: {
+                      "methodology-php": {
+                        title: "PHP design",
+                      },
+                      "oss-comparison-php": {
+                        title: "Speakeasy vs. OSS generators",
+                      },
+                    },
+                  },
+                  ruby: {
+                    title: "Ruby",
+                    items: {
+                      "methodology-ruby": {
+                        title: "Ruby design",
+                      },
+                    },
+                  },
+                  rust: {
+                    title: "Rust [coming]",
+                    items: {
+                      "methodology-rust": {
+                        title: "Rust design [coming soon]",
+                      },
+                    },
+                  },
+                  cpp: {
+                    title: "C++ [coming]",
+                    items: {
+                      "methodology-cpp": {
+                        title: "C++ design [coming soon]",
+                      },
+                    },
+                  },
+                  unity: {
+                    title: "Unity [beta]",
+                    items: {
+                      "methodology-unity": {
+                        title: "Unity design [coming soon]",
+                      },
+                    },
+                  },
+                },
+              },
+              guides: {
+                title: "Guides",
+                items: {
+                  overlays: {
+                    title: "Overlays",
+                  },
+                  hooks: {
+                    title: "Hooks",
+                  },
+                  "code-samples-without-github-actions": {
+                    title: "Populate Code Samples Without GitHub Actions",
+                  },
+                },
+              },
+            },
+          },
+          "docs-md": {
+            // Hide DocsMD docs while we're still in private beta. We'll make them visible
+            // once we hit public beta in July.
+            display: "hidden",
+          },
+
+          /*
+                Terraform
+              */
+          "terraform-section": {
+            type: "separator",
+            title: <SidebarSeparator>{"Terraform"}</SidebarSeparator>,
+          },
+          terraform: {
+            title: "Terraform",
+            display: "children",
+            items: {
+              "create-terraform": {
+                title: "Generate Terraform Provider",
+              },
+              "publish-terraform": {
+                title: "Publish Terraform Provider",
+              },
+              customize: {
+                title: "Customize Terraform",
+                items: {
+                  index: {
+                    title: "Overview",
+                  },
+                  "entity-mapping": {
+                    title: "Map API Entities",
+                  },
+                  "provider-configuration": {
+                    title: "Provider Configuration",
+                  },
+                  "resource-configuration": {
+                    title: "Resource Configuration",
+                  },
+                  "property-customization": {
+                    title: "Property Customization",
+                  },
+                  "validation-dependencies": {
+                    title: "Validation and Dependencies",
+                  },
+                  "plan-modification": {
+                    title: "Plan Modification",
+                  },
+                  "advanced-features": {
+                    title: "Advanced Features",
+                  },
+                  "schema-keywords": {
+                    title: "Schema Keywords",
+                  },
+                  testing: {
+                    display: "hidden",
+                  },
+                  extensions: {
+                    display: "hidden",
+                  },
+                },
+              },
+              guides: {
+                title: "Guides",
+              },
+            },
+          },
+          /*
+                CLI & Reference
+              */
+          "cli-section": {
+            type: "separator",
+            title: <SidebarSeparator>{"CLI"}</SidebarSeparator>,
+          },
+          "speakeasy-reference": {
+            title: "Speakeasy",
+            items: {
+              cli: {
+                title: "CLI",
+                items: {
+                  "getting-started": {
+                    title: "Getting Started",
+                  },
+                  docker: {
+                    title: "Using with Docker",
+                  },
+                  "mise-toolkit": {
+                    title: "Using with mise toolkit",
+                  },
+                },
+              },
+              generation: {
+                title: "Generation Config",
+                items: {
+                  "gen-yaml": {
+                    title: "Config File",
+                  },
+                  "ci-cd-pipeline": {
+                    title: "CI/CD Pipeline",
+                  },
+                  "ts-config": {
+                    title: "TypeScript Configuration",
+                  },
+                  "python-config": {
+                    title: "Python Configuration",
+                  },
+                  "go-config": {
+                    title: "Go Configuration",
+                  },
+                  "java-config": {
+                    title: "Java Configuration",
+                  },
+                  "csharp-config": {
+                    title: "C# Configuration",
+                  },
+                  "php-config": {
+                    title: "PHP Configuration",
+                  },
+                  "ruby-config": {
+                    title: "Ruby Configuration",
+                  },
+                  "terraform-config": {
+                    title: "Terraform Configuration",
+                  },
+                  "mcp-server-config": {
+                    title: "MCP Server Configuration",
+                  },
+                },
+              },
+              supported: {
+                title: "Supported",
+              },
+              extensions: {
+                title: "Extensions",
+              },
+              "workflow-file": {
+                title: "Workflow File",
+              },
+            },
+          },
+          /*
+                Standalone MCP
+              */
+          "standalone-mcp-section": {
+            type: "separator",
+            title: <SidebarSeparator>{"Standalone MCP"}</SidebarSeparator>,
+          },
+          "standalone-mcp": {
+            title: "Standalone MCP",
+            display: "children",
+            items: {
+              introduction: {
+                title: "Introduction",
+              },
+              "build-server": {
+                title: "Generate MCP Servers from OpenAPI Documents",
+              },
+              "cloudflare-deployment": {
+                title: "Deploy to Cloudflare Workers",
+              },
+              "gram-deployment": {
+                title: "Deploy to Gram",
+              },
+              "custom-prompts": {
+                title: "Custom Prompts",
+              },
+              "custom-resources": {
+                title: "Custom Resources",
+              },
+              "customize-tools": {
+                title: "Customize Tools",
+              },
+              "remote-mcp-servers": {
+                title: "Adapting Speakeasy MCP Servers for Remote Deployment",
+              },
+              "eval-command": {
+                title: "Test with the Eval Command",
+              },
+              "setting-up-oauth": {
+                title: "Add OAuth to an MCP Server",
+              },
+            },
+          },
+      mcp: {
         display: "children",
         items: {
-          introduction: {
-            title: "Introduction",
+          index: {
+            title: "Docs home",
+            theme: {
+              toc: false,
+              layout: "full",
+            },
           },
-          "mcp-installation-guides": {
-            title: "MCP Installation Guides",
+          introduction: {
+            title: "Why Gram?",
           },
           "getting-started": {
-            title: "Getting Started",
+            title: "Getting started",
             items: {
               typescript: {
                 title: "Use TypeScript (Gram Functions)",
@@ -54,798 +710,345 @@ const meta = {
               },
             },
           },
-          concepts: {
-            title: "Concepts",
+          /*
+            Build
+          */
+          "__group-build": {
+            type: "separator",
+            title: <SidebarSeparator>{"Build"}</SidebarSeparator>,
+          },
+          build: {
+            title: "Build",
+            display: "children",
             items: {
-              "tool-definitions": {
-                title: "Tool Definitions",
+              "gram-functions": {
+                title: "Creating TypeScript tools",
+                items: {
+                  "functions-framework": {
+                    title: "Using the Functions Framework",
+                  },
+                  "mcp-sdk": {
+                    title: "Using the MCP SDK",
+                  },
+                  "configuring-environments": {
+                    title: "Configuring environments",
+                  },
+                  "build-deploy": {
+                    title: "Build and deploy",
+                  },
+                },
               },
               toolsets: {
-                title: "Toolsets",
+                title: "Creating toolsets",
+                items: {
+                  "custom-toolsets": {
+                    title: "Curate a custom toolset",
+                  },
+                  "create-default-toolset": {
+                    title: "Create a default toolset",
+                  },
+                  "advanced-tool-curation": {
+                    title: "Advanced tool curation",
+                  },
+                  "configuring-environments": {
+                    title: "Configure environments",
+                  },
+                  "attach-environments-to-sources": {
+                    title: "Attach environments to tool sources",
+                  },
+                  "test-toolsets": {
+                    title: "Test toolsets",
+                  },
+                  "dynamic-toolsets": {
+                    title: "Dynamic toolsets (experimental)",
+                  },
+                  "response-filtering": {
+                    title: "Response filtering (experimental)",
+                  },
+                },
               },
-              "tool-variations": {
-                title: "Tool Variations",
+              hosting: {
+                title: "Hosting MCP servers",
+                items: {
+                  "deploy-mcp-server": {
+                    title: "Deploy an MCP server",
+                  },
+                  "tool-call-healing": {
+                    title: "Tool call healing",
+                  },
+                  "publish-gram-server-mcp-registry": {
+                    title: "Publish to MCP Registry",
+                  },
+                },
               },
-              "tool-sources": {
-                title: "Tool Sources",
+              integrate: {
+                title: "Integrate MCP servers",
+                items: {
+                  agents: {
+                    title: "Agent Frameworks",
+                    items: {
+                      "using-langchain-with-gram-mcp-servers": {
+                        title: "LangChain",
+                      },
+                      "using-openai-agents-sdk-with-gram-mcp-servers": {
+                        title: "OpenAI Agents SDK",
+                      },
+                      "using-openai-apps-sdk-with-gram-mcp-servers": {
+                        title: "OpenAI Apps SDK",
+                      },
+                      "using-mastra-with-gram-mcp-servers": {
+                        title: "Mastra",
+                      },
+                      "using-pydantic-ai-with-gram-mcp-servers": {
+                        title: "Pydantic AI",
+                      },
+                      "using-vellum-workflows-sdk-with-gram-mcp-servers": {
+                        title: "Vellum",
+                      },
+                    },
+                  },
+                  clients: {
+                    title: "Coding assistants & IDEs",
+                    items: {
+                      "using-chatgpt-developer-mode-with-gram": {
+                        title: "ChatGPT Developer mode",
+                      },
+                      "using-claude-code-with-gram-mcp-servers": {
+                        title: "Claude Code",
+                      },
+                      "using-claude-desktop-with-gram-mcp-server": {
+                        title: "Claude Desktop",
+                      },
+                      "using-cline-with-gram-mcp-server": {
+                        title: "Cline",
+                      },
+                      "using-cursor-with-gram-mcp-server": {
+                        title: "Cursor",
+                      },
+                      "using-gemini-cli-with-gram-mcp-servers": {
+                        title: "Gemini CLI",
+                      },
+                      "using-mistral-with-gram-mcp-servers": {
+                        title: "Mistral",
+                      },
+                      "using-n8n-with-gram-mcp-servers": {
+                        title: "n8n",
+                      },
+                      "using-roo-code-with-gram-mcp-server": {
+                        title: "Roo Code",
+                      },
+                      "using-vellum-agents-with-gram-mcp-servers": {
+                        title: "Vellum Agents",
+                      },
+                      "using-your-ide-with-gram-mcp-server": {
+                        title: "IDE",
+                      },
+                      "using-zapier-with-mcp": {
+                        title: "Zapier",
+                      },
+                      troubleshooting: {
+                        title: "Troubleshooting",
+                      },
+                    },
+                  },
+                  "api-clients": {
+                    title: "Other tools",
+                    items: {
+                      "using-anthropic-api-with-gram-mcp-servers": {
+                        title: "Anthropic API",
+                      },
+                      "using-openai-api-with-gram-mcp-servers": {
+                        title: "OpenAI Responses API",
+                      },
+                      "using-vercel-ai-sdk-with-gram-mcp-servers": {
+                        title: "Vercel AI SDK",
+                      },
+                    },
+                  },
+                  "export-server-configuration": {
+                    title: "Export server configuration",
+                  },
+                },
               },
-              environments: {
-                title: "Environments",
-              },
-              deployments: {
-                title: "Deployments",
-              },
-              "api-keys": {
-                title: "API Keys",
+              examples: {
+                title: "Examples",
+                items: {
+                  "adding-ai-chat-to-your-app": {
+                    title: "Add AI chat to an existing app",
+                  },
+                  "oauth-external-server": {
+                    title: "Build MCP with external OAuth",
+                  },
+                  "deploy-from-github-actions": {
+                    title: "Deploy from GitHub Actions",
+                  },
+                  "creating-taskmaster-mcp-server": {
+                    title: "Create a Taskmaster MCP server",
+                  },
+                  "consuming-external-apis": {
+                    title: "Connect to external APIs",
+                  },
+                  "open-ai-apps-sdk": {
+                    title: "Build a ChatGPT App",
+                  },
+                  "using-environments-with-vercel-ai-sdk": {
+                    title: "Using environments with the Vercel AI SDK",
+                  },
+                },
               },
             },
           },
-          "gram-functions": {
-            title: "Gram Functions",
-            items: {
-              introduction: {
-                title: "Introduction",
-              },
-              "functions-framework": {
-                title: "Using the Functions Framework",
-              },
-              "mcp-sdk": {
-                title: "Using the MCP SDK",
-              },
-              "configuring-environments": {
-                title: "Configuring environments",
-              },
-              "build-deploy": {
-                title: "Build and Deploy",
-              },
-            },
+          /*
+            Secure
+          */
+          "__group-secure": {
+            type: "separator",
+            title: <SidebarSeparator>{"Secure"}</SidebarSeparator>,
           },
-          "build-mcp": {
-            title: "Build MCP",
+          secure: {
+            title: "Secure",
+            display: "children",
             items: {
-              "custom-toolsets": {
-                title: "Curate a custom toolset",
+              security: {
+                title: "Security overview",
               },
-              "create-default-toolset": {
-                title: "Create a default toolset",
+              "adding-oauth-servers": {
+                title: "Add OAuth to MCP servers",
               },
-              "advanced-tool-curation": {
-                title: "Advanced tool curation",
-              },
-              "configuring-environments": {
-                title: "Configure environments",
-              },
-              "attach-environments-to-sources": {
-                title: "Attach environments to tool sources",
-              },
-              "test-toolsets": {
-                title: "Test toolsets",
-              },
-              "dynamic-toolsets": {
-                title: "Dynamic toolsets (experimental)",
-              },
-              "response-filtering": {
-                title: "Response filtering (experimental)",
-              },
-            },
-          },
-          "host-mcp": {
-            title: "Productionize MCP",
-            items: {
-              "deploy-mcp-server": {
-                title: "Deploy an MCP server",
-              },
-              "public-private-servers": {
-                title: "Control server visibility",
-              },
-              "adding-oauth": {
-                title: "Add OAuth",
+              "add-oauth-functions": {
+                title: "Add OAuth to Gram Functions",
               },
               "oauth-proxy-for-internal-servers": {
                 title: "OAuth proxy for internal servers",
               },
-              "tool-call-healing": {
-                title: "Tool call healing",
+              "public-private-servers": {
+                title: "Control server visibility",
               },
-              "publish-gram-server-mcp-registry": {
-                title: "Publish to MCP Registry",
+              "api-keys": {
+                title: "API keys",
               },
-            },
-          },
-          "command-line": {
-            title: "Command Line",
-            items: {
-              auth: {},
-              whoami: {},
-              stage: {},
-              "stage-function": {},
-              "stage-openapi": {},
-              push: {},
-              status: {},
-            },
-          },
-          clients: {
-            title: "MCP Clients",
-            items: {
-              "using-chatgpt-developer-mode-with-gram": {
-                title: "ChatGPT Developer mode",
-              },
-              "using-claude-code-with-gram-mcp-servers": {
-                title: "Claude Code",
-              },
-              "using-claude-desktop-with-gram-mcp-server": {
-                title: "Claude Desktop",
-              },
-              "using-cline-with-gram-mcp-server": {
-                title: "Cline",
-              },
-              "using-gemini-cli-with-gram-mcp-servers": {
-                title: "Gemini CLI",
-              },
-              "using-mistral-with-gram-mcp-servers": {
-                title: "Mistral",
-              },
-              "using-n8n-with-gram-mcp-servers": {
-                title: "n8n",
-              },
-              "using-roo-code-with-gram-mcp-server": {
-                title: "Roo Code",
-              },
-              "using-your-ide-with-gram-mcp-server": {
-                title: "IDE",
-              },
-              troubleshooting: {
-                title: "Troubleshooting",
+              environments: {
+                title: "Environments",
               },
             },
           },
-          "api-clients": {
-            title: "API usage",
+          /*
+            Observe
+          */
+          "__group-observe": {
+            type: "separator",
+            title: <SidebarSeparator>{"Observe"}</SidebarSeparator>,
+          },
+          observe: {
+            title: "Observe",
+            display: "children",
             items: {
-              "using-anthropic-api-with-gram-mcp-servers": {
-                title: "Anthropic API",
-              },
-              "using-langchain-with-gram-mcp-servers": {
-                title: "LangChain",
-              },
-              "using-openai-agents-sdk-with-gram-mcp-servers": {
-                title: "OpenAI Agents SDK",
-              },
-              "using-openai-api-with-gram-mcp-servers": {
-                title: "OpenAI Responses API",
-              },
-              "using-pydantic-ai-with-gram-mcp-servers": {
-                title: "Pydantic AI",
-              },
-              "using-vercel-ai-sdk-with-gram-mcp-servers": {
-                title: "Vercel AI SDK",
-              },
-            },
-          },
-          examples: {
-            title: "Examples",
-            items: {
-              "adding-ai-chat-to-your-app": {
-                title: "Add AI chat to an existing app",
-              },
-              "oauth-external-server": {
-                title: "Build MCP with external OAuth",
-              },
-              "deploy-from-github-actions": {
-                title: "Deploy from Github Actions",
-              },
-              "creating-taskmaster-mcp-server": {
-                title: "Create a Taskmaster MCP server",
-              },
-              "consuming-external-apis": {
-                title: "Connect to External APIs",
-              },
-              "open-ai-apps-sdk": {
-                title: "Build a ChatGPT App",
-              },
-              "using-environments-with-vercel-ai-sdk": {
-                title: "Using environments with the Vercel AI SDK",
-              },
-            },
-          },
-        },
-      },
-      /*
-      /docs/standalone-mcp/
-      */
-      "standalone-mcp-section": {
-        type: "separator",
-        title: <SidebarSeparator>{"Self-hosted MCP"}</SidebarSeparator>,
-      },
-      "standalone-mcp": {
-        title: "Standalone MCP",
-        display: "children",
-        items: {
-          "build-server": {
-            title: "Generate Server",
-          },
-          "customize-tools": {
-            title: "Customize Tools",
-          },
-          "custom-resources": {
-            title: "Custom Resources",
-          },
-          "custom-prompts": {
-            title: "Custom Prompts",
-          },
-          "setting-up-oauth": {
-            title: "Setting up OAuth",
-          },
-          "cloudflare-deployment": {
-            title: "Deploying on Cloudflare",
-          },
-          "remote-mcp-servers": {
-            title: "Remote MCP Servers",
-          },
-        },
-      },
-      /*
-        SDKs
-      */
-      "sdks-section": {
-        type: "separator",
-        title: <SidebarSeparator>{"SDKs"}</SidebarSeparator>,
-      },
-      sdks: {
-        title: "SDKs",
-        display: "children",
-        items: {
-          introduction: {
-            title: "Introduction",
-          },
-          "core-concepts": {
-            title: "Core Concepts",
-          },
-          "create-client-sdks": {
-            title: "Generate SDKs",
-          },
-          "prep-openapi": {
-            title: "Prepare OpenAPI Spec",
-          },
-          customize: {
-            title: "Customize",
-            items: {
-              basics: {
-                title: "Customization Basics",
-              },
-              structure: {
-                title: "Structure",
-              },
-              "data-model": {
-                title: "Data Model",
+              insights: {
+                title: "Insights (Beta)",
                 items: {
-                  types: {
-                    title: "Types",
+                  logs: {
+                    title: "Logs",
                   },
-                  enums: {
-                    title: "Enums",
+                  metrics: {
+                    title: "Metrics",
                   },
-                  "oneof-schemas": {
-                    title: "OneOf",
-                  },
-                  "allof-schemas": {
-                    title: "AllOf",
-                  },
-                  "complex-numbers": {
-                    title: "Complex Numbers",
-                  },
-                  additionalproperties: {
-                    title: "Additional Properties",
+                  "api-reference": {
+                    title: "API reference",
                   },
                 },
               },
-              methods: {
-                title: "Customize methods",
-              },
-              responses: {
-                title: "Responses & Error Handling",
-                items: {
-                  responses: {
-                    title: "Customize Responses",
-                  },
-                  errors: {
-                    title: "Error Handling",
-                  },
-                },
-              },
-              globals: {
-                title: "Global Parameters",
-              },
-              servers: {
-                title: "Configure servers",
-              },
-              deprecations: {
-                title: "Deprecations",
-              },
-              authentication: {
-                title: "Security & Authentication",
+              "agents-api": {
+                title: "Gram Agents API (Beta)",
                 items: {
                   overview: {
-                    title: "Overview",
+                    title: "Gram Agents API overview",
                   },
-                  configuration: {
-                    title: "Configuration Options",
+                  "billing-and-usage": {
+                    title: "Billing and usage",
                   },
-                  "simple-schemes": {
-                    title: "Standard security schemes",
-                  },
-                  oauth: {
-                    title: "OAuth 2.0 Authentication",
-                  },
-                  "custom-security-schemes": {
-                    title: "Custom Security Schemes",
-                  },
-                  "security-callbacks": {
-                    title: "Security Callbacks",
-                  },
-                },
-              },
-              runtime: {
-                title: "SDK Behavior",
-                items: {
-                  retries: {
-                    title: "Enable Retries",
-                  },
-                  timeouts: {
-                    title: "Enable Timeouts",
-                  },
-                  pagination: {
-                    title: "Enable Pagination",
-                  },
-                  polling: {
-                    title: "Enable Polling",
-                  },
-                  streaming: {
-                    title: "Enable Streaming",
-                  },
-                  "server-sent-events": {
-                    title: "Enable Server-Sent Events",
-                  },
-                  "jsonl-events": {
-                    title: "Enable JSON Lines Responses",
-                  },
-                  "custom-http-client": {
-                    title: "Customize HTTP Client",
-                  },
-                  "override-accept-headers": {
-                    title: "Override accept headers",
-                  },
-                },
-              },
-              webhooks: {
-                title: "Add webhooks to your SDKs",
-              },
-              code: {
-                title: "Add Custom Code",
-                items: {
-                  "code-regions": {
-                    items: {
-                      overview: {},
-                      python: {},
-                      typescript: {},
-                      java: {},
-                    },
-                  },
-                },
-              },
-              typescript: {
-                title: "TypeScript",
-                items: {
-                  "additional-index-exports": {
-                    title: "Additional index exports",
-                  },
-                  "configuring-module-format": {
-                    title: "Configuring Module Format",
-                  },
-                  "disabling-barrel-files": {
-                    title: "Disabling Barrel Files",
-                  },
-                  "model-validation-and-serialization": {
-                    title: "Model validation and serialization",
-                  },
-                  "property-naming": {
-                    title: "Control property casing: snake, camel",
-                  },
-                  "react-hooks": {
-                    title: "Generating React Hooks from OpenAPI",
+                  "example-usage": {
+                    title: "Usage examples",
                   },
                 },
               },
             },
           },
-          manage: {
-            title: "Manage",
-            items: {
-              versioning: {
-                title: "Version Control",
-              },
-              "sdk-changelogs": {
-                title: "SDK Changelogs",
-              },
-              "github-setup": {
-                title: "Github Setup",
-              },
-              "sdk-sandbox": {
-                title: "Enable Sandbox",
-              },
-              migrate: {
-                title: "Migrate",
-              },
-              "forward-compatibility": {
-                title: "Forward Compatibility",
-              },
-              "breaking-changes": {
-                title: "Handle Breaking Changes",
-              },
-            },
-          },
-          "publish-sdk": {
-            title: "Publish SDK",
-          },
-          "sdk-contract-testing": {
-            title: "SDK Contract Testing",
-            items: {
-              "bootstrapping-test-generation": {
-                title: "Bootstrapping SDK Tests",
-              },
-              "customizing-sdk-tests": {
-                title: "Customizing SDK Tests",
-              },
-              "github-actions": {
-                title: "Testing in Github Actions",
-              },
-              "openapi-in-tests": {
-                title: "OpenAPI data in Tests",
-              },
-              "running-tests": {
-                title: "Running SDK Tests",
-              },
-              "custom-contract-tests": {
-                title: "Custom Contract Tests",
-              },
-            },
-          },
-          "sdk-docs": {
-            title: "SDK Documentation",
-            items: {
-              "edit-readme": {
-                title: "Edit README",
-              },
-              integrations: {
-                title: "Integrate with docs provider",
-                items: {
-                  readme: {
-                    title: "README.com",
-                  },
-                  mintlify: {
-                    title: "Mintlify",
-                  },
-                  scalar: {
-                    title: "Scalar",
-                  },
-                  bump: {
-                    title: "Bump.sh",
-                  },
-                },
-              },
-              "code-samples": {
-                title: "Code Samples",
-                items: {
-                  "generate-code-samples": {
-                    title: "Generate Code Samples",
-                  },
-                  "code-samples-api": {
-                    title: "Code Samples API",
-                  },
-                  "automated-code-sample-urls": {
-                    title: "Automated Code Sample URLs",
-                  },
-                },
-              },
-              "snippet-ai": {
-                title: "SnippetAI",
-                display: "hidden",
-                items: {
-                  overview: {
-                    title: "Overview",
-                  },
-                  "integrate-via-react": {
-                    title: "Integrate via React",
-                  },
-                  "integrate-via-web-component": {
-                    title: "Integrate via Web Component",
-                  },
-                  "integrate-via-script": {
-                    title: "Integrate via Script",
-                  },
-                },
-              },
-            },
-          },
-          languages: {
-            title: "Language Design",
-            items: {
-              philosophy: {
-                title: "Design philosophy",
-              },
-              maturity: {
-                title: "Maturity",
-              },
-              typescript: {
-                title: "TypeScript",
-                items: {
-                  "methodology-ts": {
-                    title: "TypeScript design",
-                  },
-                  "oss-comparison-ts": {
-                    title: "Speakeasy vs. OSS generators",
-                  },
-                  "migrating-from-oss": {
-                    title: "Migrating from OpenAPI Generator to Speakeasy",
-                  },
-                  "feature-support": {
-                    title: "Feature reference",
-                  },
-                  "standalone-functions": {
-                    title: "Standalone functions",
-                  },
-                  "dependency-management": {
-                    title: "Dependency management",
-                  },
-                },
-              },
-              python: {
-                title: "Python",
-                items: {
-                  "methodology-python": {
-                    title: "Python design",
-                  },
-                  "oss-comparison-python": {
-                    title: "Speakeasy vs. OSS generators",
-                  },
-                  "feature-support": {
-                    title: "Feature reference",
-                  },
-                },
-              },
-              golang: {
-                title: "Go",
-                items: {
-                  "methodology-go": {
-                    title: "Go design",
-                  },
-                  "oss-comparison-go": {
-                    title: "Speakeasy vs. OSS generators",
-                  },
-                  "feature-support": {
-                    title: "Feature reference",
-                  },
-                },
-              },
-              java: {
-                title: "Java",
-                items: {
-                  "methodology-java": {
-                    title: "Java design",
-                  },
-                  "oss-comparison-java": {
-                    title: "Speakeasy vs. OSS generators",
-                  },
-                  "feature-support": {
-                    title: "Feature reference",
-                  },
-                },
-              },
-              csharp: {
-                title: "C#",
-                items: {
-                  "methodology-csharp": {
-                    title: "C# design",
-                  },
-                  "oss-comparison-csharp": {
-                    title: "Speakeasy vs. OSS generators",
-                  },
-                },
-              },
-              php: {
-                title: "PHP",
-                items: {
-                  "methodology-php": {
-                    title: "PHP design",
-                  },
-                  "oss-comparison-php": {
-                    title: "Speakeasy vs. OSS generators",
-                  },
-                },
-              },
-              ruby: {
-                title: "Ruby [beta]",
-                items: {
-                  "methodology-ruby": {
-                    title: "Ruby design [coming soon]",
-                  },
-                },
-              },
-              rust: {
-                title: "Rust [coming]",
-                items: {
-                  "methodology-rust": {
-                    title: "Rust design [coming soon]",
-                  },
-                },
-              },
-              cpp: {
-                title: "C++ [coming]",
-                items: {
-                  "methodology-cpp": {
-                    title: "C++ design [coming soon]",
-                  },
-                },
-              },
-              unity: {
-                title: "Unity [beta]",
-                items: {
-                  "methodology-unity": {
-                    title: "Unity design [coming soon]",
-                  },
-                },
-              },
-            },
-          },
-          guides: {
-            title: "Guides",
-            items: {
-              overlays: {
-                title: "Overlays",
-              },
-              hooks: {
-                title: "Hooks",
-              },
-            },
-          },
-        },
-      },
-      "docs-md": {
-        // Hide DocsMD docs while we're still in private beta. We'll make them visible
-        // once we hit public beta in July.
-        display: "hidden",
-      },
-
-      /*
-            Terraform
+          /*
+            Technical Reference
           */
-      "terraform-section": {
-        type: "separator",
-        title: <SidebarSeparator>{"Terraform"}</SidebarSeparator>,
-      },
-      terraform: {
-        title: "Terraform",
-        display: "children",
-        items: {
-          "create-terraform": {
-            title: "Generate Terraform Provider",
+          "__group-reference": {
+            type: "separator",
+            title: <SidebarSeparator>{"Technical Reference"}</SidebarSeparator>,
           },
-          "publish-terraform": {
-            title: "Publish Terraform Provider",
-          },
-          customize: {
-            title: "Customize Terraform",
+          reference: {
+            title: "Technical Reference",
+            display: "children",
             items: {
-              index: {
-                title: "Overview",
+              concepts: {
+                title: "Concepts",
+                items: {
+                  "tool-definitions": {
+                    title: "Tool definitions",
+                  },
+                  toolsets: {
+                    title: "Toolsets",
+                  },
+                  "tool-variations": {
+                    title: "Tool variations",
+                  },
+                  "tool-sources": {
+                    title: "Tool sources",
+                  },
+                  deployments: {
+                    title: "Deployments",
+                  },
+                },
               },
-              "entity-mapping": {
-                title: "Map API Entities",
-              },
-              "provider-configuration": {
-                title: "Provider Configuration",
-              },
-              "resource-configuration": {
-                title: "Resource Configuration",
-              },
-              "property-customization": {
-                title: "Property Customization",
-              },
-              "validation-dependencies": {
-                title: "Validation and Dependencies",
-              },
-              "plan-modification": {
-                title: "Plan Modification",
-              },
-              "advanced-features": {
-                title: "Advanced Features",
-              },
-              "schema-keywords": {
-                title: "Schema Keywords",
-              },
-              testing: {
-                display: "hidden",
-              },
-              extensions: {
-                display: "hidden",
+              "command-line": {
+                title: "CLI reference",
+                items: {
+                  install: {},
+                  auth: {},
+                  whoami: {},
+                  stage: {},
+                  "stage-function": {},
+                  "stage-openapi": {},
+                  push: {},
+                  status: {},
+                  update: {},
+                },
               },
             },
           },
-          guides: {
-            title: "Guides",
-          },
-        },
-      },
-      /*
-            Reference
+          /*
+            Elements
           */
-      "reference-section": {
-        type: "separator",
-        title: <SidebarSeparator>{"Reference"}</SidebarSeparator>,
-      },
-      "speakeasy-reference": {
-        title: "Speakeasy",
-        items: {
-          cli: {
-            title: "CLI",
+          "__group-elements": {
+            type: "separator",
+            title: <SidebarSeparator>{"Elements"}</SidebarSeparator>,
+          },
+          "gram-elements": {
+            title: "Elements",
+            display: "children",
             items: {
-              "getting-started": {
-                title: "Getting Started",
+              introduction: {
+                title: "Introduction",
+                theme: {
+                  layout: "full",
+                  toc: false,
+                },
               },
-              docker: {
-                title: "Using with Docker",
+              quickstart: {
+                title: "Quickstart",
+                theme: {
+                  layout: "default",
+                  toc: true,
+                },
               },
-              "mise-toolkit": {
-                title: "Using with mise toolkit",
+              plugins: {
+                title: "Plugins",
               },
             },
-          },
-          generation: {
-            title: "Generation Config",
-            items: {
-              "gen-yaml": {
-                title: "Config File",
-              },
-              "ci-cd-pipeline": {
-                title: "CI/CD Pipeline",
-              },
-              "ts-config": {
-                title: "TypeScript Configuration",
-              },
-              "python-config": {
-                title: "Python Configuration",
-              },
-              "go-config": {
-                title: "Go Configuration",
-              },
-              "java-config": {
-                title: "Java Configuration",
-              },
-              "csharp-config": {
-                title: "C# Configuration",
-              },
-              "php-config": {
-                title: "PHP Configuration",
-              },
-              "ruby-config": {
-                title: "Ruby Configuration",
-              },
-              "terraform-config": {
-                title: "Terraform Configuration",
-              },
-            },
-          },
-          supported: {
-            title: "Supported",
-          },
-          extensions: {
-            title: "Extensions",
-          },
-          "workflow-file": {
-            title: "Workflow File",
-          },
-          guides: {
-            title: "Guides",
           },
         },
       },
@@ -902,9 +1105,39 @@ const meta = {
       },
       servers: {
         title: "Servers",
+        items: {
+          "server-variables": {
+            title: "Server Variables",
+          },
+        },
       },
       security: {
         title: "Security",
+        items: {
+          "security-schemes": {
+            title: "Security Schemes",
+            items: {
+              "security-api-key": {
+                title: "API Key",
+              },
+              "security-http": {
+                title: "HTTP Authentication",
+              },
+              "security-mutualtls": {
+                title: "Mutual TLS",
+              },
+              "security-oauth2": {
+                title: "OAuth 2.0",
+              },
+              "security-openid": {
+                title: "OpenID Connect",
+              },
+            },
+          },
+          "custom-auth": {
+            title: "Custom Authentication",
+          },
+        },
       },
       paths: {
         title: "Paths",
@@ -928,9 +1161,62 @@ const meta = {
       },
       schemas: {
         title: "Data Types",
+        items: {
+          strings: {
+            title: "Strings",
+          },
+          numbers: {
+            title: "Numbers",
+          },
+          booleans: {
+            title: "Booleans",
+          },
+          null: {
+            title: "Null",
+          },
+          arrays: {
+            title: "Arrays",
+          },
+          objects: {
+            title: "Objects",
+            items: {
+              polymorphism: {
+                title: "Polymorphism",
+              },
+              xml: {
+                title: "XML",
+              },
+            },
+          },
+          enums: {
+            title: "Enums",
+          },
+          composition: {
+            title: "Composition",
+          },
+        },
       },
       requests: {
         title: "Requests",
+        items: {
+          parameters: {
+            title: "Parameters",
+            items: {
+              "path-parameters": {
+                title: "Path Parameters",
+              },
+              "query-parameters": {
+                title: "Query Parameters",
+              },
+              "header-parameters": {
+                title: "Header Parameters",
+              },
+              "cookie-parameters": {
+                title: "Cookie Parameters",
+              },
+            },
+          },
+        },
       },
       responses: {
         title: "Responses",
@@ -1012,6 +1298,11 @@ const meta = {
           },
           zod: {
             title: "Zod",
+            items: {
+              "zod-v3": {
+                title: "Zod v3",
+              },
+            },
           },
 
           // Python Frameworks
@@ -1383,20 +1674,6 @@ const meta = {
         theme: {
           sidebar: true,
           pagination: false,
-        },
-      },
-    },
-  },
-  changelog: {
-    title: "Changelog",
-    type: "page",
-    display: "children",
-    items: {
-      "*": {
-        theme: {
-          sidebar: false,
-          pagination: false,
-          toc: false,
         },
       },
     },

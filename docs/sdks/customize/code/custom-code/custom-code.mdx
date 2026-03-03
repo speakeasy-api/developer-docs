@@ -1,0 +1,309 @@
+---
+title: Custom code
+description: "Make custom changes anywhere in generated SDKs that persist across regenerations."
+---
+
+import { Callout, CodeWithTabs } from "@/mdx/components";
+
+# Custom code
+
+Custom code allows changes anywhere in generated SDKs. Speakeasy automatically preserves those changes across regenerations. Unlike [custom code regions](/docs/sdks/customize/code/code-regions/overview), which require predefined areas for customization, custom code provides complete flexibility to modify any generated file.
+
+## How it works
+
+Speakeasy preserves manual edits by performing a 3-way merge during generation. This process combines the pristine generated code from the previous generation, the current code on disk, and the newly generated code. If manual changes and generated updates touch the same lines, standard Git-style conflict markers appear for resolution in the editor.
+
+<Callout title="Requirements" type="info">
+  Custom code requires a Git repository. The feature uses Git under the hood to track and merge changes, but direct Git interaction is not necessary.
+</Callout>
+
+## Enabling custom code
+
+### For new SDKs
+
+Add the configuration to `gen.yaml`:
+
+```yaml filename=".speakeasy/gen.yaml"
+configVersion: 2.0.0
+generation:
+  sdkClassName: MySDK
+  # ... other configuration
+  persistentEdits: # Enables custom code preservation
+    enabled: true
+```
+
+### For existing SDKs
+
+When modifying a generated file and running Speakeasy, a prompt appears showing a diff of the changes:
+
+```ansi
+┃ Changes detected in generated SDK files
+┃ The following changes were detected in generated SDK files:
+┃   M package.json (+2/-1)
+┃       --- generated
+┃       +++ current
+┃       @@ -22,7 +22,8 @@
+┃          "scripts": {
+┃            "lint": "eslint --cache --max-warnings=0 src",
+┃            "build": "tshy",
+┃       -    "prepublishOnly": "npm run build"
+┃       +    "prepublishOnly": "npm run build",
+┃       +    "test:integration": "node ./scripts/integration.js"
+┃          },
+┃       ... (2 more lines)
+┃
+┃ Would you like to enable custom code preservation?
+┃   Yes - Enable custom code
+┃ > No - Continue without preserving changes
+┃   Don't ask again
+```
+
+Select **"Yes - Enable custom code"** to preserve changes. Speakeasy updates `gen.yaml` automatically.
+
+## When to use custom code
+
+Custom code is appropriate when:
+- Adding utility methods or business logic to generated models
+- Customizing SDK initialization or configuration
+- Integrating with internal systems or libraries
+- Making changes that do not fit into predefined extension points
+
+For simpler customizations, consider:
+- [SDK hooks](/docs/sdks/customize/code/sdk-hooks) for lifecycle customization
+- [Custom code regions](/docs/sdks/customize/code/code-regions/overview) for predefined extension areas (Enterprise only)
+- OpenAPI extensions for generation-time customization
+
+## Common use cases
+
+### Adding utility methods
+
+Add helper methods directly to generated model classes:
+
+```typescript
+export class Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+
+  // Custom utility method
+  toInvoiceItem(): InvoiceItem {
+    return {
+      description: `Payment ${this.id}`,
+      amount: this.amount,
+      currency: this.currency,
+    };
+  }
+
+  needsAction(): boolean {
+    return this.status === PaymentStatus.RequiresAction ||
+      this.status === PaymentStatus.RequiresConfirmation;
+  }
+}
+```
+
+### Modifying configuration files
+
+Add custom dependencies or scripts to package configuration:
+
+<CodeWithTabs
+  tabs={[
+    {
+      label: "package.json",
+      language: "diff",
+      code: `  {
+    "name": "@mycompany/sdk",
+    "version": "1.0.0",
+    "dependencies": {
+      "axios": "^1.6.0",
+      "zod": "^3.22.0",
++     "aws-sdk": "^2.1.0"
+    },
+    "scripts": {
+      "test": "jest",
++     "test:integration": "jest --config=jest.integration.js",
++     "deploy": "npm run build && aws s3 sync dist/ s3://my-bucket"
+    }
+  }`,
+    },
+    {
+      label: "pyproject.toml",
+      language: "diff",
+      code: `  [tool.poetry]
+  name = "mycompany-sdk"
+  version = "1.0.0"
+
+  [tool.poetry.dependencies]
+  python = "^3.8"
+  httpx = ">=0.24.0"
+  pydantic = "^2.0"
++ # Custom dependencies
++ boto3 = "^1.28.0"
++ redis = "^4.5.0"
+
+  [tool.poetry.scripts]
++ # Custom scripts
++ deploy = "mycompany_sdk.scripts:deploy"
++ validate = "mycompany_sdk.scripts:validate"`,
+    },
+  ]}
+/>
+
+### Extending SDK initialization
+
+Add custom authentication providers or configuration:
+
+```typescript
+import { AWSAuth } from "./custom/aws-auth";
+import { MetricsCollector } from "./custom/metrics";
+
+export class MySDK {
+  private client: HTTPClient;
+  private awsAuth?: AWSAuth;
+  private metrics?: MetricsCollector;
+
+  constructor(config: SDKConfig) {
+    this.client = new HTTPClient(config);
+
+    // Custom initialization logic
+    if (config.awsAuth) {
+      this.awsAuth = new AWSAuth(config.awsAuth);
+      this.client.interceptors.request.use(
+        this.awsAuth.signRequest.bind(this.awsAuth)
+      );
+    }
+
+    if (config.enableMetrics) {
+      this.metrics = new MetricsCollector(config.metricsEndpoint);
+      this.client.interceptors.response.use(
+        this.metrics.recordResponse.bind(this.metrics)
+      );
+    }
+  }
+}
+```
+
+## Handling conflicts
+
+When manual changes and Speakeasy updates modify the same lines, Speakeasy detects the conflict, adds conflict markers to the file, and stages the conflict in the Git index. This ensures that IDEs, `git status`, and other Git tools recognize the conflict and prompt for resolution:
+
+```bash
+Merge conflicts detected
+
+1 file(s) have conflicts that must be resolved manually:
+    both modified:   package.json
+
+To resolve:
+  1. Open each file and resolve the conflict markers (<<<<<<, ======, >>>>>>)
+  2. Remove the conflict markers after choosing the correct code
+  3. Run: speakeasy run --skip-versioning
+```
+
+For example, when the SDK version uses a customized prerelease tag and Speakeasy bumps the version during generation:
+
+```diff filename="package.json"
+{
+  "name": "petstore",
+<<<<<<< Current (local changes)
+  "version": "0.0.2-prerelease",
+=======
+  "version": "0.0.3",
+>>>>>>> New (Generated by Speakeasy)
+  "dependencies": {
+    ...
+  }
+}
+```
+
+To resolve conflicts:
+
+1. Edit the file to keep the desired code (in this case, decide on the correct version)
+2. Remove the conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`)
+3. Run `speakeasy run --skip-versioning` to finalize the merge and update internal tracking to accept the resolution
+4. Commit the resolved changes
+
+## Working in CI/CD
+
+Custom code works seamlessly in CI/CD environments. The feature runs non-interactively in CI:
+
+- No prompts appear
+- Conflicts cause the generation to fail with a clear error message
+- The CI job exits with a non-zero code if conflicts occur
+
+The Speakeasy GitHub Action automatically rolls back to the last working generator version if conflicts or other issues occur. This ensures SDK generation remains stable while conflicts are resolved.
+
+### Handling conflicts in CI
+
+If conflicts occur during CI generation:
+
+- The CI job fails with an error message listing conflicted files
+- Pull the changes locally
+- Run `speakeasy run` to reproduce the conflicts
+- Resolve conflicts manually
+- Commit and push the resolution
+- CI succeeds on the next run
+
+## Configuration options
+
+```yaml filename=".speakeasy/gen.yaml"
+persistentEdits:
+  # Enable or disable custom code
+  enabled: true
+```
+
+### Disabling custom code
+
+To disable custom code without losing changes:
+
+```yaml filename=".speakeasy/gen.yaml"
+persistentEdits:
+  enabled: false
+```
+
+To prevent prompts entirely:
+
+```yaml filename=".speakeasy/gen.yaml"
+persistentEdits:
+  enabled: never
+```
+
+## Frequently asked questions
+
+### Editing files in the GitHub web UI
+
+Changes made in the GitHub web UI or any Git-based tool are treated like any other manual change. When the repository is cloned locally and Speakeasy runs in that clone, edits are preserved.
+
+### Removing generated headers
+
+<Callout title="Important" type="warning">
+  Do not remove generated headers (like `// @generated-id: abc123`) when planning to move files. These headers contain tracking information that helps Speakeasy detect file moves.
+</Callout>
+
+If headers are removed:
+- Custom code still works for files that stay in the same location
+- File move detection does not work - moved files are treated as deleted and recreated
+
+### Using custom code with custom code regions
+
+Both features can be used together. Custom code regions provide predefined safe areas for customization, while custom code allows changes anywhere. Choose the approach that best fits the use case.
+
+### Git operations performed
+
+See the [technical reference](/docs/sdks/customize/code/custom-code/custom-code-reference#git-integration-details) for details on Git integration.
+
+### Resetting to pristine generated code
+
+To discard all custom changes and get fresh generated code:
+
+1. Disable custom code in `gen.yaml`
+2. Delete the modified files
+3. Run `speakeasy run` to regenerate fresh files
+4. Re-enable custom code if desired
+
+For resetting a single file while keeping other customizations, see the [best practices guide](/docs/sdks/customize/code/custom-code/custom-code-best-practices#recovery-procedures).
+
+## Next steps
+
+- Review the [technical reference](/docs/sdks/customize/code/custom-code/custom-code-reference) for implementation details
+- Check out [best practices](/docs/sdks/customize/code/custom-code/custom-code-best-practices) for team workflows
+- Learn about [custom code regions](/docs/sdks/customize/code/code-regions/overview) for predefined customization areas

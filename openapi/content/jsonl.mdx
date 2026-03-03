@@ -3,6 +3,8 @@ title: "Jsonl in OpenAPI best practices"
 description: "Comprehensive guide to Jsonl in OpenAPI. Best practices for API design, documentation, and implementation."
 ---
 
+import { Callout } from "@/mdx/components";
+
 # JSONL responses in OpenAPI
 
 JSON Lines (JSONL) is a convenient format for storing structured data that may be processed one record at a time. It's a simple format where each line is a valid JSON value, typically a JSON object or array. JSONL is particularly useful for handling large datasets, streaming data, or log files where each line represents a separate record.
@@ -28,8 +30,13 @@ JSONL offers several advantages over traditional JSON:
 
 ## Defining JSONL responses in OpenAPI documents
 
-JSONL responses can be defined in OpenAPI by using the `application/jsonl` or `text/jsonl` MIME type. While JSONL isn't natively supported in the OpenAPI specification, you can use these content types to indicate that the response will be in JSONL format.
-Here's an example of how to define a JSONL response in an OpenAPI document:
+<Callout title="OpenAPI v3.2.0 JSONL support" type="info">
+OpenAPI v3.2.0 recognizes `application/jsonl` as a sequential media type and introduces the `itemSchema` keyword for defining the structure of individual records in the stream.
+</Callout>
+
+JSONL responses can be defined in OpenAPI by using the `application/jsonl` or `text/jsonl` MIME type. In OpenAPI v3.0 and v3.1, JSONL isn't natively supported, but these content types indicate that the response will be in JSONL format. OpenAPI v3.2.0 adds native support through the `itemSchema` keyword, which defines the schema for each line in the JSONL stream.
+
+The following example defines a JSONL response in an OpenAPI document:
 
 ```yaml filename="openapi.yaml"
 paths:
@@ -78,6 +85,28 @@ components:
 ```
 
 In this example, the `/users/export` endpoint returns user data in JSONL format. Each line of the response will be a valid JSON object representing a user, as defined by the `User` schema.
+
+### Using itemSchema in OpenAPI 3.2
+
+With OpenAPI v3.2.0, the `itemSchema` keyword explicitly defines the schema for each line in the JSONL stream:
+
+```yaml filename="openapi.yaml"
+paths:
+  /users/export:
+    get:
+      summary: Export user data in JSONL format
+      responses:
+        "200":
+          description: User data in JSONL format
+          content:
+            application/jsonl:
+              schema:
+                type: string
+              itemSchema:
+                $ref: "#/components/schemas/User"
+```
+
+The `schema` describes the overall stream, while `itemSchema` defines the structure of each individual JSON object per line. This allows tooling to generate typed deserialization for each record in the stream.
 
 ## Client-side handling of JSONL responses
 

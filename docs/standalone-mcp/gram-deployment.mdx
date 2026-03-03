@@ -1,0 +1,203 @@
+---
+title: "Deploy to Gram"
+description: "Deploy your MCP server to Gram using the speakeasy mcp deploy command."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Deploy to Gram
+
+Deploy a Speakeasy-generated MCP server to Gram, Speakeasy's platform for hosting and distributing MCP servers, with a single command. The `speakeasy mcp deploy` command handles authentication, building, and deployment automatically.
+
+<Callout type="warning">
+  The `speakeasy mcp deploy` command is currently experimental. The interface may change in future releases.
+</Callout>
+
+## Prerequisites
+
+Before deploying to Gram, ensure the following:
+
+- [Generate an MCP server](/docs/standalone-mcp/build-server) using Speakeasy with the `mcp-typescript` target.
+- Have Node.js and npm installed.
+
+## Configuration
+
+Gram deployment requires configuration in two files: `gen.yaml` for enabling Gram support during generation, and `workflow.yaml` for enabling the deploy command.
+
+### Enable Gram in gen.yaml
+
+Add `gramEnabled: true` to your `.speakeasy/gen.yaml` file:
+
+```yaml
+mcp-typescript:
+  version: 0.0.1
+  packageName: my-mcp-server
+  gramEnabled: true
+```
+
+### Enable deployment in workflow.yaml
+
+Add a `deployment` block to your MCP target in `.speakeasy/workflow.yaml`:
+
+```yaml
+targets:
+  my-mcp-server:
+    target: mcp-typescript
+    source: my-openapi-source
+    output: ./mcp-server
+    deployment: {}
+```
+
+The empty `deployment: {}` block enables deployment for the target. Optionally, specify a Gram project:
+
+```yaml
+targets:
+  my-mcp-server:
+    target: mcp-typescript
+    source: my-openapi-source
+    output: ./mcp-server
+    deployment:
+      project: my-gram-project
+```
+
+### Generated files
+
+After configuring `gen.yaml` and running `speakeasy run`, Speakeasy generates additional files for Gram deployment:
+
+- **`src/mcp-server/gram.ts`**: Gram entrypoint with `withGram()` wrapper that maps environment variables to MCP server flags and declares security fields as Gram manifest variables.
+- **`gram.config.ts`**: Gram build configuration.
+- **Updated `package.json`**: Includes `gram:build` and `gram:push` npm scripts.
+- **Updated `.gitignore`**: Excludes `gram.deploy.json` and `dist/` artifacts.
+
+## Deployment process
+
+Navigate to the generated MCP server directory and run the deploy command:
+
+```bash
+cd ./mcp-server
+speakeasy mcp deploy
+```
+
+The command performs the following steps:
+
+- Loads `workflow.yaml` and finds the MCP target with deployment enabled.
+- Reads `package.json` for version information.
+- Authenticates with Gram (opens a browser if not already authenticated).
+- Builds the MCP server using `npm run build` and `npm run gram:build`.
+- Deploys to Gram with an idempotency key based on the package version.
+- Sets up the MCP server as a public toolset.
+- Displays the MCP URL for connecting clients.
+
+### Command options
+
+The `speakeasy mcp deploy` command accepts the following options:
+
+- **`--target, -t`**: Specify the target name from `workflow.yaml`. Required if multiple MCP targets exist.
+- **`--project, -p`**: Override the Gram project name. Takes precedence over the `deployment.project` setting in `workflow.yaml`.
+
+### Example with options
+
+```bash
+speakeasy mcp deploy --target my-mcp-server --project production-project
+```
+
+## Authentication
+
+The first time the deploy command runs, it opens a browser window for Gram authentication. After successful authentication, credentials are stored locally for future deployments.
+
+To re-authenticate or switch accounts, run:
+
+```bash
+speakeasy mcp deploy
+```
+
+The command automatically detects if authentication is needed and prompts accordingly.
+
+## Idempotent deployments
+
+The deploy command uses the package name and version from `package.json` as an idempotency key in the format `{slug}@{version}`. This means:
+
+- Deploying the same version multiple times is safe and won't create duplicate deployments.
+- To deploy a new version, update the `version` field in `package.json` before running the deploy command.
+
+## Using the deployed server
+
+After deployment, the command outputs an MCP URL in the format:
+
+```text
+MCP URL: https://app.getgram.ai/mcp/{org-slug}-{server-slug}
+```
+
+Configure MCP clients to connect to this URL.
+
+### Claude Code
+
+```bash
+claude mcp add --transport streaming MyAPI https://app.getgram.ai/mcp/{org-slug}-{server-slug}
+```
+
+### Cursor
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "url": "https://app.getgram.ai/mcp/{org-slug}-{server-slug}"
+    }
+  }
+}
+```
+
+### Windsurf
+
+```json
+{
+  "mcpServers": {
+    "MyAPI": {
+      "serverUrl": "https://app.getgram.ai/mcp/{org-slug}-{server-slug}"
+    }
+  }
+}
+```
+
+## Updating deployments
+
+To update a deployed MCP server:
+
+- Make changes to the OpenAPI document.
+- Regenerate the MCP server:
+
+  ```bash
+  speakeasy run
+  ```
+
+- Update the version in `package.json`.
+- Redeploy:
+
+  ```bash
+  speakeasy mcp deploy
+  ```
+
+## Troubleshooting
+
+### Deployment not configured error
+
+If the deploy command returns an error about deployment not being configured, add the `deployment: {}` block to the target in `workflow.yaml`:
+
+```yaml
+targets:
+  my-mcp-server:
+    deployment: {}
+```
+
+### Multiple MCP targets
+
+If the workflow contains multiple MCP targets, specify which target to deploy using the `--target` flag:
+
+```bash
+speakeasy mcp deploy --target my-mcp-server
+```
+
+### Authentication issues
+
+If authentication fails, ensure the browser can open and complete the Gram login flow. The command stores credentials locally after successful authentication.

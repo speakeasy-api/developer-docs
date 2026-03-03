@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { Callout } from "@/mdx/components";
 
 # The gen.yaml file reference
@@ -6,8 +5,6 @@ import { Callout } from "@/mdx/components";
 <Callout title="Tip" type="info">
 
 For most use cases, the `speakeasy configure` command is the recommended means of interacting with the Speakeasy `gen.yaml` file. The `speakeasy configure` command has subcommands for configuring sources, targets, GitHub workflow setups, and package publications. All new targets created using `speakeasy quickstart` automatically generate workflow files in the `.speakeasy/` folder in the root of the target directory.
-<br/>
-The <Image src="/assets/vscode.svg" alt="VS Code" width="20" height="20" className="inline-block! w-auto! size-5 mx-2! my-0" /> [Speakeasy VS Code extension](https://marketplace.visualstudio.com/items?itemName=Speakeasy.speakeasy-vscode-extension) provides several useful features for manually editing the `gen.yaml` file, including syntax highlighting, autocompletion, and linting for OpenAPI documents and other supported file types.
 
 </Callout>
 
@@ -46,9 +43,12 @@ generation:
     parameterOrderingFeb2024: true
     requestResponseComponentNamesFeb2024: true
     securityFeb2025: true
+    nameOverrideFeb2026: true
   auth:
     OAuth2ClientCredentialsEnabled: true
   inferSSEOverload: true
+  repoUrl: https://github.com/my-org/my-sdk
+  repoSubDirectory: go
 ```
 
 ### sdkClassName
@@ -102,6 +102,7 @@ Includes specific fixes or features to be applied during SDK generation to avoid
 - `parameterOrderingFeb2024`: **Disabling not recommended**. Enables changes introduced in February 2024 to respect the order of parameters in the OpenAPI document where possible, defaults to `true` for new SDKs. For older SDKs, setting `true` is recommended, but will be a breaking change.
 - `requestResponseComponentNamesFeb2024`: **Disabling not recommended**. Enables changes introduced in February 2024 to use the name of parent request/response components where possible, defaults to `true` for new SDKs. For older SDKs, setting `true` is recommended, but will be a breaking change.
 - `securityFeb2025`: **Disabling not recommended**. Enables changes introduced in February 2025 to the security handling at both the global and operation level, particularly needed to enable per-operation OAuth2 flows. Defaults to `true` for new SDKs. For older SDKs, setting `true` is recommended, but will be a breaking change.
+- `nameOverrideFeb2026`: **Disabling not recommended**. Prevents `x-speakeasy-name-override` values from propagating through `$ref` resolution or `allOf` composition. Defaults to `true` for new SDKs. For older SDKs, setting `true` is recommended, but can be a breaking change depending on `x-speakeasy-name-override` usage.
 
 ```yaml
   fixes:
@@ -109,6 +110,7 @@ Includes specific fixes or features to be applied during SDK generation to avoid
     parameterOrderingFeb2024: true
     requestResponseComponentNamesFeb2024: true
     securityFeb2025: true
+    nameOverrideFeb2026: true
 ```
 
 ### auth
@@ -145,6 +147,26 @@ This feature is currently Python-specific, with support for other languages plan
 
 ```yaml
   inferSSEOverload: true
+```
+
+### repoUrl
+
+Sets the repository URL for the generated SDK. This value is used in generated package metadata (for example, the `repository` field in `package.json` for TypeScript). Setting `repoUrl` in `gen.yaml` removes the need to pass the `-r` CLI flag during generation.
+
+If both the CLI flag (`-r`) and the `gen.yaml` value are provided, the CLI flag takes precedence. If neither is set, the value from `gen.lock` (saved from a previous generation) is used.
+
+```yaml
+  repoUrl: https://github.com/my-org/my-sdk
+```
+
+### repoSubDirectory
+
+Sets the subdirectory within the repository where the SDK is located. This is useful for monorepo setups where multiple SDKs live in the same repository. Setting `repoSubDirectory` in `gen.yaml` removes the need to pass the `-b` CLI flag during generation.
+
+Like `repoUrl`, the CLI flag (`-b`) takes precedence over the `gen.yaml` value.
+
+```yaml
+  repoSubDirectory: go
 ```
 
 ### baseServerUrl
@@ -200,3 +222,16 @@ Controls how arrays are serialized in multipart/form-data requests. This option 
 ```
 
 **Migration note**: Changing from `legacy` to `standard` is a breaking change. APIs expecting field names with `[]` suffixes will need to be updated to handle the RFC-compliant format.
+
+### versioningStrategy
+
+Controls how SDK versions are determined during generation. For more information about SDK versioning, see our [SDK versioning documentation](/docs/sdks/manage/versioning).
+
+- `automatic` (default): Automatically bumps the SDK version based on changes to the OpenAPI spec, configuration, or generator version.
+- `manual`: Uses the version specified in `gen.yaml` as-is without automatic bumping. Use this when you want full control over SDK versioning.
+
+```yaml
+  versioningStrategy: manual
+```
+
+When set to `manual`, the SDK version will only change when you explicitly update the `version` field in your language-specific configuration or use `speakeasy bump` commands.

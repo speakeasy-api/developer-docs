@@ -13,7 +13,8 @@ speakeasy status [flags]
 ### Options
 
 ```
-  -h, --help   help for status
+  -h, --help            help for status
+  -o, --output string   Output format (summary: visual boxes, console: plain text for non-TTY environments, json: structured JSON for automation) (default "summary")
 ```
 
 ### Options inherited from parent commands
