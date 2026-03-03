@@ -7,215 +7,54 @@ import { Callout } from "@/mdx/components";
 
 # How to generate an OpenAPI document with Flask
 
-OpenAPI is a tool for defining and sharing REST APIs, and Flask can be paired with `flask-smorest` to build such APIs.
+When building REST APIs with Flask, clear and accurate documentation helps API consumers integrate quickly and confidently. [The OpenAPI Specification](https://swagger.io/specification/) has become the industry standard for documenting RESTful APIs, but writing and maintaining OpenAPI documents by hand is tedious and error-prone.
 
-This guide walks you through generating an OpenAPI document from a Flask project and using it to create SDKs with Speakeasy, covering the following steps:
+`flask-smorest` solves this by generating OpenAPI documentation directly from Flask code, using decorators and marshmallow schemas already in use. This guide covers generating an OpenAPI document from a Flask project and using it to create SDKs with Speakeasy, covering the following:
 
-1. Setting up a simple REST API with Flask
-2. Integrating `flask-smorest`
-3. Creating the OpenAPI document to describe the API
-4. Customizing the OpenAPI schema
-5. Using the Speakeasy CLI to create an SDK based on the schema
-6. Integrating SDK creation into CI/CD workflows
+- Setting up a Flask REST API with `flask-smorest`
+- Integrating OpenAPI document generation
+- Generating and customizing the OpenAPI spec
+- Using the Speakeasy CLI to generate client SDKs
 
-## Requirements
+## What is flask-smorest?
 
-To follow along, you will need:
+[flask-smorest](https://flask-smorest.readthedocs.io/) is a Flask extension that generates OpenAPI documentation from application code. Unlike tools that parse docstrings or require separate spec files, flask-smorest uses decorators on view classes to describe endpoints, validate request data, and serialize responses — all while automatically building an accurate OpenAPI document.
 
-- Python version 3.8 or higher
-- An existing Flask project or a copy of the provided [example repository](https://github.com/speakeasy-api/flask-openapi-example)
-- A basic understanding of Flask project structure and how REST APIs work
+flask-smorest builds on two Flask concepts:
 
-## Example Flask REST API repository
+- **`Blueprint`**: flask-smorest's `Blueprint` extends Flask's built-in blueprint with OpenAPI integration. Blueprints are registered with the `Api` object instead of the Flask app directly.
+- **`MethodView`**: Flask's class-based views group `get`, `post`, `put`, and `delete` methods under a single route, making it easy to apply flask-smorest decorators consistently.
+
+The two main decorators are:
+
+- **`@blp.response(status_code, schema)`**: Specifies the response code and marshmallow schema for a method. flask-smorest uses this to document the response and serialize the return value.
+- **`@blp.arguments(schema)`**: Validates and deserializes the request body against a marshmallow schema, and documents the expected request body in the OpenAPI spec.
+
+## Example API repository
 
 <Callout title="Example repository" type="info">
-The source code for the completed example is available in the [**Speakeasy Flask example repository**](https://github.com/speakeasy-api/openapi-flask-example).
+The source code for the completed example is available in the [**Speakeasy examples repository**](https://github.com/speakeasy-api/examples.git) (framework-flask).
 </Callout>
 
-The repository already contains all the code covered throughout the guide. You can clone it and follow along with the tutorial, or use it as a reference to add to your own Flask project.
+The repository contains all the code covered throughout this guide. Clone it to follow along, or use it as a reference for an existing Flask project.
 
-To better understand the process of generating an OpenAPI document with Flask, let's start by inspecting some simple CRUD endpoints for an online library, along with a `Book` class and a serializer for our data.
+For this guide, we'll use a simple Formula 1 (F1) lap times API with the following resources:
 
-### Models and routes
+- **Circuits**: Racing circuits with names and locations
+- **Drivers**: F1 drivers with their names and codes
+- **Lap Times**: Records of lap times for drivers on specific circuits
 
-### Apps
+### Requirements
 
-Open the `app.py` file, which serves as the main entry point of the program, and inspect the main function:
+To follow this guide:
 
-```python
-from flask import Flask
-from flask_smorest import Api
-from db import db
-import models
-from resources import blp as BookBlueprint
-import yaml
+- Python 3.8 or higher
+- An existing Flask project or a copy of the provided [example repository](https://github.com/speakeasy-api/flask-openapi-example)
+- A basic understanding of Flask and REST APIs
 
-app = Flask(__name__)
-app.config["API_TITLE"] = "Library API"
-app.config["API_VERSION"] = "v0.0.1"
-app.config["OPENAPI_VERSION"] = "3.1.0"
-app.config["OPENAPI_DESCRIPTION"] = "A simple library API"
-app.config["OPENAPI_URL_PREFIX"] = "/"
-app.config["OPENAPI_SWAGGER_UI_PATH"] = "/swagger-ui"
-app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database-file.db"
-app.config["API_SPEC_OPTIONS"] = {"x-speakeasy-retries": {
-        'strategy': 'backoff',
-        'backoff': {
-            'initialInterval': 500,
-            'maxInterval': 60000,
-            'maxElapsedTime': 3600000,
-            'exponent': 1.5,
-        },
-        'statusCodes': ['5XX'],
-        'retryConnectionErrors': True,
-    }
-}
+## Setting up flask-smorest
 
-
-db.init_app(app)
-api = Api(app)
-api.register_blueprint(BookBlueprint)
-
-# Add server information to the OpenAPI spec
-api.spec.options["servers"] = [
-    {
-        "url": "http://127.0.0.1:5000",
-        "description": "Local development server"
-    }
-]
-
-# Serve OpenAPI spec document endpoint for download
-@app.route("/openapi.yaml")
-def openapi_yaml():
-    spec = api.spec.to_dict()
-    return app.response_class(
-        yaml.dump(spec, default_flow_style=False),
-        mimetype="application/x-yaml"
-    )
-
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()  # Create database tables
-    app.run(debug=True)
-```
-
-### Database
-
-Here, you will see a method call to create a SQLite database and a function to run the Flask app:
-
-```python mark=54,55
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()  # Create database tables
-    app.run(debug=True)
-```
-
-### Models
-
-From the root of the repository, open the `models.py` file to see a `Book` model containing a few fields with validation:
-
-```python
-from db import db
-
-class Book(db.Model):
-    __tablename__ = "books"
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(80), nullable=False)
-    author = db.Column(db.String(80), nullable=False)
-    description = db.Column(db.String(200))
-```
-
-### Schemas
-
-In the `schemas.py` file, the `BookSchema` class can be used to serialize and deserialize book data with the `marshmallow` package:
-
-```python
-from marshmallow import Schema, fields
-
-class BookSchema(Schema):
-    id = fields.Int(dump_only=True)
-    title = fields.Str(required=True)
-    author = fields.Str(required=True)
-    description = fields.Str()
-```
-
-### Resources
-
-The `resources.py` file contains API endpoints set up to handle all the CRUD operations for the books:
-
-```python
-from flask.views import MethodView
-from flask_smorest import Blueprint, abort
-from sqlalchemy.exc import IntegrityError
-from db import db
-from models import Book
-from schemas import BookSchema
-
-blp = Blueprint("Books", "books", url_prefix="/books", description="Operations on books")
-
-@blp.route("/")
-class BookList(MethodView):
-    @blp.response(200, BookSchema(many=True))
-    @blp.paginate()
-    def get(self, pagination_parameters):
-        """List all books"""
-        query = Book.query
-        paginated_books = query.paginate(
-            page=pagination_parameters.page,
-            per_page=pagination_parameters.page_size,
-            error_out=False
-        )
-        pagination_parameters.item_count = paginated_books.total
-        return paginated_books.items
-
-    @blp.arguments(BookSchema)
-    @blp.response(201, BookSchema)
-    def post(self, new_data):
-        """Create a new book"""
-        book = Book(**new_data)
-        db.session.add(book)
-        db.session.commit()
-        return book
-
-@blp.route("/<int:book_id>")
-class BookDetail(MethodView):
-    @blp.response(200, BookSchema)
-    def get(self, book_id):
-        """Return books based on ID.
-        ---
-        Internal comment not meant to be exposed.
-        """
-        book = Book.query.get_or_404(book_id)
-        return book
-
-    @blp.arguments(BookSchema)
-    @blp.response(200, BookSchema)
-    def put(self, updated_data, book_id):
-        """Update an existing book"""
-        book = Book.query.get_or_404(book_id)
-        book.title = updated_data["title"]
-        book.author = updated_data["author"]
-        book.description = updated_data.get("description")
-        db.session.commit()
-        return book
-
-    def delete(self, book_id):
-        """Delete a book"""
-        book = Book.query.get_or_404(book_id)
-        db.session.delete(book)
-        db.session.commit()
-        return {"message": "Book deleted"}, 204
-```
-
-
-This code defines a simple Flask REST API with CRUD operations for a `Book` model. The `BookList` class provides a way to retrieve all book data and create new books. The `BookDetail` class handles the retrieval of specific books, updating book data, and deleting books.
-
-## Generate the OpenAPI document using `flask-smorest`
-
-Flask does not support OpenAPI document generation out-of-the-box, so we'll use the `flask-smorest` package to generate the OpenAPI document.
-
-If you are following along with the example repository, you can create and activate a virtual environment to install the project dependencies:
+To follow along with the example repository, create and activate a virtual environment and install the project dependencies:
 
 ```bash filename="Terminal"
 python -m venv venv
@@ -223,37 +62,50 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-If you have not already, install `flask-smorest` with the following command:
+To add flask-smorest to an existing project, install it with:
 
 ```bash filename="Terminal"
 pip install flask-smorest
 ```
 
+### Configuring flask-smorest
 
-### Configuration
+The core configuration for generating an OpenAPI document is added in `app.py`:
 
-The most basic configuration for generating an OpenAPI document with `flask-smorest` is added in the `app.py` file:
+```python filename="app.py"
+from flask import Flask
+from flask_smorest import Api
+from flask_migrate import Migrate
+from db import db
+import models
+from resources import CircuitBlueprint, DriverBlueprint, LapTimeBlueprint
+import yaml
 
-```python
-app.config["API_TITLE"] = "Library API"
-app.config["API_VERSION"] = "v0.0.1"
+app = Flask(__name__)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config["API_TITLE"] = "F1 Laps API"
+app.config["API_VERSION"] = "v1"
 app.config["OPENAPI_VERSION"] = "3.1.0"
-app.config["OPENAPI_DESCRIPTION"] = "A simple library API"
-```
-
-### SwaggerUI
-
-The new Swagger UI endpoint is also added in the `app.py` file:
-
-```python mark=14
+app.config["OPENAPI_URL_PREFIX"] = "/"
 app.config["OPENAPI_SWAGGER_UI_PATH"] = "/swagger-ui"
+app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database-file.db"
+
+db.init_app(app)
+migrate = Migrate(app, db)
+api = Api(app)
+api.register_blueprint(CircuitBlueprint)
+api.register_blueprint(DriverBlueprint)
+api.register_blueprint(LapTimeBlueprint)
 ```
 
-### Server
+The `API_TITLE`, `API_VERSION`, and `OPENAPI_VERSION` keys become the `info` block in the generated OpenAPI document. The `OPENAPI_SWAGGER_UI_PATH` and `OPENAPI_SWAGGER_UI_URL` keys enable the built-in OpenAPI UI.
 
-The `app.py` file contains additional configuration settings for the OpenAPI document. These add a development server:
+### Adding a server and download endpoint
 
-```python
+Server information and a downloadable spec endpoint can be added to `app.py`:
+
+```python filename="app.py"
 # Add server information to the OpenAPI spec
 api.spec.options["servers"] = [
     {
@@ -261,13 +113,7 @@ api.spec.options["servers"] = [
         "description": "Local development server"
     }
 ]
-```
 
-### Routes
-
-These additional configuration settings add a route to serve the OpenAPI document:
-
-```python
 # Serve OpenAPI spec document endpoint for download
 @app.route("/openapi.yaml")
 def openapi_yaml():
@@ -278,39 +124,149 @@ def openapi_yaml():
     )
 ```
 
+## Writing the API
 
-### Run server
+### Models
 
-To inspect and interact with the OpenAPI document, you need to run the development server, which will create a database file if one does not already exist, and serve the API.
+The `models.py` file defines the SQLAlchemy models. A `TimestampMixin` adds a `created_at` field to all models:
 
-Run the development server:
+```python filename="models.py"
+from db import db
+import datetime
+
+class TimestampMixin(object):
+    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
+
+class Circuit(TimestampMixin, db.Model):
+  __tablename__ = "circuits"
+  id = db.Column(db.Integer, primary_key=True)
+  name = db.Column(db.String(80), nullable=False)
+  location = db.Column(db.String(80), nullable=False)
+
+class Driver(TimestampMixin, db.Model):
+  __tablename__ = "drivers"
+  id = db.Column(db.Integer, primary_key=True)
+  name = db.Column(db.String(80), nullable=False)
+  code = db.Column(db.String(80), nullable=False)
+
+class LapTime(TimestampMixin, db.Model):
+  __tablename__ = "lap_times"
+  id = db.Column(db.Integer, primary_key=True)
+  driver_id = db.Column(db.Integer, db.ForeignKey(Driver.id))
+  circuit_id = db.Column(db.Integer, db.ForeignKey(Circuit.id))
+  lap_number = db.Column(db.Integer)
+  time_ms = db.Column(db.Integer)
+```
+
+### Schemas
+
+The `schemas.py` file defines marshmallow schemas for serialization and deserialization. flask-smorest uses these schemas to validate request data and generate OpenAPI schema components:
+
+```python filename="schemas.py"
+from marshmallow import Schema, fields
+
+class CircuitSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.Str(required=True)
+    location = fields.Str(required=True)
+    created_at = fields.DateTime(dump_only=True)
+
+class DriverSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.Str(required=True)
+    code = fields.Str(required=True)
+    created_at = fields.DateTime(dump_only=True)
+
+class LapTimeSchema(Schema):
+    id = fields.Int(dump_only=True)
+    driver_id = fields.Int(required=True)
+    circuit_id = fields.Int(required=True)
+    lap_number = fields.Int(required=True)
+    time_ms = fields.Int(required=True)
+    created_at = fields.DateTime(dump_only=True)
+```
+
+Fields marked `dump_only=True` (such as `id` and `created_at`) appear in responses but are ignored in request bodies.
+
+### Resources
+
+The `resources.py` file defines the API endpoints using flask-smorest Blueprints and `MethodView`. Here's `CircuitBlueprint` as a representative example — `DriverBlueprint` and `LapTimeBlueprint` follow the same pattern:
+
+```python filename="resources.py"
+from flask.views import MethodView
+from flask_smorest import Blueprint, abort
+from sqlalchemy.exc import IntegrityError
+from db import db
+from models import Circuit, Driver, LapTime
+from schemas import CircuitSchema, DriverSchema, LapTimeSchema
+
+CircuitBlueprint = Blueprint("Circuits", "circuits", url_prefix="/circuits", description="Operations on circuits")
+
+@CircuitBlueprint.route("/")
+class CircuitList(MethodView):
+    @CircuitBlueprint.response(200, CircuitSchema(many=True))
+    def get(self):
+        """List all circuits"""
+        return Circuit.query.all()
+
+    @CircuitBlueprint.arguments(CircuitSchema)
+    @CircuitBlueprint.response(201, CircuitSchema)
+    def post(self, new_data):
+        """Create a new circuit"""
+        circuit = Circuit(**new_data)
+        db.session.add(circuit)
+        db.session.commit()
+        return circuit
+
+@CircuitBlueprint.route("/<int:circuit_id>")
+class CircuitDetail(MethodView):
+    @CircuitBlueprint.response(200, CircuitSchema)
+    def get(self, circuit_id):
+        """Get circuit by ID"""
+        return Circuit.query.get_or_404(circuit_id)
+
+    @CircuitBlueprint.arguments(CircuitSchema)
+    @CircuitBlueprint.response(200, CircuitSchema)
+    def put(self, updated_data, circuit_id):
+        """Update an existing circuit"""
+        circuit = Circuit.query.get_or_404(circuit_id)
+        circuit.name = updated_data["name"]
+        circuit.location = updated_data["location"]
+        db.session.commit()
+        return circuit
+
+    def delete(self, circuit_id):
+        """Delete a circuit"""
+        circuit = Circuit.query.get_or_404(circuit_id)
+        db.session.delete(circuit)
+        db.session.commit()
+        return {"message": "Circuit deleted"}, 204
+```
+
+## Generating the OpenAPI document
+
+Run the development server to create the database and serve the API:
 
 ```bash filename="Terminal"
 python app.py
 ```
 
-You can now access the API and documentation:
+The following endpoints are now available:
 
-- Visit `http://127.0.0.1:5000/swagger-ui` to view the Swagger documentation and interact with the API.
-- Visit `http://127.0.0.1:5000/openapi.yaml` to download the OpenAPI document.
+- `http://127.0.0.1:5000/openapi-ui` — OpenAPI UI for interactive documentation
+- `http://127.0.0.1:5000/openapi.yaml` — the downloadable OpenAPI document
 
-### OpenAPI document generation
-
-Now that we understand our Flask REST API, we can run the following command to generate the OpenAPI document using `flask-smorest`:
+To write a static `openapi.yaml` file to the project root, run:
 
 ```bash filename="Terminal"
 flask openapi write --format=yaml openapi.yaml
 ```
 
-This generates a new file, `openapi.yaml`, in the root of the project.
+### The generated OpenAPI document
 
+Here's the OpenAPI document flask-smorest generates for the F1 Laps API:
 
-
-### Document
-
-Here, you can see an example of the generated OpenAPI document:
-
-```yaml
+```yaml filename="openapi.yaml"
 components:
   responses:
     DEFAULT_ERROR:
@@ -326,20 +282,39 @@ components:
             $ref: '#/components/schemas/Error'
       description: Unprocessable Entity
   schemas:
-    Book:
+    Circuit:
       properties:
-        author:
-          type: string
-        description:
+        created_at:
+          format: date-time
+          readOnly: true
           type: string
         id:
           readOnly: true
           type: integer
-        title:
+        location:
+          type: string
+        name:
           type: string
       required:
-      - author
-      - title
+      - name
+      - location
+      type: object
+    Driver:
+      properties:
+        code:
+          type: string
+        created_at:
+          format: date-time
+          readOnly: true
+          type: string
+        id:
+          readOnly: true
+          type: integer
+        name:
+          type: string
+      required:
+      - name
+      - code
       type: object
     Error:
       properties:
@@ -357,29 +332,35 @@ components:
           description: Error name
           type: string
       type: object
-    PaginationMetadata:
+    LapTime:
       properties:
-        first_page:
+        circuit_id:
           type: integer
-        last_page:
+        created_at:
+          format: date-time
+          readOnly: true
+          type: string
+        driver_id:
           type: integer
-        next_page:
+        id:
+          readOnly: true
           type: integer
-        page:
+        lap_number:
           type: integer
-        previous_page:
+        time_ms:
           type: integer
-        total:
-          type: integer
-        total_pages:
-          type: integer
+      required:
+      - circuit_id
+      - driver_id
+      - lap_number
+      - time_ms
       type: object
 info:
-  title: Library API
-  version: v0.0.1
+  title: F1 Laps API
+  version: v1
 openapi: 3.1.0
 paths:
-  /books/:
+  /circuits/:
     get:
       responses:
         '200':
@@ -387,59 +368,59 @@ paths:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/Book'
+                  $ref: '#/components/schemas/Circuit'
                 type: array
           description: OK
         default:
           $ref: '#/components/responses/DEFAULT_ERROR'
-      summary: List all books
+      summary: List all circuits
       tags:
-      - Books
+      - Circuits
     post:
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Book'
+              $ref: '#/components/schemas/Circuit'
         required: true
       responses:
         '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Book'
+                $ref: '#/components/schemas/Circuit'
           description: Created
         '422':
           $ref: '#/components/responses/UNPROCESSABLE_ENTITY'
         default:
           $ref: '#/components/responses/DEFAULT_ERROR'
-      summary: Create a new book
+      summary: Create a new circuit
       tags:
-      - Books
-  /books/{book_id}:
+      - Circuits
+  /circuits/{circuit_id}:
     delete:
       responses:
         default:
           $ref: '#/components/responses/DEFAULT_ERROR'
-      summary: Delete a book
+      summary: Delete a circuit
       tags:
-      - Books
+      - Circuits
     get:
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Book'
+                $ref: '#/components/schemas/Circuit'
           description: OK
         default:
           $ref: '#/components/responses/DEFAULT_ERROR'
-      summary: Return books based on ID.
+      summary: Get circuit by ID
       tags:
-      - Books
+      - Circuits
     parameters:
     - in: path
-      name: book_id
+      name: circuit_id
       required: true
       schema:
         minimum: 0
@@ -449,203 +430,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Book'
+              $ref: '#/components/schemas/Circuit'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Book'
+                $ref: '#/components/schemas/Circuit'
           description: OK
         '422':
           $ref: '#/components/responses/UNPROCESSABLE_ENTITY'
         default:
           $ref: '#/components/responses/DEFAULT_ERROR'
-      summary: Update an existing book
+      summary: Update an existing circuit
       tags:
-      - Books
-servers:
-- description: Local development server
-  url: http://127.0.0.1:5000
-tags:
-- description: Operations on books
-  name: Books
-x-speakeasy-retries:
-  backoff:
-    exponent: 1.5
-    initialInterval: 500
-    maxElapsedTime: 3600000
-    maxInterval: 60000
-  retryConnectionErrors: true
-  statusCodes:
-  - 5XX
-  strategy: backoff
-```
-
-### Config
-
-Return to the `app.py` file to see how the app configuration influences the OpenAPI document generation:
-
-```python
-app.config["API_TITLE"] = "Library API"
-app.config["API_VERSION"] = "v0.0.1"
-app.config["OPENAPI_VERSION"] = "3.1.0"
-app.config["OPENAPI_DESCRIPTION"] = "A simple library API"
-app.config["OPENAPI_URL_PREFIX"] = "/"
-app.config["OPENAPI_SWAGGER_UI_PATH"] = "/swagger-ui"
-app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
-```
-
-### Metadata
-
-Open the `openapi.yaml` file to see the titles and versions reflected in the generated OpenAPI document:
-
-```yaml
-info:
-  title: Library API
-  version: v0.0.1
-openapi: 3.1.0
-```
-
-### ServerInfo
-
-The server URL is also included in the OpenAPI document:
-
-```yaml
-servers:
-- description: Local development server
-  url: http://127.0.0.1:5000
-```
-
-### BookParams
-
-Open the `models.py` file to see the `Book` parameters:
-
-```python
-class Book(db.Model):
-    __tablename__ = "books"
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(80), nullable=False)
-    author = db.Column(db.String(80), nullable=False)
-    description = db.Column(db.String(200))
-```
-
-### SchemaRef
-
-Open the `openapi.yaml`file to check the same `Book` parameters are reflected in the OpenAPI document:
-
-```yaml
-  schemas:
-    Book:
-      properties:
-        author:
-          type: string
-        description:
-          type: string
-        id:
-          readOnly: true
-          type: integer
-        title:
-          type: string
-      required:
-      - author
-      - title
-      type: object
-```
-
-
-
-## OpenAPI document customization
-
-The OpenAPI document generated by `flask-smorest` may not fit all use cases. The document can be customized further to better serve information about your API endpoints. You can add descriptions, tags, examples, and more to make the documentation more informative and user-friendly.
-
-In the [customized](https://github.com/speakeasy-api/openapi-flask-example/tree/customized) branch of the example repository, you can find a customized OpenAPI document that demonstrates the options available for modifying your generated document.
-
-
-
-### Endpoints
-
-Open the `resources.py` file and inspect the configured endpoints:
-
-```python
-from flask.views import MethodView
-from flask_smorest import Blueprint, abort
-from sqlalchemy.exc import IntegrityError
-from db import db
-from models import Book
-from schemas import BookSchema
-
-blp = Blueprint("Books", "books", url_prefix="/books", description="Operations on books")
-
-@blp.route("/")
-class BookList(MethodView):
-    @blp.response(200, BookSchema(many=True))
-    @blp.paginate()
-    def get(self, pagination_parameters):
-        """List all books"""
-        query = Book.query
-        paginated_books = query.paginate(
-            page=pagination_parameters.page,
-            per_page=pagination_parameters.page_size,
-            error_out=False
-        )
-        pagination_parameters.item_count = paginated_books.total
-        return paginated_books.items
-
-    @blp.arguments(BookSchema)
-    @blp.response(201, BookSchema)
-    def post(self, new_data):
-        """Create a new book"""
-        book = Book(**new_data)
-        db.session.add(book)
-        db.session.commit()
-        return book
-
-@blp.route("/<int:book_id>")
-class BookDetail(MethodView):
-    @blp.response(200, BookSchema)
-    def get(self, book_id):
-        """Return books based on ID.
-        ---
-        Internal comment not meant to be exposed.
-        """
-        book = Book.query.get_or_404(book_id)
-        return book
-
-    @blp.arguments(BookSchema)
-    @blp.response(200, BookSchema)
-    def put(self, updated_data, book_id):
-        """Update an existing book"""
-        book = Book.query.get_or_404(book_id)
-        book.title = updated_data["title"]
-        book.author = updated_data["author"]
-        book.description = updated_data.get("description")
-        db.session.commit()
-        return book
-
-    def delete(self, book_id):
-        """Delete a book"""
-        book = Book.query.get_or_404(book_id)
-        db.session.delete(book)
-        db.session.commit()
-        return {"message": "Book deleted"}, 204
-```
-
-### Responses
-
-You can indicate the expected response codes and models using `@blp.response()`:
-
-```python
-    @blp.response(200, BookSchema(many=True))
-```
-
-### OpenAPIResponse
-
-This results in the following additions, for example, to the `/books/` `get` operation in the OpenAPI document:
-
-```yaml
-  /books/:
+      - Circuits
+  /drivers/:
     get:
       responses:
         '200':
@@ -653,91 +454,332 @@ This results in the following additions, for example, to the `/books/` `get` ope
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/Book'
+                  $ref: '#/components/schemas/Driver'
                 type: array
           description: OK
         default:
           $ref: '#/components/responses/DEFAULT_ERROR'
-      summary: List all books
+      summary: List all drivers
       tags:
-      - Books
-```
-
-### Arguments
-
-Use the `@blp.arguments()` decorator to enforce a schema for arguments:
-
-```python
-    @blp.arguments(BookSchema)
-```
-
-### OpenAPIArguments
-
-An enforced arguments schema results in the following additions to the `post` operation:
-
-```yaml
+      - Drivers
+    post:
       requestBody:
         content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Driver'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+          description: Created
+        '422':
+          $ref: '#/components/responses/UNPROCESSABLE_ENTITY'
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Create a new driver
+      tags:
+      - Drivers
+  /drivers/{driver_id}:
+    delete:
+      responses:
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Delete a driver
+      tags:
+      - Drivers
+    get:
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+          description: OK
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Get driver by ID
+      tags:
+      - Drivers
+    parameters:
+    - in: path
+      name: driver_id
+      required: true
+      schema:
+        minimum: 0
+        type: integer
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Driver'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+          description: OK
+        '422':
+          $ref: '#/components/responses/UNPROCESSABLE_ENTITY'
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Update an existing driver
+      tags:
+      - Drivers
+  /lap-times/:
+    get:
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LapTime'
+                type: array
+          description: OK
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: List all lap times
+      tags:
+      - LapTimes
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LapTime'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LapTime'
+          description: Created
+        '422':
+          $ref: '#/components/responses/UNPROCESSABLE_ENTITY'
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Create a new lap time
+      tags:
+      - LapTimes
+  /lap-times/{lap_time_id}:
+    delete:
+      responses:
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Delete a lap time
+      tags:
+      - LapTimes
+    get:
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LapTime'
+          description: OK
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Get lap time by ID
+      tags:
+      - LapTimes
+    parameters:
+    - in: path
+      name: lap_time_id
+      required: true
+      schema:
+        minimum: 0
+        type: integer
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LapTime'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LapTime'
+          description: OK
+        '422':
+          $ref: '#/components/responses/UNPROCESSABLE_ENTITY'
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: Update an existing lap time
+      tags:
+      - LapTimes
+servers:
+- description: Local development server
+  url: http://127.0.0.1:5000
+tags:
+- description: Operations on circuits
+  name: Circuits
+- description: Operations on drivers
+  name: Drivers
+- description: Operations on lap times
+  name: LapTimes
 ```
 
-### Pagination
+### API metadata
 
-Allow pagination with the `@blp.paginate()` decorator:
+The `app.py` configuration keys map directly to the `info` block in the generated document:
 
-```python
-    @blp.paginate()
+```python filename="app.py"
+app.config["API_TITLE"] = "F1 Laps API"
+app.config["API_VERSION"] = "v1"
+app.config["OPENAPI_VERSION"] = "3.1.0"
 ```
 
-### PaginationQuery
-
-Allowing paginations gives you access to the `page` and `page_size` properties, which you can use in your database query:
-
-```python
-    def get(self, pagination_parameters):
-        """List all books"""
-        query = Book.query
-        paginated_books = query.paginate(
-            page=pagination_parameters.page,
-            per_page=pagination_parameters.page_size,
-            error_out=False
-        )
-        pagination_parameters.item_count = paginated_books.total
-        return paginated_books.items
+```yaml filename="openapi.yaml"
+info:
+  title: F1 Laps API
+  version: v1
+openapi: 3.1.0
 ```
 
-### Docstrings
+### Server information
 
-You can add inline documentation using docstrings:
+The server URL added in `app.py` appears in the `servers` block:
 
-```python
-    def get(self, book_id):
-        """Return books based on ID.
+```yaml filename="openapi.yaml"
+servers:
+- description: Local development server
+  url: http://127.0.0.1:5000
+```
+
+### Model parameters
+
+Open `models.py` to see the `Circuit` model fields:
+
+```python filename="models.py"
+class Circuit(TimestampMixin, db.Model):
+  __tablename__ = "circuits"
+  id = db.Column(db.Integer, primary_key=True)
+  name = db.Column(db.String(80), nullable=False)
+  location = db.Column(db.String(80), nullable=False)
+```
+
+### Schema in the OpenAPI document
+
+Open `openapi.yaml` to see the same fields reflected in the `Circuit` schema:
+
+```yaml filename="openapi.yaml"
+  schemas:
+    Circuit:
+      properties:
+        created_at:
+          format: date-time
+          readOnly: true
+          type: string
+        id:
+          readOnly: true
+          type: integer
+        location:
+          type: string
+        name:
+          type: string
+      required:
+      - name
+      - location
+      type: object
+```
+
+## Customizing the OpenAPI document
+
+The OpenAPI document flask-smorest generates can be enriched with additional detail. Decorators on view methods control both API behavior and the resulting documentation.
+
+### Response schema in the OpenAPI document
+
+Use `@blp.response()` to specify the expected response code and schema for a method:
+
+```python filename="resources.py"
+    @CircuitBlueprint.response(200, CircuitSchema(many=True))
+    def get(self):
+        """List all circuits"""
+        return Circuit.query.all()
+```
+
+This generates the following entry for the `/circuits/` `GET` operation in the OpenAPI document:
+
+```yaml filename="openapi.yaml"
+  /circuits/:
+    get:
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Circuit'
+                type: array
+          description: OK
+        default:
+          $ref: '#/components/responses/DEFAULT_ERROR'
+      summary: List all circuits
+      tags:
+      - Circuits
+```
+
+### Request body in the OpenAPI document
+
+Use `@blp.arguments()` to validate the request body against a schema and document it in the spec:
+
+```python filename="resources.py"
+    @CircuitBlueprint.arguments(CircuitSchema)
+    @CircuitBlueprint.response(201, CircuitSchema)
+    def post(self, new_data):
+        """Create a new circuit"""
+        ...
+```
+
+This adds a `requestBody` to the `POST` operation:
+
+```yaml filename="openapi.yaml"
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Circuit'
+        required: true
+```
+
+### Docstrings in the OpenAPI document
+
+Method docstrings become the `summary` field in the OpenAPI document. Anything after `---` in the docstring is treated as an internal comment and omitted from the spec:
+
+```python filename="resources.py"
+    def get(self, circuit_id):
+        """Get circuit by ID.
         ---
-        Internal comment not meant to be exposed.
+        Internal note: add caching here later.
         """
+        return Circuit.query.get_or_404(circuit_id)
 ```
 
-### DocReflection
+This produces:
 
-Docstrings are reflected in the OpenAPI document as follows:
-
-```yaml
-      summary: Return books based on ID.
+```yaml filename="openapi.yaml"
+      summary: Get circuit by ID.
 ```
 
-### Comments
+The internal comment is excluded from the generated document.
 
-Notice the internal comment that is omitted from the OpenAPI document:
+### Retries in the generated SDK
 
-```python
-        Internal comment not meant to be exposed.
-```
+Global retry behavior for Speakeasy-generated SDKs can be configured by adding an `x-speakeasy-retries` extension to the OpenAPI spec via `app.config["API_SPEC_OPTIONS"]`:
 
-### Retries
-
-You can add global retries to the OpenAPI document by modifying the app config in the `app.py` file:
-
-```python
+```python filename="app.py"
 app.config["API_SPEC_OPTIONS"] = {"x-speakeasy-retries": {
         'strategy': 'backoff',
         'backoff': {
@@ -752,11 +794,9 @@ app.config["API_SPEC_OPTIONS"] = {"x-speakeasy-retries": {
 }
 ```
 
-### SDKRetries
+This adds the following to the generated OpenAPI document, which Speakeasy uses when generating SDK retry logic:
 
-This enables retries when using the document to create an SDK with Speakeasy:
-
-```yaml
+```yaml filename="openapi.yaml"
 x-speakeasy-retries:
   backoff:
     exponent: 1.5
@@ -769,198 +809,28 @@ x-speakeasy-retries:
   strategy: backoff
 ```
 
+## Generating SDKs with Speakeasy
 
+With the OpenAPI document ready, Speakeasy can generate client SDKs. First, install the Speakeasy CLI:
 
-## Creating SDKs for a Flask REST API
+```bash filename="Terminal"
+curl -fsSL https://go.speakeasy.com/cli-install.sh | sh
+```
 
-To create a Python SDK for the Flask REST API, run the following command:
+Then run:
 
 ```bash filename="Terminal"
 speakeasy quickstart
 ```
 
-Follow the onscreen prompts to provide the configuration details for your new SDK, such as the name, schema location, and output path. When prompted, enter `openapi.yaml` for the OpenAPI document location, select a language, and generate.
+Follow the prompts to provide the OpenAPI document location (`openapi.yaml`), choose a language, and generate. Speakeasy produces a complete client SDK based on your API specification.
 
-## Add SDK generation to your GitHub Actions
+## Add SDK generation to GitHub Actions
 
-The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows for integrating the Speakeasy CLI into your CI/CD pipeline, so that your SDKs are recreated whenever your OpenAPI document changes.
+The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows for integrating the Speakeasy CLI into a CI/CD pipeline, so SDKs are regenerated whenever the OpenAPI document changes.
 
-You can set up Speakeasy to automatically push a new branch to your SDK repositories for your engineers to review before merging the SDK changes.
-
-For an overview of how to set up automation for your SDKs, see the Speakeasy [SDK Generation Action and Workflows](/docs/speakeasy-reference/workflow-file) documentation.
-
-## SDK customization
-
-After creating your SDK with Speakeasy, you will find a new directory containing the generated SDK code, which we will now explore further.
-
-These examples assume a Python SDK named `books-python` was generated from the example Flask project above. Edit any paths to reflect your environment if you want to follow in your own project.
-
-
-### BookClass
-
-Navigate into the `books-python/src/books/models` directory and find the `book.py` file created by Speakeasy. Note how the OpenAPI document was used to create the `Book` class:
-
-```python
-"""Code generated by Speakeasy (https://speakeasy.com). DO NOT EDIT."""
-
-from __future__ import annotations
-from books.types import BaseModel
-from typing import Optional
-from typing_extensions import NotRequired, TypedDict
-
-
-class BookTypedDict(TypedDict):
-    author: str
-    title: str
-    description: NotRequired[str]
-    id: NotRequired[int]
-
-
-class Book(BaseModel):
-    author: str
-
-    title: str
-
-    description: Optional[str] = None
-
-    id: Optional[int] = None
-```
-
-### SDKMethods
-
-Open the `src/books/books_sdk.py` file to see the methods that call the web API from an application using the SDK:
-
-```python mark=13
-class BooksSDK(BaseSDK):
-    r"""Operations on books"""
-
-    def get_books_(
-        self,
-        *,
-        page: Optional[int] = 1,
-        page_size: Optional[int] = 10,
-        retries: OptionalNullable[utils.RetryConfig] = UNSET,
-        server_url: Optional[str] = None,
-        timeout_ms: Optional[int] = None,
-    ) -> models.GetBooksResponse:
-        r"""List all books
-
-        :param page:
-        :param page_size:
-        :param retries: Override the default retry configuration for this method
-        :param server_url: Override the default server URL for this method
-        :param timeout_ms: Override the default request timeout configuration for this method in milliseconds
-        """
-        base_url = None
-        url_variables = None
-        if timeout_ms is None:
-            timeout_ms = self.sdk_configuration.timeout_ms
-
-        if server_url is not None:
-            base_url = server_url
-
-        request = models.GetBooksRequest(
-            page=page,
-            page_size=page_size,
-        )
-
-        req = self.build_request(
-            method="GET",
-            path="/books/",
-            base_url=base_url,
-            url_variables=url_variables,
-            request=request,
-            request_body_required=False,
-            request_has_path_params=False,
-            request_has_query_params=True,
-            user_agent_header="user-agent",
-            accept_header_value="application/json",
-            timeout_ms=timeout_ms,
-        )
-
-        if retries == UNSET:
-            if self.sdk_configuration.retry_config is not UNSET:
-                retries = self.sdk_configuration.retry_config
-            else:
-                retries = utils.RetryConfig(
-                    "backoff", utils.BackoffStrategy(500, 60000, 1.5, 3600000), True
-                )
-
-        retry_config = None
-        if isinstance(retries, utils.RetryConfig):
-            retry_config = (retries, ["5XX"])
-
-        http_res = self.do_request(
-            hook_ctx=HookContext(
-                operation_id="get_/books/", oauth2_scopes=[], security_source=None
-            ),
-            request=req,
-            error_status_codes=["422", "4XX", "5XX"],
-            retry_config=retry_config,
-        )
-
-        data: Any = None
-        if utils.match_response(http_res, "200", "application/json"):
-            return models.GetBooksResponse(
-                result=utils.unmarshal_json(http_res.text, List[models.Book]),
-                headers=utils.get_response_headers(http_res.headers),
-            )
-        if utils.match_response(http_res, "422", "application/json"):
-            data = utils.unmarshal_json(http_res.text, models.Error1Data)
-            raise models.Error1(data=data)
-        if utils.match_response(http_res, ["4XX", "5XX"], "*"):
-            http_res_text = utils.stream_to_text(http_res)
-            raise models.APIError(
-                "API error occurred", http_res.status_code, http_res_text, http_res
-            )
-        if utils.match_response(http_res, "default", "application/json"):
-            return models.GetBooksResponse(
-                result=utils.unmarshal_json(http_res.text, models.Error), headers={}
-            )
-
-        content_type = http_res.headers.get("Content-Type")
-        http_res_text = utils.stream_to_text(http_res)
-        raise models.APIError(
-            f"Unexpected response received (code: {http_res.status_code}, type: {content_type})",
-            http_res.status_code,
-            http_res_text,
-            http_res,
-        )
-```
-
-### Requests
-
-Here, you can see how the request to the API endpoint is built:
-
-```python
-        req = self.build_request(
-            method="GET",
-            path="/books/",
-            base_url=base_url,
-            url_variables=url_variables,
-            request=request,
-            request_body_required=False,
-            request_has_path_params=False,
-            request_has_query_params=True,
-            user_agent_header="user-agent",
-            accept_header_value="application/json",
-            timeout_ms=timeout_ms,
-        )
-```
-
-### RetriesConfig
-
-Finally, note the result of the global retries strategy that we set up in the `app.py` file:
-
-```python
-                retries = utils.RetryConfig(
-                    "backoff", utils.BackoffStrategy(500, 60000, 1.5, 3600000), True
-                )
-```
-
+For an overview of how to set up SDK automation, see the Speakeasy [SDK Generation Action and Workflows](/docs/speakeasy-reference/workflow-file) documentation.
 
 ## Summary
 
-In this guide, we showed you how to generate an OpenAPI document for a Flask API and use Speakeasy to create an SDK based on the OpenAPI document. The step-by-step instructions included adding relevant tools to the Flask project, generating an OpenAPI document, enhancing it for improved creation, using Speakeasy CLI to create the SDKs, and interpreting the basics of the generated SDK.
-
-We also explored automating SDK generation through CI/CD workflows and improving API operations.
+This guide covered how to generate an OpenAPI document for a Flask API using `flask-smorest` and use Speakeasy to create client SDKs from it. We covered setting up flask-smorest, writing models, schemas, and blueprint-based resources for the F1 Laps API, generating and inspecting the OpenAPI document, and customizing it with response schemas, request validation, docstrings, and retry configuration.
