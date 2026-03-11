@@ -727,6 +727,9 @@ const meta = {
                   "functions-framework": {
                     title: "Using the Functions Framework",
                   },
+                  "tool-annotations": {
+                    title: "Tool annotations",
+                  },
                   "mcp-sdk": {
                     title: "Using the MCP SDK",
                   },
