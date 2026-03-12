@@ -28,7 +28,7 @@ speakeasy quickstart [flags]
   -s, --schema string         local filepath, URL, or registry reference for the OpenAPI schema (e.g., ./spec.yaml, https://..., namespace, org/workspace/namespace@tag)
       --skip-compile          skip compilation during generation after setup
       --skip-interactive      skip all interactive prompts and use defaults (useful for non-interactive environments like CI)
-  -t, --target string         generation target (available options: [csharp, go, java, mcp-typescript, php, postman, python, ruby, terraform, typescript, unity])
+  -t, --target string         generation target (available options: [cli, csharp, go, java, mcp-typescript, php, postman, python, ruby, terraform, typescript, unity])
 ```
 
 ### Options inherited from parent commands
