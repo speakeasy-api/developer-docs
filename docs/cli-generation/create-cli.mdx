@@ -1,0 +1,213 @@
+---
+title: "Generate a CLI from an OpenAPI Document"
+description: "Generate a production-ready command-line interface from an OpenAPI document using Speakeasy."
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+# Generate a CLI from an OpenAPI document
+
+<Callout type="warning" title="Alpha · Enterprise Only">
+  CLI generation is currently in **alpha** and available exclusively to
+  **Enterprise** customers. Features and configuration may change. [Contact
+  us](https://www.speakeasy.com/pricing) for access.
+</Callout>
+
+Speakeasy generates a fully functional command-line interface from your OpenAPI specification. The CLI is written in Go using [Cobra](https://cobra.dev/) and wraps a generated Go SDK, providing a per-operation command structure with built-in authentication, multiple output formats, and cross-platform distribution tooling.
+
+## Prerequisites
+
+- The [Speakeasy CLI](/docs/speakeasy-reference/cli/getting-started)
+- An [Enterprise plan](https://www.speakeasy.com/pricing)
+- An API spec in a supported format:
+
+<Table
+  data={[
+    { format: "OpenAPI 3.0", supported: "✅" },
+    { format: "OpenAPI 3.1", supported: "✅" },
+    { format: "JSON Schema", supported: "✅" },
+  ]}
+  columns={[
+    { key: "format", header: "Spec format" },
+    { key: "supported", header: "Supported" },
+  ]}
+/>
+
+## Quickstart
+
+### 1. Create a CLI
+
+Run the Speakeasy quickstart command and select the CLI target:
+
+```bash
+speakeasy quickstart --target cli
+```
+
+The interactive flow prompts for three configuration values:
+
+
+<Table
+  data={[
+    {
+      field: "`packageName`",
+      description:
+        "The Go module path for your CLI (e.g., `github.com/my-company/my-api-cli`).",
+      example: "`github.com/acme/petstore-cli`",
+    },
+    {
+      field: "`cliName`",
+      description:
+        "The binary name users will type to run the CLI. Also used for the config directory (`~/.config/<cliName>/`).",
+      example: "`petstore`",
+    },
+    {
+      field: "`envVarPrefix`",
+      description:
+        "Prefix for environment variables. The CLI will check for variables like `<PREFIX>_API_KEY`.",
+      example: "`PETSTORE`",
+    },
+  ]}
+  columns={[
+    { key: "field", header: "Field" },
+    { key: "description", header: "Description" },
+    { key: "example", header: "Example" },
+  ]}
+/>
+
+### 2. Review the generated output
+
+After generation, you'll have a complete Go project:
+
+```
+├── cmd/
+│   ├── <cliName>/main.go        # Binary entrypoint
+│   └── gendocs/main.go          # Cobra documentation generator
+├── internal/
+│   ├── cli/                     # Cobra command files (one per operation)
+│   │   ├── root.go              # Root command with global flags
+│   │   ├── configure.go         # Interactive setup wizard
+│   │   ├── whoami.go            # Auth status checker
+│   │   ├── version.go           # Version info
+│   │   └── ...                  # Per-operation commands
+│   ├── client/                  # SDK client wrapper and diagnostics
+│   ├── config/                  # Config file and OS keychain management
+│   ├── flagutil/                # Flag registration and request building
+│   ├── output/                  # Output formatting (pretty, JSON, YAML, table, TOON)
+│   └── sdk/                     # Auto-generated Go SDK
+├── scripts/
+│   ├── install.sh               # Linux/macOS install script
+│   └── install.ps1              # Windows install script
+├── .goreleaser.yaml             # Cross-platform binary builds
+├── go.mod
+└── README.md
+```
+
+### 3. Build and run
+
+```bash
+go build -o petstore ./cmd/petstore
+./petstore --help
+```
+
+### 4. Configure authentication
+
+Run the interactive setup wizard to configure API credentials:
+
+```bash
+./my-cli configure
+```
+
+This stores credentials securely in the OS keychain (macOS Keychain, Windows Credential Manager, or Linux Secret Service) and generates a config file at `~/.config/<cliName>/config.yaml`.
+
+## Key features
+
+### Per-operation commands
+
+Every API operation becomes a CLI command. Operations are grouped by tags, with smart stutter removal to keep command names clean:
+
+```bash
+# If your API has a "users" tag with a "list-users" operation:
+my-cli users list    # "-users" suffix is removed from "list-users"
+
+# View all available commands:
+my-cli --help
+```
+
+### Multiple output formats
+
+Control output format with the `--output-format` flag (or `-o` for short):
+
+```bash
+my-cli users list -o json     # JSON output
+my-cli users list -o yaml     # YAML output
+my-cli users list -o table    # Tabular output
+my-cli users list -o pretty   # Colored key-value output (default)
+my-cli users list -o toon     # Token-oriented output (for LLM consumption)
+```
+
+### jq filtering
+
+Filter and transform output with built-in jq support:
+
+```bash
+my-cli users list --jq '.[] | {name: .name, email: .email}'
+```
+
+### Flexible request input
+
+Provide request data through individual flags, a JSON body, or stdin:
+
+```bash
+# Individual flags
+my-cli users create --name "Alice" --email "alice@example.com"
+
+# JSON body
+my-cli users create --body '{"name": "Alice", "email": "alice@example.com"}'
+
+# Stdin piping
+echo '{"name": "Alice"}' | my-cli users create
+```
+
+### Authentication
+
+The CLI resolves credentials with a 4-tier priority:
+
+- **Flags** — `--api-key`, `--bearer-token`, etc.
+- **Environment variables** — `<PREFIX>_API_KEY`, `<PREFIX>_BEARER_TOKEN`, etc.
+- **OS keychain** — stored via `my-cli configure`
+- **Config file** — `~/.config/<cliName>/config.yaml`
+
+### Pagination
+
+Automatically page through paginated endpoints:
+
+```bash
+my-cli users list --all                # Fetch all pages
+my-cli users list --all --max-pages 5  # Limit to 5 pages
+```
+
+### Diagnostics
+
+Debug API calls without making real requests:
+
+```bash
+my-cli users list --dry-run   # Show the request without sending it
+my-cli users list --debug     # Show full request/response with secret redaction
+```
+
+### Shell completions
+
+Generate shell completions for your CLI:
+
+```bash
+my-cli completion bash   # Bash
+my-cli completion zsh    # Zsh
+my-cli completion fish   # Fish
+my-cli completion powershell   # PowerShell
+```
+
+## Next steps
+
+- [**Customize your CLI**](/docs/cli-generation/customize-cli) — Configure command naming, environment variables, and custom code
+- [**Distribute your CLI**](/docs/cli-generation/distribute-cli) — Set up GoReleaser, install scripts, and release automation
+- [**Configuration reference**](/docs/speakeasy-reference/generation/cli-config) — Full `gen.yaml` reference for the `cli` target

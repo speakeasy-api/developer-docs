@@ -1,0 +1,130 @@
+---
+title: "Customize a CLI"
+description: "Customize command naming, authentication, output, and behavior of your generated CLI."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Customize a CLI
+
+<Callout type="warning" title="Alpha · Enterprise Only">
+  CLI generation is currently in **alpha** and available exclusively to
+  **Enterprise** customers. Features and configuration may change. [Contact
+  us](https://www.speakeasy.com/pricing) for access.
+</Callout>
+
+The generated CLI can be customized through `gen.yaml` configuration options and OpenAPI extensions. This page covers CLI-specific customization. For the full configuration reference, see the [CLI configuration options](/docs/speakeasy-reference/generation/cli-config).
+
+## Command stutter removal
+
+By default, the CLI applies smart stutter removal to keep command names clean. When an operation name shares a prefix or suffix with its tag (group), the redundant part is removed.
+
+**Prefix stutter** — an operation name like `users-list` under a `users` tag becomes `list`:
+
+```bash
+# With removeStutter: true (default)
+my-cli users list        # "users-" prefix removed from "users-list"
+my-cli users get         # "users-" prefix removed from "users-get"
+
+# With removeStutter: false
+my-cli users users-list
+my-cli users users-get
+```
+
+**Suffix stutter** — an operation name like `list-users` under a `users` tag becomes `list`:
+
+```bash
+# With removeStutter: true (default)
+my-cli users list        # "-users" suffix removed from "list-users"
+my-cli users create      # "-user" suffix removed from "create-user" (singular match)
+
+# With removeStutter: false
+my-cli users list-users
+my-cli users create-user
+```
+
+**Exact matches** are promoted to the parent group command (the group itself becomes runnable). Both prefix and suffix matching also handle singular/plural variations (e.g., `create-user` under a `users` group). Configure this behavior in `gen.yaml`:
+
+```yaml
+cli:
+  removeStutter: true # default
+```
+
+## Environment variable prefix
+
+The `envVarPrefix` setting controls the prefix for all environment variables the CLI reads. This affects authentication, server selection, and global parameters.
+
+```yaml
+cli:
+  envVarPrefix: "PETSTORE"
+```
+
+With this configuration, the CLI will check for variables like:
+
+- `PETSTORE_API_KEY` — API key authentication
+- `PETSTORE_BEARER_TOKEN` — Bearer token authentication
+- `PETSTORE_SERVER_URL` — Server URL override
+
+## Custom code regions
+
+Enable custom code regions to insert hand-written code into specific locations in the generated CLI. When enabled, marked regions in the generated code are preserved across regenerations.
+
+```yaml
+cli:
+  enableCustomCodeRegions: true
+```
+
+Custom code regions use Go comments to mark boundaries:
+
+```go
+// #region custom-imports
+import "my-custom-package"
+// #endregion custom-imports
+```
+
+For more details on custom code regions, see the [custom code regions documentation](/docs/customize-sdks/code/code-regions/overview).
+
+## Release artifact generation
+
+By default, the CLI target generates GoReleaser configuration, GitHub Actions workflows, and install scripts. Disable this if you manage releases separately:
+
+```yaml
+cli:
+  generateRelease: false # default: true
+```
+
+When enabled, the following files are generated:
+
+- `.goreleaser.yaml` — Cross-platform binary build configuration
+- `.github/workflows/release.yaml` — GitHub Actions release workflow
+- `scripts/install.sh` — Linux/macOS install script
+- `scripts/install.ps1` — Windows PowerShell install script
+
+For more information on distributing your CLI, see [Distribute a CLI](/docs/cli-generation/distribute-cli).
+
+## CLI name and binary
+
+The `cliName` setting controls:
+
+- The binary name (what users type to run the CLI)
+- The config directory path (`~/.config/<cliName>/config.yaml`)
+- Shell completion command names
+- References in generated documentation
+
+```yaml
+cli:
+  cliName: "petstore"
+```
+
+## Go SDK customization
+
+The CLI target generates a Go SDK internally (in the `internal/sdk/` directory) that powers the CLI commands. Many standard SDK customization options apply to the underlying SDK, including:
+
+- [Server configuration](/docs/customize-sdks/servers)
+- [Authentication and security](/docs/customize-sdks/authentication/overview)
+- [Retries](/docs/customize-sdks/runtime/retries)
+- [Pagination](/docs/customize-sdks/runtime/pagination)
+- [Error handling](/docs/customize-sdks/responses/errors)
+- [Global parameters](/docs/customize-sdks/globals)
+
+For Go-specific SDK configuration, see the [Go configuration reference](/docs/speakeasy-reference/generation/go-config).
