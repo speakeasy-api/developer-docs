@@ -7,19 +7,18 @@ import { Callout, Table } from "@/mdx/components";
 
 # Distribute a CLI
 
-<Callout type="warning" title="Alpha · Enterprise Only">
-  CLI generation is currently in **alpha** and available exclusively to
-  **Enterprise** customers. Features and configuration may change. [Contact
-  us](https://www.speakeasy.com/pricing) for access.
+<Callout type="warning" title="Alpha · Early Access">
+  CLI generation is currently in **alpha** and available exclusively to **early
+  access** customers. Features and configuration may change. [Contact
+  us](/book-demo) for access.
 </Callout>
 
 <Callout type="info">
-  CLI distribution currently uses GoReleaser and generated install scripts
-  rather than the standard `speakeasy configure publishing` workflow. More
-  distribution options are planned for future releases.
+  CLI distribution currently uses generated GoReleaser configuration and release
+  scripts rather than the standard `speakeasy configure publishing` workflow.
 </Callout>
 
-The CLI target generates everything needed for cross-platform binary distribution: a GoReleaser configuration, a GitHub Actions release workflow, and install scripts for Linux, macOS, and Windows.
+The CLI target generates the artifacts needed for cross-platform binary distribution: a GoReleaser configuration, a GitHub Actions release workflow, and install scripts for Linux, macOS, and Windows.
 
 ## Distribution methods
 
@@ -28,20 +27,20 @@ The CLI target generates everything needed for cross-platform binary distributio
     {
       method: "GoReleaser + GitHub Releases",
       description:
-        "Automated cross-platform binary builds triggered by git tags. Produces archives with checksums.",
+        "Automated cross-platform binary builds triggered by git tags. Produces archives and checksums.",
       bestFor: "Production releases",
     },
     {
       method: "Install scripts",
       description:
-        "Generated `install.sh` (bash) and `install.ps1` (PowerShell) scripts that download the latest release from GitHub.",
+        "Generated `install.sh` and `install.ps1` scripts that download the latest or a pinned release from GitHub.",
       bestFor: "End-user installation",
     },
     {
       method: "`go install`",
       description:
-        "Install directly from the Go module. Requires Go toolchain on the user's machine.",
-      bestFor: "Go developers",
+        "Install directly from the Go module path. Best suited for Go developers or internal tooling users who already have Go installed.",
+      bestFor: "Developer-first distribution",
     },
   ]}
   columns={[
@@ -51,9 +50,25 @@ The CLI target generates everything needed for cross-platform binary distributio
   ]}
 />
 
+## Generated release artifacts
+
+With `cli.generateRelease: true` (the default), the generator produces:
+
+- `.goreleaser.yaml`
+- `.github/workflows/release.yaml`
+- `scripts/install.sh`
+- `scripts/install.ps1`
+
+To manage releases with separate tooling, disable this behavior:
+
+```yaml
+cli:
+  generateRelease: false
+```
+
 ## GoReleaser
 
-The CLI target generates a `.goreleaser.yaml` that builds binaries for all major platforms:
+The generated `.goreleaser.yaml` builds binaries for the major desktop/server targets:
 
 <Table
   data={[
@@ -62,18 +77,16 @@ The CLI target generates a `.goreleaser.yaml` that builds binaries for all major
     { os: "Windows", architectures: "amd64, arm64" },
   ]}
   columns={[
-    { key: "os", header: "Operating System" },
+    { key: "os", header: "Operating system" },
     { key: "architectures", header: "Architectures" },
   ]}
 />
 
-### Generated GoReleaser configuration
+The generated build metadata is derived from the CLI config, especially `cliName`. For example, with `cliName: "petstore"`, GoReleaser will build from `./cmd/petstore` and publish a binary named `petstore`.
 
-The `id`, `main`, and `binary` fields are derived from the `cliName` configuration value. For example, with `cliName: "petstore"`:
-
+### Example generated configuration
 
 ```yaml
-# .goreleaser.yaml (generated)
 version: 2
 
 builds:
@@ -95,39 +108,30 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    files:
-      - README.md
-      - LICENSE*
-
-release:
-  draft: false
-  prerelease: auto
-  mode: append
 
 checksum:
-  name_template: "checksums.txt"
+  name_template: checksums.txt
 ```
 
 ### Creating a release
 
-The generated GitHub Actions workflow automates releases when a version tag is pushed:
-
+The generated GitHub Actions workflow runs GoReleaser when a version tag is pushed:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-This triggers the workflow, which runs GoReleaser to build binaries, create a GitHub Release, and upload the archives with checksums.
+This creates a GitHub Release and uploads the compiled archives and checksums.
 
 ### Prerequisites
 
-- **GitHub Actions permissions**: The release workflow requires `contents: write` permission to create releases and upload assets.
-- **Repository access**: For public repositories, release assets are accessible to anyone. For private repositories, users need repository access to download binaries.
+- **GitHub Actions permissions**: the release workflow needs `contents: write`
+- **Repository visibility/access**: private repositories require appropriate access for anyone downloading release assets
 
 ## Install scripts
 
-The CLI target generates platform-specific install scripts that download the latest (or a pinned) release from GitHub.
+The generated install scripts download a release archive from GitHub, extract the binary, and place it into a sensible install location.
 
 ### Linux and macOS
 
@@ -135,50 +139,66 @@ The CLI target generates platform-specific install scripts that download the lat
 curl -fsSL https://raw.githubusercontent.com/{org}/{repo}/main/scripts/install.sh | bash
 ```
 
-Configure the installation using environment variables derived from your `envVarPrefix` configuration. For example, with `envVarPrefix: "PETSTORE"`:
+The script supports two environment variables derived from the configured `envVarPrefix`:
+
+- `<PREFIX>_INSTALL_DIR` — override the install directory
+- `<PREFIX>_VERSION` — install a specific release tag instead of `latest`
+
+Example:
 
 ```bash
-# Custom install directory
 PETSTORE_INSTALL_DIR=/opt/bin curl -fsSL .../install.sh | bash
-
-# Specific version
 PETSTORE_VERSION=v0.2.0 curl -fsSL .../install.sh | bash
 ```
 
-The environment variable names follow the pattern `<envVarPrefix>_INSTALL_DIR` and `<envVarPrefix>_VERSION`. The script installs to `/usr/local/bin` by default, falling back to `~/.local/bin` if the user doesn't have write access to `/usr/local/bin`.
+By default, the installer tries `/usr/local/bin` first and falls back to `~/.local/bin` when it does not have write access.
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/{org}/{repo}/main/scripts/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/{org}/{repo}/main/scripts/install.ps1 | iex
 ```
+
+The PowerShell installer uses the same environment-variable pattern:
+
+- `<PREFIX>_INSTALL_DIR`
+- `<PREFIX>_VERSION`
+
+By default, it installs under `%LOCALAPPDATA%\Programs\<cliName>` and updates the user PATH when needed.
 
 ## go install
 
-Users with the Go toolchain can install directly from the module:
+Users with the Go toolchain can install the CLI directly from the module:
 
 ```bash
 go install {packageName}/cmd/{cliName}@latest
 ```
 
-For example:
+Example:
 
 ```bash
 go install github.com/acme/petstore-cli/cmd/petstore@latest
 ```
 
-The exact command depends on the `packageName` and `cliName` values in your `gen.yaml`.
+This command is derived from the `packageName` and `cliName` settings.
 
-## Disabling release generation
+<Callout title="Note">
+  `go install` does not inject the version metadata that the GoReleaser build
+  adds with linker flags. Version output may therefore appear as `(devel)`.
+</Callout>
 
-If you manage releases through your own tooling, disable the generated release artifacts:
+## Shell completions after install
 
-```yaml
-cli:
-  generateRelease: false
+Generated CLIs include Cobra’s built-in completion command, so after installation users can enable completions with:
+
+```bash
+petstore completion bash
+petstore completion zsh
+petstore completion fish
+petstore completion powershell
 ```
 
-This prevents generation of `.goreleaser.yaml`, the GitHub Actions workflow, and install scripts.
+This works regardless of whether the CLI was installed from a release archive, an install script, or `go install`.
 
 ## Common pitfalls
 
@@ -187,22 +207,22 @@ This prevents generation of `.goreleaser.yaml`, the GitHub Actions workflow, and
     {
       issue: "GoReleaser fails with permission errors",
       solution:
-        "Ensure the GitHub Actions workflow has `contents: write` permission. Check that the `GITHUB_TOKEN` has sufficient scope.",
+        "Ensure the GitHub Actions workflow has `contents: write` permission and that the repository token has enough scope to create releases and upload assets.",
     },
     {
       issue: "Install script fails on private repos",
       solution:
-        "The install scripts use unauthenticated GitHub API calls by default. For private repos, users need to set a `GITHUB_TOKEN` environment variable or download binaries manually.",
+        "The generated scripts download from GitHub release URLs. Private repositories require repository access, and an additional authenticated installation flow may be needed in the target environment.",
     },
     {
-      issue: "Checksums don't match",
+      issue: "Checksums or archives differ from local builds",
       solution:
-        "Always use the official release workflow. Manual builds may produce different binaries due to environment differences. GoReleaser builds are deterministic with `CGO_ENABLED=0`.",
+        "Use the generated GoReleaser workflow for official builds. Manual builds can differ because of environment and linker-flag differences.",
     },
     {
-      issue: "`go install` builds without version info",
+      issue: "`go install` shows `(devel)` version output",
       solution:
-        "`go install` doesn't inject ldflags. The version will show as `(devel)`. Use GoReleaser for versioned builds.",
+        "This is expected because `go install` does not apply the GoReleaser ldflags used in release builds.",
     },
   ]}
   columns={[

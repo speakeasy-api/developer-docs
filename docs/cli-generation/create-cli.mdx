@@ -7,18 +7,18 @@ import { Callout, Table } from "@/mdx/components";
 
 # Generate a CLI from an OpenAPI document
 
-<Callout type="warning" title="Alpha · Enterprise Only">
-  CLI generation is currently in **alpha** and available exclusively to
-  **Enterprise** customers. Features and configuration may change. [Contact
-  us](https://www.speakeasy.com/pricing) for access.
+<Callout type="warning" title="Alpha · Early Access">
+  CLI generation is currently in **alpha** and available exclusively to **early
+  access** customers. Features and configuration may change. [Contact
+  us](/book-demo) for access.
 </Callout>
 
-Speakeasy generates a fully functional command-line interface from your OpenAPI specification. The CLI is written in Go using [Cobra](https://cobra.dev/) and wraps a generated Go SDK, providing a per-operation command structure with built-in authentication, multiple output formats, and cross-platform distribution tooling.
+Speakeasy generates a fully functional command-line interface from an OpenAPI specification. The CLI is written in Go using [Cobra](https://cobra.dev/) and wraps a generated Go SDK, providing per-operation commands, built-in authentication, multiple output formats, shell completions, and cross-platform distribution tooling.
 
 ## Prerequisites
 
 - The [Speakeasy CLI](/docs/speakeasy-reference/cli/getting-started)
-- An [Enterprise plan](https://www.speakeasy.com/pricing)
+- Early access to CLI generation. [Contact sales](/book-demo) for access.
 - An API spec in a supported format:
 
 <Table
@@ -45,25 +45,24 @@ speakeasy quickstart --target cli
 
 The interactive flow prompts for three configuration values:
 
-
 <Table
   data={[
     {
       field: "`packageName`",
       description:
-        "The Go module path for your CLI (e.g., `github.com/my-company/my-api-cli`).",
+        "The Go module path for your CLI (for example, `github.com/my-company/my-api-cli`).",
       example: "`github.com/acme/petstore-cli`",
     },
     {
       field: "`cliName`",
       description:
-        "The binary name users will type to run the CLI. Also used for the config directory (`~/.config/<cliName>/`).",
+        "The binary name users will type to run the CLI. Also used for the config directory (`~/.config/<cliName>/`). Defaults to `cli` if not set.",
       example: "`petstore`",
     },
     {
       field: "`envVarPrefix`",
       description:
-        "Prefix for environment variables. The CLI will check for variables like `<PREFIX>_API_KEY`.",
+        "Prefix for environment variables. The CLI will check for variables like `<PREFIX>_API_KEY`. Defaults to `CLI` if not set.",
       example: "`PETSTORE`",
     },
   ]}
@@ -76,23 +75,20 @@ The interactive flow prompts for three configuration values:
 
 ### 2. Review the generated output
 
-After generation, you'll have a complete Go project:
+After generation, the output is a complete Go project:
 
 ```
 ├── cmd/
 │   ├── <cliName>/main.go        # Binary entrypoint
 │   └── gendocs/main.go          # Cobra documentation generator
 ├── internal/
-│   ├── cli/                     # Cobra command files (one per operation)
-│   │   ├── root.go              # Root command with global flags
-│   │   ├── configure.go         # Interactive setup wizard
-│   │   ├── whoami.go            # Auth status checker
-│   │   ├── version.go           # Version info
-│   │   └── ...                  # Per-operation commands
+│   ├── cli/                     # Cobra command files (root, auth, configure, per-operation)
 │   ├── client/                  # SDK client wrapper and diagnostics
 │   ├── config/                  # Config file and OS keychain management
 │   ├── flagutil/                # Flag registration and request building
-│   ├── output/                  # Output formatting (pretty, JSON, YAML, table, TOON)
+│   ├── output/                  # Output formatting and agent-mode behavior
+│   ├── usage/                   # Grouped help and machine-readable usage schema
+│   ├── explorer/                # Interactive command explorer (when enabled)
 │   └── sdk/                     # Auto-generated Go SDK
 ├── scripts/
 │   ├── install.sh               # Linux/macOS install script
@@ -111,103 +107,228 @@ go build -o petstore ./cmd/petstore
 
 ### 4. Configure authentication
 
-Run the interactive setup wizard to configure API credentials:
+Run the interactive setup wizard to configure API credentials and global settings:
 
 ```bash
-./my-cli configure
+./petstore configure
 ```
 
-This stores credentials securely in the OS keychain (macOS Keychain, Windows Credential Manager, or Linux Secret Service) and generates a config file at `~/.config/<cliName>/config.yaml`.
+When available, secrets are stored in the OS keychain (macOS Keychain, Windows Credential Manager, or Linux Secret Service / keyring-compatible backends). Non-secret configuration is stored in `~/.config/<cliName>/config.yaml`.
 
-## Key features
+If interactive auth is enabled and the API has global security, generated CLIs also expose an `auth` command group:
+
+```bash
+./petstore auth login
+./petstore auth whoami
+./petstore auth logout
+```
+
+## How generated CLIs behave
 
 ### Per-operation commands
 
 Every API operation becomes a CLI command. Operations are grouped by tags, with smart stutter removal to keep command names clean:
 
 ```bash
-# If your API has a "users" tag with a "list-users" operation:
-my-cli users list    # "-users" suffix is removed from "list-users"
+# If the API has a "users" tag with a "list-users" operation:
+petstore users list
 
 # View all available commands:
-my-cli --help
+petstore --help
 ```
 
-### Multiple output formats
+### Request input options
 
-Control output format with the `--output-format` flag (or `-o` for short):
+Generated CLIs support multiple request input styles with predictable precedence:
 
-```bash
-my-cli users list -o json     # JSON output
-my-cli users list -o yaml     # YAML output
-my-cli users list -o table    # Tabular output
-my-cli users list -o pretty   # Colored key-value output (default)
-my-cli users list -o toon     # Token-oriented output (for LLM consumption)
-```
-
-### jq filtering
-
-Filter and transform output with built-in jq support:
-
-```bash
-my-cli users list --jq '.[] | {name: .name, email: .email}'
-```
-
-### Flexible request input
-
-Provide request data through individual flags, a JSON body, or stdin:
+- Individual flags (highest priority)
+- `--body` JSON
+- stdin JSON (lowest priority)
 
 ```bash
 # Individual flags
-my-cli users create --name "Alice" --email "alice@example.com"
+petstore users create --name "Alice" --email "alice@example.com"
 
-# JSON body
-my-cli users create --body '{"name": "Alice", "email": "alice@example.com"}'
+# Whole request body JSON
+petstore users create --body '{"name":"Alice","email":"alice@example.com"}'
 
 # Stdin piping
-echo '{"name": "Alice"}' | my-cli users create
+cat payload.json | petstore users create
 ```
 
-### Authentication
+Individual flags override values supplied through `--body` or stdin, which makes the CLI work well for both scripts and ad hoc usage.
 
-The CLI resolves credentials with a 4-tier priority:
+### Bytes and base64 request input
 
-- **Flags** — `--api-key`, `--bearer-token`, etc.
-- **Environment variables** — `<PREFIX>_API_KEY`, `<PREFIX>_BEARER_TOKEN`, etc.
-- **OS keychain** — stored via `my-cli configure`
-- **Config file** — `~/.config/<cliName>/config.yaml`
-
-### Pagination
-
-Automatically page through paginated endpoints:
+Request fields typed as bytes are exposed as flags that accept three forms:
 
 ```bash
-my-cli users list --all                # Fetch all pages
-my-cli users list --all --max-pages 5  # Limit to 5 pages
+# Read bytes from disk
+petstore files upload --contents file:./avatar.png
+
+# Decode base64 first
+petstore files upload --contents b64:SGVsbG8=
+
+# Use raw string bytes directly
+petstore files upload --contents hello
+```
+
+Supported base64 forms include padded and unpadded standard base64 plus URL-safe base64 variants.
+
+### Output formats
+
+Control output format with the `--output-format` flag (or `-o`):
+
+```bash
+petstore users list -o pretty
+petstore users list -o json
+petstore users list -o yaml
+petstore users list -o table
+petstore users list -o toon
+```
+
+- `pretty` is the default for human terminal use
+- `toon` is optimized for compact, line-oriented agent consumption
+- `--jq` applies a jq expression and produces JSON output
+
+```bash
+petstore users list --jq '.[] | {name: .name, email: .email}'
+```
+
+### Binary responses
+
+Binary or file-like responses get binary-safe handling:
+
+```bash
+# Save directly to disk
+petstore files download --id file_123 --output-file ./report.pdf
+
+# Print as base64 instead of raw bytes
+petstore files download --id file_123 --output-b64
+```
+
+For binary-only operations, the CLI blocks writing raw binary directly to an interactive terminal and instructs the user to use `--output-file`, `--output-b64`, or piping.
+
+### Response headers
+
+Generated CLIs can optionally include HTTP response headers in output:
+
+```bash
+petstore users get --id user_123 --include-headers -o json
+```
+
+This is useful for surfacing pagination headers, rate-limit metadata, or request tracing identifiers.
+
+### Pagination and streaming
+
+When an operation is marked as paginated, the CLI adds `--all` and `--max-pages`:
+
+```bash
+petstore users list --all
+petstore users list --all --max-pages 5
+```
+
+Streaming endpoints are also supported:
+
+- **SSE** (`text/event-stream`)
+- **JSONL / NDJSON** (`application/jsonl`, `application/x-ndjson`)
+
+These are emitted incrementally rather than buffered.
+
+### Retries, timeout, and custom headers
+
+Generated CLIs include runtime controls that map to the underlying SDK behavior. Retry flags are available when retry support is enabled for the generated target/spec:
+
+```bash
+petstore users list --timeout 30s
+petstore users list --no-retries
+petstore users list --retry-max-elapsed-time 10s
+petstore users list --header "X-Request-ID: abc-123"
 ```
 
 ### Diagnostics
 
-Debug API calls without making real requests:
+The CLI includes built-in diagnostics that are safe for scripts and CI:
 
 ```bash
-my-cli users list --dry-run   # Show the request without sending it
-my-cli users list --debug     # Show full request/response with secret redaction
+petstore users list --dry-run
+petstore users list --debug
 ```
+
+- `--dry-run` shows the request that would be sent without making a network call
+- `--debug` logs request/response diagnostics to stderr
+- both paths automatically redact common secret-bearing headers and payload fields
+
+### Interactive mode
+
+Interactive mode is enabled by default in the generator and improves the human terminal experience:
+
+- auto-prompting for unresolved required fields
+- an `explore` TUI for browsing and launching commands
+- interactive `configure` flows
+- interactive `auth login` flows when auth is available and interactive auth is enabled
+
+```bash
+petstore explore
+petstore users create
+petstore users create --no-interactive
+```
+
+Interactive prompting and explorer auto-launch only happen when stdin and stdout are TTYs.
+
+### Agent mode
+
+Generated CLIs also support an agent-aware runtime mode optimized for AI coding assistants and non-human terminal drivers.
+
+```bash
+petstore users list --agent-mode
+petstore users list --agent-mode=false
+```
+
+Agent mode can also auto-enable when the CLI detects well-known agent environments such as Claude Code, Cursor, Codex, Aider, Cline, Windsurf, GitHub Copilot, Amazon Q, Gemini Code Assist, and Cody.
+
+When agent mode is active:
+
+- the default output format becomes `toon`
+- errors become structured and machine-readable
+- interactive surfaces are suppressed or blocked
+- explorer auto-launch is disabled
+
+### Machine-readable usage schema
+
+Generated CLIs provide both standard Cobra help and a machine-readable usage schema:
+
+```bash
+petstore users create --help
+petstore users create --usage
+```
+
+`--usage` emits a KDL representation of the selected command, including flags, defaults, help text, aliases, and configuration metadata.
 
 ### Shell completions
 
-Generate shell completions for your CLI:
+Generated CLIs support Cobra’s built-in completion command:
 
 ```bash
-my-cli completion bash   # Bash
-my-cli completion zsh    # Zsh
-my-cli completion fish   # Fish
-my-cli completion powershell   # PowerShell
+petstore completion bash
+petstore completion zsh
+petstore completion fish
+petstore completion powershell
 ```
+
+Source the generated output directly in a shell session or install completion scripts as part of the CLI setup.
+
+## Authentication and configuration precedence
+
+The generated CLI resolves values in a predictable order:
+
+- **Security credentials**: flags → environment variables → OS keychain → config file
+- **Global parameters**: flags → environment variables → config file
+
+That means users can mix persistent configuration with per-command overrides without changing the generated code.
 
 ## Next steps
 
-- [**Customize your CLI**](/docs/cli-generation/customize-cli) — Configure command naming, environment variables, and custom code
-- [**Distribute your CLI**](/docs/cli-generation/distribute-cli) — Set up GoReleaser, install scripts, and release automation
+- [**Customize a CLI**](/docs/cli-generation/customize-cli) — Configure command naming, environment variables, interactive features, and release artifacts
+- [**Distribute a CLI**](/docs/cli-generation/distribute-cli) — Set up GoReleaser, install scripts, and release automation
 - [**Configuration reference**](/docs/speakeasy-reference/generation/cli-config) — Full `gen.yaml` reference for the `cli` target

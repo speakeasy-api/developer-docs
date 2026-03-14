@@ -581,11 +581,11 @@ const meta = {
         title: "CLI Generation",
         display: "children",
         items: {
-          index: {
-            title: "Overview",
-          },
           "create-cli": {
             title: "Generate CLI",
+          },
+          index: {
+            title: "Overview",
           },
           "customize-cli": {
             title: "Customize CLI",
