@@ -1,0 +1,164 @@
+---
+title: "Customize model namespaces"
+description: "Route component schemas into custom namespace subdirectories in your generated SDK using x-speakeasy-model-namespace."
+slug: "/customize-sdks/model-namespaces/"
+---
+
+import { Callout } from "~/components";
+import { Tabs } from "@speakeasy/nextra-theme";
+
+# Customize model namespaces
+
+<Callout title="Experimental" variant="info">
+  `x-speakeasy-model-namespace` is an experimental feature. All languages are supported.
+</Callout>
+
+By default, Speakeasy places all component schemas into a single shared directory (for example, `models/components`). As your API grows, this flat structure can lead to naming collisions and make it harder for SDK consumers to find relevant types.
+
+The `x-speakeasy-model-namespace` extension routes individual component schemas into custom namespace subdirectories, giving SDK consumers cleaner, topic-scoped imports and allowing identically named schemas to coexist in different namespaces.
+
+## Usage
+
+Add `x-speakeasy-model-namespace` to any component schema in your OpenAPI spec:
+
+```yaml
+components:
+  schemas:
+    CoreSkillInput:
+      x-speakeasy-model-namespace: mcp-server
+      type: object
+      properties:
+        name:
+          type: string
+    Pet:
+      type: object # no namespace — goes to the default shared directory
+      properties:
+        name:
+          type: string
+```
+
+Schemas without the extension continue to land in the default shared directory as usual.
+
+## Output path transformation
+
+The namespace value replaces the last segment of the default shared directory path:
+
+| Default path | Namespace | Result |
+| --- | --- | --- |
+| `models/components` | `mcp-server` | `models/mcp-server` |
+| `sdk/models/shared` | `foo` | `sdk/models/foo` |
+| `models` | `foo` | `models/foo` |
+
+The namespace becomes a peer directory of the default shared folder, not a subdirectory within it.
+
+## Per-language imports
+
+The namespace value is automatically sanitized to match each language's conventions:
+
+| Language | Casing rule |
+| --- | --- |
+| Go | lowercase, special characters stripped |
+| Python | snake_case |
+| Java | lowercase |
+| TypeScript | camelCase |
+| C# / PHP | PascalCase |
+
+Given a namespace value of `mcp-server`, imports look like this:
+
+<Tabs items={['TypeScript', 'Python', 'Go', 'Java', 'C#']}>
+<Tabs.Tab>
+```typescript
+import { CoreSkillInput } from "my-sdk/models/mcpServer";
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```python
+from my_sdk.models.mcp_server import CoreSkillInput
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```go
+import "github.com/example/my-sdk/models/mcpserver"
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```java
+import com.example.models.mcpserver.CoreSkillInput;
+```
+</Tabs.Tab>
+<Tabs.Tab>
+```csharp
+using MySDK.Models.McpServer;
+```
+</Tabs.Tab>
+</Tabs>
+
+## Validation rules
+
+The namespace value must satisfy the following constraints:
+
+- Not be empty.
+- Not start with a number (would cause compilation errors in most languages).
+- Contain only alphanumeric characters (`a-z`, `A-Z`, `0-9`), underscores (`_`), hyphens (`-`), and dots (`.`).
+- Not contain forward slashes — nested namespaces (`foo/bar`) are not supported. Only flat, single-level namespaces are allowed.
+
+If validation fails, Speakeasy will report one of the following errors:
+
+- `x-speakeasy-model-namespace cannot be empty`
+- `x-speakeasy-model-namespace must contain only alphanumeric characters (a-z, A-Z, 0-9), underscores (_), hyphens (-), and dots (.). Nested namespaces using forward slashes (/) are not currently supported`
+- `x-speakeasy-model-namespace cannot start with a number`
+
+## Collision detection
+
+Speakeasy validates that different namespace values won't collide after language-specific sanitization. For example, `federation_lookup` and `federationLookup` both become `federationlookup` in Go. If a collision is detected, Speakeasy reports an error:
+
+```
+model namespace `federationLookup` (`federationlookup`) will collide with
+`federation_lookup` (`federationlookup`) [line 42] when converted to folder/package name
+```
+
+Choose distinct namespace values that remain unique after sanitization to avoid this error.
+
+## Inheritance
+
+Child schemas inherit the namespace from their parent. Inline properties and `$ref`'d types within a namespaced schema automatically receive the same namespace.
+
+However, `oneOf` members do **not** inherit a namespace. Each schema in a discriminated union keeps its own namespace (or lack thereof).
+
+## Name collision support
+
+Combined with `x-speakeasy-name-override`, you can have identically named schemas in different namespaces:
+
+```yaml
+components:
+  schemas:
+    foo_Pet:
+      x-speakeasy-name-override: Pet
+      x-speakeasy-model-namespace: foo
+      type: object
+      properties:
+        name:
+          type: string
+    bar_Pet:
+      x-speakeasy-name-override: Pet
+      x-speakeasy-model-namespace: bar
+      type: object
+      properties:
+        name:
+          type: string
+```
+
+This produces `foo.Pet` and `bar.Pet` as fully separate types with collision-resistant imports in all languages.
+
+## Security schemes
+
+`x-speakeasy-model-namespace` also works on security scheme definitions. Adding the extension to a `securitySchemes` entry routes the generated security type into the specified namespace:
+
+```yaml
+components:
+  securitySchemes:
+    McpAuth:
+      x-speakeasy-model-namespace: mcp-server
+      type: http
+      scheme: bearer
+```
