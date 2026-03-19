@@ -1,6 +1,6 @@
 ---
 title: "Distribute a CLI"
-description: "Distribute your generated CLI using GoReleaser, install scripts, or go install."
+description: "Distribute your generated CLI using GoReleaser, Homebrew, Linux packages, install scripts, or go install."
 ---
 
 import { Callout, Table } from "@/mdx/components";
@@ -18,7 +18,7 @@ import { Callout, Table } from "@/mdx/components";
   scripts rather than the standard `speakeasy configure publishing` workflow.
 </Callout>
 
-The CLI target generates the artifacts needed for cross-platform binary distribution: a GoReleaser configuration, a GitHub Actions release workflow, and install scripts for Linux, macOS, and Windows.
+The CLI target generates the artifacts needed for cross-platform binary distribution: a GoReleaser configuration, a GitHub Actions release workflow, install scripts for Linux, macOS, and Windows, optional Homebrew tap publishing, optional WinGet publishing, and optional Linux package artifacts via nFPM.
 
 ## Distribution methods
 
@@ -27,8 +27,26 @@ The CLI target generates the artifacts needed for cross-platform binary distribu
     {
       method: "GoReleaser + GitHub Releases",
       description:
-        "Automated cross-platform binary builds triggered by git tags. Produces archives and checksums.",
+        "Automated cross-platform binary builds triggered by git tags. Produces archives, checksums, and a detached GPG signature for the checksum file.",
       bestFor: "Production releases",
+    },
+    {
+      method: "Homebrew tap",
+      description:
+        "Optional Homebrew formula publishing through a customer-owned tap repository. Users install with `brew install org/tap/cli`.",
+      bestFor: "macOS/Linux package-manager installs",
+    },
+    {
+      method: "WinGet",
+      description:
+        "Optional Windows Package Manager publishing through a generated PR to `microsoft/winget-pkgs`. Users install with `winget install Publisher.Package`.",
+      bestFor: "Windows-native installs",
+    },
+    {
+      method: "Linux packages (nFPM)",
+      description:
+        "Optional `.deb`, `.rpm`, or `.apk` packages attached to GitHub Releases. Users download the package artifact from a release and install it manually.",
+      bestFor: "Linux-first distribution",
     },
     {
       method: "Install scripts",
@@ -58,6 +76,10 @@ With `cli.generateRelease: true` (the default), the generator produces:
 - `.github/workflows/release.yaml`
 - `scripts/install.sh`
 - `scripts/install.ps1`
+- `checksums.txt` plus a detached GPG signature for the checksum artifact at release time
+- optional Homebrew tap publishing when `cli.distribution.homebrew.enabled: true`
+- optional WinGet publishing when `cli.distribution.winget.enabled: true`
+- optional Linux package artifacts (`.deb`, `.rpm`, `.apk`) when `cli.distribution.nfpm.enabled: true`
 
 To manage releases with separate tooling, disable this behavior:
 
@@ -83,6 +105,86 @@ The generated `.goreleaser.yaml` builds binaries for the major desktop/server ta
 />
 
 The generated build metadata is derived from the CLI config, especially `cliName`. For example, with `cliName: "petstore"`, GoReleaser will build from `./cmd/petstore` and publish a binary named `petstore`.
+
+### Homebrew tap publishing
+
+Enable Homebrew formula generation in `gen.yaml`:
+
+```yaml
+cli:
+  generateRelease: true
+  distribution:
+    homebrew:
+      enabled: true
+      tap: myorg/homebrew-petstore
+```
+
+When enabled, GoReleaser updates a formula in the configured tap repository as part of the release.
+
+One-time setup:
+
+- Create a tap repository such as `github.com/myorg/homebrew-petstore`
+- Add a `HOMEBREW_TAP_GITHUB_TOKEN` secret to the CLI repository
+- For classic personal access tokens, grant `public_repo` for public taps or `repo` for private taps
+- For fine-grained personal access tokens, grant `Contents: Read and write` on the tap repository
+
+End users install the CLI with:
+
+```bash
+brew install myorg/petstore/petstore
+```
+
+### WinGet publishing
+
+Enable WinGet manifest generation in `gen.yaml`:
+
+```yaml
+cli:
+  generateRelease: true
+  distribution:
+    winget:
+      enabled: true
+      publisher: MyOrg
+      repositoryOwner: mygithubuser
+      publisherUrl: https://example.com
+      packageIdentifier: MyOrg.Petstore
+      license: Apache-2.0
+```
+
+When enabled, GoReleaser generates a WinGet manifest, pushes a branch, and opens a PR against `microsoft/winget-pkgs`.
+
+One-time setup:
+
+- Fork `microsoft/winget-pkgs` under a GitHub account or organization
+- Set `distribution.winget.repositoryOwner` to the owner of that fork
+- Add a `WINGET_GITHUB_TOKEN` secret to the CLI repository
+- Use a classic GitHub personal access token with `public_repo` scope for the fork owner account
+- Ensure the configured `distribution.winget.packageIdentifier` matches the desired publisher/package name
+
+End users install the CLI with:
+
+```powershell
+winget install MyOrg.Petstore
+```
+
+### Linux package artifacts with nFPM
+
+Enable Linux package generation in `gen.yaml`:
+
+```yaml
+cli:
+  generateRelease: true
+  distribution:
+    nfpm:
+      enabled: true
+      formats: deb,rpm
+      maintainer: "Speakeasy <oss@speakeasy.com>"
+      license: "Apache-2.0"
+```
+
+When enabled, GoReleaser attaches Linux packages to the same GitHub Release as the archive artifacts.
+
+**Important:** this does **not** create an apt or yum repository automatically. Users download the package from GitHub Releases and install it manually.
 
 ### Example generated configuration
 
@@ -111,7 +213,24 @@ archives:
 
 checksum:
   name_template: checksums.txt
+
+signs:
+  - artifacts: checksum
 ```
+
+### Checksum signing
+
+The generated release workflow signs the checksum file with GPG. This produces:
+
+- `checksums.txt`
+- `checksums.txt.sig`
+
+Add these repository secrets before pushing a release tag:
+
+- `CLI_GPG_SECRET_KEY`
+- `CLI_GPG_PASSPHRASE`
+
+Use an ASCII-armored private key for `CLI_GPG_SECRET_KEY`. The generated workflow imports that key, exports its fingerprint to `GPG_FINGERPRINT`, and GoReleaser signs the checksum artifact.
 
 ### Creating a release
 
@@ -128,6 +247,9 @@ This creates a GitHub Release and uploads the compiled archives and checksums.
 
 - **GitHub Actions permissions**: the release workflow needs `contents: write`
 - **Repository visibility/access**: private repositories require appropriate access for anyone downloading release assets
+- **Checksum signing secrets**: set `CLI_GPG_SECRET_KEY` and `CLI_GPG_PASSPHRASE`. `CLI_GPG_SECRET_KEY` must contain an ASCII-armored private key used to sign the generated checksum file.
+- **Homebrew tap secret**: when Homebrew publishing is enabled, set `HOMEBREW_TAP_GITHUB_TOKEN`. For classic PATs use `public_repo` (public tap) or `repo` (private tap). For fine-grained PATs grant `Contents: Read and write` on the tap repository.
+- **WinGet secret**: when WinGet publishing is enabled, set `WINGET_GITHUB_TOKEN` using a classic PAT with `public_repo` scope for the account that owns the `winget-pkgs` fork, and set `distribution.winget.repositoryOwner` to that fork owner.
 
 ## Install scripts
 
@@ -165,6 +287,50 @@ The PowerShell installer uses the same environment-variable pattern:
 - `<PREFIX>_VERSION`
 
 By default, it installs under `%LOCALAPPDATA%\Programs\<cliName>` and updates the user PATH when needed.
+
+## Homebrew installation
+
+If Homebrew tap publishing is enabled for the CLI, users can install it with:
+
+```bash
+brew install myorg/petstore/petstore
+```
+
+This requires the publisher to maintain a tap repository named `homebrew-<name>` and configure `HOMEBREW_TAP_GITHUB_TOKEN` in the CLI repository's release workflow.
+
+## WinGet installation
+
+If WinGet publishing is enabled for the CLI, Windows users can install it with:
+
+```powershell
+winget install MyOrg.Petstore
+```
+
+This requires the publisher to fork `microsoft/winget-pkgs`, set `distribution.winget.repositoryOwner` to that fork owner, configure `WINGET_GITHUB_TOKEN` in the CLI repository's release workflow, and supply the required publisher/package metadata in `gen.yaml`.
+
+## Linux package installation
+
+After downloading a release artifact from GitHub Releases, install it with the matching package manager.
+
+### Debian/Ubuntu (.deb)
+
+```bash
+sudo dpkg -i petstore_*_amd64.deb
+```
+
+### RHEL/Fedora (.rpm)
+
+```bash
+sudo rpm -i petstore_*_amd64.rpm
+```
+
+### Alpine (.apk)
+
+```bash
+sudo apk add --allow-untrusted ./petstore_*_amd64.apk
+```
+
+Only document the package formats actually published for the CLI. End users should see installation steps that match the assets attached to the release they download.
 
 ## go install
 

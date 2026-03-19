@@ -91,6 +91,22 @@ cli:
 ```yaml
 cli:
   generateRelease: true
+  distribution:
+    homebrew:
+      enabled: false
+      tap: "myorg/homebrew-petstore"
+    winget:
+      enabled: false
+      publisher: "MyOrg"
+      repositoryOwner: "mygithubuser"
+      publisherUrl: "https://example.com"
+      packageIdentifier: "MyOrg.Petstore"
+      license: "Apache-2.0"
+    nfpm:
+      enabled: false
+      formats: "deb,rpm"
+      maintainer: "Team <team@example.com>"
+      license: "Apache-2.0"
 ```
 
 <Table
@@ -100,7 +116,91 @@ cli:
       required: "false",
       default: "true",
       description:
-        "When enabled, generates GoReleaser configuration (`.goreleaser.yaml`), GitHub Actions release workflow, and platform install scripts (`scripts/install.sh` and `scripts/install.ps1`). Disable if you manage releases separately.",
+        "When enabled, generates GoReleaser configuration (`.goreleaser.yaml`), GitHub Actions release workflow, and platform install scripts (`scripts/install.sh` and `scripts/install.ps1`). The generated release workflow also signs the checksum artifact with GPG. Disable if you manage releases separately.",
+    },
+    {
+      name: "distribution.homebrew.enabled",
+      required: "false",
+      default: "false",
+      description:
+        "When enabled, generates a Homebrew tap formula through GoReleaser and publishes it to the configured tap repository.",
+    },
+    {
+      name: "distribution.homebrew.tap",
+      required: "false",
+      default: '""',
+      description:
+        "GitHub repository for the Homebrew tap in `owner/repo` format. The repository name must start with `homebrew-`. Required when `distribution.homebrew.enabled` is `true`.",
+    },
+    {
+      name: "distribution.winget.enabled",
+      required: "false",
+      default: "false",
+      description:
+        "When enabled, generates a WinGet manifest through GoReleaser and opens a PR against `microsoft/winget-pkgs`.",
+    },
+    {
+      name: "distribution.winget.publisher",
+      required: "false",
+      default: '""',
+      description:
+        "Publisher name for the generated WinGet manifest. Required when `distribution.winget.enabled` is `true`.",
+    },
+    {
+      name: "distribution.winget.repositoryOwner",
+      required: "false",
+      default: '""',
+      description:
+        "GitHub owner for the fork of `microsoft/winget-pkgs` that GoReleaser should push to before opening a PR. Required when `distribution.winget.enabled` is `true`.",
+    },
+    {
+      name: "distribution.winget.publisherUrl",
+      required: "false",
+      default: '""',
+      description:
+        "Publisher URL for the generated WinGet manifest. Must be an absolute `http` or `https` URL. Required when `distribution.winget.enabled` is `true`.",
+    },
+    {
+      name: "distribution.winget.packageIdentifier",
+      required: "false",
+      default: '""',
+      description:
+        "Package identifier for WinGet, typically in `Publisher.Package` format. Required when `distribution.winget.enabled` is `true`.",
+    },
+    {
+      name: "distribution.winget.license",
+      required: "false",
+      default: '""',
+      description:
+        "License metadata for the generated WinGet manifest. Required when `distribution.winget.enabled` is `true`.",
+    },
+    {
+      name: "distribution.nfpm.enabled",
+      required: "false",
+      default: "false",
+      description:
+        "When enabled, generates Linux package artifacts through nFPM and attaches them to GitHub Releases.",
+    },
+    {
+      name: "distribution.nfpm.formats",
+      required: "false",
+      default: "deb,rpm",
+      description:
+        "Comma-separated package formats to generate when nFPM is enabled. Allowed values: `deb`, `rpm`, `apk`.",
+    },
+    {
+      name: "distribution.nfpm.maintainer",
+      required: "false",
+      default: '""',
+      description:
+        "Maintainer metadata for generated Linux packages. Required when `distribution.nfpm.enabled` is `true`.",
+    },
+    {
+      name: "distribution.nfpm.license",
+      required: "false",
+      default: '""',
+      description:
+        "License metadata for generated Linux packages. Required when `distribution.nfpm.enabled` is `true`.",
     },
   ]}
   columns={[
@@ -110,6 +210,25 @@ cli:
     { key: "description", header: "Description" },
   ]}
 />
+
+Validation rules:
+
+- `distribution.homebrew.enabled: true` requires `generateRelease: true`
+- `distribution.homebrew.enabled: true` requires `distribution.homebrew.tap` in `owner/repo` format and the repository name must start with `homebrew-`
+- `distribution.homebrew.enabled: true` requires `repoURL` or `packageName` to resolve to a GitHub repository
+- `distribution.winget.enabled: true` requires `generateRelease: true`
+- `distribution.winget.enabled: true` requires `distribution.winget.publisher`, `distribution.winget.repositoryOwner`, `distribution.winget.publisherUrl`, `distribution.winget.packageIdentifier`, and `distribution.winget.license`
+- `distribution.winget.repositoryOwner` must be a valid GitHub owner name
+- `distribution.winget.publisherUrl` must be an absolute `http` or `https` URL
+- `distribution.winget.packageIdentifier` must use dot-separated `Publisher.Package` segments
+- `distribution.winget.enabled: true` requires `repoURL` or `packageName` to resolve to a GitHub repository
+- `distribution.nfpm.enabled: true` requires `generateRelease: true`
+- `distribution.nfpm.enabled: true` requires both `distribution.nfpm.maintainer` and `distribution.nfpm.license`
+- `distribution.nfpm.formats` must contain one or more of `deb`, `rpm`, or `apk`
+- `generateRelease: true` expects the generated release workflow to have `CLI_GPG_SECRET_KEY` and `CLI_GPG_PASSPHRASE` repository secrets so it can sign the checksum artifact
+- Homebrew publishing requires a `HOMEBREW_TAP_GITHUB_TOKEN` secret. For classic PATs use `public_repo` (public tap) or `repo` (private tap). For fine-grained PATs grant `Contents: Read and write` on the tap repository.
+- WinGet publishing requires a `WINGET_GITHUB_TOKEN` secret using a classic PAT with `public_repo` scope, plus a fork of `microsoft/winget-pkgs` owned by `distribution.winget.repositoryOwner`
+- nFPM generates package files attached to GitHub Releases; it does not create a hosted package repository automatically
 
 ## Custom code
 
