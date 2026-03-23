@@ -1,0 +1,398 @@
+---
+title: "Distribute a CLI"
+description: "Distribute your generated CLI using GoReleaser, Homebrew, Linux packages, install scripts, or go install."
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+# Distribute a CLI
+
+<Callout type="warning" title="Alpha · Early Access">
+  CLI generation is currently in **alpha** and available exclusively to **early
+  access** customers. Features and configuration may change. [Contact
+  us](/book-demo) for access.
+</Callout>
+
+<Callout type="info">
+  CLI distribution currently uses generated GoReleaser configuration and release
+  scripts rather than the standard `speakeasy configure publishing` workflow.
+</Callout>
+
+The CLI target generates the artifacts needed for cross-platform binary distribution: a GoReleaser configuration, a GitHub Actions release workflow, install scripts for Linux, macOS, and Windows, optional Homebrew tap publishing, optional WinGet publishing, and optional Linux package artifacts via nFPM.
+
+## Distribution methods
+
+<Table
+  data={[
+    {
+      method: "GoReleaser + GitHub Releases",
+      description:
+        "Automated cross-platform binary builds triggered by git tags. Produces archives, checksums, and a detached GPG signature for the checksum file.",
+      bestFor: "Production releases",
+    },
+    {
+      method: "Homebrew tap",
+      description:
+        "Optional Homebrew formula publishing through a customer-owned tap repository. Users install with `brew install org/tap/cli`.",
+      bestFor: "macOS/Linux package-manager installs",
+    },
+    {
+      method: "WinGet",
+      description:
+        "Optional Windows Package Manager publishing through a generated PR to `microsoft/winget-pkgs`. Users install with `winget install Publisher.Package`.",
+      bestFor: "Windows-native installs",
+    },
+    {
+      method: "Linux packages (nFPM)",
+      description:
+        "Optional `.deb`, `.rpm`, or `.apk` packages attached to GitHub Releases. Users download the package artifact from a release and install it manually.",
+      bestFor: "Linux-first distribution",
+    },
+    {
+      method: "Install scripts",
+      description:
+        "Generated `install.sh` and `install.ps1` scripts that download the latest or a pinned release from GitHub.",
+      bestFor: "End-user installation",
+    },
+    {
+      method: "`go install`",
+      description:
+        "Install directly from the Go module path. Best suited for Go developers or internal tooling users who already have Go installed.",
+      bestFor: "Developer-first distribution",
+    },
+  ]}
+  columns={[
+    { key: "method", header: "Method" },
+    { key: "description", header: "Description" },
+    { key: "bestFor", header: "Best for" },
+  ]}
+/>
+
+## Generated release artifacts
+
+With `cli.generateRelease: true` (the default), the generator produces:
+
+- `.goreleaser.yaml`
+- `.github/workflows/release.yaml`
+- `scripts/install.sh`
+- `scripts/install.ps1`
+- `checksums.txt` plus a detached GPG signature for the checksum artifact at release time
+- optional Homebrew tap publishing when `cli.distribution.homebrew.enabled: true`
+- optional WinGet publishing when `cli.distribution.winget.enabled: true`
+- optional Linux package artifacts (`.deb`, `.rpm`, `.apk`) when `cli.distribution.nfpm.enabled: true`
+
+To manage releases with separate tooling, disable this behavior:
+
+```yaml
+cli:
+  generateRelease: false
+```
+
+## GoReleaser
+
+The generated `.goreleaser.yaml` builds binaries for the major desktop/server targets:
+
+<Table
+  data={[
+    { os: "Linux", architectures: "amd64, arm64" },
+    { os: "macOS (Darwin)", architectures: "amd64, arm64" },
+    { os: "Windows", architectures: "amd64, arm64" },
+  ]}
+  columns={[
+    { key: "os", header: "Operating system" },
+    { key: "architectures", header: "Architectures" },
+  ]}
+/>
+
+The generated build metadata is derived from the CLI config, especially `cliName`. For example, with `cliName: "petstore"`, GoReleaser will build from `./cmd/petstore` and publish a binary named `petstore`.
+
+### Homebrew tap publishing
+
+Enable Homebrew formula generation in `gen.yaml`:
+
+```yaml
+cli:
+  generateRelease: true
+  distribution:
+    homebrew:
+      enabled: true
+      tap: myorg/homebrew-petstore
+```
+
+When enabled, GoReleaser updates a formula in the configured tap repository as part of the release.
+
+One-time setup:
+
+- Create a tap repository such as `github.com/myorg/homebrew-petstore`
+- Add a `HOMEBREW_TAP_GITHUB_TOKEN` secret to the CLI repository
+- For classic personal access tokens, grant `public_repo` for public taps or `repo` for private taps
+- For fine-grained personal access tokens, grant `Contents: Read and write` on the tap repository
+
+End users install the CLI with:
+
+```bash
+brew install myorg/petstore/petstore
+```
+
+### WinGet publishing
+
+Enable WinGet manifest generation in `gen.yaml`:
+
+```yaml
+cli:
+  generateRelease: true
+  distribution:
+    winget:
+      enabled: true
+      publisher: MyOrg
+      repositoryOwner: mygithubuser
+      publisherUrl: https://example.com
+      packageIdentifier: MyOrg.Petstore
+      license: Apache-2.0
+```
+
+When enabled, GoReleaser generates a WinGet manifest, pushes a branch, and opens a PR against `microsoft/winget-pkgs`.
+
+One-time setup:
+
+- Fork `microsoft/winget-pkgs` under a GitHub account or organization
+- Set `distribution.winget.repositoryOwner` to the owner of that fork
+- Add a `WINGET_GITHUB_TOKEN` secret to the CLI repository
+- Use a classic GitHub personal access token with `public_repo` scope for the fork owner account
+- Ensure the configured `distribution.winget.packageIdentifier` matches the desired publisher/package name
+
+End users install the CLI with:
+
+```powershell
+winget install MyOrg.Petstore
+```
+
+### Linux package artifacts with nFPM
+
+Enable Linux package generation in `gen.yaml`:
+
+```yaml
+cli:
+  generateRelease: true
+  distribution:
+    nfpm:
+      enabled: true
+      formats: deb,rpm
+      maintainer: "Speakeasy <oss@speakeasy.com>"
+      license: "Apache-2.0"
+```
+
+When enabled, GoReleaser attaches Linux packages to the same GitHub Release as the archive artifacts.
+
+**Important:** this does **not** create an apt or yum repository automatically. Users download the package from GitHub Releases and install it manually.
+
+### Example generated configuration
+
+```yaml
+version: 2
+
+builds:
+  - id: petstore
+    main: ./cmd/petstore
+    binary: petstore
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.buildTime={{.Date}}
+
+archives:
+  - id: petstore
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+signs:
+  - artifacts: checksum
+```
+
+### Checksum signing
+
+The generated release workflow signs the checksum file with GPG. This produces:
+
+- `checksums.txt`
+- `checksums.txt.sig`
+
+Add these repository secrets before pushing a release tag:
+
+- `CLI_GPG_SECRET_KEY`
+- `CLI_GPG_PASSPHRASE`
+
+Use an ASCII-armored private key for `CLI_GPG_SECRET_KEY`. The generated workflow imports that key, exports its fingerprint to `GPG_FINGERPRINT`, and GoReleaser signs the checksum artifact.
+
+### Creating a release
+
+The generated GitHub Actions workflow runs GoReleaser when a version tag is pushed:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+This creates a GitHub Release and uploads the compiled archives and checksums.
+
+### Prerequisites
+
+- **GitHub Actions permissions**: the release workflow needs `contents: write`
+- **Repository visibility/access**: private repositories require appropriate access for anyone downloading release assets
+- **Checksum signing secrets**: set `CLI_GPG_SECRET_KEY` and `CLI_GPG_PASSPHRASE`. `CLI_GPG_SECRET_KEY` must contain an ASCII-armored private key used to sign the generated checksum file.
+- **Homebrew tap secret**: when Homebrew publishing is enabled, set `HOMEBREW_TAP_GITHUB_TOKEN`. For classic PATs use `public_repo` (public tap) or `repo` (private tap). For fine-grained PATs grant `Contents: Read and write` on the tap repository.
+- **WinGet secret**: when WinGet publishing is enabled, set `WINGET_GITHUB_TOKEN` using a classic PAT with `public_repo` scope for the account that owns the `winget-pkgs` fork, and set `distribution.winget.repositoryOwner` to that fork owner.
+
+## Install scripts
+
+The generated install scripts download a release archive from GitHub, extract the binary, and place it into a sensible install location.
+
+### Linux and macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/{org}/{repo}/main/scripts/install.sh | bash
+```
+
+The script supports two environment variables derived from the configured `envVarPrefix`:
+
+- `<PREFIX>_INSTALL_DIR` — override the install directory
+- `<PREFIX>_VERSION` — install a specific release tag instead of `latest`
+
+Example:
+
+```bash
+PETSTORE_INSTALL_DIR=/opt/bin curl -fsSL .../install.sh | bash
+PETSTORE_VERSION=v0.2.0 curl -fsSL .../install.sh | bash
+```
+
+By default, the installer tries `/usr/local/bin` first and falls back to `~/.local/bin` when it does not have write access.
+
+### Windows (PowerShell)
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/{org}/{repo}/main/scripts/install.ps1 | iex
+```
+
+The PowerShell installer uses the same environment-variable pattern:
+
+- `<PREFIX>_INSTALL_DIR`
+- `<PREFIX>_VERSION`
+
+By default, it installs under `%LOCALAPPDATA%\Programs\<cliName>` and updates the user PATH when needed.
+
+## Homebrew installation
+
+If Homebrew tap publishing is enabled for the CLI, users can install it with:
+
+```bash
+brew install myorg/petstore/petstore
+```
+
+This requires the publisher to maintain a tap repository named `homebrew-<name>` and configure `HOMEBREW_TAP_GITHUB_TOKEN` in the CLI repository's release workflow.
+
+## WinGet installation
+
+If WinGet publishing is enabled for the CLI, Windows users can install it with:
+
+```powershell
+winget install MyOrg.Petstore
+```
+
+This requires the publisher to fork `microsoft/winget-pkgs`, set `distribution.winget.repositoryOwner` to that fork owner, configure `WINGET_GITHUB_TOKEN` in the CLI repository's release workflow, and supply the required publisher/package metadata in `gen.yaml`.
+
+## Linux package installation
+
+After downloading a release artifact from GitHub Releases, install it with the matching package manager.
+
+### Debian/Ubuntu (.deb)
+
+```bash
+sudo dpkg -i petstore_*_amd64.deb
+```
+
+### RHEL/Fedora (.rpm)
+
+```bash
+sudo rpm -i petstore_*_amd64.rpm
+```
+
+### Alpine (.apk)
+
+```bash
+sudo apk add --allow-untrusted ./petstore_*_amd64.apk
+```
+
+Only document the package formats actually published for the CLI. End users should see installation steps that match the assets attached to the release they download.
+
+## go install
+
+Users with the Go toolchain can install the CLI directly from the module:
+
+```bash
+go install {packageName}/cmd/{cliName}@latest
+```
+
+Example:
+
+```bash
+go install github.com/acme/petstore-cli/cmd/petstore@latest
+```
+
+This command is derived from the `packageName` and `cliName` settings.
+
+<Callout title="Note">
+  `go install` does not inject the version metadata that the GoReleaser build
+  adds with linker flags. Version output may therefore appear as `(devel)`.
+</Callout>
+
+## Shell completions after install
+
+Generated CLIs include Cobra’s built-in completion command, so after installation users can enable completions with:
+
+```bash
+petstore completion bash
+petstore completion zsh
+petstore completion fish
+petstore completion powershell
+```
+
+This works regardless of whether the CLI was installed from a release archive, an install script, or `go install`.
+
+## Common pitfalls
+
+<Table
+  data={[
+    {
+      issue: "GoReleaser fails with permission errors",
+      solution:
+        "Ensure the GitHub Actions workflow has `contents: write` permission and that the repository token has enough scope to create releases and upload assets.",
+    },
+    {
+      issue: "Install script fails on private repos",
+      solution:
+        "The generated scripts download from GitHub release URLs. Private repositories require repository access, and an additional authenticated installation flow may be needed in the target environment.",
+    },
+    {
+      issue: "Checksums or archives differ from local builds",
+      solution:
+        "Use the generated GoReleaser workflow for official builds. Manual builds can differ because of environment and linker-flag differences.",
+    },
+    {
+      issue: "`go install` shows `(devel)` version output",
+      solution:
+        "This is expected because `go install` does not apply the GoReleaser ldflags used in release builds.",
+    },
+  ]}
+  columns={[
+    { key: "issue", header: "Issue" },
+    { key: "solution", header: "Solution" },
+  ]}
+/>

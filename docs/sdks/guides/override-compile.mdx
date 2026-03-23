@@ -1,0 +1,108 @@
+---
+title: "Overriding Compile Commands for SDK Generation"
+description: "Use the `compileCommand` and `compileCommands` features to customize the compilation pipeline for TypeScript and Python SDK generation."
+image: "/assets/examples/generic.png"
+date: 2025-01-03
+authors:
+  - name: Logan Gingerich
+  - image_url: '/assets/author-headshots/logan.jpg'
+tags:
+  - SDK Generation
+is_featured: false
+featured_image: "/assets/examples/generic.png"
+---
+
+## Overriding Compile Commands for SDK Generation
+
+Both TypeScript and Python SDK targets support overriding the default compilation pipeline with custom commands. This is useful when you need to customize build steps, control resource usage, or integrate additional tooling.
+
+## TypeScript
+
+### 1. Remove `package.json` from `.genignore`
+
+The `.genignore` file is used to signal which files are manually managed rather than handled by the SDK generator. It functions similarly to `.gitignore` but for SDK generation purposes.
+Update your `.genignore` file to remove `package.json`. It no longer needs to be ignored as the generation process will manage it automatically.
+
+### 2. Create a Compile Script
+
+Create a file named `openapi/scripts/compile.sh` and add the following script:
+
+```bash
+#!/usr/bin/env bash
+
+set -e
+
+npm install
+npm run build
+```
+
+Ensure the script is executable by running the following command:
+
+```bash
+chmod +x openapi/scripts/compile.sh
+```
+
+### 3. Update `gen.yaml`
+
+Modify your `.speakeasy/gen.yaml` file to include the `compileCommand` under the TypeScript section. Add the following configuration:
+
+```yaml
+typescript:
+  compileCommand:
+    - bash
+    - -c
+    - ./openapi/scripts/compile.sh
+```
+
+### 4. Verify the Configuration
+
+Run the following command to test that the setup is working as expected:
+
+```bash
+speakeasy run --force
+```
+
+## Python
+
+Python uses `compileCommands` (plural) to override the default compilation pipeline, which includes bytecode compilation (`compileall`), linting (`pylint`), and type checking (`mypy` and `pyright`).
+
+A common reason to override is to control `pylint` parallelism. The default pipeline uses `pylint -j=0` (auto-detect parallelism), which can cause out-of-memory errors in CI environments.
+
+### Update `gen.yaml`
+
+Add `compileCommands` under the `python` section. Each entry is an array where the first element is the command and the rest are arguments:
+
+```yaml
+python:
+  compileCommands:
+    - ["uv", "lock"]
+    - ["uv", "sync", "--dev"]
+    - ["uv", "run", "python", "-m", "compileall", "-q", "."]
+    - ["uv", "run", "python", "-m", "pylint", "-j=1", "src/my_sdk"]
+    - ["uv", "run", "python", "-m", "mypy", "src/my_sdk"]
+```
+
+If you're using `poetry` as your package manager, adjust the commands accordingly:
+
+```yaml
+python:
+  packageManager: poetry
+  compileCommands:
+    - ["poetry", "lock"]
+    - ["poetry", "install", "--with=dev"]
+    - ["poetry", "run", "python", "-m", "compileall", "-q", "."]
+    - ["poetry", "run", "python", "-m", "pylint", "-j=1", "src/my_sdk"]
+    - ["poetry", "run", "python", "-m", "mypy", "src/my_sdk"]
+```
+
+Replace `my_sdk` with your actual module name.
+
+### Verify the Configuration
+
+Run the following command to test that the setup is working as expected:
+
+```bash
+speakeasy run --force
+```
+
+See the [Python configuration reference](/docs/speakeasy-reference/generation/python-config#compile-commands) for more details.

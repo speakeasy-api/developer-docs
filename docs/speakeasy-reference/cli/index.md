@@ -10,9 +10,11 @@ The Speakeasy CLI tool provides access to the Speakeasy.com platform
 
 ## Details
 
-# Speakeasy 
+# Speakeasy
 
 A CLI tool for interacting with the [Speakeasy platform](https://www.speakeasy.com/) and its APIs.
+
+AI Agents: run **speakeasy agent context** for structured documentation and project guidance.
 
 Use this CLI to:
 - Lint and validate OpenAPI specs
@@ -46,17 +48,21 @@ speakeasy [flags]
 
 ### Sub Commands
 
+* [speakeasy agent](/docs/speakeasy-reference/cli/agent)	 - Docs & guided workflows for AI coding agents (start here: speakeasy agent context)
 * [speakeasy ask](/docs/speakeasy-reference/cli/ask)	 - Starts a conversation with Speakeasy trained AI
 * [speakeasy auth](/docs/speakeasy-reference/cli/auth)	 - Authenticate the CLI
 * [speakeasy billing](/docs/speakeasy-reference/cli/billing)	 - Manage billing related operations
 * [speakeasy bump](/docs/speakeasy-reference/cli/bump)	 - Bumps the version of a Speakeasy Generation Target
 * [speakeasy clean](/docs/speakeasy-reference/cli/clean)	 - Speakeasy clean can be used to clean up cache, stale temp folders, and old CLI binaries.
 * [speakeasy configure](/docs/speakeasy-reference/cli/configure)	 - Configure your Speakeasy SDK Setup.
+* [speakeasy diff](/docs/speakeasy-reference/cli/diff)	 - Compare spec revisions and show SDK changes
 * [speakeasy lint](/docs/speakeasy-reference/cli/lint)	 - Lint/Validate OpenAPI documents and Speakeasy configuration files
+* [speakeasy mcp](/docs/speakeasy-reference/cli/mcp)	 - Commands for MCP server management
 * [speakeasy merge](/docs/speakeasy-reference/cli/merge)	 - Merge multiple OpenAPI documents into a single document
 * [speakeasy openapi](/docs/speakeasy-reference/cli/openapi)	 - Utilities for working with OpenAPI documents
 * [speakeasy overlay](/docs/speakeasy-reference/cli/overlay)	 - Work with OpenAPI Overlays
-* [speakeasy pull](/docs/speakeasy-reference/cli/pull)	 - pull a spec from the registry
+* [speakeasy patches](/docs/speakeasy-reference/cli/patches)	 - Debug and inspect pristine vs patched SDK files
+* [speakeasy pull](/docs/speakeasy-reference/cli/pull)	 - Pull a spec from the registry or list available specs/tags
 * [speakeasy quickstart](/docs/speakeasy-reference/cli/quickstart)	 - Guided setup to help you create a new SDK in minutes.
 * [speakeasy repro](/docs/speakeasy-reference/cli/repro)	 - Reproduce a failed generation locally
 * [speakeasy run](/docs/speakeasy-reference/cli/run)	 - Run all the workflows defined in your workflow.yaml file. This can include multiple SDK generations from different OpenAPI sources

@@ -37,4 +37,5 @@ speakeasy auth [flags]
 
 * [speakeasy auth login](/docs/speakeasy-reference/cli/auth/login)	 - Authenticate the CLI
 * [speakeasy auth logout](/docs/speakeasy-reference/cli/auth/logout)	 - Logout of the CLI
+* [speakeasy auth status](/docs/speakeasy-reference/cli/auth/status)	 - Show authentication status
 * [speakeasy auth switch](/docs/speakeasy-reference/cli/auth/switch)	 - Switch between authenticated workspaces

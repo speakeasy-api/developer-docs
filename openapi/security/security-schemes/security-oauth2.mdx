@@ -22,7 +22,7 @@ The fields for an OAuth 2 security scheme are as follows:
   data={[
     { field: "`type`", type: "String", required: "✅", description: "`oauth2`" },
     { field: "`description`", type: "String", required: "", description: "Human-readable information. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description." },
-    { field: "`flows`", type: "Map[{key}, [OAuth Flow Object](#oauth-flow-object)]", required: "✅", description: "An object containing configuration for the available OAuth 2 flows. Valid keys are `implicit`, `password`, `clientCredentials`, and `authorizationCode`." },
+    { field: "`flows`", type: "Map[{key}, [OAuth Flow Object](#oauth-flow-object)]", required: "✅", description: "An object containing configuration for the available OAuth 2 flows. Valid keys are `implicit`, `password`, `clientCredentials`, `authorizationCode`, and `deviceAuthorization` (OpenAPI v3.2.0+)." },
     { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the Security Scheme Object to be used by tooling and vendors." }
   ]}
   columns={[
@@ -52,12 +52,13 @@ security:
 
 The value of the [OAuth Flows Object](https://spec.openapis.org/oas/v3.1.0#oauth-flows-object) is a map of [OAuth Flow Objects](https://spec.openapis.org/oas/v3.1.0#oauth-flow-object).
 
-The OpenAPI Specification 3.1 supports the following four OAuth Flow Objects:
+The OpenAPI Specification supports the following OAuth Flow Objects:
 
 - The [Client Credentials](#the-client-credentials-flow) flow (using `clientCredentials`, previously `application` in OpenAPI 2.0)
 - The [Authorization Code](#the-authorization-code-flow) flow (using `authorizationCode`, previously `accessCode` in OpenAPI 2.0)
 - The [Password](#the-password-flow) flow (using `password`)
 - The [Implicit](#the-implicit-flow) flow (using `implicit`)
+- The [Device Authorization](#the-device-authorization-flow) flow (using `deviceAuthorization`, available in OpenAPI v3.2.0+)
 
 Each OAuth Flow Object has its own configuration parameters, so let's look at them individually.
 
@@ -346,6 +347,62 @@ OAuth 2.1 is a simplified version of OAuth 2 that combines its best practices an
 
 For more information on the changes and improvements made in OAuth 2.1, refer to [the OAuth 2.1 specification](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13).
 
-**Device Authorization** is a new OAuth flow (also called a grant) that is not yet supported in the OpenAPI Specification 3.1. It will be added in the OpenAPI Specification 3.2, which is currently in development.
+### The Device Authorization flow
 
-For more information on the Device Authorization grant, take a look at the specification for the [OAuth 2.0 Device Authorization grant](https://datatracker.ietf.org/doc/html/rfc8628).
+The Device Authorization flow (also called the Device Authorization grant) is designed for devices with limited input capabilities, such as smart TVs, kiosks, and IoT devices. Instead of entering credentials directly, the device displays a code that the user enters on a separate device with a full browser. OpenAPI v3.2.0 adds support for this flow using the `deviceAuthorization` key.
+
+For more information on the Device Authorization grant, refer to the specification for the [OAuth 2.0 Device Authorization grant](https://datatracker.ietf.org/doc/html/rfc8628).
+
+<Table
+  data={[
+    { field: "`deviceAuthorizationUrl`", type: "String", required: "✅", description: "The device authorization URL to be used for this flow." },
+    { field: "`tokenUrl`", type: "String", required: "✅", description: "The token URL to be used for this flow." },
+    { field: "`refreshUrl`", type: "String", required: "", description: "The URL to be used for refreshing the token. No refresh URL means the token is not refreshable." },
+    { field: "`scopes`", type: "Map[String, String]", required: "✅", description: "The available scopes for the OAuth 2 flow, with a description for each scope. Although the specification requires this field, it can be an empty object." },
+    { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to an OAuth Flow Object to be used by tooling and vendors to add additional metadata and functionality to the OpenAPI Specification." }
+  ]}
+  columns={[
+    { key: "field", header: "Field" },
+    { key: "type", header: "Type" },
+    { key: "required", header: "Required" },
+    { key: "description", header: "Description" }
+  ]}
+/>
+
+The following example shows an OAuth 2 security scheme using the `deviceAuthorization` flow:
+
+```yaml
+components:
+  securitySchemes:
+    deviceAuth:
+      type: oauth2
+      flows:
+        deviceAuthorization:
+          deviceAuthorizationUrl: https://speakeasy.bar/oauth2/device
+          tokenUrl: https://speakeasy.bar/oauth2/token
+          refreshUrl: https://speakeasy.bar/oauth2/refresh
+          scopes:
+            read: Grants read access
+            write: Grants write access
+security:
+  - deviceAuth: []
+```
+
+## OAuth 2.0 metadata discovery
+
+OpenAPI v3.2.0 adds the `oauth2MetadataUrl` field to the OAuth Flow Object. This field provides a URL pointing to the OAuth 2.0 Authorization Server Metadata document ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)), enabling clients to automatically discover OAuth 2.0 endpoint configuration.
+
+```yaml
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://speakeasy.bar/oauth2/authorize
+          tokenUrl: https://speakeasy.bar/oauth2/token
+          oauth2MetadataUrl: https://speakeasy.bar/.well-known/oauth-authorization-server
+          scopes:
+            read: Grants read access
+            write: Grants write access
+```

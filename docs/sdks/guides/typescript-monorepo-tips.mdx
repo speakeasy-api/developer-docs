@@ -1,0 +1,231 @@
+---
+title: "Tips for Integrating a TypeScript SDK into a Monorepo"
+description: "Best practices for integrating Speakeasy TypeScript SDKs in monorepo architectures."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Tips for Integrating a TypeScript SDK into a Monorepo
+
+<Callout title="Get Started">
+  If you're looking to set up a monorepo from scratch, check out our [Create a
+  monorepo](/guides/sdks/creating-a-monorepo) guide first.
+</Callout>
+
+## Dependency Confusion
+
+The most common issue we see is dependency confusion. This happens when developers have multiple versions of the same dependency across different packages in the monorepo.
+
+### Why is this a problem?
+
+Let's say a developer has Zod installed in their monorepo's root, and their Speakeasy SDK also uses Zod. With Speakeasy's bundled Zod dependency, this is no longer an issue since the SDK uses its own version of Zod v3, preventing conflicts with user installations of Zod v4.
+
+Previously, developers might have run into a situation where code like this didn't work:
+
+```typescript
+try {
+  const result = await sdk.products.create({
+    name: "Cool Product",
+    price: "not a number", // This should fail validation
+  });
+} catch (err) {
+  if (err instanceof ZodError) {
+    // This check could fail with peer dependencies!
+    console.log("Validation error:", err.errors);
+  }
+}
+```
+
+The `instanceof` check could fail because they were importing `ZodError` from a different instance of Zod than what the SDK was using. By bundling Zod, Speakeasy eliminates this confusion.
+
+### How to fix it
+
+PNPM's strict module resolution is fantastic at preventing this issue:
+
+```bash
+# In .npmrc
+shamefully-hoist=false
+strict-peer-dependencies=true
+```
+
+If you're using Yarn or npm, you'll need to be more explicit:
+
+```json
+// With Yarn (in package.json)
+{
+  "resolutions": {
+    "zod": "^3.22.4",
+    "@tanstack/react-query": "^4.29.5"
+  }
+}
+
+// With npm (in package.json)
+{
+  "overrides": {
+    "zod": "^3.22.4",
+    "@tanstack/react-query": "^4.29.5"
+  }
+}
+```
+
+This forces all packages to use the same version of these dependencies, preventing the confusion.
+
+## Module format mismatches - ESM vs CommonJS chaos
+
+The second most common issue is dealing with mixed module formats. Some packages use CommonJS, others use ESM, and a monorepo probably has a mix of both.
+
+### Why this is a problem
+
+You might see errors like:
+
+```
+Error [ERR_REQUIRE_ESM]: require() of ES Module not supported
+```
+
+Or:
+
+```
+SyntaxError: Cannot use import statement outside a module
+```
+
+These happen when module systems don't align. It's especially common when there's a package using CommonJS trying to import an ESM module, or vice versa.
+
+### How to fix it
+
+The simplest solution is to configure your Speakeasy SDK to use ESM format:
+
+```yaml
+# In gen.yaml
+typescript:
+  moduleFormat: esm
+```
+
+If you need to support both ESM and CommonJS packages importing your SDK, you can use the dual format (which is the Speakeasy default):
+
+```yaml
+# In gen.yaml
+typescript:
+  moduleFormat: dual
+```
+
+When using `moduleFormat: dual`, make sure the tsconfig.json is set up correctly:
+
+```json
+// In tsconfig.json
+{
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "module": "esnext",
+    "esModuleInterop": true
+  }
+}
+```
+
+There's a small bundle size tradeoff with dual format, but it's usually worth it for the compatibility benefits.
+
+## Package manager differences - npm vs the world
+
+The last common issue is package manager compatibility. Speakeasy uses npm when building SDKs, but a monorepo might use pnpm, Yarn, or even Bun.
+
+### Why this is a problem
+
+Different package managers handle dependencies differently. This can lead to subtle issues where the SDK works fine when generated, but breaks when integrated into the monorepo.
+
+For example, one might see errors about missing dependencies that they know are installed, or weird resolution issues that only happen in the monorepo.
+
+### How to fix it
+
+Configure Speakeasy to use your preferred package manager when building the SDK. For pnpm (recommended for monorepos), customize the compile command in your `gen.yaml`:
+
+```yaml
+# For pnpm
+typescript:
+  compileCommand:
+    - pnpm
+    - install
+```
+
+This tells Speakeasy to use pnpm instead of npm when building the SDK, which is especially important in monorepos where pnpm's strict module resolution helps prevent dependency confusion issues.
+
+<Callout title="Related Guide">
+  For more detailed information about configuring pnpm as your default package
+  manager, see our [Using PNPM guide](/guides/sdks/pnpm-default).
+</Callout>
+
+## Putting it all together - a real-world example
+
+This is an example of how a developer may set up a monorepo with a Speakeasy SDK:
+
+```
+my-monorepo/
+├── package.json
+├── pnpm-workspace.yaml
+├── tsconfig.json
+├── packages/
+│   ├── api-sdk/         # Speakeasy-generated SDK
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── gen.yaml
+│   ├── frontend/        # Frontend application using the SDK
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   └── backend/         # Backend service using the SDK
+│       ├── package.json
+│       └── tsconfig.json
+```
+
+pnpm-workspace.yaml:
+
+```yaml
+packages:
+  - "packages/*"
+```
+
+frontend/package.json:
+
+```json
+{
+  "dependencies": {
+    "api-sdk": "workspace:*"
+  }
+}
+```
+
+gen.yaml:
+
+```yaml
+typescript:
+  moduleFormat: esm
+  compileCommand:
+    - pnpm
+    - install
+    - and
+    - pnpm
+    - build
+```
+
+This setup gives:
+
+1. A consistent dependency tree with pnpm's strict module resolution
+2. ESM modules for maximum compatibility
+3. pnpm for package management
+
+## Best practices for TypeScript SDKs in monorepos
+
+Beyond the specific issues above, here are some general best practices:
+
+- **Use workspace references**: Always reference your SDK using workspace syntax (`workspace:*`) rather than local file paths
+- **Consistent TypeScript versions**: Use the same TypeScript version across all packages
+- **Shared tsconfig**: Create a base tsconfig.json that all packages extend
+- **Centralized types**: Consider creating a shared types package for common interfaces
+- **Integration tests**: Write tests that verify the SDK works correctly with other packages
+
+## Related documentation
+
+For more information on configuring Speakeasy TypeScript SDKs, check out:
+
+- [TypeScript SDK Design](https://www.speakeasy.com/docs/languages/typescript/methodology-ts)
+- [Configuring Module Format](https://www.speakeasy.com/docs/customize/typescript/configuring-module-format)
+- [TypeScript SDK Reference](https://www.speakeasy.com/docs/languages/typescript/feature-support)
+- [Model Validation and Serialization](https://www.speakeasy.com/docs/customize/typescript/model-validation-and-serialization)
+- [TypeScript Configuration](https://www.speakeasy.com/docs/speakeasy-reference/generation/ts-config)

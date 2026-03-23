@@ -18,6 +18,7 @@ speakeasy configure publishing [flags]
 
 ```
   -h, --help                        help for publishing
+      --pypi-trusted-publishing     use PyPI trusted publishing instead of API tokens for Python targets
   -d, --workflow-directory string   directory of speakeasy workflow file
 ```
 

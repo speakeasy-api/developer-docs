@@ -1,0 +1,612 @@
+---
+title: "Map API Entities to Terraform Resources"
+description: |
+  Learn how to map API entities to Terraform resources and specify CRUD operations.
+---
+
+import { Callout } from "@/mdx/components";
+
+# Map API Entities to Terraform Resources
+
+## Entity Mapping
+
+Add the `x-speakeasy-entity` extension to objects in your OpenAPI Specification document to include them as entities in the Terraform provider, such as managed resources. The extension value may be a single string or an array of strings if the object should be represented by multiple API entities.
+
+As a component:
+
+```yaml
+components:
+  schemas:
+    Order:
+      description: An order helps you make coffee
+      x-speakeasy-entity: Order
+      properties:
+        id:
+          type: integer
+          description: Numeric identifier of the order.
+        name:
+          type: string
+          description: Product name of the coffee.
+        price:
+          type: number
+          description: Suggested cost of the coffee.
+      required:
+        - name
+        - price
+      type: object
+```
+
+Or inline in a path:
+
+```yaml
+paths:
+  /order:
+    post:
+      tags:
+        - Order
+      summary: Create a coffee order
+      x-speakeasy-entity-operation: Order#create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              x-speakeasy-entity: Order
+              properties:
+                id:
+                  type: integer
+                  description: Numeric identifier of the order.
+                name:
+                  type: string
+                  description: Product name of the coffee.
+                price:
+                  type: number
+                  description: Suggested cost of the coffee.
+              required:
+                - name
+                - price
+              type: object
+```
+
+```hcl
+resource "yourprovider_order" "example" {
+  name  = "Filter Blend"
+  price = 11.5
+}
+```
+
+Where you place the `x-speakeasy-entity` annotation affects the Terraform resource schema structure.
+
+- **At the top level:** Properties are nested objects.
+- **At a lower level:** Properties above the annotation are flattened.
+
+### Top Level
+
+```yaml
+Pet:
+  x-speakeasy-entity: Order
+  type: object
+  properties:
+    data:
+      type: object
+      properties:
+        name:
+          type: string
+        # ...
+```
+
+Results in the following resource schema and configuration:
+
+```hcl
+resource "yourprovider_order" "example" {
+  data = {
+    name = "Filter Blend"
+  }
+}
+```
+
+### Lower Level
+
+```yaml
+Pet:
+  type: object
+  properties:
+    data:
+      x-speakeasy-entity: Order
+      type: object
+      properties:
+        name:
+          type: string
+        #...
+```
+
+Results in the following resource schema and configuration:
+
+```hcl
+resource "yourprovider_order" "example" {
+  name = "Filter Blend"
+}
+```
+
+<Callout title="Warning" type="warning">
+  Properties above the `x-speakeasy-entity` annotation are flattened, which
+  could cause conflicts. Apply the annotation carefully to align the structure
+  of the Terraform provider with the API&apos;s intended interaction.
+</Callout>
+
+## Specify Terraform Operations for API Operations
+
+The `x-speakeasy-entity-operation` annotation on an API operation in the OpenAPI Specification specifies Terraform operations associated with an particular Terraform entity, such as a managed resource. In the simplest string value form, it is structured as `entity#operation[#order]` where:
+
+- `entity`: Name of the Terraform entity for the API operation, such as the name of a Terraform managed resource.
+- `operation`: Associated Terraform operation, such as `close`, `create`, `delete`, `invoke`, `open`, `read`, or `update`.
+- `order`: (Optional) Ordering for API operation within the same Terraform operation, such as defining multiple API operations that should be invoked for a Terraform operation.
+
+### Managed Resource Terraform Operations
+
+Define [managed resources](https://developer.hashicorp.com/terraform/language/block/resource) (sometimes called "resources"), which are associated with API resources that typically have a create, read, update, and delete (CRUD) lifecycle:
+
+- `entity#create`: (Required) API operation(s) for creating an instance of an API resource. Also supports API operations for immediate update during creation, if certain API resource properties are not configurable during the initial creation.
+  - `entity#create,update`: Alternative **idempotent** API operation(s) for creating and updating an instance of an API resource.
+- `entity#read`: API operation(s) for reading an instance of an API resource. Enables Terraform configuration drift detection and import support. By default, a [data resource](https://developer.hashicorp.com/terraform/language/block/data) of the same entity name will also be generated.
+- `entity#update` API operation(s) for updating an instance, or specific properties, of an API resource. Enables in-place API resource updates rather than forcing replacement (deleting and re-creating the API resource) for Terraform configuration changes.
+- `entity#delete` API operation(s) for deleting an instance of an API resource.
+
+In this example, a `pet` managed resource with full create, read, update, and delete lifecycle and `pet` data resource (due to `pet#read`) are generated:
+
+```yaml
+paths:
+  /pet:
+    post:
+      description: Add a new pet to the store
+      x-speakeasy-entity-operation: pet#create
+  /pet/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Pet identifier in the store
+        schema:
+          type: integer
+    get:
+      description: Retrieve a specific pet in the store
+      x-speakeasy-entity-operation: pet#read
+    put:
+      description: Update a specific pet in the store
+      x-speakeasy-entity-operation: pet#update
+    delete:
+      description: Remove a specific pet from the store
+      x-speakeasy-entity-operation: pet#delete
+```
+
+### Data Resource Terraform Operations
+
+Define [data resources](https://developer.hashicorp.com/terraform/language/block/data) (sometimes called "data sources"), which are associated with API data that is useful for dynamic lookup:
+
+- `entity#read`: (Required) API operation(s) associated with reading data.
+
+In this example, both `pets` and `pet` data resources are generated:
+
+```yaml
+paths:
+  /pet:
+    get:
+      description: List all pets in the store
+      x-speakeasy-entity-operation: pets#read
+  /pet/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Pet identifier in the store
+        schema:
+          type: integer
+    get:
+      description: Retrieve a specific pet in the store
+      x-speakeasy-entity-operation: pet#read
+```
+
+### Ephemeral Resource Terraform Operations
+
+Define [ephemeral resources](https://developer.hashicorp.com/terraform/language/block/ephemeral), which are associated with temporary API data or concepts:
+
+- `entity#open`: (Required) API operation(s) associated with the Terraform ephemeral resource open lifecycle, such as fetching a temporary secret or opening a temporary network connection.
+- `entity#close`: API operation(s) associated with the Terraform ephemeral resource close lifecycle, such as closing a temporary network connection.
+
+In this example, a `token` ephemeral resource is generated:
+
+```yaml
+paths:
+  /token:
+    get:
+      description: Retrieve a temporary token
+      x-speakeasy-entity-operation: token#open
+```
+
+In this example, a `tunnel` ephemeral resource with open and close lifecycle is generated:
+
+```yaml
+paths:
+  /tunnel:
+    post:
+      description: Open the network tunnel
+      x-speakeasy-entity-operation: tunnel#open
+    delete:
+      description: Close the network tunnel
+      x-speakeasy-entity-operation: tunnel#close
+```
+
+### Action Terraform Operations
+
+Define [actions](https://developer.hashicorp.com/terraform/language/block/action), which are API operations to invoke for automations:
+
+- `entity#invoke`: (Required) API operation(s) associated with the Terraform action, such as starting an automation task.
+
+In this example, a `backup` action is generated:
+
+```yaml
+paths:
+  /backup:
+    post:
+      description: Create a backup
+      x-speakeasy-entity-operation: backup#invoke
+```
+
+### Multiple API Operations for One Resource
+
+When multiple API operations are necessary for a single resource, use the additional entity-ordering capabilities of the `x-speakeasy-entity-operation` annotation.
+
+```yaml
+paths:
+  /pet/{petId}:
+    get:
+      x-speakeasy-entity-operation: Pet#read#1
+  /animal:
+    get:
+      x-speakeasy-entity-operation: Pet#read#2
+```
+
+Multiple API operations for one resource can be combined with multiple entity operations of [one API operation for multiple resources](#one-api-operation-for-multiple-resources) as necessary.
+
+If additional API operations have transient properties, such as an asynchronous task identifier necessary for polling, use `x-speakeasy-terraform-ignore: schema` to remove them from the Terraform schema.
+
+### One API Operation for Multiple Resources
+
+When a single API operation is necessary for multiple resources, use multiple entity operation entries with the `x-speakeasy-entity-operation` annotation.
+
+```yaml
+parameters:
+  - in: query
+    name: id
+    required: false
+    schema:
+      type: string
+operationId: GetAnimal
+x-speakeasy-entity-operation:
+  - Cat#read
+  - Dog#read
+```
+
+One API operation for multiple resources can be combined with the entity operation ordering of [multiple API operations for one resource](#multiple-api-operations-for-one-resource) as necessary.
+
+If the resource creation requires both a create and update operation where the create response includes an API assigned resource identifier, mark the update request resource identifier property as read only via `x-speakeasy-param-readonly: true` to ensure the property remains non-configurable in the schema.
+
+### API Operation Pagination
+
+Define automatic API operation pagination logic, such as paginated list APIs, via the [`x-speakeasy-pagination` extension](/docs/customize/runtime/pagination). The generation will automatically handle paging through all responses and removing pagination properties from resource schemas that would be extraneous to Terraform configurations.
+
+In this example, an automatically paginated Pets data resource is defined:
+
+```yaml
+paths:
+  /pet:
+    get:
+      tags:
+        - pet
+      summary: Lists all pets
+      x-speakeasy-entity-operation: Pets#read
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: page
+            in: parameters
+            type: page
+        outputs:
+          results: $.results
+```
+
+### API Operation Polling
+
+Define automatic API operation polling logic for APIs with asynchronous behaviors via the `x-speakeasy-polling` and `x-speakeasy-entity-operation` extensions in the OpenAPI Specification document. Refer to the [SDK Polling documentation](/docs/customize/runtime/polling) for additional information about configuring `x-speakeasy-polling`.
+
+In this example:
+
+```yaml
+/task:
+  post:
+    x-speakeasy-entity-operation: Task#create#1
+/task/{id}:
+  get:
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum:
+                    - completed
+                    - errored
+                    - pending
+                    - running
+              required:
+                - name
+                - status
+    x-speakeasy-polling:
+      - name: WaitForCompleted
+        failureCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "errored"
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "completed"
+    x-speakeasy-entity-operation:
+      - Task#read
+      - entityOperation: Task#create#2
+        options:
+          polling:
+            name: WaitForCompleted
+```
+
+The API operation is used for both the read operation and the second create operation, where the second create operation will use the `WaitForCompleted` polling method to ensure the success criteria is met before the resource logic (and therefore Terraform) continues.
+
+There are `delaySeconds`, `intervalSeconds`, and `limitCount` configurations to override the `x-speakeasy-polling` configuration values for a specific entity operation.
+
+In this example:
+
+```yaml
+/task/{id}:
+  get:
+    x-speakeasy-polling:
+      - name: WaitForCompleted
+        failureCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "errored"
+        intervalSeconds: 5
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body#/status == "completed"
+    x-speakeasy-entity-operation:
+      - Task#read
+      - entityOperation: Task#create#2
+        options:
+          polling:
+            name: WaitForCompleted
+            intervalSeconds: 10
+```
+
+The `WaitForCompleted` polling method for the API operation defaults to a 5 second interval, however the create entity operation overrides to a 10 second interval.
+
+### Update Patch Semantics
+
+Define automatic patch semantics for Terraform provider update operations via the `x-speakeasy-entity-operation` extension in the OpenAPI Specification document. When enabled, entity operations will only send attributes that have changed from their prior state, rather than sending the entire resource representation.
+
+This is particularly useful for APIs that support partial updates (such as PATCH semantics) where sending unchanged fields may cause unintended side effects or where bandwidth efficiency is important.
+
+#### Basic Usage
+
+In this example:
+
+```yaml
+/resource:
+  post:
+    x-speakeasy-entity-operation:
+      - entityOperation: Resource#create,update
+        options:
+          patch:
+            style: only-send-changed-attributes
+    operationId: create-or-update-resource
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ResourceRequest"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResourceResponse"
+```
+
+The `create,update` entity operation uses the `only-send-changed-attributes` patch style. During entity operations, the generated Terraform provider will compare each attribute against its prior state and only include attributes that have changed in the API request.
+
+#### Configuration
+
+The patch style is configured within the `options` section of an entity operation mapping:
+
+```yaml
+x-speakeasy-entity-operation:
+  - entityOperation: Entity#operation
+    options:
+      patch:
+        style: only-send-changed-attributes
+```
+
+#### When to Use
+
+Use `only-send-changed-attributes` when:
+
+- Your API supports partial updates (PATCH semantics) and may have side effects when unchanged fields are sent
+- You want to minimize request payload size by excluding unchanged attributes
+- Your API has fields where re-sending the same value triggers unwanted behavior (such as regenerating tokens or timestamps)
+
+### Manual association between Operations and Resource / Data Sources
+
+The default behavior within Speakeasy is to automatically infer a data source from all operations that have an `x-speakeasy-entity-operation: Entity#read` association defined.
+
+For some APIs, you might want the data source to use a "search" endpoint (e.g., search for an entity by name, where name is non-unique), while using a "get" operation for the resource (e.g., to find an entity by ID for state reconciliation).
+
+In this case, use an object syntax for the `x-speakeasy-entity-operation` annotation to explicitly control whether an operation generates a resource, a data source, or both:
+
+```yaml
+paths:
+  "/example":
+    get:
+      operationId: getThing
+      x-speakeasy-entity-operation:
+        terraform-datasource: null
+        terraform-resource: Thing#read
+```
+
+This syntax allows you to:
+
+- Prevent automatic generation of a data source by setting `terraform-datasource` to `null`
+- Prevent invocation of the operation during the resource's Read method ("invoked as part of terraform state refresh") by setting `terraform-resource` to `null`
+
+For example, the configuration above declares that `getThing` is associated with just a resource, and a data source should not be automatically generated.
+
+### Wrapping Additional API Operation Response Data
+
+When defining multiple API operations for a single entity, an API definition may be written such that those API operation response are a flattened object. When adding those additional operations to the entity, those flattened object properties are added to the top level of the resource schema by default.
+
+Use `x-speakeasy-wrapped-attribute` extension to override this behavior, which will create a wrapping attribute that contains the underlying object properties in the final resource schema.
+
+In this example, the resource will put the second API operation response properties underneath a `subconfig` attribute:
+
+```yaml
+paths:
+  /example/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-speakeasy-entity-operation: Example#read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExampleResponse"
+  /example/{id}/subconfig:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-speakeasy-entity-operation: Example#read#2
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ExampleSubconfigResponse"
+                  - x-speakeasy-wrapped-attribute: subconfig
+```
+
+### Array Response Wrapping
+
+Terraform resources require an object-type root schema. When an API returns an array, Speakeasy automatically wraps it in an attribute (default name: `data`).
+
+**Default behavior:**
+
+```yaml
+paths:
+  /things:
+    get:
+      x-speakeasy-entity-operation: Things#read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  x-speakeasy-entity: Things
+```
+
+Since the response is `type: array`, Speakeasy wraps it in a `data` attribute for Terraform compatibility.
+
+Access in Terraform:
+
+```hcl
+data.example_things.data[0].id
+```
+
+**Customize the wrapper name:**
+
+```yaml
+paths:
+  /things:
+    get:
+      x-speakeasy-entity-operation: Things#read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                x-speakeasy-wrapped-attribute: items
+                type: array
+                items:
+                  x-speakeasy-entity: Things
+```
+
+Now the wrapping attribute is named `items` instead:
+
+```hcl
+data.example_things.items[0].id
+```
+
+<Callout title="Note" type="info">
+  The wrapping attribute name is a Terraform construct created by Speakeasy,
+  completely separate from your API's response structure. Use
+  `x-speakeasy-wrapped-attribute` to customize it.
+</Callout>
+
+### Resources with Soft Delete
+
+By default, a generated managed resource uses the HTTP 404 Not Found status code on read to automatically remove the resource from the Terraform state which causes the next Terraform plan to propose recreating the resource. For resource APIs that support soft delete (grace time period before the resource is fully deleted), the `x-speakeasy-soft-delete-property` annotation adds a check against a read response property to also propose resource recreation.
+
+For managed resources, any `x-speakeasy-soft-delete-property` attribute is omitted from the schema and state. For data resources, the attribute remains to preserve client-side filtering capabilities.
+
+In this example, the resource will be proposed for recreation if the `deleted_at` property has a value:
+
+```yaml
+paths:
+  "/example":
+    get:
+      x-speakeasy-entity-operation: Example#read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schema/ExampleGetResponse"
+components:
+  schemas:
+    ExampleGetResponse:
+      type: object
+      properties:
+        # ...
+        deleted_at:
+          type: string
+          format: date-time
+          x-speakeasy-soft-delete-property: true
+```

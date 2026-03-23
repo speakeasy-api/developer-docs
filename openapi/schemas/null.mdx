@@ -1,6 +1,6 @@
 ---
 title: Null in OpenAPI best practices
-description: Describing null values in OpenAPI schemas in OpenAPI 3.0.X and 3.1.X.
+description: Describing null values in OpenAPI schemas in OpenAPI 3.0.X and 3.1.X, including guidance on combining optional and nullable fields.
 ---
 
 # null in OpenAPI
@@ -69,3 +69,88 @@ schema:
                 - type: 'null'
                 - type: string
 ```
+
+## Optional vs. nullable vs. optional + nullable
+
+In OpenAPI, **optional** and **nullable** are two separate concepts that are often confused:
+
+- **Optional** means a property can be omitted from the request or response body entirely. A property is optional when it is _not_ listed in the `required` array of its parent object.
+- **Nullable** means a property can be explicitly set to `null`.
+
+When a field is only **optional** (not required, not nullable), the API expects either a valid value or for the field to be omitted:
+
+```yaml
+# An optional string field (can be "hello" or omitted entirely)
+schema:
+    type: object
+    properties:
+        nickname:
+            type: string
+```
+
+When a field is only **nullable** (required, but nullable), the API expects the field to always be present, but it can be set to `null`:
+
+```yaml
+# A required but nullable string field (can be "hello" or null, but must be present)
+# OpenAPI 3.0.X
+schema:
+    type: object
+    properties:
+        nickname:
+            type: string
+            nullable: true
+    required:
+        - nickname
+
+# OpenAPI v3.1
+schema:
+    type: object
+    properties:
+        nickname:
+            type: ['null', 'string']
+    required:
+        - nickname
+```
+
+### When a field is both optional and nullable
+
+Marking a field as both optional _and_ nullable introduces three distinct states:
+
+| State | JSON representation | Meaning |
+| --- | --- | --- |
+| **Value present** | `{ "nickname": "hello" }` | The field is set to a value |
+| **Explicitly null** | `{ "nickname": null }` | The field is present but intentionally null |
+| **Omitted** | `{ }` | The field is not included at all |
+
+```yaml
+# An optional AND nullable field — three possible states
+# OpenAPI 3.0.X
+schema:
+    type: object
+    properties:
+        nickname:
+            type: string
+            nullable: true
+
+# OpenAPI v3.1
+schema:
+    type: object
+    properties:
+        nickname:
+            type: ['null', 'string']
+```
+
+This is valid OpenAPI, but it adds real complexity for API consumers. SDK generators need to use special wrapper types to let users express all three states, since a simple pointer or `Optional` type can only distinguish between two states (set vs. unset).
+
+### When to use optional + nullable
+
+Only mark a field as both optional and nullable when the API genuinely treats `null` and omitted differently. Common examples include:
+
+- **PATCH endpoints** where omitting a field means "don't change this value" and sending `null` means "clear this value"
+- **Sparse update APIs** that distinguish between "no update" and "reset to default"
+
+### When to remove nullable from optional fields
+
+If the API treats `null` and omitted the same way, remove the `nullable` modifier and keep the field as just optional. Combining optional and nullable when they have the same effect is a common specification mistake that makes generated SDKs harder to use without any benefit.
+
+As a rule of thumb: if you can't describe a scenario where sending `{ "field": null }` and `{ }` should produce different outcomes, the field should be optional but **not** nullable.

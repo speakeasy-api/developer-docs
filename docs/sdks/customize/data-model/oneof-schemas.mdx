@@ -456,6 +456,35 @@ Will result in these response types:
 ]}
 />
 
+## Discriminator display names
+
+When a `oneOf` schema uses a `discriminator` with mapping keys that contain special characters (e.g., `$login`, `$challenge`), the generated SDK identifiers can become unwieldy. For example, a `$login` key produces a Go function named `CreateRiskDollarLogin` because the `$` character is sanitized to `Dollar`.
+
+The `x-speakeasy-discriminator` extension provides clean display names for discriminator mapping keys while preserving the original values for JSON serialization.
+
+```yaml
+components:
+  schemas:
+    RiskAssessment:
+      oneOf:
+        - $ref: "#/components/schemas/LoginRiskRequest"
+        - $ref: "#/components/schemas/ChallengeRiskRequest"
+      discriminator:
+        propertyName: type
+        mapping:
+          $login: "#/components/schemas/LoginRiskRequest"
+          $challenge: "#/components/schemas/ChallengeRiskRequest"
+      x-speakeasy-discriminator:
+        $login: login
+        $challenge: challenge
+```
+
+In this example, the generated Go SDK uses `CreateRiskAssessmentLogin` and `CreateRiskAssessmentChallenge` as function names instead of `CreateRiskAssessmentDollarLogin` and `CreateRiskAssessmentDollarChallenge`. The wire values (`"$login"` and `"$challenge"`) remain unchanged during JSON serialization.
+
+The extension maps each discriminator mapping key to a display name. Only keys that need renaming must be included. Any key not listed in `x-speakeasy-discriminator` retains its original name for identifier generation.
+
+This extension is supported in Go, Terraform, and mock server targets.
+
 ### Splitting `oneOf` schema types
 
 By defining similar operations with aligned but different schemas, you can apply `x-speakeasy-type-override: any` for untyped operations and use `oneOf` to define stricter types in others. This allows you to use methods like `DoSomething(StrictObject{...})` alongside `DoSomethingUntyped({...})`, providing flexibility across SDK methods based on the required schema type.

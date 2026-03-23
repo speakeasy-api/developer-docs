@@ -16,6 +16,7 @@ Speakeasy generates Java SDKs that integrate naturally with existing Java ecosys
 - **Comprehensive type safety**: Strong typing catches API contract violations at compile time, while JSR-305/Jakarta nullability annotations provide rich IDE warnings and autocomplete derived directly from your OpenAPI specification
 - **Flexible concurrency models**: Synchronous execution by default supports traditional blocking patterns, while `.async()` mode provides `CompletableFuture<T>` and reactive streams support for non-blocking architectures—enabling incremental adoption without rewriting existing code
 - **Minimal runtime dependencies**: Built on Java standard library primitives like `CompletableFuture<T>` and `Flow.Publisher<T>` rather than heavyweight frameworks, ensuring clean integration into existing codebases and microservice architectures
+- **Built-in observability**: SLF4J integration provides structured logging across all SDK operations without framework lock-in, enabling comprehensive monitoring of HTTP requests, retries, streaming, and hook execution
 - **Specification fidelity**: Method signatures, documentation, and validation rules generated directly from OpenAPI definitions maintain accuracy between API contracts and client code, reducing integration surprises
 
 ```java
@@ -680,6 +681,73 @@ additionalDependencies:
   - implementation:com.fasterxml.jackson.core:jackson-databind:2.16.0
 ```
 
+### Logging & Observability
+
+#### SLF4J Integration
+
+The Java SDK includes built-in SLF4J logging integration that provides structured logging across all SDK operations without requiring specific logging implementations. This backend-agnostic approach allows library authors to include logging without depending on particular logging frameworks.
+
+**Configuration:**
+
+SLF4J logging is enabled by default for new SDKs via the `enableSlf4jLogging` configuration option. The feature can be configured in `gen.yaml`:
+
+```yaml
+java:
+  version: 1.0.0
+  enableSlf4jLogging: true  # Default: true for new SDKs
+```
+
+**Log Levels:**
+
+- **DEBUG**: High-level operations (request/response cycles, retry attempts, hook executions)
+- **TRACE**: Detailed information (pagination state, streaming lifecycle, backoff calculations)
+
+**Logging Coverage:**
+
+- **HTTP Client**: Request/response logging with sensitive header redaction
+- **Retry Logic**: Attempt tracking, backoff calculations, and exhaustion reporting
+- **Pagination**: Page fetch tracking and state management
+- **Streaming**: Initialization, item processing, and lifecycle events
+- **Hooks**: Execution counts, operation IDs, and exception handling
+
+**Setup Example:**
+
+Add a logging implementation dependency to your project:
+
+```gradle
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'ch.qos.logback:logback-classic:1.5.6'  // Example implementation
+}
+```
+
+Create a `logback.xml` configuration file:
+
+```xml
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Set SDK logging to DEBUG level -->
+    <logger name="com.example.sdk" level="DEBUG"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+```
+
+**Backward Compatibility:**
+
+Legacy `enableHTTPDebugLogging()` continues to work for existing SDKs. Both logging approaches can coexist during migration periods.
+
+**Security:**
+
+Sensitive headers (Authorization, X-API-Key, etc.) are automatically redacted in HTTP request/response logs to prevent credential leakage.
+
 ### Dependencies
 
 The SDK maintains minimal dependencies:
@@ -687,6 +755,7 @@ The SDK maintains minimal dependencies:
 - [Jackson Library](https://github.com/FasterXML/jackson) for JSON serialization/deserialization
 - [Apache HttpClient](https://hc.apache.org/httpcomponents-client-4.5.x/index.html) for HTTP requests
 - [Jayway JsonPath](https://github.com/json-path/JsonPath) for JSON path expressions in Speakeasy metadata
+- [SLF4J API](https://www.slf4j.org/) for structured logging (when enabled)
 
 ## Configuration Reference
 

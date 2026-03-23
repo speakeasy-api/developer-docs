@@ -32,13 +32,16 @@ paths:
       tags: [drinks]
 ```
 
-Here is the full specification for the tag object for OpenAPI v3.0-v3.1.
+Here is the full specification for the Tag Object.
 
 <Table
   data={[
     { field: "`name`", type: "String", required: "✅", description: "The name of the tag. **_Must_** be unique in the document." },
     { field: "`description`", type: "String", required: "", description: "A description of the tag. This may contain [CommonMark syntax](https://spec.commonmark.org/) to provide a rich description." },
     { field: "`externalDocs`", type: "[External Documentation Object](/openapi/external-documentation)", required: "", description: "Additional external documentation for this tag." },
+    { field: "`summary`", type: "String", required: "", description: "A short, human-friendly name for the tag. Available in OpenAPI v3.2.0+." },
+    { field: "`parent`", type: "String", required: "", description: "The `name` of another tag that this tag is nested under. The named tag must exist in the document, and circular references must not be used. Available in OpenAPI v3.2.0+." },
+    { field: "`kind`", type: "String", required: "", description: "A machine-readable string to categorize the tag. Common values include `nav`, `badge`, and `audience`. See the [tag kind registry](https://spec.openapis.org/registry/tag-kind/). Available in OpenAPI v3.2.0+." },
     { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the tag object that can be used by tooling and vendors." }
   ]}
   columns={[
@@ -56,7 +59,7 @@ Whether a tag should be human readable (e.g. `Publishing Tokens`) or machine-fri
 Then the human friendly name can be passed in one of two locations.
 
 1. For OpenAPI v3.0 and v3.1 users, the commonly used vendor extension `x-displayName` will work in most API documentation tools.
-2. The upcoming OpenAPI v3.2 introduces a new `tags.summary` to pass the human-friendly same name.
+2. OpenAPI v3.2 introduces a new `tags.summary` field to pass the human-friendly name.
 
 Check to see which of these keywords are supported by documentation tools in the toolchain, and if neither perhaps go with a human-readable `name` until that tool supports `x-displayName` or the OpenAPI is upgraded to v3.2.
 
@@ -113,12 +116,12 @@ In Scalar the above example would look like this.
 
 ![Screenshot of Scalar interpreting tag groups](/assets/openapi/guide/scalar-x-tagGroups.png)
 
-In OpenAPI v3.2 there will be two new properties which can be used to handle tag grouping and nesting:
+OpenAPI v3.2 adds two new properties for handling tag grouping and nesting:
 
-- `tags.parent` - The `name` of a tag that this tag is nested under. The named tag MUST exist in the API description, and circular references between parent and child tags MUST NOT be used.
-- `tags.kind` - A machine-readable string to categorize what sort of tag it is. Any string value can be used; common uses are `nav` for Navigation, `badge` for visible badges, `audience` for APIs used by different groups. A [registry of the most commonly used values](https://spec.openapis.org/registry/tag-kind/) is available.
+- `tags.parent` - The `name` of a tag that this tag is nested under. The named tag must exist in the API description, and circular references between parent and child tags must not be used.
+- `tags.kind` - A machine-readable string to categorize what sort of tag it is. Any string value can be used; common values are `nav` for navigation, `badge` for visible badges, and `audience` for APIs used by different groups. A [registry of commonly used values](https://spec.openapis.org/registry/tag-kind/) is available.
 
-It will look something like this.
+The `kind` field enables tooling to differentiate between tags used for navigation and tags used for other purposes, such as badges or audience segmentation.
 
 ```yaml
 tags:
@@ -126,6 +129,11 @@ tags:
     summary: Account Updates
     description: Account update operations
     kind: nav
+
+  - name: beta
+    summary: Beta
+    description: Operations that are in beta
+    kind: badge
 
   - name: partner
     summary: Partner
@@ -138,8 +146,6 @@ tags:
     description: Operations available to external consumers
     kind: audience
 ```
-
-This is not available yet, but will be coming in OpenAPI v3.2 which many tooling providers are excited to start supporting.
 
 ## Best practices
 

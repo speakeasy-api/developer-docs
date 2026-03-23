@@ -29,6 +29,7 @@ speakeasy run [flags]
 ### Options
 
 ```
+  -y, --auto-yes                  auto confirm all prompts
   -d, --debug                     enable writing debug files with broken code
       --github                    kick off a generation run in GitHub for the repository pertaining to your current directory
       --github-repos string       GLOBAL: run SDK generation across your entire Speakeasy workspace/account, independent of your current directory. Use 'all' for all connected repos or a comma-separated list of GitHub repo URLs
@@ -37,6 +38,7 @@ speakeasy run [flags]
       --installationURLs string   a map from target ID to installation URL for installation instructions if the SDK is not published to a package manager (default "null")
       --minimal                   only run the steps that are strictly necessary to generate the SDK
   -o, --output string             What to output while running (summary: visual workflow summary, mermaid: Mermaid diagram of workflow, console: basic console output) (default "summary")
+      --parallel                  run targets in parallel as separate subprocesses
       --registry-tags strings     tags to apply to the speakeasy registry bundle (comma-separated list)
   -r, --repo string               the repository URL for the SDK, if the published (-p) flag isn't used this will be used to generate installation instructions
   -b, --repo-subdir string        the subdirectory of the repository where the SDK is located in the repo, helps with documentation generation

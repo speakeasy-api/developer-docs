@@ -1,0 +1,143 @@
+---
+description: "Use Speakeasy Docker images to run CLI commands for validating OpenAPI specs, checking SDK status, and other non-generation tasks in containerized environments."
+slug: /speakeasy-cli/docker/
+---
+
+# Using Speakeasy with Docker
+
+The Speakeasy Docker image provides a containerized environment for running Speakeasy CLI commands. The image does not include language toolchains, so it cannot be used for SDK generation. Use it for other tasks like validating OpenAPI specs, checking SDK status, and running quickstart commands.
+
+## Docker image
+
+The official Speakeasy Docker image is available on GitHub Container Registry:
+
+[ghcr.io/speakeasy-api/speakeasy](https://github.com/speakeasy-api/speakeasy/pkgs/container/speakeasy)
+
+## Installation
+
+Pull the latest Speakeasy Docker image:
+
+```bash
+docker pull ghcr.io/speakeasy-api/speakeasy:latest
+```
+
+You can also use specific version tags instead of `latest` for reproducible builds:
+
+```bash
+docker pull ghcr.io/speakeasy-api/speakeasy:v1.234.0
+```
+
+## Authentication
+
+To authenticate with the Speakeasy Platform from within a Docker container, you need to:
+
+1. Set the `SPEAKEASY_LOGIN_CALLBACK_PORT` environment variable
+2. Expose the callback port for OAuth authentication
+3. Mount your workspace directory
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    -e SPEAKEASY_LOGIN_CALLBACK_PORT=$SPEAKEASY_LOGIN_CALLBACK_PORT \
+    -p $SPEAKEASY_LOGIN_CALLBACK_PORT:$SPEAKEASY_LOGIN_CALLBACK_PORT \
+    ghcr.io/speakeasy-api/speakeasy:latest auth login
+```
+
+After running this command, a browser window will open for you to authenticate with the Speakeasy Platform.
+
+### Using API keys in CI/CD
+
+For automated environments like CI/CD pipelines, use an API key instead of interactive authentication:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    -e SPEAKEASY_API_KEY=$SPEAKEASY_API_KEY \
+    ghcr.io/speakeasy-api/speakeasy:latest run
+```
+
+Create an API key in the [Speakeasy Platform](https://app.speakeasy.com) and set it as the `SPEAKEASY_API_KEY` environment variable.
+
+## Common usage examples
+
+### Run quickstart
+
+Get started with an interactive quickstart:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest quickstart
+```
+
+### Validate OpenAPI spec
+
+Validate your OpenAPI specification:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest validate openapi -s ./openapi.yaml
+```
+
+### Check SDK status
+
+Check the status of your SDK generation:
+
+```bash
+docker run -it -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest status
+```
+
+## Using in CI/CD pipelines
+
+The Docker image is designed for use in CI/CD pipelines. Here's an example GitHub Actions workflow for validating an OpenAPI spec:
+
+```yaml
+name: Validate OpenAPI
+on:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Validate OpenAPI spec
+        run: |
+          docker run -v "$(pwd):/workspace" -w "/workspace" \
+            ghcr.io/speakeasy-api/speakeasy:latest validate openapi -s ./openapi.yaml
+```
+
+## Volume mounts and permissions
+
+When using the Docker image, ensure that:
+
+1. Your workspace directory is mounted to `/workspace`
+2. The working directory is set to `/workspace` with `-w "/workspace"`
+3. File permissions allow the container to read and write files
+
+If you encounter permission issues, you may need to adjust file ownership or run the container with appropriate user permissions.
+
+## Troubleshooting
+
+### Authentication issues
+
+If authentication fails, ensure that:
+- The callback port is properly exposed with `-p`
+- The `SPEAKEASY_LOGIN_CALLBACK_PORT` environment variable is set
+- Your firewall allows connections on the callback port
+
+### File permission errors
+
+If file permission errors occur, try running the container with the appropriate user ID:
+
+```bash
+docker run -it --user $(id -u):$(id -g) \
+    -v "$(pwd):/workspace" -w "/workspace" \
+    ghcr.io/speakeasy-api/speakeasy:latest validate openapi -s ./openapi.yaml
+```
+
+### Network connectivity
+
+Ensure the Docker container has network access to:
+- The Speakeasy Platform (app.speakeasy.com)
+- The OpenAPI specification source (if remote)

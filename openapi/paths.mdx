@@ -111,6 +111,8 @@ components:
     { field: "`head`", type: "[Operation Object](/openapi/paths/operations)", required: "", description: "An operation associated with the [`HEAD` HTTP method](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/HEAD)." },
     { field: "`patch`", type: "[Operation Object](/openapi/paths/operations)", required: "", description: "An operation associated with the [`PATCH` HTTP method](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/PATCH)." },
     { field: "`trace`", type: "[Operation Object](/openapi/paths/operations)", required: "", description: "An operation associated with the [`TRACE` HTTP method](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/TRACE)." },
+    { field: "`query`", type: "[Operation Object](/openapi/paths/operations)", required: "", description: "An operation associated with the `QUERY` HTTP method. Safe and idempotent, like `GET`, but allows a request body for complex queries. Available in OpenAPI v3.2.0+." },
+    { field: "`additionalOperations`", type: "Map[String, [Operation Object](/openapi/paths/operations)]", required: "", description: "A map of non-standard HTTP methods to Operation Objects, enabling documentation of custom methods beyond those defined by the specification. Available in OpenAPI v3.2.0+." },
     { field: "`x-*`", type: "[Extensions](/openapi/extensions)", required: "", description: "Any number of extension fields can be added to the Path Item Object that can be used by tooling and vendors." }
   ]}
   columns={[
@@ -122,3 +124,90 @@ components:
 />
 
 The order of fields above is recommended but is not significant to the order in which the endpoints should be used.
+
+## OpenAPI 3.2 path features
+
+OpenAPI 3.2.0 introduces several new capabilities for path items.
+
+### The QUERY HTTP method
+
+The `QUERY` method is a safe, idempotent HTTP method that allows clients to send query criteria in the request body rather than encoding complex parameters in the URL. This is useful for operations that require structured or lengthy query parameters that exceed practical URL length limits.
+
+```yaml
+paths:
+  /drinks:
+    query:
+      operationId: searchDrinks
+      summary: Search for drinks with complex criteria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ingredients:
+                  type: array
+                  items:
+                    type: string
+                minRating:
+                  type: number
+      responses:
+        "200":
+          description: A list of matching drinks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Drink"
+```
+
+### Additional operations
+
+The `additionalOperations` field allows defining non-standard HTTP methods as Operation Objects. This is useful for APIs that use custom HTTP methods beyond the standard set.
+
+```yaml
+paths:
+  /drinks/{drinkId}:
+    additionalOperations:
+      BREW:
+        operationId: brewDrink
+        summary: Brew a specific drink
+        parameters:
+          - name: drinkId
+            in: path
+            required: true
+            schema:
+              type: string
+        responses:
+          "200":
+            description: Drink brewed successfully
+```
+
+### The querystring field
+
+OpenAPI 3.2.0 also introduces the `querystring` field on Operation Objects, which allows defining all query parameters as a single Schema Object instead of listing individual `parameters` with `in: query`. This simplifies the definition of operations with many query parameters or complex query structures.
+
+```yaml
+paths:
+  /drinks:
+    get:
+      operationId: listDrinks
+      summary: List available drinks
+      querystring:
+        type: object
+        properties:
+          type:
+            type: string
+            enum: [cocktail, mocktail, spirit, beer, wine, cider]
+          limit:
+            type: integer
+            default: 20
+          offset:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: A list of drinks
+```
