@@ -1,240 +1,233 @@
 ---
 title: How To Generate an OpenAPI Document With Hono
-description: "Learn how to create an OpenAPI document for a Hono API and use it to automatically generate and customize SDKs."
+description: "Learn how to create an OpenAPI document for your Hono API and use it to automatically generate and customize SDKs."
 ---
 
 import { Callout } from "@/mdx/components";
 
 # How to generate an OpenAPI document with Hono
 
-This guide demonstrates generating an OpenAPI document for a [Hono](https://hono.dev/) API and using Speakeasy to create an SDK based on the generated document.
+This guide walks you through generating an OpenAPI document for a [Hono](https://hono.dev/) API and using Speakeasy to create an SDK based on the generated document.
 
-This guide covers:
+Here's what we'll do:
 
-1. Adding Hono OpenAPI and Scalar UI to a Node.js Hono project.
-2. Generating an OpenAPI document using the Hono OpenAPI middleware with Zod validation.
-3. Improving the generated OpenAPI document to prepare it for code generation.
-4. Using the Speakeasy CLI to generate an SDK based on the OpenAPI document.
-5. Adding Speakeasy OpenAPI extensions to improve the generated SDK.
+1. Add Zod OpenAPI and Scalar UI to a Node.js Hono project.
+2. Generate an OpenAPI document using the Zod OpenAPI Hono middleware.
+3. Improve the generated OpenAPI document to prepare it for code generation.
+4. Use the Speakeasy CLI to generate an SDK based on the OpenAPI document.
+5. Add Speakeasy OpenAPI extensions to improve the generated SDK.
 
-The generated SDK usage will also be demonstrated.
+We'll also take a look at how you can use the generated SDK.
 
-While the example application is simplified, the steps outlined should translate well to any Hono project.
+Your Hono project might not be as simple as our example app, but the steps below should translate well to any Hono project.
 
 ## The OpenAPI creation pipeline
 
-[Hono OpenAPI](https://hono.dev/examples/hono-openapi) is middleware that enables automatic OpenAPI documentation generation for Hono APIs by integrating with validation libraries like Zod, Valibot, ArkType, and TypeBox. This guide uses [Zod](https://zod.dev/) to define data schemas and validate values, then sets up the Hono app to generate an OpenAPI document.
+[Zod OpenAPI](https://hono.dev/examples/zod-openapi#zod-openapi) is Hono middleware that allows you to validate values and types using [Zod](https://zod.dev/) and generate an OpenAPI document. We'll begin by defining data schemas with Zod, then set up the Hono app to generate an OpenAPI document.
 
-The quality of the OpenAPI document determines the quality of generated SDKs and documentation, so techniques for improving the generated document will be explored based on the Speakeasy [OpenAPI best practices](/docs/prep-openapi/best-practices).
+The quality of your OpenAPI document determines the quality of generated SDKs and documentation, so we'll look into ways you can improve the generated document based on the Speakeasy [OpenAPI best practices](/docs/prep-openapi/best-practices).
 
-The improved OpenAPI document will then be used to generate an SDK using Speakeasy.
+We'll then use the improved OpenAPI document to generate an SDK using Speakeasy.
 
-Instructions for adding SDK creation to a CI/CD pipeline will be provided so that Speakeasy automatically generates fresh SDKs whenever the Hono API changes in the future.
+We'll explain how to add SDK creation to a CI/CD pipeline so that Speakeasy automatically generates fresh SDKs whenever your Hono API changes in the future.
 
-Finally, a simplified example will demonstrate how to use the generated SDK.
+Finally, we'll use a simplified example to demonstrate how to use the generated SDK.
 
 ## Requirements
 
-Ensure the following are installed:
+This guide assumes that you have an existing Hono app and basic familiarity with Hono.
 
-- [Node.js 18.14.1 or above](https://nodejs.org/en/download) (Node v22.15.1 was used for testing).
-- The [Speakeasy CLI](/docs/speakeasy-cli/getting-started), which will be used to generate an SDK from the OpenAPI document.
-
-<Callout title="Sample code" type="info">
-  The source code for the examples throughout this guide are available in the [Speakeasy Hono
-  example repository](https://github.com/speakeasy-api/examples/tree/main/frameworks-hono-ts).
+<Callout title="Example repository" type="info">
+  The source code for the completed example is available in the [Speakeasy Hono
+  example
+  repository](https://github.com/speakeasy-api/examples/tree/main/framework-hono-ts).
+  If you want to follow along step-by-step, you can clone the [Speakeasy Hono
+  example
+  repository](https://github.com/speakeasy-api/examples/tree/main/frameworks-hono-ts/initial-app),
+  which has the initial state of the app that we'll use to start this tutorial
+  within the `initial-app` directory.
 </Callout>
 
+Ensure the following are installed on your machine:
 
-This guide starts from scratch with a new Hono project, but anyone adding OpenAPI documentation to an existing Hono project can jump straight to step 3.
+- [Node.js version 18 or above](https://nodejs.org/en/download) (we used Node v22.15.1), which the Hono Node.js Adapter requires.
+- The [Speakeasy CLI](/docs/speakeasy-cli/getting-started), which we'll use to generate an SDK from the OpenAPI document.
 
-## Step 1: Scaffold a Hono project
+If you're using the [example initial application](https://github.com/speakeasy-api/examples/tree/main/frameworks-hono-ts/initial-app), add a `.env` file containing the following environment variables to the root of the initial app project:
 
-Those starting from scratch, run the Hono project scaffold command to get a basic setup.
-
-```bash filename="Terminal"
-npm create hono@latest users-api
+```env
+NODE_ENV=development
+PORT=3000
 ```
 
-When prompted, select `nodejs` as the template. Then install dependencies:
+## Adding the Zod OpenAPI middleware to a Hono project
 
-```bash filename="Terminal"
-cd users-api && npm install
-```
+We'll use the [Zod OpenAPI Hono](https://hono.dev/examples/zod-openapi) middleware to generate an OpenAPI document. We'll create Zod schemas to validate values and types and to generate part of the OpenAPI document.
 
-## Step 2: Create a basic Web API
-
-The scaffold generates a single `src/index.ts`. Split this into two files:
-
-- `src/index.ts` — starts the HTTP server
-- `src/app.ts` — defines the Hono app and routes
-
-Replace `src/index.ts` with:
-
-```typescript filename="src/index.ts"
-import { serve } from '@hono/node-server'
-import app from './app'
-
-const port = 3000
-console.log(`Server running on http://localhost:${port}`)
-
-serve({ fetch: app.fetch, port })
-```
-
-Create `src/app.ts`:
-
-```typescript filename="src/app.ts"
-import { Hono } from 'hono';
-
-const app = new Hono();
-
-app.get('/users', (c) => {
-  return c.json([
-    { id: '1', name: 'John Doe', age: 42 },
-    { id: '2', name: 'Sarah Jones', age: 32 },
-  ])
-});
-
-app.post('/users', async (c) => {
-  const body = await c.req.json()
-  return c.json({ id: '3', ...body }, 200)
-});
-
-app.get('/users/:id', (c) => {
-  const id = c.req.param('id')
-  return c.json({ id, name: 'John Doe', age: 42 })
-});
-
-export default app;
-```
-
-Run `npm run dev` and open [`http://localhost:3000/users`](http://localhost:3000/users) to confirm the API is working.
-
-## Step 3: Add Hono OpenAPI middleware
-
-The [Hono OpenAPI](https://hono.dev/examples/hono-openapi) middleware will be used to generate an OpenAPI document. This middleware works with validation libraries through [Standard Schema](https://standardschema.dev/), including Zod, Valibot, ArkType, and TypeBox. 
-
-This guide will use Zod (v4) schemas to validate values and types and to generate part of the OpenAPI document, but the same principles apply to the other supported validation libraries.
+### Creating Zod schemas
 
 First, install the middleware and Zod:
 
 ```bash filename="Terminal"
-npm i hono-openapi @hono/standard-validator zod@v4
+npm i zod @hono/zod-openapi
 ```
 
-Next, create a `schemas.ts` file in the `src` folder, with Zod schemas for the data:
+Next, create a `schemas.ts` file in the `src` folder and create Zod schemas for your data:
 
 ```typescript filename="schema.ts"
-import { z } from "zod";
+import { z } from "@hono/zod-openapi";
 
-export const UserSelectSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    age: z.number(),
-  })
-  .describe("User object")
-  .meta({ ref: "UserSelect" });
+export const UserSelectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  age: z.number(),
+});
 
-export const UserInsertSchema = z
-  .object({
-    name: z.string(),
-    age: z.number(),
-  })
-  .describe("User creation data")
-  .meta({ ref: "UserInsert" });
+export const UserInsertSchema = z.object({
+  name: z.string(),
+  age: z.number(),
+});
 
-export const patchUserSchema = UserInsertSchema.partial()
-  .describe("User update data")
-  .meta({ ref: "patchUser" });
+export const patchUserSchema = UserInsertSchema.partial();
 ```
 
-The `z` object is imported directly from `zod` unlike other Hono/Zod integrations that modify it and extent it a bit. This is just a plain Zod instance, so check out the Zod documentation for more guidance.
+The `z` object should be imported from `@hono/zod-openapi`. Note that Hono also has a [Standard Schema validator](https://github.com/honojs/middleware/tree/main/packages/standard-validator) that lets you write schemas and validate the incoming values using the same interface for multiple validation libraries that support Standard Schema. Supported validation libraries include Zod, Valibot, and ArkType.
 
-One important thing here is `.meta({ ref: "..." })`, which registers schemas as [reusable components](/openapi/components) exactly based on OpenAPI's component structure and the JSON Schema `$ref` keyword.
-
-Schemas can be created for anything that would benefit from a data schema, validation properties, and human-readable descriptions. This includes, but is not limited to, the JSON request body, query parameters, headers, and response data, and error messages.
+Create schemas for your request-query parameters, messages, and error responses:
 
 ```typescript filename="schema.ts"
 export const idParamsSchema = z.object({
   id: z.string().min(3),
 });
 
-export const ErrorSchema = z
-  .object({
+export function createMessageObjectSchema(
+  exampleMessage: string = "Hello World",
+) {
+  return z.object({
     message: z.string(),
-  })
-  .describe("Error response")
-  .meta({ ref: "Error" });
+  });
+}
+
+export function createErrorSchema<T extends ZodSchema>(schema: T) {
+  const { error } = schema.safeParse(
+    schema._def.typeName === z.ZodFirstPartyTypeKind.ZodArray ? [] : {},
+  );
+  return z.object({
+    success: z.boolean(),
+    error: z.object({
+      issues: z.array(
+        z.object({
+          code: z.string(),
+          path: z.array(z.union([z.string(), z.number()])),
+          message: z.string().optional(),
+        }),
+      ),
+      name: z.string(),
+    }),
+  });
+}
 ```
 
-## Step 4: Describe what endpoints should be doing with describeRoutes
+Create a `types.ts` file in the `src/lib` folder and add the `ZodSchema` type to it:
 
-With `hono-openapi`, the OpenAPI metadata and schemas are added through the `describeRoute` middleware.
+```typescript filename="types.ts"
+import type { z } from "@hono/zod-openapi";
 
-For better code organization, and to avoid overloading `src/app.ts` with OpenAPI descriptions, consider splitting the route description objects from the route handlers. 
+// eslint-disable-next-line ts/ban-ts-comment
+// @ts-expect-error
+export type ZodSchema =
+  | z.ZodUnion
+  | z.AnyZodObject
+  | z.ZodArray<z.AnyZodObject>;
+```
 
-Create a `users.routes.ts` file in the `src/routes/users` folder, with route description objects like this following:
+Import this type in the `src/schemas.ts` file.
+
+```typescript filename="schemas.ts"
+import type { ZodSchema } from "./lib/types";
+```
+
+### Replacing the Hono instances with OpenAPIHono
+
+Set up your app to use the `OpenAPIHono` instance of the Zod OpenAPI middleware instead of the `Hono` instance. Import the `OpenAPIHono` class in the `src/lib/createApp.ts` file:
+
+```typescript filename="createApp.ts"
+import { OpenAPIHono } from "@hono/zod-openapi";
+```
+
+Remove the `Hono` import and replace the `Hono` instances with `OpenAPIHono`:
+
+```diff filename="createApp.ts"
+- return new Hono({ strict: false });
++ return new OpenAPIHono({ strict: false });
+```
+
+```diff filename="createApp.ts"
+- const app = new Hono({ strict: false });
++ const app = new OpenAPIHono({ strict: false });
+```
+
+The `OpenAPIHono` class is an extension of the `Hono` class that gives `OpenAPIHono` its OpenAPI document-generation functionality.
+
+### Defining routes
+
+Let's split the routes and handlers into separate files for better code organization.
+
+Create a `users.routes.ts` file in the `src/routes/users` folder and use the Zod OpenAPI `createRoute` method to define your routes:
 
 ```typescript filename="users.routes.ts"
 import {
-  ErrorSchema,
+  createErrorSchema,
+  createMessageObjectSchema,
+  idParamsSchema,
+  patchUserSchema,
+  UserInsertSchema,
   UserSelectSchema,
 } from "@/schemas";
-import { resolver } from "hono-openapi";
-import { z } from "zod";
+import { createRoute, z } from "@hono/zod-openapi";
 
-export const listRoute = {
-  description: "Get all users",
+export const list = createRoute({
+  path: "/users",
+  method: "get",
   responses: {
     200: {
       content: {
         "application/json": {
-          schema: resolver(z.array(UserSelectSchema)),
+          schema: z.array(UserSelectSchema),
         },
       },
       description: "The list of users",
     },
   },
-};
+});
 
-export const createRoute = {
-  description: "Create a user",
+export const create = createRoute({
+  path: "/users",
+  method: "post",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: UserInsertSchema,
+        },
+      },
+      description: "The user to create",
+      required: true,
+    },
+  },
   responses: {
     200: {
       content: {
         "application/json": {
-          schema: resolver(UserSelectSchema),
+          schema: UserSelectSchema,
         },
       },
       description: "The created user",
     },
-    422: {
-      content: {
-        "application/json": {
-          schema: resolver(ErrorSchema),
-        },
-      },
-      description: "The validation error(s)",
-    },
-  },
-};
-
-export const getOneRoute = {
-  description: "Get a user by ID",
-  responses: {
-    200: {
-      content: {
-        "application/json": {
-          schema: resolver(UserSelectSchema),
-        },
-      },
-      description: "The requested user",
-    },
     404: {
       content: {
         "application/json": {
-          schema: resolver(ErrorSchema),
+          schema: createMessageObjectSchema("Not Found"),
         },
       },
       description: "User not found",
@@ -242,27 +235,68 @@ export const getOneRoute = {
     422: {
       content: {
         "application/json": {
-          schema: resolver(ErrorSchema),
+          schema: createErrorSchema(patchUserSchema),
+        },
+      },
+      description: "The validation error(s)",
+    },
+  },
+});
+
+export const getOne = createRoute({
+  path: "/users/{id}",
+  method: "get",
+  request: {
+    params: idParamsSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: UserSelectSchema,
+        },
+      },
+      description: "The requested user",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: createMessageObjectSchema("Not Found"),
+        },
+      },
+      description: "User not found",
+    },
+    422: {
+      content: {
+        "application/json": {
+          schema: createErrorSchema(patchUserSchema),
         },
       },
       description: "Invalid id error",
     },
   },
-};
+});
+
+export type ListRoute = typeof list;
+export type CreateRoute = typeof create;
+export type GetOneRoute = typeof getOne;
 ```
 
-These route description objects define the OpenAPI specification for each route. The `resolver` function converts Zod schemas to OpenAPI schemas, which will be used for request validation automatically when the `validator` middleware is used in the route handlers.
+The `createRoute` function takes in an object that describes the route's request and possible responses. The Zod schema defines the request and response content. The route types are then exported for use in the route handlers.
 
-## Step 5: Implement route handlers
+### Defining route handlers
 
-With the endpoints described by OpenAPI in `users.routes.ts` it's time to define the route handler logic itself. This is what the endpoint will actually do. Create something. Save something. Send something. 
-
-To implement this code we need another file, so create a `users.handlers.ts` file in the `src/routes/users` folder and use the following placeholder code.
+Create a `users.handlers.ts` file in the `src/routes/users` folder and add the following route handlers to it:
 
 ```typescript filename="users.handlers.ts"
-import type { Context } from "hono";
+import type { AppRouteHandler } from "@/lib/types";
+import type {
+  CreateRoute,
+  GetOneRoute,
+  ListRoute,
+} from "@/routes/users/users.routes";
 
-export const list = async (c: Context) => {
+export const list: AppRouteHandler<ListRoute> = async (c) => {
   // TODO: db query to get all users
   return c.json(
     [
@@ -281,7 +315,7 @@ export const list = async (c: Context) => {
   );
 };
 
-export const create = async (c: Context) => {
+export const create: AppRouteHandler<CreateRoute> = async (c) => {
   const user = c.req.valid("json");
   console.log({ user });
   // TODO: db query to create a user
@@ -295,7 +329,7 @@ export const create = async (c: Context) => {
   );
 };
 
-export const getOne = async (c: Context) => {
+export const getOne: AppRouteHandler<GetOneRoute> = async (c) => {
   const { id } = c.req.valid("param");
   // TODO: db query to get a user by id
   const foundUser = {
@@ -316,229 +350,340 @@ export const getOne = async (c: Context) => {
 };
 ```
 
-With `hono-openapi`, handlers accept the one argument, which is Hono's standard `Context` type. This gives access to the request data and other validation middleware logic, which can be accessed using `c.req.valid()`. 
+Add the following `AppRouteHandler` type to the `src/lib/types.ts` file:
 
-The schemas are there, the app logic is written, but now it all needs to be brought together.
+```typescript filename="types.ts"
+import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 
-## Step 6: Register application routes with the Hono router
+export type AppRouteHandler<R extends RouteConfig> = RouteHandler<R>;
+```
 
-For each endpoint in the API, it needs a route, a HTTP method, a path, and a handler. That's regular Hono usage, but what's extra for OpenAPI here is the two middlewares being added in: `describeRoute` and `zValidator`. 
+The handlers are made type safe by the route types. The request and response data in the Hono [context object](https://hono.dev/docs/api/context) is type checked using the schema defined in the routes. If you use an incorrect type, for example, by setting `age:` to `42`, you'll get a type error.
+
+### Configuring the middleware for each endpoint
+
+Replace the code in the `src/routes/users/users.index.ts` file with the following lines of code:
 
 ```typescript filename="users.index.ts"
-import { Hono } from "hono";
-import { describeRoute, validator as zValidator } from "hono-openapi";
-
-import { idParamsSchema, UserInsertSchema } from "@/schemas";
+import { createRouter } from "@/lib/createApp";
 import * as handlers from "./users.handlers";
 import * as routes from "./users.routes";
 
-const router = new Hono();
-
-router.get("/users", describeRoute(routes.listRoute), handlers.list);
-
-router.post(
-  "/users",
-  describeRoute(routes.createRoute),
-  zValidator("json", UserInsertSchema),
-  handlers.create
-);
-
-router.get(
-  "/users/:id",
-  describeRoute(routes.getOneRoute),
-  zValidator("param", idParamsSchema),
-  handlers.getOne
-);
+const router = createRouter()
+  .openapi(routes.list, handlers.list)
+  .openapi(routes.create, handlers.create)
+  .openapi(routes.getOne, handlers.getOne);
 
 export default router;
 ```
 
-The important bits here are these two validators:
+The `openapi` method takes the route and the handler as its arguments and configures the Zod OpenAPI middleware for each endpoint on the `OpenAPIHono` instance.
 
-- `describeRoute` middleware to add OpenAPI documentation to the route based on the route description objects defined in `users.routes.ts`.
-- `validator` (aliased as `zValidator`) middleware to validate requests and automatically add request schemas to OpenAPI.
+## Configuring and generating the OpenAPI document
 
-By using the same Zod schema instance to both power the actual server-side validation logic, and generate the OpenAPI description (which is then used for documentation, mock servers, SDK generation, etc.) the implementation cannot get out of sync with the OpenAPI, something people have struggled with for years.
+Create a file called `configureOpenAPI.ts` in the `src/lib` folder and add the following lines of code to it:
 
-## Step 7: Exporting OpenAPI and API reference documentation
-
-Once all this is set up, it's time to go about exporting the OpenAPI, and therefore creating API Reference Documentation, SDKs, or any other artifacts from this OpenAPI. One popular approach is to offer this up over HTTP so it can be used by anything with access to the API domain, therefore ensuring the correct version of the OpenAPI is being looked at.
-
-One way to do this is with a `src/lib/configureOpenAPI.ts` file, that does three things:
-
-1. Add all the higher-level OpenAPI that's not covered on the route-specific Zod-based stuff so far.
-2. Add a route for `/openapi` to export the OpenAPI itself.
-3. Add a route for `/docs` which uses Scalar UI to turn that OpenAPI into beautiful simple API documentation.
-
-Option 3 is optional, and will need the following NPM package to make it work: 
-
-```bash  filename="Terminal"
-npm install @scalar/hono-api-reference
-```
-
-The code to do all of this will look like this.
-
-```typescript filename="src/lib/configureOpenAPI.ts"
-import type { Hono } from "hono";
-import { Scalar } from "@scalar/hono-api-reference";
-import { openAPIRouteHandler } from "hono-openapi";
+```typescript filename="configureOpenAPI.ts"
+import type { OpenAPIHono } from "@hono/zod-openapi";
 import packageJson from "../../package.json";
 
-export const openAPIDocumentation = {
-  info: {
-    version: packageJson.version,
-    title: "Users API",
-  },
+export const openAPIObjectConfig = {
+  openapi: "3.1.0",
   externalDocs: {
     description: "Find out more about Users API",
     url: "www.example.com",
   },
+  info: {
+    version: packageJson.version,
+    title: "Users API",
+  },
 };
 
-export default function configureOpenAPI(app: Hono) {
-  // Comment these out if exposing OpenAPI/Docs over HTTP is not wanted
-  app.get(
-    "/openapi",
-    openAPIRouteHandler(app, {
-      documentation: openAPIDocumentation,
-    })
-  );
-  app.get(
-    "/docs",
-    Scalar({
-      url: "/openapi",
-      pageTitle: "Users Management API",
-    })
-  );
+export default function configureOpenAPI(app: OpenAPIHono) {
+  app.doc31("/doc", openAPIObjectConfig);
 }
 ```
 
-Now, pass in the Hono app instance to the `configureOpenAPI` function in the `src/app.ts` file:
+The `configureOpenAPI` function takes in an `OpenAPIHono` instance and uses the `doc31` method to generate an OpenAPI document based on the OpenAPI Specification version 3.1. We can view this document at the `'/doc'` endpoint. We then pass in the OpenAPI configuration object to the function to add fields to the root object of the OpenAPI document.
+
+Now, pass in the `OpenAPIHono` app instance to the `configureOpenAPI` function in the `src/app.ts` file:
 
 ```typescript filename="app.ts"
-import { Hono } from "hono";
 import configureOpenAPI from "./lib/configureOpenAPI";
-
-const app = new Hono();
 
 configureOpenAPI(app);
 ```
 
-To confirm this has all worked, go to [`http://localhost:3000/openapi`](http://localhost:3000/openapi) to see the OpenAPI description in JSON, and navigate to [`http://localhost:3000/docs`](http://localhost:3000/docs) to see Scalar UI showing off the API documentation nicely.
+## Supported OpenAPI Specification versions in Hono and Speakeasy
+
+Speakeasy currently supports the OpenAPI Specification versions 3.0.x and 3.1.x. We recommend using OpenAPI Specification version 3.1 if possible, as it's fully compatible with [JSON Schema](https://json-schema.org/), which gives you access to a large ecosystem of tools and libraries.
+
+Zod OpenAPI Hono can generate an OpenAPI document using version 3.0 or version 3.1 of the OpenAPI Specification. This guide uses version 3.1.
+
+Run the development server `npm run dev` and open [`http://localhost:3000/doc`](http://localhost:3000/doc) to see the OpenAPI document in JSON format:
+
+```json
+{
+  "openapi": "3.1.0",
+  "externalDocs": {
+    "description": "Find out more about Users API",
+    "url": "www.example.com"
+  },
+  "info": {
+    "version": "1.0.0",
+    "title": "Users API"
+  },
+  "components": {
+    "schemas": {
+
+    },
+    "parameters": {
+
+    }
+  },
+  "paths": {
+    "/users": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "The list of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    ...
+
+```
+
+## Adding Scalar UI middleware
+
+Let's use the [Scalar UI middleware](https://www.npmjs.com/package/@scalar/hono-api-reference) to add an interactive documentation UI for the API.
+
+Install the middleware:
+
+```bash filename="Terminal"
+npm i @scalar/hono-api-reference
+```
+
+Import the `Scalar` middleware in the `src/lib/configureOpenAPI.ts` file:
+
+```typescript filename="configureOpenAPI.ts"
+import { Scalar } from "@scalar/hono-api-reference";
+```
+
+Add `Scalar` as a handler for GET requests to the `/ui` route:
+  
+```typescript filename="configureOpenAPI.ts"
+// !mark(3)
+export default function configureOpenAPI(app: OpenAPIHono) {
+  (app.doc31("/doc", openAPIObjectConfig),
+    app.get(
+      "/ui",
+      Scalar({
+        url: "/doc",
+        pageTitle: "Users Management API",
+      }),
+    ));
+}
+```
+
+Open your browser and navigate to [`http://localhost:3000/ui`](http://localhost:3000/ui). You should see the Scalar UI with three API endpoints in the sidebar:
 
 ![Scalar UI endpoints](/assets/openapi/hono/scalar-ui.png)
 
-## Step 8: Save the OpenAPI description to a file
+You can see the parameters required for API endpoints and try out the different API endpoints. In the `http://localhost:3000/doc` route, you can also view the OpenAPI document in JSON format.
 
-To generate an SDK, save the OpenAPI description as a YAML file. First, install the js-yaml package:
+## Registering the Zod schemas as reusable OpenAPI component schemas
 
-```bash filename="Terminal"
-npm i js-yaml && npm i --save-dev @types/js-yaml
-```
+The request and response content schemas of the OpenAPI document are inline:
 
-Create a script called `generateOpenApiDocument.ts` in the `src/` folder. This script imports the whole Hono application, and the `openAPIDocumentation` from `src/lib/configureOpenAPI.ts` which brings in the generic OpenAPI not defined elsewhere in the application. Then it uses `generateSpecs` to extract the OpenAPI document, and writes it as YAML.
-
-```typescript filename="src/generateOpenApiDocument.ts"
-import fs from "node:fs";
-import { generateSpecs } from "hono-openapi";
-import yaml from "js-yaml";
-
-import mainApp from "./app";
-import { openAPIDocumentation } from "./lib/configureOpenAPI";
-
-async function main() {
-  const specs = await generateSpecs(mainApp, {
-    documentation: openAPIDocumentation,
-  });
-
-  fs.writeFileSync("openapi.yaml", yaml.dump(specs));
-}
-
-main();
-```
-
-Add a script to `package.json`:
-
-```json filename="package.json"
-"generate:openapi": "npx tsx ./src/generateOpenApiDocument.ts"
-```
-
-Run the script:
-
-```bash filename="Terminal"
-npm run generate:openapi
-```
-
-An `openapi.yaml` file will be created in the root folder.
-
-## Step 9: Lint the OpenAPI document
-
-Even though this OpenAPI is being generated from Zod and Hono, it's still possible to make some mistakes. To guide you through this process the Speakeasy CLI has an [OpenAPI linting](/docs/prep-openapi/linting#configuration) built in, which can check the OpenAPI document for errors and style issues.
-
-Run the linting command:
-
-```bash filename="Terminal"
-speakeasy lint openapi --schema ./openapi.yaml
-```
-
-A lint report will be displayed in the terminal, showing errors, warnings, and hints:
-
-![Speakeasy lint report](/assets/openapi/hono/speakeasy-lint-report.png)
-
-The Speakeasy Linter has a set of [rules](/docs/prep-openapi/linting#available-rules) that can be configured.
-
-Speakeasy has a [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Speakeasy.speakeasy-vscode-extension) to help validate OpenAPI documents for the creation of production-grade SDKs.
-
-For advanced customization, Speakeasy [transformations](/docs/prep-openapi/transformations) can modify the OpenAPI document (remove unused components, filter operations), and [overlays](/docs/prep-openapi/overlays/create-overlays) can add extensions or examples without modifying the original document.
-
-## Step 10: Improving OpenAPI quality 
-
-Now that the OpenAPI is being generated as a local file and/or a URL and linted for validity, it is time to really polish this OpenAPI to make more tools have more information and therefore be more useful.
-
-### Add operationIds to routes
-
-In the OpenAPI document, each HTTP request has an `operationId` that identifies the operation. The `operationId` is used to generate method names and documentation in SDKs, and often used for clean URLs in documentation, so it's good to have them.
-
-Add an `operationId` to each route documentation object:
-
-```typescript filename="users.routes.ts"
-export const listRoute = {
-  operationId: 'getUsers',
-  description: "Get all users",
-  responses: {
-    // ...
+```json
+"components": {
+    "schemas": {},
+    "parameters": {}
   },
-};
+"paths": {
+  "/users": {
+    "get": {
+      "responses": {
+        "200": {
+          "description": "The list of users",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
 ```
 
-### Add tags to routes
+Let's make these schemas reusable by adding them to the OpenAPI [Components Object](https://swagger.io/specification/#components-object).
 
-Tags group operations in generated SDK code and documentation, improving navigation and URL structure. Add them to all routes using the `tags` property:
+Use the [`.openapi()`](https://github.com/asteasolutions/zod-to-openapi#the-openapi-method) method on the Zod object to register your Zod schemas as referenced components in the `src/schemas.ts` file:
+
+```typescript filename="schemas.ts"
+// !mark(7)
+export const UserSelectSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    age: z.number(),
+  })
+  .openapi("UserSelect");
+```
+
+This adds your schemas to the OpenAPI components object:
+
+```json
+  "components": {
+    "schemas": {
+      "UserSelect": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "age": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "age"
+        ]
+      },
+```
+
+The schemas are referenced using a [Reference Object](https://swagger.io/specification/#reference-object) (`$ref`), which is a reference identifier that specifies the location (as a URI) of the value being referenced.
+
+```json
+  "responses": {
+    "200": {
+      "description": "The created user",
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "#/components/schemas/UserSelect"
+          }
+        }
+      }
+    }
+  }
+```
+
+## Adding OpenAPI metadata to the Zod schemas
+
+Let's add additional OpenAPI metadata to our schemas.
+
+In the `src/schemas.ts` file, add example values by passing in an object with an `example` property to the `openapi` method:
+
+```typescript filename="schemas.ts"
+// !mark(4:6)
+export const UserSelectSchema = z
+  .object({
+    id: z.string().openapi({
+      example: "123",
+    }),
+    // !mark(2:4)
+    name: z.string().openapi({
+      example: "John Doe",
+    }),
+    // !mark(2:4)
+    age: z.number().openapi({
+      example: 42,
+    }),
+  })
+  .openapi("UserSelect");
+
+// !mark(4:6)
+export const UserInsertSchema = z
+  .object({
+    name: z.string().openapi({
+      example: "John Doe",
+    }),
+    age: z
+      .number()
+      // !mark(1:3)
+      .openapi({
+        example: 42,
+      }),
+  })
+  .openapi("UserInsert");
+```
+
+Define the route parameters for parameter schema:
+
+```typescript filename="schemas.ts"
+// !mark(6:9)
+export const idParamsSchema = z.object({
+  id: z
+    .string()
+    .min(3)
+    .openapi({
+      param: {
+        name: "id",
+        in: "path",
+      },
+      example: "423",
+    })
+    .openapi("idParams"),
+});
+```
+
+After adding the OpenAPI metadata to your schemas, you'll see that your OpenAPI document and Scalar UI will show example values for the schemas used in requests and responses:
+
+![Scalar UI POST request example values](/assets/openapi/hono/scalar-ui-example-post.png)
+
+You can also view the details of the example data schemas:
+
+![Scalar UI example data schema](/assets/openapi/hono/scalar-ui-data-schema.png)
+
+## Adding the OpenAPI operationId using Hono Zod OpenAPI
+
+In the OpenAPI document, each HTTP request has an `operationId` that identifies the operation. The `operationId` is also used to generate method names and documentation in SDKs.
+
+To add an `operationId`, use the `operationId` property of the `createRoute` method in the `src/routes/users/users.routes.ts` file:
 
 ```typescript filename="users.routes.ts"
-export const listRoute = {
+export const list = createRoute({
   operationId: 'getUsers',
-  description: "Get all users",
+```
+
+## Adding OpenAPI tags to Zod OpenAPI Hono routes
+
+Whether you're building a big application or only have a handful of operations, we recommend adding tags to all your Hono routes so you can group them by tag in generated SDK code and documentation.
+
+### Adding OpenAPI tags to routes in Hono
+
+To add an OpenAPI tag to a Zod OpenAPI Hono route, use the `tags` property to pass in an array of tags as the argument object of the `createRoute` method call:
+
+```typescript filename="users.routes.ts"
   tags: ['Users'],
-  responses: {
-    // ...
-  },
-};
 ```
 
-Add tag metadata by including a [Tag Object](https://spec.openapis.org/oas/v3.1.2.html#tag-object) in the documentation configuration:
+### Adding metadata to tags
+
+We can add metadata to the tag by passing in a [Tag Object](https://swagger.io/specification/#tag-object), instead of a string, to a tag array item.
+
+Add a tag to the root OpenAPI object `openAPIObjectConfig` in the `src/lib/configureOpenAPI.ts` file:
 
 ```typescript filename="configureOpenAPI.ts"
-export const openAPIDocumentation = {
-  info: {
-    version: packageJson.version,
-    title: "Users API",
-  },
+// !mark(7:14)
+export const openAPIObjectConfig = {
+  openapi: '3.1.0',
   externalDocs: {
-    description: "Find out more about Users API",
-    url: "www.example.com",
+    description: 'Find out more about Users API',
+    url: 'https://www.example.com',
   },
-  // !mark(1:8)
   tags: [{
     name: 'Users',
     description: 'Users operations',
@@ -547,56 +692,21 @@ export const openAPIDocumentation = {
       url: 'https://example.com',
     },
   }],
-};
 ```
 
-### Add servers to the OpenAPI document
+## Adding a list of servers to the Hono OpenAPI document
 
-Speakeasy expects a list of servers at the root of the OpenAPI document. Add a `servers` property to the documentation object:
+When validating an OpenAPI document, Speakeasy expects a list of servers at the root of the document.
 
-```typescript filename="configureOpenAPI.ts"
-export const openAPIDocumentation = {
-  info: {
-    version: packageJson.version,
-    title: "Users API",
-  },
-  externalDocs: {
-    description: "Find out more about Users API",
-    url: "www.example.com",
-  },
-  // !mark(1:6)
-  servers: [
-    {
-      url: 'http://localhost:3000/',
-      description: 'Development server',
-    },
-  ],
-  tags: [{
-    name: 'Users',
-    description: 'Users operations',
-    externalDocs: {
-      description: 'Find more info here',
-      url: 'https://example.com',
-    },
-  }],
-};  
-```
-
-## Step 11: Add retries with x-speakeasy-retries
-
-[Speakeasy extensions](/docs/speakeasy-reference/extensions) enable vendor-specific functionality in the OpenAPI document. Extension fields are prefixed with `x-speakeasy-`.
-
-Add the `x-speakeasy-retries` extension to configure automatic retry behavior for SDK requests. Apply it globally in the documentation object:
+Add a server by adding a `servers` property to the `openAPIObjectConfig` object:
 
 ```typescript filename="configureOpenAPI.ts"
-export const openAPIDocumentation = {
-  info: {
-    version: packageJson.version,
-    title: "Users API",
-  },
+// !mark(7:12)
+export const openAPIObjectConfig = {
+  openapi: '3.1.0',
   externalDocs: {
-    description: "Find out more about Users API",
-    url: "www.example.com",
+    description: 'Find out more about Users API',
+    url: 'https://www.example.com',
   },
   servers: [
     {
@@ -604,7 +714,35 @@ export const openAPIDocumentation = {
       description: 'Development server',
     },
   ],
-  // !mark(1:11)
+```
+
+## Adding retries to your SDK with x-speakeasy-retries
+
+[OpenAPI document extensions](/openapi/extensions) allow us to add vendor-specific functionality to the document.
+
+- Extension fields must be prefixed with `x-`.
+- Speakeasy uses extensions that start with `x-speakeasy-`.
+
+Let's add a [Speakeasy extension](/docs/speakeasy-reference/extensions) that adds retries to requests from Speakeasy SDKs by adding a top-level `x-speakeasy-retries` schema to the OpenAPI document. We can also override the retry strategy per operation.
+
+### Adding global retries
+
+Apply the Speakeasy retries extension globally by adding the following `'x-speakeasy-retries'` property to the `openAPIObjectConfig` object:
+
+```typescript filename="configureOpenAPI.ts"
+// !mark(13:23)
+export const openAPIObjectConfig = {
+  openapi: '3.1.0',
+  externalDocs: {
+    description: 'Find out more about Users API',
+    url: 'https://www.example.com',
+  },
+  servers: [
+    {
+      url: 'http://localhost:3000/',
+      description: 'Development server',
+    },
+  ],
   'x-speakeasy-retries': {
     strategy: 'backoff',
     backoff: {
@@ -616,25 +754,19 @@ export const openAPIDocumentation = {
     statusCodes: ['5XX'],
     retryConnectionErrors: true,
   },
-  tags: [{
-    name: 'Users',
-    description: 'Users operations',
-    externalDocs: {
-      description: 'Find more info here',
-      url: 'https://example.com',
-    },
-  }],
-};
 ```
 
-Override the global retry strategy for a specific route by adding `x-speakeasy-retries` to that route's documentation object:
+### Adding retries per method
+
+To create a unique retry strategy for a single route, add an `'x-speakeasy-retries'` property to the `createRoute` method call's argument object in the `src/routes/users/users.routes.ts` file:
 
 ```typescript filename="users.routes.ts"
-export const listRoute = {
-  operationId: 'getUsers',
-  description: "Get all users",
-  tags: ['Users'],
-  // !mark(1:11)
+// !mark(6:16)
+export const list = createRoute({
+  'operationId': 'getUsers',
+  'path': '/users',
+  'method': 'get',
+  'tags': ['Users'],
   'x-speakeasy-retries': {
     strategy: 'backoff',
     backoff: {
@@ -646,16 +778,94 @@ export const listRoute = {
     statusCodes: ['5XX'],
     retryConnectionErrors: true,
   },
-  responses: {
-    // ...
-  },
-};
 ```
 
+## Generating an SDK based on your OpenAPI document
 
-## Step 12: Create the SDK
+Before generating an SDK, we need to save the Hono Zod OpenAPI-generated OpenAPI document to a file. OpenAPI files are written as JSON or YAML; we'll save it as a YAML file, as it's easier to read.
 
-The [`quickstart`](/docs/speakeasy-cli/quickstart) command will be used for a guided SDK setup.
+### Saving the OpenAPI document to a YAML file using a Node.js script
+
+First install the [JS-YAML](https://www.npmjs.com/package/js-yaml) package:
+
+```bash filename="Terminal"
+npm i js-yaml
+```
+
+Then install the types for the package:
+
+```bash filename="Terminal"
+npm i --save-dev  @types/js-yaml
+```
+
+Now let's create a script to convert the OpenAPI object to a YAML file. We'll use the JS-YAML library to convert the OpenAPI object to a YAML string.
+
+Create a script called `generateOpenAPIYamlFile.ts` in the `src` folder and add the following lines of code to it:
+
+```typescript filename="generateOpenAPIYamlFile.ts"
+import { writeFileSync } from "node:fs";
+import users from "@/routes/users/users.index";
+import * as yaml from "js-yaml";
+import configureOpenAPI, { openAPIObjectConfig } from "./lib/configureOpenAPI";
+import createApp from "./lib/createApp";
+
+const app = createApp();
+
+const routes = [users] as const;
+
+configureOpenAPI(app);
+routes.forEach((route) => {
+  app.route("/", route);
+});
+
+// Convert the OpenAPIObject to a YAML string
+const yamlString = yaml.dump(app.getOpenAPI31Document(openAPIObjectConfig));
+
+// Save the YAML string to a file
+writeFileSync("openapi.yaml", yamlString);
+```
+
+This initializes the app and routes, uses the `getOpenAPI31Document` method to generate an OpenAPI Specification version 3.1 schema object, converts the schema object to a YAML string, and saves it as a file.
+
+Add the following script to your `package.json` file:
+
+```json filename="package.json"
+"create:openapi": "npx tsx ./src/generateOpenAPIYamlFile.ts"
+```
+
+Run the script using the following command:
+
+```bash filename="Terminal"
+npm run create:openapi
+```
+
+An `openapi.yaml` file will be created in your root folder.
+
+### Linting the OpenAPI document with Speakeasy
+
+The Speakeasy CLI has an OpenAPI [linting](/docs/prep-openapi/linting#configuration) command that checks the OpenAPI document for errors and style issues.
+
+Run the linting command:
+
+```bash filename="Terminal"
+speakeasy lint openapi --schema ./openapi.yaml
+```
+
+A lint report will be displayed in the terminal, showing errors, warnings, and hints:
+
+![Speakeasy lint report](/assets/openapi/hono/speakeasy-lint-report.png)
+
+The Speakeasy Linter has a set of [rules](/docs/prep-openapi/linting#available-rules) that you can configure.
+
+### Improving and customizing the OpenAPI document using Speakeasy overlays and transformations
+
+Speakeasy [transformations](/docs/prep-openapi/transformations) are predefined functions that modify the OpenAPI document to improve it for SDK generation. You can use them to remove unused components, filter operations, and format the OpenAPI document.
+
+[Overlays](/docs/prep-openapi/overlays/create-overlays) let you create overlay documents that can be merged with an OpenAPI document, allowing you to update and use an OpenAPI document without modifying the original OpenAPI document. Overlays are useful when the same OpenAPI document is used in multiple places. Common use cases include adding Speakeasy extensions, adding examples, and hiding internal APIs from a public SDK.
+
+### Creating an SDK from the Speakeasy CLI
+
+We'll use the [`quickstart`](/docs/speakeasy-cli/quickstart) command for a guided SDK setup.
 
 Run the command using the Speakeasy CLI:
 
@@ -665,7 +875,7 @@ speakeasy quickstart
 
 Following the prompts, provide the OpenAPI document location, name the SDK `SDK`, and select `TypeScript` as the SDK language.
 
-In the terminal, the steps taken by Speakeasy to create the SDK will be displayed.
+In the terminal, you'll see the steps taken by Speakeasy to create the SDK.
 
 ```
 │ Workflow - success
@@ -691,40 +901,40 @@ In the terminal, the steps taken by Speakeasy to create the SDK will be displaye
 │       └─Uploading Code Samples - success
 ```
 
-Speakeasy [validates](/docs/sdks/core-concepts#validation) the OpenAPI document to check that it is ready for code generation. Validation issues will be printed in the terminal. The generated SDK will be saved as a folder in the project.
+Speakeasy [validates](/docs/sdks/core-concepts#validation) the OpenAPI document to check that it's ready for code generation. Validation issues will be printed in the terminal. The generated SDK will be saved as a folder in your project.
 
-If ESLint styling errors occur, running the `speakeasy quickstart` command from outside the project will resolve them.
+If you get ESLint styling errors, run the `speakeasy quickstart` command from outside your project.
 
-Speakeasy also suggests improvements for the SDK using [Speakeasy Suggest](/docs/prep-openapi/maintenance), which is an AI-powered tool in Speakeasy Studio. Suggestions can be viewed by opening the link to the Speakeasy Studio workspace in the terminal:
+Speakeasy also suggests improvements for your SDK using [Speakeasy Suggest](/docs/prep-openapi/maintenance), which is an AI-powered tool in Speakeasy Studio. You can see suggestions by opening the link to your Speakeasy Studio workspace in the terminal:
 
 ![Speakeasy Studio showing SDK improvement suggestions](/assets/openapi/hono/speakeasy-studio-suggestions.png)
 
-## Adding SDK generation to GitHub Actions
+## Adding SDK generation to your GitHub Actions
 
 The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows for integrating the Speakeasy CLI into CI/CD pipelines to automatically regenerate SDKs when the OpenAPI document changes.
 
-Speakeasy can be set up to automatically push a new branch to SDK repositories so that engineers can review and merge the SDK changes.
+You can set up Speakeasy to automatically push a new branch to your SDK repositories so that your engineers can review and merge the SDK changes.
 
-For an overview of how to set up automation for SDKs, see the Speakeasy [SDK Workflow Matrix](/docs/workflow-reference/generation-reference).
+For an overview of how to set up automation for your SDKs, see the Speakeasy [SDK Workflow Matrix](/docs/workflow-reference/generation-reference).
 
-## Using the SDK
+## Using your SDK
 
-Once an SDK has been generated, it can be [published](/docs/publish-sdk) for use. For TypeScript, it can be published as an npm package.
+Once you've generated your SDK, you can [publish](/docs/publish-sdk) it for use. For TypeScript, you can publish it as an npm package.
 
-A quick, non-production-ready way to see the SDK in action is to copy the SDK folder to a frontend TypeScript project and use it there.
+A quick, non-production-ready way to see your SDK in action is to copy your SDK folder to a frontend TypeScript project and use it there.
 
-For example, a Vite project that uses TypeScript can be created:
+For example, you can create a Vite project that uses TypeScript:
 
 ```bash filename="Terminal"
 npm create vite@latest
 ```
 
-Copy the SDK folder from the Hono app to the `src` directory of the TypeScript Vite project and delete the SDK folder in the Hono project.
+Copy the SDK folder from your Hono app to the `src` directory of your TypeScript Vite project and delete the SDK folder in your Hono project.
 
-In the SDK `README.md` file, documentation about the Speakeasy SDK can be found. TypeScript SDKs generated with Speakeasy include an installable [Model Context Protocol (MCP) server](https://www.speakeasy.com/docs/standalone-mcp/build-server) where the various SDK methods are exposed as tools that AI applications can invoke.
-The SDK documentation includes instructions for installing the MCP server.
+In the SDK `README.md` file, you'll find documentation about your Speakeasy SDK. TypeScript SDKs generated with Speakeasy include an installable [Model Context Protocol (MCP) server](https://www.speakeasy.com/docs/standalone-mcp/build-server) where the various SDK methods are exposed as tools that AI applications can invoke.
+Your SDK documentation includes instructions for installing the MCP server.
 
-Note that the SDK is not ready for production use. To get it production-ready, follow the steps outlined in the Speakeasy workspace.
+Note that the SDK is not ready for production use. To get it production-ready, follow the steps outlined in your Speakeasy workspace.
 
 The SDK includes Zod as a bundled dependency, as can be seen in the `sdk-typescript/package.json` file.
 
@@ -751,7 +961,7 @@ Run the Vite dev server:
 npm run dev
 ```
 
-Enable CORS in the Hono dev server by importing the built-in CORS middleware in the `src/app.ts` file:
+Enable CORS in your Hono dev server by importing the built-in CORS middleware in the `src/app.ts` file:
 
 ```typescript filename="app.ts"
 import { cors } from "hono/cors";
@@ -774,34 +984,34 @@ Run the Hono dev server as well:
 npm run dev
 ```
 
-The following will be logged in the browser dev tools console:
+You'll see the following logged in your browser dev tools console:
 
-```json
+```
 {
-  "result": [
-    {
-      "id": "123",
-      "name": "John Doe",
-      "age": 42
-    },
-    {
-      "id": "124",
-      "name": "Sarah Jones",
-      "age": 32
-    }
-  ]
+    "result": [
+        {
+            "id": "123",
+            "name": "John Doe",
+            "age": 42
+        },
+        {
+            "id": "124",
+            "name": "Sarah Jones",
+            "age": 32
+        }
+    ]
 }
 ```
 
 The SDK functions are type safe and include TypeScript autocompletion for arguments and outputs.
 
-If attempting to access a property that doesn't exist:
+If you try to access a property that doesn't exist:
 
 ```typescript filename="main.ts"
 const userOne = result[0].surname;
 ```
 
-A TypeScript error will be displayed:
+You'll get a TypeScript error:
 
 ```
 Property 'surname' does not exist on type 'UserSelect'
@@ -809,11 +1019,9 @@ Property 'surname' does not exist on type 'UserSelect'
 
 ## Further reading
 
-This guide covered the basics of generating an OpenAPI document using Hono. Here are some resources for learning more about OpenAPI, the Hono OpenAPI middleware, and Speakeasy:
+This guide covered the basics of generating an OpenAPI document using Hono. Here are some resources to help you learn more about OpenAPI, the Hono Zod OpenAPI middleware, and Speakeasy:
 
-- [The Hono OpenAPI documentation](https://honohub.dev/docs/openapi): Learn more about generating an OpenAPI document and validating values and types using multiple validation libraries through Standard Schema. The topics covered include installation, configuration, validation, and advanced usage.
-- [The Hono OpenAPI examples with Zod](https://honohub.dev/docs/openapi/zod): Official guide for using hono-openapi with Zod.
-- [The Hono examples on OpenAPI](https://hono.dev/examples/hono-openapi): Official Hono documentation with examples of using the hono-openapi middleware.
+- [The Hono Zod OpenAPI middleware documentation](https://github.com/honojs/middleware/tree/main/packages/zod-openapi): Learn more about generating an OpenAPI document and validating values and types using Zod. The topics covered include setup, handling validation errors, configuration, RPC mode, and authorization setup.
 
 - [The Speakeasy documentation](/docs): Speakeasy has extensive documentation covering how to generate SDKs from OpenAPI documents, how to customize SDKs, and more.
 - [The Speakeasy OpenAPI reference](/openapi): View a detailed reference for the OpenAPI Specification.
