@@ -930,6 +930,22 @@ const meta = {
             },
           },
           /*
+            Catalog
+          */
+          "__group-catalog": {
+            type: "separator",
+            title: <SidebarSeparator>{"Catalog"}</SidebarSeparator>,
+          },
+          catalog: {
+            title: "Catalog",
+            display: "children",
+            items: {
+              "sub-catalogs": {
+                title: "Sub catalogs",
+              },
+            },
+          },
+          /*
             Secure
           */
           "__group-secure": {
