@@ -1,0 +1,79 @@
+---
+title: "Tool annotations"
+description: "Add behavior hints to Gram Functions so AI models and clients can make better decisions about tool invocation."
+---
+
+## What are tool annotations?
+
+In the [Model Context Protocol](https://modelcontextprotocol.io/docs/concepts/tools#tool-annotations), tools are model-controlled primitives that let AI models invoke server-side functionality. While tool names, descriptions, and input schemas tell a model *what* a tool does, annotations tell clients *how* the tool behaves — whether it reads or writes data, whether it's destructive, and whether it reaches out to external systems.
+
+This matters because MCP clients use annotations to build safer, more intuitive interfaces. A client might auto-approve a tool marked as read-only, require confirmation for destructive operations, or batch idempotent calls without worry. Without annotations, clients have to assume the worst — that every tool is potentially destructive and open-world.
+
+The Gram Functions Framework supports MCP tool annotations directly in tool definitions. Add annotations to any tool using the `annotations` property:
+
+```typescript
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+const gram = new Gram().tool({
+  name: "delete_user",
+  description: "Permanently delete a user account",
+  inputSchema: { userId: z.string() },
+  annotations: {
+    title: "Delete User",
+    destructiveHint: true,
+    readOnlyHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  async execute(ctx, input) {
+    await deleteUser(input.userId);
+    return ctx.json({ deleted: true });
+  },
+});
+
+export default gram;
+```
+
+## Available fields
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `title` | `string` | — | Human-readable display name for the tool |
+| `readOnlyHint` | `boolean` | `false` | Tool does not modify its environment |
+| `destructiveHint` | `boolean` | `true` | Tool may perform destructive updates |
+| `idempotentHint` | `boolean` | `false` | Repeated calls with the same arguments have no additional effect |
+| `openWorldHint` | `boolean` | `true` | Tool interacts with external entities |
+
+All annotation properties are **hints**. They are not guaranteed to be accurate, and clients should not rely on them for security decisions.
+
+## Default behavior
+
+When no annotations are specified, Gram applies conservative defaults: tools are assumed to be potentially destructive and open-world. Specify annotations explicitly to give clients more accurate information about tool behavior.
+
+```typescript
+// A read-only tool that only queries data
+const gram = new Gram().tool({
+  name: "get_weather",
+  description: "Get current weather for a city",
+  inputSchema: { city: z.string() },
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: true,
+  },
+  async execute(ctx, input) {
+    const weather = await fetchWeather(input.city);
+    return ctx.json(weather);
+  },
+});
+```
+
+## Annotations with MCP SDK passthrough
+
+Annotations defined on Gram Functions are automatically forwarded when tools are exposed through MCP servers. No additional configuration is needed — the annotations set in the tool definition are passed through to MCP clients as part of the tool listing.
+
+## Next steps
+
+- Learn more about the [Functions Framework](/docs/mcp/build/gram-functions/functions-framework)
+- [Build and deploy](/docs/mcp/build/gram-functions/build-deploy) Gram Functions

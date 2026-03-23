@@ -1,0 +1,295 @@
+---
+title: "Customize a CLI"
+description: "Customize command naming, authentication, output, interactivity, and release behavior of your generated CLI."
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+# Customize a CLI
+
+<Callout type="warning" title="Alpha · Early Access">
+  CLI generation is currently in **alpha** and available exclusively to **early
+  access** customers. Features and configuration may change. [Contact
+  us](/book-demo) for access.
+</Callout>
+
+The generated CLI can be customized through `gen.yaml`, shared OpenAPI-driven generation settings, and a small set of CLI-specific runtime defaults. This page focuses on the options that most directly affect generated CLI behavior. For the full set of target options, see the [CLI configuration reference](/docs/speakeasy-reference/generation/cli-config).
+
+## CLI-specific generator settings
+
+The CLI target exposes a focused set of generator settings that control naming, runtime UX, and release artifacts.
+
+<Table
+  data={[
+    {
+      setting: "`cliName`",
+      purpose:
+        "Sets the executable name, config directory name, documentation references, and generated command examples.",
+      defaultValue: "`cli`",
+    },
+    {
+      setting: "`envVarPrefix`",
+      purpose:
+        "Defines the environment variable prefix used for auth, server selection, and global parameters.",
+      defaultValue: "`CLI`",
+    },
+    {
+      setting: "`removeStutter`",
+      purpose:
+        "Removes redundant group prefixes/suffixes from command names such as `users list-users` → `users list`.",
+      defaultValue: "`true`",
+    },
+    {
+      setting: "`generateRelease`",
+      purpose:
+        "Generates `.goreleaser.yaml`, GitHub release workflow, and install scripts.",
+      defaultValue: "`true`",
+    },
+    {
+      setting: "`interactiveMode`",
+      purpose:
+        "Generates interactive command explorer support and auto-prompting for missing required flags.",
+      defaultValue: "`true`",
+    },
+    {
+      setting: "`interactiveAuth`",
+      purpose:
+        "Generates interactive auth login/logout flows and richer auth/configure forms where global security exists.",
+      defaultValue: "`true`",
+    },
+    {
+      setting: "`interactiveTheme`",
+      purpose:
+        "Controls the color palette used by generated interactive forms and explorer surfaces.",
+      defaultValue: "Built-in theme",
+    },
+    {
+      setting: "`enableCustomCodeRegions`",
+      purpose:
+        "Preserves hand-written code inside supported region markers across regeneration.",
+      defaultValue: "`false`",
+    },
+  ]}
+  columns={[
+    { key: "setting", header: "Setting" },
+    { key: "purpose", header: "Purpose" },
+    { key: "defaultValue", header: "Default" },
+  ]}
+/>
+
+## Example gen.yaml
+
+```yaml
+cli:
+  cliName: petstore
+  envVarPrefix: PETSTORE
+  removeStutter: true
+  generateRelease: true
+  interactiveMode: true
+  interactiveAuth: true
+  interactiveTheme:
+    accentColor: "#38BDF8"
+    dimmedColor: "#64748B"
+    subtleColor: "#475569"
+    errorColor: "#F87171"
+    successColor: "#4ADE80"
+```
+
+## Command naming and stutter removal
+
+By default, the CLI applies stutter removal to keep command names readable. When an operation name overlaps with its tag group, the redundant part is removed.
+
+### Prefix stutter
+
+An operation like `users-list` under a `users` tag becomes `list`:
+
+```bash
+# removeStutter: true
+petstore users list
+petstore users get
+
+# removeStutter: false
+petstore users users-list
+petstore users users-get
+```
+
+### Suffix stutter
+
+An operation like `list-users` under a `users` tag also becomes `list`:
+
+```bash
+# removeStutter: true
+petstore users list
+petstore users create
+
+# removeStutter: false
+petstore users list-users
+petstore users create-user
+```
+
+Singular/plural variants are also handled, so `create-user` under `users` can become `create`.
+
+## Environment variable prefix
+
+The `envVarPrefix` setting controls the prefix for environment variables consumed by the generated CLI. This affects authentication, server overrides, and global parameters.
+
+```yaml
+cli:
+  envVarPrefix: PETSTORE
+```
+
+With this configuration, the CLI will look for values such as:
+
+- `PETSTORE_API_KEY`
+- `PETSTORE_BEARER_TOKEN`
+- `PETSTORE_SERVER_URL`
+- `PETSTORE_TIMEOUT`
+
+The exact auth-related variable names depend on the security schemes in the OpenAPI document.
+
+## Interactive mode
+
+`interactiveMode` controls whether the generated CLI includes richer terminal UX for human users.
+
+```yaml
+cli:
+  interactiveMode: true
+```
+
+When enabled, the generator adds:
+
+- an `explore` command for browsing and launching commands from a TUI
+- auto-prompting for unresolved required fields on eligible operation commands
+- auto-launch of the explorer when the CLI is invoked with no subcommand from a real TTY
+- the global `--no-interactive` flag to disable prompting/TUI behavior at runtime
+
+```bash
+petstore explore
+petstore users create --no-interactive
+```
+
+When disabled, the CLI remains fully functional as a flag-driven command-line tool; it simply omits these interactive surfaces.
+
+## Interactive auth flows
+
+`interactiveAuth` controls richer auth-specific flows layered on top of the standard config/auth behavior.
+
+```yaml
+cli:
+  interactiveAuth: true
+```
+
+When enabled, and when the API defines global security, the generated CLI can add:
+
+- `auth login`
+- `auth whoami`
+- `auth logout`
+- richer `configure` flows using terminal forms rather than plain prompts
+
+These flows automatically degrade when interactivity is unavailable and are suppressed in agent mode.
+
+## Interactive theme
+
+Tune the generated form and TUI palette with `interactiveTheme`:
+
+```yaml
+cli:
+  interactiveTheme:
+    accentColor: "#2563EB"
+    dimmedColor: "#64748B"
+    subtleColor: "#475569"
+    errorColor: "#DC2626"
+    successColor: "#16A34A"
+```
+
+The theme values are hex colors used for:
+
+- accents and borders
+- secondary/dimmed text
+- subtle placeholders and muted elements
+- validation errors
+- success indicators and confirmations
+
+## Release artifact generation
+
+By default, the CLI target generates release infrastructure for distributing binaries:
+
+```yaml
+cli:
+  generateRelease: true
+```
+
+When enabled, the generator produces:
+
+- `.goreleaser.yaml`
+- `.github/workflows/release.yaml`
+- `scripts/install.sh`
+- `scripts/install.ps1`
+
+Set `generateRelease: false` to manage packaging and binary distribution separately.
+
+## CLI name and binary identity
+
+The `cliName` setting affects more than just the executable:
+
+- binary name
+- config directory path (`~/.config/<cliName>/config.yaml`)
+- shell completion command name
+- generated install and usage examples
+- user-facing documentation and generated README snippets
+
+```yaml
+cli:
+  cliName: petstore
+```
+
+## Custom code regions
+
+Enable custom code regions to preserve hand-written code inside supported files across regenerations.
+
+```yaml
+cli:
+  enableCustomCodeRegions: true
+```
+
+Example:
+
+```go
+// #region custom-imports
+import "my-custom-package"
+// #endregion custom-imports
+```
+
+For more details, see the [custom code regions documentation](/docs/customize-sdks/code/code-regions/overview).
+
+## OpenAPI-driven behavior that also affects the CLI
+
+Many CLI features are driven by the OpenAPI document or shared generation/runtime settings rather than a CLI-only flag. Examples include:
+
+- authentication schemes and credential flags
+- server definitions and server variable flags
+- pagination support
+- retries configuration
+- response/header behavior
+- request body structure and generated flag shape
+- streaming endpoints (SSE / JSONL)
+- binary responses and bytes request fields
+
+The CLI target wraps a generated Go SDK, so many shared SDK/runtime customizations also influence CLI behavior.
+
+## Underlying Go SDK behavior
+
+The CLI target generates and embeds a Go SDK under the hood. Many shared SDK/runtime concepts still apply, including:
+
+- [Server configuration](/docs/customize-sdks/servers)
+- [Authentication and security](/docs/customize-sdks/authentication/overview)
+- [Retries](/docs/customize-sdks/runtime/retries)
+- [Pagination](/docs/customize-sdks/runtime/pagination)
+- [Error handling](/docs/customize-sdks/responses/errors)
+- [Global parameters](/docs/customize-sdks/globals)
+
+For Go-specific SDK configuration, see the [Go configuration reference](/docs/speakeasy-reference/generation/go-config).
+
+## Next step
+
+For release packaging and installation workflows, see [Distribute a CLI](/docs/cli-generation/distribute-cli).

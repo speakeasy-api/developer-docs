@@ -27,7 +27,8 @@ speakeasy quickstart [flags]
   -p, --package-name string   package name for the generated SDK (e.g., "my-company-sdk" for npm, Go module path for Go)
   -s, --schema string         local filepath, URL, or registry reference for the OpenAPI schema (e.g., ./spec.yaml, https://..., namespace, org/workspace/namespace@tag)
       --skip-compile          skip compilation during generation after setup
-  -t, --target string         generation target (available options: [csharp, go, java, mcp-typescript, php, postman, python, ruby, terraform, typescript, unity])
+      --skip-interactive      skip all interactive prompts and use defaults (useful for non-interactive environments like CI)
+  -t, --target string         generation target (available options: [cli, csharp, go, java, mcp-typescript, php, postman, python, ruby, terraform, typescript, unity])
 ```
 
 ### Options inherited from parent commands

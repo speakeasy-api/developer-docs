@@ -30,662 +30,690 @@ const meta = {
         SDKs
       */
       "sdks-section": {
-            type: "separator",
-            title: <SidebarSeparator>{"SDKs"}</SidebarSeparator>,
+        type: "separator",
+        title: <SidebarSeparator>{"SDKs"}</SidebarSeparator>,
+      },
+      sdks: {
+        title: "SDKs",
+        display: "children",
+        items: {
+          introduction: {
+            title: "Introduction",
           },
-          sdks: {
-            title: "SDKs",
-            display: "children",
+          "core-concepts": {
+            title: "Core Concepts",
+          },
+          "create-client-sdks": {
+            title: "Generate SDKs",
+          },
+          "prep-openapi": {
+            title: "Prepare OpenAPI Spec",
             items: {
-              introduction: {
-                title: "Introduction",
+              "best-practices": {
+                title: "Best Practices",
               },
-              "core-concepts": {
-                title: "Core Concepts",
+              linting: {
+                title: "Linting",
               },
-              "create-client-sdks": {
-                title: "Generate SDKs",
+              merge: {
+                title: "Merge Documents",
               },
-              "prep-openapi": {
-                title: "Prepare OpenAPI Spec",
-                items: {
-                  "best-practices": {
-                    title: "Best Practices",
-                  },
-                  linting: {
-                    title: "Linting",
-                  },
-                  merge: {
-                    title: "Merge Documents",
-                  },
-                  overlays: {
-                    title: "Overlays",
-                  },
-                  transformations: {
-                    title: "Transformations",
-                  },
-                  maintenance: {
-                    title: "Maintenance",
-                  },
-                },
+              overlays: {
+                title: "Overlays",
               },
-              customize: {
-                title: "Customize",
-                items: {
-                  basics: {
-                    title: "Customization Basics",
-                  },
-                  structure: {
-                    title: "Structure",
-                  },
-                  "data-model": {
-                    title: "Data Model",
-                    items: {
-                      types: {
-                        title: "Types",
-                      },
-                      enums: {
-                        title: "Enums",
-                      },
-                      "oneof-schemas": {
-                        title: "OneOf",
-                      },
-                      "allof-schemas": {
-                        title: "AllOf",
-                      },
-                      "complex-numbers": {
-                        title: "Complex Numbers",
-                      },
-                      additionalproperties: {
-                        title: "Additional Properties",
-                      },
-                    },
-                  },
-                  methods: {
-                    title: "Customize methods",
-                  },
-                  responses: {
-                    title: "Responses & Error Handling",
-                    items: {
-                      responses: {
-                        title: "Customize Responses",
-                      },
-                      errors: {
-                        title: "Error Handling",
-                      },
-                    },
-                  },
-                  globals: {
-                    title: "Global Parameters",
-                  },
-                  servers: {
-                    title: "Configure servers",
-                  },
-                  deprecations: {
-                    title: "Deprecations",
-                  },
-                  authentication: {
-                    title: "Security & Authentication",
-                    items: {
-                      overview: {
-                        title: "Overview",
-                      },
-                      configuration: {
-                        title: "Configuration Options",
-                      },
-                      "simple-schemes": {
-                        title: "Standard security schemes",
-                      },
-                      oauth: {
-                        title: "OAuth 2.0 Authentication",
-                      },
-                      "custom-security-schemes": {
-                        title: "Custom Security Schemes",
-                      },
-                      "security-callbacks": {
-                        title: "Security Callbacks",
-                      },
-                    },
-                  },
-                  runtime: {
-                    title: "SDK Behavior",
-                    items: {
-                      retries: {
-                        title: "Enable Retries",
-                      },
-                      timeouts: {
-                        title: "Enable Timeouts",
-                      },
-                      pagination: {
-                        title: "Enable Pagination",
-                      },
-                      polling: {
-                        title: "Enable Polling",
-                      },
-                      streaming: {
-                        title: "Enable Streaming",
-                      },
-                      "server-sent-events": {
-                        title: "Enable Server-Sent Events",
-                      },
-                      "jsonl-events": {
-                        title: "Enable JSON Lines Responses",
-                      },
-                      "custom-http-client": {
-                        title: "Customize HTTP Client",
-                      },
-                      "override-accept-headers": {
-                        title: "Override accept headers",
-                      },
-                    },
-                  },
-                  webhooks: {
-                    title: "Add webhooks to your SDKs",
-                  },
-                  code: {
-                    title: "Modify SDK code",
-                    items: {
-                      "sdk-hooks": {
-                        title: "Hooks",
-                      },
-                      "custom-code": {
-                        title: "Custom code",
-                        items: {
-                          "custom-code": {
-                            title: "Overview",
-                          },
-                          "custom-code-best-practices": {
-                            title: "Best practices",
-                          },
-                          "custom-code-reference": {
-                            title: "Technical reference",
-                          },
-                          genignore: {
-                            title: "Ignoring files",
-                          },
-                        },
-                      },
-                      "code-regions": {
-                        title: "Code regions",
-                        items: {
-                          overview: {
-                            title: "Custom code regions",
-                          },
-                          python: {
-                            title: "Python",
-                          },
-                          typescript: {
-                            title: "TypeScript",
-                          },
-                          java: {
-                            title: "Java",
-                          },
-                        },
-                      },
-                    },
-                  },
-                  typescript: {
-                    title: "TypeScript",
-                    items: {
-                      "additional-index-exports": {
-                        title: "Additional index exports",
-                      },
-                      "configuring-module-format": {
-                        title: "Configuring Module Format",
-                      },
-                      "disabling-barrel-files": {
-                        title: "Disabling Barrel Files",
-                      },
-                      "model-validation-and-serialization": {
-                        title: "Model validation and serialization",
-                      },
-                      "property-naming": {
-                        title: "Control property casing: snake, camel",
-                      },
-                      "react-hooks": {
-                        title: "Generating React Hooks from OpenAPI",
-                      },
-                    },
-                  },
-                },
+              transformations: {
+                title: "Transformations",
               },
-              manage: {
-                title: "Manage",
-                items: {
-                  versioning: {
-                    title: "Version Control",
-                  },
-                  "sdk-changelogs": {
-                    title: "SDK Changelogs",
-                  },
-                  "github-setup": {
-                    title: "Github Setup",
-                  },
-                  "sdk-sandbox": {
-                    title: "Enable Sandbox",
-                  },
-                  migrate: {
-                    title: "Migrate",
-                  },
-                  "forward-compatibility": {
-                    title: "Forward Compatibility",
-                  },
-                  "breaking-changes": {
-                    title: "Handle Breaking Changes",
-                  },
-                },
-              },
-              "publish-sdk": {
-                title: "Publish SDK",
-              },
-              "sdk-contract-testing": {
-                title: "SDK Contract Testing",
-                items: {
-                  "bootstrapping-test-generation": {
-                    title: "Bootstrapping SDK Tests",
-                  },
-                  "customizing-sdk-tests": {
-                    title: "Customizing SDK Tests",
-                  },
-                  "github-actions": {
-                    title: "Testing in Github Actions",
-                  },
-                  "openapi-in-tests": {
-                    title: "OpenAPI data in Tests",
-                  },
-                  "running-tests": {
-                    title: "Running SDK Tests",
-                  },
-                  "custom-contract-tests": {
-                    title: "Custom Contract Tests",
-                  },
-                },
-              },
-              "sdk-docs": {
-                title: "SDK Documentation",
-                items: {
-                  "edit-readme": {
-                    title: "Edit README",
-                  },
-                  integrations: {
-                    title: "Integrate with docs provider",
-                    items: {
-                      readme: {
-                        title: "README.com",
-                      },
-                      mintlify: {
-                        title: "Mintlify",
-                      },
-                      scalar: {
-                        title: "Scalar",
-                      },
-                      bump: {
-                        title: "Bump.sh",
-                      },
-                    },
-                  },
-                  "code-samples": {
-                    title: "Code Samples",
-                    items: {
-                      "generate-code-samples": {
-                        title: "Generate Code Samples",
-                      },
-                      "code-samples-api": {
-                        title: "Code Samples API",
-                      },
-                      "automated-code-sample-urls": {
-                        title: "Automated Code Sample URLs",
-                      },
-                    },
-                  },
-                  "snippet-ai": {
-                    title: "SnippetAI",
-                    display: "hidden",
-                    items: {
-                      overview: {
-                        title: "Overview",
-                      },
-                      "integrate-via-react": {
-                        title: "Integrate via React",
-                      },
-                      "integrate-via-web-component": {
-                        title: "Integrate via Web Component",
-                      },
-                      "integrate-via-script": {
-                        title: "Integrate via Script",
-                      },
-                    },
-                  },
-                },
-              },
-              languages: {
-                title: "Language Design",
-                items: {
-                  philosophy: {
-                    title: "Design philosophy",
-                  },
-                  maturity: {
-                    title: "Maturity",
-                  },
-                  typescript: {
-                    title: "TypeScript",
-                    items: {
-                      "methodology-ts": {
-                        title: "TypeScript design",
-                      },
-                      "oss-comparison-ts": {
-                        title: "Speakeasy vs. OSS generators",
-                      },
-                      "migrating-from-oss": {
-                        title: "Migrating from OpenAPI Generator to Speakeasy",
-                      },
-                      "feature-support": {
-                        title: "Feature reference",
-                      },
-                      "standalone-functions": {
-                        title: "Standalone functions",
-                      },
-                      "dependency-management": {
-                        title: "Dependency management",
-                      },
-                    },
-                  },
-                  python: {
-                    title: "Python",
-                    items: {
-                      "methodology-python": {
-                        title: "Python design",
-                      },
-                      "oss-comparison-python": {
-                        title: "Speakeasy vs. OSS generators",
-                      },
-                      "feature-support": {
-                        title: "Feature reference",
-                      },
-                    },
-                  },
-                  golang: {
-                    title: "Go",
-                    items: {
-                      "methodology-go": {
-                        title: "Go design",
-                      },
-                      "oss-comparison-go": {
-                        title: "Speakeasy vs. OSS generators",
-                      },
-                      "feature-support": {
-                        title: "Feature reference",
-                      },
-                    },
-                  },
-                  java: {
-                    title: "Java",
-                    items: {
-                      "methodology-java": {
-                        title: "Java design",
-                      },
-                      "oss-comparison-java": {
-                        title: "Speakeasy vs. OSS generators",
-                      },
-                      "feature-support": {
-                        title: "Feature reference",
-                      },
-                    },
-                  },
-                  csharp: {
-                    title: "C#",
-                    items: {
-                      "methodology-csharp": {
-                        title: "C# design",
-                      },
-                      "oss-comparison-csharp": {
-                        title: "Speakeasy vs. OSS generators",
-                      },
-                    },
-                  },
-                  php: {
-                    title: "PHP",
-                    items: {
-                      "methodology-php": {
-                        title: "PHP design",
-                      },
-                      "oss-comparison-php": {
-                        title: "Speakeasy vs. OSS generators",
-                      },
-                    },
-                  },
-                  ruby: {
-                    title: "Ruby",
-                    items: {
-                      "methodology-ruby": {
-                        title: "Ruby design",
-                      },
-                    },
-                  },
-                  rust: {
-                    title: "Rust [coming]",
-                    items: {
-                      "methodology-rust": {
-                        title: "Rust design [coming soon]",
-                      },
-                    },
-                  },
-                  cpp: {
-                    title: "C++ [coming]",
-                    items: {
-                      "methodology-cpp": {
-                        title: "C++ design [coming soon]",
-                      },
-                    },
-                  },
-                  unity: {
-                    title: "Unity [beta]",
-                    items: {
-                      "methodology-unity": {
-                        title: "Unity design [coming soon]",
-                      },
-                    },
-                  },
-                },
-              },
-              guides: {
-                title: "Guides",
-                items: {
-                  overlays: {
-                    title: "Overlays",
-                  },
-                  hooks: {
-                    title: "Hooks",
-                  },
-                  "code-samples-without-github-actions": {
-                    title: "Populate Code Samples Without GitHub Actions",
-                  },
-                },
+              maintenance: {
+                title: "Maintenance",
               },
             },
           },
-          "docs-md": {
-            // Hide DocsMD docs while we're still in private beta. We'll make them visible
-            // once we hit public beta in July.
-            display: "hidden",
-          },
-
-          /*
-                Terraform
-              */
-          "terraform-section": {
-            type: "separator",
-            title: <SidebarSeparator>{"Terraform"}</SidebarSeparator>,
-          },
-          terraform: {
-            title: "Terraform",
-            display: "children",
+          customize: {
+            title: "Customize",
             items: {
-              "create-terraform": {
-                title: "Generate Terraform Provider",
+              basics: {
+                title: "Customization Basics",
               },
-              "publish-terraform": {
-                title: "Publish Terraform Provider",
+              structure: {
+                title: "Structure",
               },
-              customize: {
-                title: "Customize Terraform",
+              "data-model": {
+                title: "Data Model",
                 items: {
-                  index: {
+                  types: {
+                    title: "Types",
+                  },
+                  enums: {
+                    title: "Enums",
+                  },
+                  "oneof-schemas": {
+                    title: "OneOf",
+                  },
+                  "allof-schemas": {
+                    title: "AllOf",
+                  },
+                  "complex-numbers": {
+                    title: "Complex Numbers",
+                  },
+                  additionalproperties: {
+                    title: "Additional Properties",
+                  },
+                },
+              },
+              methods: {
+                title: "Customize methods",
+              },
+              responses: {
+                title: "Responses & Error Handling",
+                items: {
+                  responses: {
+                    title: "Customize Responses",
+                  },
+                  errors: {
+                    title: "Error Handling",
+                  },
+                },
+              },
+              globals: {
+                title: "Global Parameters",
+              },
+              servers: {
+                title: "Configure servers",
+              },
+              deprecations: {
+                title: "Deprecations",
+              },
+              authentication: {
+                title: "Security & Authentication",
+                items: {
+                  overview: {
                     title: "Overview",
                   },
-                  "entity-mapping": {
-                    title: "Map API Entities",
+                  configuration: {
+                    title: "Configuration Options",
                   },
-                  "provider-configuration": {
-                    title: "Provider Configuration",
+                  "simple-schemes": {
+                    title: "Standard security schemes",
                   },
-                  "resource-configuration": {
-                    title: "Resource Configuration",
+                  oauth: {
+                    title: "OAuth 2.0 Authentication",
                   },
-                  "property-customization": {
-                    title: "Property Customization",
+                  "custom-security-schemes": {
+                    title: "Custom Security Schemes",
                   },
-                  "validation-dependencies": {
-                    title: "Validation and Dependencies",
-                  },
-                  "plan-modification": {
-                    title: "Plan Modification",
-                  },
-                  "advanced-features": {
-                    title: "Advanced Features",
-                  },
-                  "schema-keywords": {
-                    title: "Schema Keywords",
-                  },
-                  testing: {
-                    display: "hidden",
-                  },
-                  extensions: {
-                    display: "hidden",
+                  "security-callbacks": {
+                    title: "Security Callbacks",
                   },
                 },
               },
-              guides: {
-                title: "Guides",
+              runtime: {
+                title: "SDK Behavior",
+                items: {
+                  retries: {
+                    title: "Enable Retries",
+                  },
+                  timeouts: {
+                    title: "Enable Timeouts",
+                  },
+                  pagination: {
+                    title: "Enable Pagination",
+                  },
+                  polling: {
+                    title: "Enable Polling",
+                  },
+                  streaming: {
+                    title: "Enable Streaming",
+                  },
+                  "server-sent-events": {
+                    title: "Enable Server-Sent Events",
+                  },
+                  "jsonl-events": {
+                    title: "Enable JSON Lines Responses",
+                  },
+                  "custom-http-client": {
+                    title: "Customize HTTP Client",
+                  },
+                  "override-accept-headers": {
+                    title: "Override accept headers",
+                  },
+                },
+              },
+              webhooks: {
+                title: "Add webhooks to your SDKs",
+              },
+              code: {
+                title: "Modify SDK code",
+                items: {
+                  "sdk-hooks": {
+                    title: "Hooks",
+                  },
+                  "custom-code": {
+                    title: "Custom code",
+                    items: {
+                      "custom-code": {
+                        title: "Overview",
+                      },
+                      "custom-code-best-practices": {
+                        title: "Best practices",
+                      },
+                      "custom-code-reference": {
+                        title: "Technical reference",
+                      },
+                      genignore: {
+                        title: "Ignoring files",
+                      },
+                    },
+                  },
+                  "code-regions": {
+                    title: "Code regions",
+                    items: {
+                      overview: {
+                        title: "Custom code regions",
+                      },
+                      python: {
+                        title: "Python",
+                      },
+                      typescript: {
+                        title: "TypeScript",
+                      },
+                      java: {
+                        title: "Java",
+                      },
+                    },
+                  },
+                },
+              },
+              typescript: {
+                title: "TypeScript",
+                items: {
+                  "additional-index-exports": {
+                    title: "Additional index exports",
+                  },
+                  "configuring-module-format": {
+                    title: "Configuring Module Format",
+                  },
+                  "disabling-barrel-files": {
+                    title: "Disabling Barrel Files",
+                  },
+                  "model-validation-and-serialization": {
+                    title: "Model validation and serialization",
+                  },
+                  "property-naming": {
+                    title: "Control property casing: snake, camel",
+                  },
+                  "react-hooks": {
+                    title: "Generating React Hooks from OpenAPI",
+                  },
+                },
               },
             },
           },
-          /*
-                CLI & Reference
-              */
-          "cli-section": {
-            type: "separator",
-            title: <SidebarSeparator>{"CLI"}</SidebarSeparator>,
-          },
-          "speakeasy-reference": {
-            title: "Speakeasy",
+          manage: {
+            title: "Manage",
             items: {
-              cli: {
-                title: "CLI",
+              versioning: {
+                title: "Version Control",
+              },
+              "sdk-changelogs": {
+                title: "SDK Changelogs",
+              },
+              "github-setup": {
+                title: "Github Setup",
+              },
+              "sdk-sandbox": {
+                title: "Enable Sandbox",
+              },
+              migrate: {
+                title: "Migrate",
+              },
+              "forward-compatibility": {
+                title: "Forward Compatibility",
+              },
+              "breaking-changes": {
+                title: "Handle Breaking Changes",
+              },
+            },
+          },
+          "publish-sdk": {
+            title: "Publish SDK",
+          },
+          "sdk-contract-testing": {
+            title: "SDK Contract Testing",
+            items: {
+              "bootstrapping-test-generation": {
+                title: "Bootstrapping SDK Tests",
+              },
+              "customizing-sdk-tests": {
+                title: "Customizing SDK Tests",
+              },
+              "github-actions": {
+                title: "Testing in Github Actions",
+              },
+              "openapi-in-tests": {
+                title: "OpenAPI data in Tests",
+              },
+              "running-tests": {
+                title: "Running SDK Tests",
+              },
+              "custom-contract-tests": {
+                title: "Custom Contract Tests",
+              },
+            },
+          },
+          "sdk-docs": {
+            title: "SDK Documentation",
+            items: {
+              "edit-readme": {
+                title: "Edit README",
+              },
+              integrations: {
+                title: "Integrate with docs provider",
                 items: {
-                  "getting-started": {
-                    title: "Getting Started",
+                  readme: {
+                    title: "README.com",
                   },
-                  docker: {
-                    title: "Using with Docker",
+                  mintlify: {
+                    title: "Mintlify",
                   },
-                  "mise-toolkit": {
-                    title: "Using with mise toolkit",
+                  scalar: {
+                    title: "Scalar",
+                  },
+                  bump: {
+                    title: "Bump.sh",
                   },
                 },
               },
-              generation: {
-                title: "Generation Config",
+              "code-samples": {
+                title: "Code Samples",
                 items: {
-                  "gen-yaml": {
-                    title: "Config File",
+                  "generate-code-samples": {
+                    title: "Generate Code Samples",
                   },
-                  "ci-cd-pipeline": {
-                    title: "CI/CD Pipeline",
+                  "code-samples-api": {
+                    title: "Code Samples API",
                   },
-                  "ts-config": {
-                    title: "TypeScript Configuration",
-                  },
-                  "python-config": {
-                    title: "Python Configuration",
-                  },
-                  "go-config": {
-                    title: "Go Configuration",
-                  },
-                  "java-config": {
-                    title: "Java Configuration",
-                  },
-                  "csharp-config": {
-                    title: "C# Configuration",
-                  },
-                  "php-config": {
-                    title: "PHP Configuration",
-                  },
-                  "ruby-config": {
-                    title: "Ruby Configuration",
-                  },
-                  "terraform-config": {
-                    title: "Terraform Configuration",
-                  },
-                  "mcp-server-config": {
-                    title: "MCP Server Configuration",
+                  "automated-code-sample-urls": {
+                    title: "Automated Code Sample URLs",
                   },
                 },
               },
-              supported: {
-                title: "Supported",
+              "snippet-ai": {
+                title: "SnippetAI",
+                display: "hidden",
+                items: {
+                  overview: {
+                    title: "Overview",
+                  },
+                  "integrate-via-react": {
+                    title: "Integrate via React",
+                  },
+                  "integrate-via-web-component": {
+                    title: "Integrate via Web Component",
+                  },
+                  "integrate-via-script": {
+                    title: "Integrate via Script",
+                  },
+                },
+              },
+            },
+          },
+          languages: {
+            title: "Language Design",
+            items: {
+              philosophy: {
+                title: "Design philosophy",
+              },
+              maturity: {
+                title: "Maturity",
+              },
+              typescript: {
+                title: "TypeScript",
+                items: {
+                  "methodology-ts": {
+                    title: "TypeScript design",
+                  },
+                  "oss-comparison-ts": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "migrating-from-oss": {
+                    title: "Migrating from OpenAPI Generator to Speakeasy",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                  "standalone-functions": {
+                    title: "Standalone functions",
+                  },
+                  "dependency-management": {
+                    title: "Dependency management",
+                  },
+                },
+              },
+              python: {
+                title: "Python",
+                items: {
+                  "methodology-python": {
+                    title: "Python design",
+                  },
+                  "oss-comparison-python": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                },
+              },
+              golang: {
+                title: "Go",
+                items: {
+                  "methodology-go": {
+                    title: "Go design",
+                  },
+                  "oss-comparison-go": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                },
+              },
+              java: {
+                title: "Java",
+                items: {
+                  "methodology-java": {
+                    title: "Java design",
+                  },
+                  "oss-comparison-java": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                  "feature-support": {
+                    title: "Feature reference",
+                  },
+                },
+              },
+              csharp: {
+                title: "C#",
+                items: {
+                  "methodology-csharp": {
+                    title: "C# design",
+                  },
+                  "oss-comparison-csharp": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                },
+              },
+              php: {
+                title: "PHP",
+                items: {
+                  "methodology-php": {
+                    title: "PHP design",
+                  },
+                  "oss-comparison-php": {
+                    title: "Speakeasy vs. OSS generators",
+                  },
+                },
+              },
+              ruby: {
+                title: "Ruby",
+                items: {
+                  "methodology-ruby": {
+                    title: "Ruby design",
+                  },
+                },
+              },
+              rust: {
+                title: "Rust [coming]",
+                items: {
+                  "methodology-rust": {
+                    title: "Rust design [coming soon]",
+                  },
+                },
+              },
+              cpp: {
+                title: "C++ [coming]",
+                items: {
+                  "methodology-cpp": {
+                    title: "C++ design [coming soon]",
+                  },
+                },
+              },
+              unity: {
+                title: "Unity [beta]",
+                items: {
+                  "methodology-unity": {
+                    title: "Unity design [coming soon]",
+                  },
+                },
+              },
+            },
+          },
+          guides: {
+            title: "Guides",
+            items: {
+              overlays: {
+                title: "Overlays",
+              },
+              hooks: {
+                title: "Hooks",
+              },
+              "code-samples-without-github-actions": {
+                title: "Populate Code Samples Without GitHub Actions",
+              },
+            },
+          },
+        },
+      },
+      "docs-md": {
+        // Hide DocsMD docs while we're still in private beta. We'll make them visible
+        // once we hit public beta in July.
+        display: "hidden",
+      },
+
+      /*
+                Terraform
+              */
+      "terraform-section": {
+        type: "separator",
+        title: <SidebarSeparator>{"Terraform"}</SidebarSeparator>,
+      },
+      terraform: {
+        title: "Terraform",
+        display: "children",
+        items: {
+          "create-terraform": {
+            title: "Generate Terraform Provider",
+          },
+          "publish-terraform": {
+            title: "Publish Terraform Provider",
+          },
+          "customize-terraform": {
+            title: "Customize Terraform",
+            items: {
+              index: {
+                title: "Overview",
+              },
+              "entity-mapping": {
+                title: "Map API Entities",
+              },
+              "provider-configuration": {
+                title: "Provider Configuration",
+              },
+              "resource-configuration": {
+                title: "Resource Configuration",
+              },
+              "property-customization": {
+                title: "Property Customization",
+              },
+              "validation-dependencies": {
+                title: "Validation and Dependencies",
+              },
+              "plan-modification": {
+                title: "Plan Modification",
+              },
+              "advanced-features": {
+                title: "Advanced Features",
+              },
+              "schema-keywords": {
+                title: "Schema Keywords",
+              },
+              testing: {
+                display: "hidden",
               },
               extensions: {
-                title: "Extensions",
-              },
-              "workflow-file": {
-                title: "Workflow File",
+                display: "hidden",
               },
             },
           },
-          /*
+          "terraform-guides": {
+            title: "Guides",
+          },
+        },
+      },
+      /*
+                CLI Generation
+              */
+      "cli-generation-section": {
+        type: "separator",
+        title: <SidebarSeparator>{"CLI Generation"}</SidebarSeparator>,
+      },
+      "cli-generation": {
+        title: "CLI Generation",
+        display: "children",
+        items: {
+          "create-cli": {
+            title: "Generate CLI",
+          },
+          index: {
+            title: "Overview",
+          },
+          "customize-cli": {
+            title: "Customize CLI",
+          },
+          "distribute-cli": {
+            title: "Distribute CLI",
+          },
+        },
+      },
+      /*
+                CLI & Reference
+              */
+      "cli-section": {
+        type: "separator",
+        title: <SidebarSeparator>{"CLI"}</SidebarSeparator>,
+      },
+      "speakeasy-reference": {
+        title: "Speakeasy",
+        items: {
+          cli: {
+            title: "CLI",
+            items: {
+              "getting-started": {
+                title: "Getting Started",
+              },
+              docker: {
+                title: "Using with Docker",
+              },
+              "mise-toolkit": {
+                title: "Using with mise toolkit",
+              },
+            },
+          },
+          generation: {
+            title: "Generation Config",
+            items: {
+              "gen-yaml": {
+                title: "Config File",
+              },
+              "ci-cd-pipeline": {
+                title: "CI/CD Pipeline",
+              },
+              "ts-config": {
+                title: "TypeScript Configuration",
+              },
+              "python-config": {
+                title: "Python Configuration",
+              },
+              "go-config": {
+                title: "Go Configuration",
+              },
+              "java-config": {
+                title: "Java Configuration",
+              },
+              "csharp-config": {
+                title: "C# Configuration",
+              },
+              "php-config": {
+                title: "PHP Configuration",
+              },
+              "ruby-config": {
+                title: "Ruby Configuration",
+              },
+              "terraform-config": {
+                title: "Terraform Configuration",
+              },
+              "mcp-server-config": {
+                title: "MCP Server Configuration",
+              },
+              "cli-config": {
+                title: "CLI Configuration",
+              },
+            },
+          },
+          supported: {
+            title: "Supported",
+          },
+          extensions: {
+            title: "Extensions",
+          },
+          "workflow-file": {
+            title: "Workflow File",
+          },
+        },
+      },
+      /*
                 Standalone MCP
               */
-          "standalone-mcp-section": {
-            type: "separator",
-            title: <SidebarSeparator>{"Standalone MCP"}</SidebarSeparator>,
+      "standalone-mcp-section": {
+        type: "separator",
+        title: <SidebarSeparator>{"Standalone MCP"}</SidebarSeparator>,
+      },
+      "standalone-mcp": {
+        title: "Standalone MCP",
+        display: "children",
+        items: {
+          overview: {
+            title: "Introduction",
           },
-          "standalone-mcp": {
-            title: "Standalone MCP",
-            display: "children",
-            items: {
-              introduction: {
-                title: "Introduction",
-              },
-              "build-server": {
-                title: "Generate MCP Servers from OpenAPI Documents",
-              },
-              "cloudflare-deployment": {
-                title: "Deploy to Cloudflare Workers",
-              },
-              "gram-deployment": {
-                title: "Deploy to Gram",
-              },
-              "custom-prompts": {
-                title: "Custom Prompts",
-              },
-              "custom-resources": {
-                title: "Custom Resources",
-              },
-              "customize-tools": {
-                title: "Customize Tools",
-              },
-              "remote-mcp-servers": {
-                title: "Adapting Speakeasy MCP Servers for Remote Deployment",
-              },
-              "eval-command": {
-                title: "Test with the Eval Command",
-              },
-              "setting-up-oauth": {
-                title: "Add OAuth to an MCP Server",
-              },
-            },
+          "build-server": {
+            title: "Generate MCP Servers from OpenAPI Documents",
           },
+          "cloudflare-deployment": {
+            title: "Deploy to Cloudflare Workers",
+          },
+          "gram-deployment": {
+            title: "Deploy to Gram",
+          },
+          "custom-prompts": {
+            title: "Custom Prompts",
+          },
+          "custom-resources": {
+            title: "Custom Resources",
+          },
+          "customize-tools": {
+            title: "Customize Tools",
+          },
+          "remote-mcp-servers": {
+            title: "Adapting Speakeasy MCP Servers for Remote Deployment",
+          },
+          "eval-command": {
+            title: "Test with the Eval Command",
+          },
+          "setting-up-oauth": {
+            title: "Add OAuth to an MCP Server",
+          },
+        },
+      },
       mcp: {
         display: "children",
         items: {
@@ -696,7 +724,7 @@ const meta = {
               layout: "full",
             },
           },
-          introduction: {
+          "why-gram": {
             title: "Why Gram?",
           },
           "getting-started": {
@@ -726,6 +754,9 @@ const meta = {
                 items: {
                   "functions-framework": {
                     title: "Using the Functions Framework",
+                  },
+                  "tool-annotations": {
+                    title: "Tool annotations",
                   },
                   "mcp-sdk": {
                     title: "Using the MCP SDK",
@@ -899,6 +930,22 @@ const meta = {
             },
           },
           /*
+            Catalog
+          */
+          "__group-catalog": {
+            type: "separator",
+            title: <SidebarSeparator>{"Catalog"}</SidebarSeparator>,
+          },
+          catalog: {
+            title: "Catalog",
+            display: "children",
+            items: {
+              "sub-catalogs": {
+                title: "Sub catalogs",
+              },
+            },
+          },
+          /*
             Secure
           */
           "__group-secure": {
@@ -1031,7 +1078,7 @@ const meta = {
             title: "Elements",
             display: "children",
             items: {
-              introduction: {
+              "elements-overview": {
                 title: "Introduction",
                 theme: {
                   layout: "full",
