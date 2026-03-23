@@ -25,6 +25,19 @@ using TypeSpec.Versioning;
 @versioned(Versions)
 @server("http://127.0.0.1:4010", "Book Store API v1")
 @doc("API for managing a book store inventory and orders")
+
+@extension("x-speakeasy-retries", #{
+  strategy: "backoff",
+  backoff: #{
+    initialInterval: 500,
+    maxInterval: 60000,
+    maxElapsedTime: 3600000,
+    exponent: 1.5,
+  },
+  statusCodes: ["5XX"],
+  retryConnectionErrors: true
+})
+
 namespace BookStore;
 
 enum Versions {
