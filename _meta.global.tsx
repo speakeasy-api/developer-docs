@@ -940,6 +940,9 @@ const meta = {
             title: "Catalog",
             display: "children",
             items: {
+              overview: {
+                title: "Catalog overview",
+              },
               "sub-catalogs": {
                 title: "Sub catalogs",
               },
