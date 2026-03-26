@@ -328,3 +328,99 @@ components:
   should updates to attributes happen outside of Terraform changes. Please only
   apply this when necessary.
 </Callout>
+
+## Filter Data Resource Results by Response Values
+
+Some list API endpoints do not support server-side filtering. The `x-speakeasy-response-filter` extension enables client-side filtering of list API responses in [data resources](https://developer.hashicorp.com/terraform/language/data-sources), allowing Terraform users to narrow results by matching property values.
+
+When applied to a response property, the generated data resource schema promotes that property to an optional, configurable attribute. If a user provides a value for a filter attribute, the generated provider filters the API response array on the client side, returning only items where the property matches the configured value.
+
+<Callout title="Info" type="info">
+  This extension only applies to data resources that read from list API
+  endpoints returning arrays. Only top-level primitive fields (`string`,
+  `number`, `boolean`, `integer`) are supported as filter properties.
+</Callout>
+
+### Basic usage
+
+Mark response properties with `x-speakeasy-response-filter: true` to make them available as filter attributes in the data resource:
+
+```yaml
+components:
+  schemas:
+    Pet:
+      x-speakeasy-entity: Pets
+      type: object
+      properties:
+        name:
+          type: string
+          x-speakeasy-response-filter: true
+        species:
+          type: string
+          x-speakeasy-response-filter: true
+        id:
+          type: integer
+        age:
+          type: integer
+```
+
+With the corresponding list operation:
+
+```yaml
+paths:
+  /pets:
+    get:
+      summary: List all pets
+      x-speakeasy-entity-operation: Pets#read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+```
+
+Terraform users can then filter the data resource results:
+
+```hcl
+data "example_pets" "dogs" {
+  name    = "Buddy"
+  species = "dog"
+}
+```
+
+The generated provider fetches all pets from the API and returns only items where `name` equals `"Buddy"` and `species` equals `"dog"`.
+
+### Array response wrapping
+
+For APIs where the response is wrapped in an object, the extension works with the array items. Filter fields are automatically hoisted from the array item level to the data resource root for a flat configuration experience:
+
+```yaml
+components:
+  schemas:
+    PetList:
+      x-speakeasy-entity: Pets
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                x-speakeasy-response-filter: true
+              id:
+                type: integer
+```
+
+The Terraform configuration remains flat regardless of the API response structure:
+
+```hcl
+data "example_pets" "my_pet" {
+  name = "Buddy"
+}
+```
