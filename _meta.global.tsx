@@ -179,6 +179,9 @@ const meta = {
                   },
                 },
               },
+              "data-transforms": {
+                title: "Data transforms",
+              },
               webhooks: {
                 title: "Add webhooks to your SDKs",
               },

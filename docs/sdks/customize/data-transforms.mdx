@@ -1,0 +1,213 @@
+---
+title: "Data transforms"
+description: "Use jq expressions to automatically transform data between the API wire format and the SDK interface."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Data transforms
+
+When the shape of data on the wire differs from the shape SDK users should see, use the `x-speakeasy-transform-from-api` and `x-speakeasy-transform-to-api` extensions to bridge the gap automatically. These extensions apply [jq expressions](https://jqlang.org/manual/) to transform data during serialization and deserialization, so SDK users work with a clean interface while the underlying API format is preserved.
+
+<Callout title="Language support" type="info">
+  Data transforms currently generate transform code for the **Go** target only. Other SDK targets (TypeScript, Python, Java, C#) will silently ignore these extensions.
+</Callout>
+
+## When to use data transforms
+
+Data transforms are useful when:
+
+- The API returns a response shape that could be cleaner for SDK consumers, such as deeply nested structures that should be flattened
+- The API schema cannot be changed, but the SDK should present a better interface
+- Fields need to be derived from other fields, such as combining `first_name` and `last_name` into `display_name`
+
+## Extensions
+
+Place these extensions on a schema in the OpenAPI spec, typically on request body or response schemas.
+
+- `x-speakeasy-transform-from-api`: Transforms data **from** the API response before the SDK user sees it.
+- `x-speakeasy-transform-to-api`: Transforms data **to** the API request format before sending.
+
+Both extensions can be used on the same schema when transforms are needed in both directions.
+
+### Format
+
+The value must be a YAML mapping with a `jq` key:
+
+```yaml
+x-speakeasy-transform-from-api:
+  jq: '.your_expression_here'
+```
+
+<Callout title="Note" type="info">
+  The only supported transform type is `jq`. Invalid syntax produces a build error with the expression and the parse error.
+</Callout>
+
+## Examples
+
+### Copy a field
+
+```yaml
+components:
+  schemas:
+    Resource:
+      type: object
+      x-speakeasy-transform-from-api:
+        jq: '. + { backup_id: .id }'
+      properties:
+        id:
+          type: string
+```
+
+### Rename a field
+
+```yaml
+components:
+  schemas:
+    Resource:
+      type: object
+      x-speakeasy-transform-to-api:
+        jq: '{ displayName: .name }'
+      properties:
+        name:
+          type: string
+```
+
+### Add a derived field
+
+```yaml
+components:
+  schemas:
+    User:
+      type: object
+      x-speakeasy-transform-from-api:
+        jq: '. + { display_name: .first_name + " " + .last_name }'
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+```
+
+### Flatten a nested structure
+
+```yaml
+components:
+  schemas:
+    Order:
+      type: object
+      x-speakeasy-transform-from-api:
+        jq: '. + { status: .metadata.status } | del(.metadata)'
+      properties:
+        id:
+          type: string
+        metadata:
+          type: object
+          properties:
+            status:
+              type: string
+```
+
+### Conditional field addition
+
+```yaml
+components:
+  schemas:
+    Account:
+      type: object
+      x-speakeasy-transform-from-api:
+        jq: 'if .status == "active" then . + { is_active: true } else . end'
+      properties:
+        status:
+          type: string
+```
+
+### Remove a field before sending
+
+```yaml
+components:
+  schemas:
+    UpdateRequest:
+      type: object
+      x-speakeasy-transform-to-api:
+        jq: 'del(.internal_field)'
+      properties:
+        name:
+          type: string
+        internal_field:
+          type: string
+```
+
+### Bidirectional transforms
+
+Apply both extensions on the same schema to transform data in both directions:
+
+```yaml
+components:
+  schemas:
+    Service:
+      type: object
+      x-speakeasy-transform-to-api:
+        jq: '{ displayName: .name, maxInstances: .max_instance_count }'
+      x-speakeasy-transform-from-api:
+        jq: '. + { name: .displayName, max_instance_count: .maxInstances }'
+      properties:
+        displayName:
+          type: string
+        maxInstances:
+          type: integer
+```
+
+### Convert an array to a map
+
+Transform arrays from the API into a simpler map structure:
+
+```yaml
+requestBody:
+  content:
+    application/json:
+      schema:
+        type: object
+        x-speakeasy-transform-to-api:
+          jq: |
+            .tags |= (
+              if type == "object" then
+                to_entries | map({key: .key, value: .value})
+              else
+                .
+              end
+            )
+        properties:
+          tags:
+            type: array
+            items:
+              type: object
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+```
+
+### Build composite identifiers
+
+Create combined identifiers from separate API fields:
+
+```yaml
+responses:
+  "200":
+    content:
+      application/json:
+        schema:
+          type: object
+          x-speakeasy-transform-from-api:
+            jq: |
+              .id = "projects/\(.project_id)/regions/\(.region)/databases/\(.name)"
+          properties:
+            project_id:
+              type: string
+            region:
+              type: string
+            name:
+              type: string
+```
