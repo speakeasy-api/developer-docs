@@ -63,6 +63,10 @@ Before implementing OAuth, consider what kind of credentials you expect end user
 
 **Gram can integrate OAuth into a server in any way that's currently possible within the MCP context.** The key is choosing the approach that best fits your existing authentication system and user experience goals.
 
+<Callout title="Multiple security schemes" type="info">
+If your OpenAPI spec defines multiple security schemes (e.g., OAuth **and** an API key), Gram will accept any of them. Users are not locked into a single authentication method — see [Multiple security schemes](#multiple-security-schemes) below.
+</Callout>
+
 ## Access Token Based Authentication
 
 **This is often the simplest and most practical approach for MCP servers.** Gram allows passing pre-obtained OAuth access tokens directly to an MCP server through headers. This is completely valid and doesn't require implementing complex OAuth flows.
@@ -124,7 +128,7 @@ Companies like [Stripe](https://docs.stripe.com/mcp), [Asana](https://developers
 
 If your underlying API supports the necessary OAuth requirements, you can easily place any OAuth server in front of any Gram MCP Server with just a few clicks!
 
-Only one OAuth flow can be placed in front of an MCP server, so it is very important that your MCP server only includes a single downstream API provider that takes in OAuth.
+Only one managed OAuth flow can be placed in front of an MCP server, so it is very important that your MCP server only includes a single downstream API provider that takes in OAuth. However, other security schemes (API keys, bearer tokens, etc.) defined in your OpenAPI spec will still be accepted alongside managed OAuth — see [Multiple security schemes](#multiple-security-schemes).
 
 The artifact you are able to produce should look something like this:
 
@@ -154,17 +158,71 @@ Note: An MCP Client such as Claude will use the same client_id in perpetuity unl
 
 See our [guide](/docs/mcp/build/examples/oauth-external-server) on integrating a DCR compliant OAuth setup into a Gram MCP Server.
 
+## Multiple security schemes
+
+If your OpenAPI spec defines more than one security scheme, Gram evaluates **all** of them when a request arrives. Access is granted as long as **at least one** scheme is satisfied. This means you can offer users flexibility: some may authenticate with an OAuth token while others provide an API key or a bearer token.
+
+### Supported scheme types
+
+| Scheme | OpenAPI type | Credential source |
+|---|---|---|
+| API Key | `apiKey` | Header or query parameter |
+| HTTP Bearer | `http` (scheme `bearer`) | `Authorization` header |
+| HTTP Basic | `http` (scheme `basic`) | `Authorization` header (username + password) |
+| OAuth 2.0 Authorization Code | `oauth2` (authorizationCode flow) | Bearer token via managed OAuth or pass-through |
+| OAuth 2.0 Client Credentials | `oauth2` (clientCredentials flow) | `client_id` + `client_secret` environment variables |
+| OpenID Connect | `openIdConnect` | Bearer token via managed OAuth or pass-through |
+
+### How it works
+
+- Gram reads the `securitySchemes` from your OpenAPI spec and classifies each one.
+- On every `tools/list` or `tools/call` request, Gram merges credentials from the system environment, the user's Gram environment, and any headers included in the request.
+- If **any** scheme's required credentials are present, the request proceeds. If none are satisfied, the server returns a `401` with a `WWW-Authenticate` header pointing to the OAuth metadata endpoint (when OAuth is configured).
+
+### Example: OAuth + API key
+
+```yaml
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth/authorize
+          tokenUrl: /oauth/token
+          scopes:
+            read: Read access
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - oauth2: [read]
+  - apiKey: []
+```
+
+With this configuration:
+- Users who complete the OAuth flow are authenticated via their bearer token.
+- Users who pass an `X-API-Key` header are authenticated via the API key — no OAuth flow required.
+- If neither credential is provided, the server returns `401` with OAuth discovery metadata so clients can initiate the OAuth flow.
+
+<Callout title="Managed OAuth limit" type="info">
+Only one managed OAuth provider can be attached to a server. The multi-scheme support described here applies to credentials defined in your OpenAPI spec's `securitySchemes`, not to multiple managed OAuth providers.
+</Callout>
+
 ## Summary
 
 When implementing authentication for your MCP server, remember:
 
 1. **OAuth exchange is NOT required** - passing access tokens directly is completely valid
-2. **Choose the right approach** for your use case:
+2. **Multiple security schemes are supported** - if your OpenAPI spec defines OAuth, API key, and bearer auth, users can authenticate with any of them
+3. **Choose the right approach** for your use case:
    - Access tokens: Simple, works with existing systems
    - Client credentials: Good for server-to-server auth
    - Gram OAuth: Organization-based access control for private servers (no external OAuth needed)
    - User-facing OAuth: Best for public servers with external OAuth providers (requires DCR or proxy)
-3. **DCR is only needed** if you want MCP clients to handle OAuth flows with external providers directly, but it is a requirement for that scenario
-4. **We can help** with white-glove service for guiding towards DCR compliance
+4. **DCR is only needed** if you want MCP clients to handle OAuth flows with external providers directly, but it is a requirement for that scenario
+5. **We can help** with white-glove service for guiding towards DCR compliance
 
 The goal is to choose the authentication method that works best with your existing infrastructure while providing the right user experience for your MCP server's intended use case.

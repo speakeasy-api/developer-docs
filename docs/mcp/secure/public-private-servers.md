@@ -26,7 +26,7 @@ Public servers are the easiest way to use Gram and are typically what you'd use 
 
 ![Example of a Gram-hosted MCP documentation page showing available tools and endpoints](/assets/docs/gram/img/guides/gram-example-public-docs.png)
 
-Public servers also support [MCP Managed OAuth](/docs/mcp/secure/adding-oauth-servers) for simplified authentication.
+Public servers also support [MCP Managed OAuth](/docs/mcp/secure/adding-oauth-servers) for simplified authentication. When OAuth is configured, users can still authenticate with alternative security schemes defined in your OpenAPI spec (such as API keys or bearer tokens). Gram evaluates all available schemes and grants access when any one is satisfied — see [Multiple security schemes](/docs/mcp/secure/adding-oauth-servers#multiple-security-schemes) for details.
 
 ## Private Servers
 
