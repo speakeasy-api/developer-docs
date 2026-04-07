@@ -503,6 +503,9 @@ const meta = {
               "code-samples-without-github-actions": {
                 title: "Populate Code Samples Without GitHub Actions",
               },
+              "sdk-preview-breaking-changes": {
+                title: "SDK preview and breaking change detection",
+              },
             },
           },
         },

@@ -1,0 +1,581 @@
+---
+title: Automated SDK preview and breaking change detection for spec PRs
+description: "Set up a workflow where every OpenAPI spec PR automatically generates SDK PRs, posts status comments, and reports breaking changes across all target languages."
+---
+
+# Automated SDK preview and breaking change detection for spec PRs
+
+This guide walks through setting up a workflow where every pull request that modifies the OpenAPI spec automatically:
+
+- Generates SDKs for each target language (TypeScript, Python, Go, etc.)
+- Opens a PR in each downstream SDK repository showing the exact code changes
+- Posts a status comment on the spec PR linking to each SDK PR
+- Reports any breaking changes introduced by the spec modification
+- Auto-merges or closes SDK PRs when the spec PR is merged or closed
+
+The end result: the team reviews a spec change and immediately sees how it affects every SDK, including whether the change breaks existing consumers.
+
+---
+
+## Architecture overview
+
+This pattern uses a **multi-repo layout** with two component types:
+
+- **Spec repo** (one) -- holds the OpenAPI spec, triggers downstream generation
+- **SDK repos** (one per language) -- each receives a trigger and generates code
+
+```
+spec-repo
+  ├── specs/openapi.yaml
+  ├── .speakeasy/workflow.yaml          (registry source config)
+  └── .github/workflows/
+        ├── trigger-downstream-sdk-generation.yaml
+        └── reconcile-sdk-prs.yaml
+
+sdk-repo-python
+  ├── .speakeasy/workflow.yaml          (target + registry source)
+  └── .github/workflows/
+        └── generate-sdk-from-spec.yaml
+
+sdk-repo-typescript
+  ├── .speakeasy/workflow.yaml
+  └── .github/workflows/
+        └── generate-sdk-from-spec.yaml
+```
+
+**Flow:**
+
+1. A developer opens a PR in the spec repo modifying `specs/openapi.yaml`.
+2. The spec repo workflow tags the new spec version in the Speakeasy registry.
+3. It then triggers `workflow_dispatch` in each downstream SDK repo, passing the spec tag.
+4. Each SDK repo generates code from the tagged spec, opens a PR with the diff, and Speakeasy annotates it with a changelog and breaking change report.
+5. The spec repo polls each downstream workflow and posts a summary comment on the original spec PR.
+6. When the spec PR is merged, a reconciliation workflow auto-merges the SDK PRs. If the spec PR is closed without merging, the SDK PRs are closed.
+
+---
+
+## Prerequisites
+
+- A [Speakeasy](https://www.speakeasy.com/) account with a valid API key (see [core concepts](/docs/sdks/core-concepts) for an overview of how Speakeasy SDK generation works)
+- The Speakeasy CLI (`speakeasy`) installed in CI (the workflows handle this automatically)
+- Separate GitHub repositories for each SDK target
+- A **fine-grained Personal Access Token (PAT)** or GitHub App token with permissions to trigger workflows and manage PRs in the downstream SDK repos (see [GitHub setup](/docs/sdks/manage/github-setup) for details)
+
+---
+
+## Step 1: Configure the spec repo
+
+### 1.1 Speakeasy workflow configuration
+
+Create `.speakeasy/workflow.yaml` in the spec repo. This tells Speakeasy where the spec lives and where to publish it in the registry (see the [workflow file reference](/docs/speakeasy-reference/workflow-file) for all available options):
+
+```yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  my-api:
+    inputs:
+      - location: specs/openapi.yaml
+    registry:
+      location: registry.speakeasyapi.dev/<org>/<workspace>/my-api
+targets: {}
+```
+
+Key points:
+- Replace `<org>/<workspace>` with the appropriate Speakeasy organization and workspace identifiers.
+- `targets: {}` is intentionally empty. The spec repo only publishes to the registry; the downstream SDK repos define their own targets.
+- When `speakeasy run` executes, it validates the spec and pushes a tagged version to the registry.
+
+### 1.2 Trigger downstream SDK generation workflow
+
+Create `.github/workflows/trigger-downstream-sdk-generation.yaml`:
+
+<details>
+<summary>trigger-downstream-sdk-generation.yaml</summary>
+
+```yaml
+name: Trigger Downstream SDK Generation
+
+permissions:
+  checks: write
+  contents: write
+  pull-requests: write
+  statuses: write
+  id-token: write
+  issues: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # To avoid triggering on unrelated changes, scope this to the spec path:
+    # paths:
+    #   - "specs/**"
+  workflow_dispatch:
+
+jobs:
+  # ------------------------------------------------------------------
+  # Job 1: Tag the spec in the Speakeasy registry
+  # ------------------------------------------------------------------
+  update_spec_and_tag_registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+
+      - name: Install Speakeasy CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+          echo "$HOME/.speakeasy/bin" >> $GITHUB_PATH
+
+      - name: Run Speakeasy workflow
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+        run: speakeasy run
+
+  # ------------------------------------------------------------------
+  # Job 2: Fan out to each downstream SDK repo
+  # ------------------------------------------------------------------
+  trigger_sdk_workflows:
+    needs: update_spec_and_tag_registry
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: typescript
+            owner: your-org
+            repo: your-sdk-typescript
+          - language: python
+            owner: your-org
+            repo: your-sdk-python
+          # Add more SDK targets as needed:
+          # - language: go
+          #   owner: your-org
+          #   repo: your-sdk-go
+    steps:
+      - name: Prepare branch tag
+        id: tag
+        run: |
+          echo "name=$(echo "${{ github.head_ref }}" | sed 's|/|-|g')" >> $GITHUB_OUTPUT
+
+      - name: Initialize status comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          language="${{ matrix.language }}"
+          repo="${{ matrix.repo }}"
+          owner="${{ matrix.owner }}"
+          marker="<!-- sdk-generation-status-$language -->"
+
+          comment_body="$marker
+          ### ${language} SDK Generation
+
+          | Repository | Workflow Run | Status | SDK PR |
+          | --- | --- | --- | --- |
+          | [$repo](https://github.com/$owner/$repo) | Pending | :hourglass_flowing_sand: Pending | Pending |"
+
+          existing_comment_id=$(gh api \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq "map(select(.body | contains(\"$marker\"))) | last | .id // empty")
+
+          if [[ -n "$existing_comment_id" ]]; then
+            gh api --method PATCH \
+              "repos/${{ github.repository }}/issues/comments/$existing_comment_id" \
+              -f body="$comment_body" > /dev/null
+            echo "SDK_COMMENT_ID=$existing_comment_id" >> $GITHUB_ENV
+          else
+            new_comment_id=$(gh api --method POST \
+              "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+              -f body="$comment_body" --jq '.id')
+            echo "SDK_COMMENT_ID=$new_comment_id" >> $GITHUB_ENV
+          fi
+
+      - name: Trigger ${{ matrix.language }} SDK generation
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_SDK_TOKEN }}
+        run: |
+          owner="${{ matrix.owner }}"
+          repo="${{ matrix.repo }}"
+          language="${{ matrix.language }}"
+          branch="${{ github.head_ref }}"
+          tag_name="${{ steps.tag.outputs.name }}"
+
+          gh workflow run generate-sdk-from-spec.yaml \
+            --repo "$owner/$repo" --ref main \
+            --field force="true" \
+            --field feature_branch="$branch" \
+            --field environment="TAG=$tag_name"
+
+          sleep 10
+          run_id=$(gh run list --repo "$owner/$repo" \
+            --workflow generate-sdk-from-spec.yaml \
+            --limit 1 --json databaseId --jq '.[0].databaseId')
+
+          if [[ -z "$run_id" ]]; then
+            echo "Failed to get run ID"
+            exit 1
+          fi
+
+          echo "WORKFLOW_RUN_ID=$run_id" >> $GITHUB_ENV
+          run_url="https://github.com/$owner/$repo/actions/runs/$run_id"
+          echo "WORKFLOW_RUN_URL=$run_url" >> $GITHUB_ENV
+
+          marker="<!-- sdk-generation-status-$language -->"
+          pending_body="$marker
+          ### ${language} SDK Generation
+
+          | Repository | Workflow Run | Status | SDK PR |
+          | --- | --- | --- | --- |
+          | [$repo](https://github.com/$owner/$repo) | [Workflow run]($run_url) | :hourglass_flowing_sand: In Progress | Pending |"
+
+          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh api --method PATCH \
+            "repos/${{ github.repository }}/issues/comments/$SDK_COMMENT_ID" \
+            -f body="$pending_body" > /dev/null
+
+      - name: Poll workflow status
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_SDK_TOKEN }}
+        run: |
+          owner="${{ matrix.owner }}"
+          repo="${{ matrix.repo }}"
+          run_id="$WORKFLOW_RUN_ID"
+
+          while true; do
+            resp=$(gh api "repos/$owner/$repo/actions/runs/$run_id")
+            status=$(echo "$resp" | jq -r '.status')
+            conclusion=$(echo "$resp" | jq -r '.conclusion')
+
+            if [[ "$status" == "completed" ]]; then
+              if [[ "$conclusion" == "success" ]]; then
+                echo "WORKFLOW_SUCCESS=true" >> $GITHUB_ENV
+              else
+                echo "WORKFLOW_SUCCESS=false" >> $GITHUB_ENV
+              fi
+              break
+            fi
+            sleep 30
+          done
+
+      - name: Finalize PR comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_TOKEN: ${{ secrets.DOWNSTREAM_SDK_TOKEN }}
+        run: |
+          language="${{ matrix.language }}"
+          repo="${{ matrix.repo }}"
+          owner="${{ matrix.owner }}"
+          branch="${{ github.head_ref }}"
+          marker="<!-- sdk-generation-status-$language -->"
+
+          pr_url=$(GH_TOKEN="$SDK_TOKEN" gh pr list \
+            --repo "$owner/$repo" --head "$branch" \
+            --json url --jq '.[0].url' 2>/dev/null || echo "")
+
+          if [[ "$WORKFLOW_SUCCESS" == "true" ]]; then
+            status_cell=":white_check_mark: Success"
+          else
+            status_cell=":x: Failed"
+          fi
+
+          run_cell="[Workflow run]($WORKFLOW_RUN_URL)"
+
+          if [[ -n "$pr_url" && "$pr_url" != "null" ]]; then
+            pr_cell="[SDK PR]($pr_url)"
+          else
+            compare_url="https://github.com/$owner/$repo/compare/main...$branch"
+            pr_cell="[Review Changes]($compare_url)"
+          fi
+
+          comment_body="$marker
+          ### ${language} SDK Generation
+
+          | Repository | Workflow Run | Status | SDK PR |
+          | --- | --- | --- | --- |
+          | [$repo](https://github.com/$owner/$repo) | $run_cell | $status_cell | $pr_cell |"
+
+          gh api --method PATCH \
+            "repos/${{ github.repository }}/issues/comments/$SDK_COMMENT_ID" \
+            -f body="$comment_body"
+
+          if [[ "$WORKFLOW_SUCCESS" != "true" ]]; then
+            exit 1
+          fi
+```
+
+</details>
+
+### 1.3 Reconcile SDK PRs workflow
+
+Create `.github/workflows/reconcile-sdk-prs.yaml`. This handles the lifecycle of downstream SDK PRs when the spec PR is resolved:
+
+<details>
+<summary>reconcile-sdk-prs.yaml</summary>
+
+```yaml
+name: Reconcile SDK PRs
+
+permissions:
+  contents: read
+  pull-requests: read
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  manage_sdk_prs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: typescript
+            owner: your-org
+            repo: your-sdk-typescript
+          - language: python
+            owner: your-org
+            repo: your-sdk-python
+    steps:
+      - name: Manage ${{ matrix.language }} SDK PR
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_SDK_TOKEN }}
+        run: |
+          branch_name="${{ github.event.pull_request.head.ref }}"
+          owner="${{ matrix.owner }}"
+          repo="${{ matrix.repo }}"
+          was_merged="${{ github.event.pull_request.merged }}"
+
+          pr_data=$(gh pr list --repo "$owner/$repo" \
+            --head "$branch_name" \
+            --json number,title,url --jq '.[0]' 2>/dev/null || echo "null")
+
+          if [[ "$pr_data" != "null" && -n "$pr_data" ]]; then
+            pr_number=$(echo "$pr_data" | jq -r '.number')
+            pr_title=$(echo "$pr_data" | jq -r '.title')
+
+            if [[ "$was_merged" == "true" ]]; then
+              echo "Merging SDK PR #$pr_number..."
+              gh pr merge "$pr_number" --repo "$owner/$repo" \
+                --squash --delete-branch
+            else
+              echo "Closing SDK PR #$pr_number..."
+              gh pr close "$pr_number" --repo "$owner/$repo" \
+                --comment "Closing: source spec PR was closed without merging."
+            fi
+          else
+            echo "No matching PR found for branch '$branch_name'."
+          fi
+```
+
+</details>
+
+---
+
+## Step 2: Configure each downstream SDK repo
+
+Each SDK repo needs two things: a Speakeasy workflow config and a GitHub Actions workflow that can be triggered remotely.
+
+### 2.1 Speakeasy workflow configuration
+
+Create `.speakeasy/workflow.yaml` in each SDK repo. This tells Speakeasy to pull the spec from the registry (tagged by the spec repo) and generate code for the appropriate language.
+
+**Python example:**
+
+```yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  my-api:
+    inputs:
+      - location: registry.speakeasyapi.dev/<org>/<workspace>/my-api:${TAG:-latest}
+    registry:
+      location: registry.speakeasyapi.dev/<org>/<workspace>/my-api
+targets:
+  python:
+    target: python
+    source: my-api
+    output: .
+```
+
+**TypeScript example:**
+
+```yaml
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+  my-api:
+    inputs:
+      - location: registry.speakeasyapi.dev/<org>/<workspace>/my-api:${TAG:-latest}
+    registry:
+      location: registry.speakeasyapi.dev/<org>/<workspace>/my-api
+targets:
+  typescript:
+    target: typescript
+    source: my-api
+    output: .
+```
+
+The `${TAG:-latest}` variable is the key mechanism. When the spec repo triggers generation, it passes the branch-specific tag (e.g., `feature-add-users-endpoint`), so the SDK is generated from exactly the spec version in the PR. When `TAG` is not set (e.g., on a daily schedule), it falls back to `latest`.
+
+### 2.2 SDK generation workflow
+
+Create `.github/workflows/generate-sdk-from-spec.yaml` in each SDK repo:
+
+<details>
+<summary>generate-sdk-from-spec.yaml</summary>
+
+```yaml
+name: Generate SDK from Spec
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force SDK regeneration"
+        required: false
+        default: "false"
+        type: string
+      feature_branch:
+        description: "Branch for SDK changes"
+        required: false
+        type: string
+      environment:
+        description: "Environment variables (e.g., TAG=branch-name)"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+  statuses: write
+
+jobs:
+  generate:
+    uses: speakeasy-api/sdk-generation-action/.github/workflows/workflow-executor.yaml@v15
+    with:
+      mode: pr
+      force: ${{ inputs.force || 'false' }}
+      feature_branch: ${{ inputs.feature_branch }}
+      environment: ${{ inputs.environment }}
+    secrets:
+      github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      speakeasy_api_key: ${{ secrets.SPEAKEASY_API_KEY }}
+```
+
+</details>
+
+This workflow:
+- Accepts a `feature_branch` input so the SDK PR is created on a branch that matches the spec PR branch name (enabling the reconciliation workflow to find it later).
+- Accepts an `environment` input to pass the `TAG` variable, which the Speakeasy workflow config uses to pull the correct spec version.
+- Uses `mode: pr` so changes are opened as a pull request rather than pushed directly.
+- Also runs on a daily schedule to catch any registry updates outside of the PR flow.
+
+---
+
+## Step 3: Set up secrets
+
+### Spec repo secrets
+
+| Secret | Purpose |
+| --- | --- |
+| `SPEAKEASY_API_KEY` | Authenticates with the Speakeasy platform for registry tagging |
+| `DOWNSTREAM_SDK_TOKEN` | Fine-grained PAT (or GitHub App token) that can trigger `workflow_dispatch` and manage PRs in the downstream SDK repos |
+
+### Downstream SDK repo secrets
+
+| Secret | Purpose |
+| --- | --- |
+| `SPEAKEASY_API_KEY` | Authenticates with the Speakeasy platform for SDK generation |
+
+The `DOWNSTREAM_SDK_TOKEN` needs the following permissions on each downstream SDK repo:
+- **Actions**: Read and write (to trigger workflows and poll status)
+- **Contents**: Read and write (for branch creation)
+- **Pull requests**: Read and write (to create, merge, and close PRs)
+
+---
+
+## Step 4: Team visibility
+
+### On the spec PR
+
+When a developer opens a PR that modifies the OpenAPI spec, the workflow posts one comment per SDK target:
+
+```
+### typescript SDK Generation
+
+| Repository | Workflow Run | Status | SDK PR |
+| --- | --- | --- | --- |
+| your-sdk-typescript | Workflow run | ✅ Success | SDK PR |
+```
+
+Each "SDK PR" link takes the reviewer directly to the downstream SDK repo's pull request, where they can inspect the generated code diff.
+
+### On each SDK PR
+
+Speakeasy automatically annotates each SDK PR with:
+
+- **OpenAPI change report** -- A summary of what changed in the spec (new endpoints, modified schemas, removed fields, etc.) with a link to a detailed report on the Speakeasy dashboard.
+- **Breaking change detection** -- Explicit callout of any changes that would break existing SDK consumers (removed fields, type changes, required parameter additions, etc.). See [breaking changes](/docs/sdks/manage/breaking-changes) for more on how Speakeasy handles these.
+- **Linting report** -- Spec quality and style issues surfaced during generation. See [linting](/docs/sdks/prep-openapi/linting) for configuration options.
+- **Version bump recommendation** -- Whether the change warrants a patch, minor, or major version bump based on the nature of the modifications. See [versioning](/docs/sdks/manage/versioning) for how Speakeasy determines version bumps.
+- **Generated changelog** -- A human-readable summary of what changed in the SDK code. See [SDK changelogs](/docs/sdks/manage/sdk-changelogs) for details.
+
+Reviewers can also use the "Files changed" tab on the SDK PR to see the exact diff of every generated file, giving full visibility into how a spec change translates to SDK code.
+
+---
+
+## Step 5: Adding more SDK targets
+
+To add a new language (e.g., Go, Java, Ruby):
+
+1. **Create the downstream SDK repo** with the same structure: `.speakeasy/workflow.yaml` targeting the new language and `.github/workflows/generate-sdk-from-spec.yaml`.
+
+2. **Add the target to the matrix** in both spec repo workflows:
+
+   In `trigger-downstream-sdk-generation.yaml`:
+   ```yaml
+   matrix:
+     include:
+       # ... existing targets ...
+       - language: go
+         owner: your-org
+         repo: your-sdk-go
+   ```
+
+   In `reconcile-sdk-prs.yaml`:
+   ```yaml
+   matrix:
+     include:
+       # ... existing targets ...
+       - language: go
+         owner: your-org
+         repo: your-sdk-go
+   ```
+
+3. **Add `SPEAKEASY_API_KEY`** as a secret in the new repo.
+
+4. **Ensure `DOWNSTREAM_SDK_TOKEN`** has permissions for the new repo.
+
+---
+
+## How breaking change detection works
+
+Speakeasy tracks breaking changes at two levels:
+
+1. **OpenAPI spec level** -- When the spec is tagged in the registry, Speakeasy compares it against the previous version and identifies breaking changes according to OpenAPI compatibility rules:
+   - Removed endpoints or operations
+   - Required parameters added to existing operations
+   - Response schema fields removed or type-changed
+   - Authentication requirements changed
+   - Enum values removed
+
+2. **SDK level** -- The generated SDK PR reflects these as concrete code changes: removed methods, changed function signatures, modified type definitions. Reviewers see the actual impact on the public API surface of each SDK.
+
+The breaking change report appears in the SDK PR description and is also accessible via the Speakeasy dashboard link. This gives both a high-level summary ("1 breaking change detected") and a detailed breakdown of what changed and why it's breaking. For a deeper look at how Speakeasy classifies and surfaces breaking changes, see the [breaking changes documentation](/docs/sdks/manage/breaking-changes).
