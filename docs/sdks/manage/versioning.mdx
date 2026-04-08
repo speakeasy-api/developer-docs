@@ -11,36 +11,44 @@ Speakeasy-generated SDKs are automatically versioned using Semantic Versioning (
 
 ## Versioning logic
 
-The SDK version will be automatically incremented in the following cases.
+The SDK version is automatically incremented based on three independent inputs: generator feature changes, OpenAPI document changes, and configuration changes. Each input is evaluated separately, and the largest bump across all three wins.
+
+The precedence order is: **major > minor > patch**. For example, if generator features trigger a minor bump and the OpenAPI document triggers a major bump, the final result is a major bump.
 
 ### Generator version changes
 
 When Speakeasy releases a new generator version, it compares the features changed in the new generator to those used in the SDK:
 
 - If multiple used features in the SDK change, the largest version bump (major, minor, patch) across all used features determines the version increment.
+- If a generator feature that was previously tracked in `gen.lock` is no longer present, that triggers a minor bump.
 - Features unaffected by the new generator version maintain the current version.
 
 ### Configuration changes
 
 - Changes to the `gen.yaml` file will bump the patch version.
-- Changes to the checksum will also bump the patch version.
+- Changes to the configuration checksum will also bump the patch version.
 
 ### OpenAPI document changes
 
-- If the `info.version` section of the OpenAPI document is SemVer compliant, major or minor changes to the OpenAPI document will bump the major or minor version of SDKs correspondingly.
-- _Coming Soon_: Speakeasy will detect changes to the OpenAPI document (for example, adding a breaking change to the parameters of an operation) and bump versions accordingly.
+Versioning based on OpenAPI document changes works by comparing the `info.version` field between generations:
+
+- If the `info.version` field is a valid SemVer string, Speakeasy compares the previous and current values. A major or minor increment in `info.version` bumps the SDK version correspondingly.
+- If `info.version` is not present, is not a valid SemVer string, or has not changed, Speakeasy falls back to a document checksum comparison. A checksum change triggers a patch bump.
+- Speakeasy does not currently analyze the actual content of the OpenAPI document (such as added or removed operations). Only the `info.version` field and the overall document checksum are evaluated.
 
 ## Pre-release version bumps
 
 Speakeasy supports any SemVer-compatible string as a valid version, including pre-release versions such as `X.X.X-alpha` or `X.X.X-alpha.X`.
 
-- Pre-release versioning continues until manual removal.
-- Automated bumps increment pre-release versions. For example, `1.0.0-alpha`, `1.0.0-alpha.1`, `1.0.0-alpha.2`.
-- To exit pre-release versioning, set a new version or run `speakeasy bump graduate`.
+- When the current version has a pre-release suffix (for example, `1.0.0-alpha.1`), automated bumps increment the pre-release counter instead of the main version segments. For example: `1.0.0-alpha` → `1.0.0-alpha.1` → `1.0.0-alpha.2`.
+- Pre-release versioning continues until explicitly exited.
+- To exit pre-release versioning, set a new version manually, run `speakeasy bump graduate`, or set the `SPEAKEASY_BUMP_OVERRIDE` environment variable to `graduate`. A `graduate` bump strips the pre-release suffix entirely, promoting `1.0.0-alpha.2` to `1.0.0`.
 
 ## Major version bumps
 
 New SDKs start at version `0.0.1`. Automatic major version bumps begin after reaching version `1.0.0`. Breaking changes trigger major version increments after `1.0.0`.
+
+When a major bump is detected for a pre-v1 SDK (version below `1.0.0`), Speakeasy automatically downgrades it to a minor bump. This also applies to Go SDKs regardless of version, because major version changes in Go require import path changes that significantly impact downstream users. This automatic downgrade does not apply when the bump was explicitly set via `SPEAKEASY_BUMP_OVERRIDE=major`.
 
 Major version changes affect the Golang SDK migration path.
 
@@ -52,6 +60,22 @@ Golang module versions above `1.0.0` require import path changes to include the 
 - Version `2.0.0`: `github.com/speakeasy/speakeasy-go/v2`
 
 Consider Golang SDK major version changes carefully due to migration path impacts. The SDK maintainer determines when to increment major versions.
+
+## Overriding automatic versioning with an environment variable
+
+Set the `SPEAKEASY_BUMP_OVERRIDE` environment variable to force a specific bump type, bypassing all automatic detection. Valid values are `patch`, `minor`, `major`, and `graduate`.
+
+When set, this variable clears any bumps detected from generator features, OpenAPI document changes, or configuration changes, and applies only the specified bump type.
+
+```bash
+# Force a minor bump regardless of detected changes
+SPEAKEASY_BUMP_OVERRIDE=minor speakeasy run
+
+# Force graduation from pre-release
+SPEAKEASY_BUMP_OVERRIDE=graduate speakeasy run
+```
+
+This is useful in CI/CD pipelines that require deterministic version control. Unlike the automatic major-bump downgrade for pre-v1 and Go SDKs, `SPEAKEASY_BUMP_OVERRIDE=major` applies the major bump as specified without any downgrade.
 
 ## Disabling automatic versioning
 
