@@ -67,6 +67,44 @@ schema:
     - COMPLETE
 ```
 
+## Preserve custom enum names in TypeScript
+
+When `x-speakeasy-enums` provides custom names, the TypeScript generator applies PascalCase transformation by default. This can mangle names where casing carries meaning. For example, `X86_64` becomes `X8664` because the transformation strips underscores and collapses digits.
+
+To preserve custom enum names exactly as written, enable the [`fixEnumNameSanitization`](/docs/speakeasy-reference/generation/ts-config#error-and-response-handling) option in `gen.yaml`:
+
+```yaml
+typescript:
+  fixEnumNameSanitization: true
+```
+
+With this option enabled, custom names provided via `x-speakeasy-enums` are kept as-is, with only illegal character sanitization applied. No PascalCase or other casing transformations are performed.
+
+For example, given the following OpenAPI schema and `gen.yaml` configuration:
+
+```yaml
+# gen.yaml
+typescript:
+  fixEnumNameSanitization: true
+```
+
+```yaml
+# OpenAPI spec
+ImageArchitecture:
+  enum: ["x86_64", "arm64"]
+  type: string
+  x-speakeasy-enums:
+    x86_64: X86_64
+```
+
+The generated enum member is `X86_64` instead of `X8664`.
+
+<Callout title="Note" type="info">
+  The `fixEnumNameSanitization` option is currently available for TypeScript only (including `mcp-typescript`). It applies exclusively to enums with `x-speakeasy-enums` overrides — enums without custom names are unaffected.
+</Callout>
+
+Because this option skips all casing transformations for custom names, names are used exactly as provided. For example, a custom name like `under_review` remains `under_review` in the generated output rather than being converted to `UnderReview`.
+
 ## Enum class naming
 
 Use the `x-speakeasy-name-override` attribute to customize enum class names:
