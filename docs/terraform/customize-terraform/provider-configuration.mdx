@@ -217,3 +217,34 @@ The `additionalActions` key is expected to contain a list of `{ importLocation?:
 The `additionalFunctions` key is expected to contain a list of `{ importLocation?: string, importAlias?: string, function: string }` objects. Each `function` is inserted into the provider-managed function list. If `importLocation` or `importAlias` is defined, Speakeasy adds them to the import list at the top of the provider file.
 
 To learn more about how to write a Terraform resource, please consult the [official Terraform documentation](https://developer.hashicorp.com/terraform/plugin/framework).
+
+## Override provider type name
+
+<Callout title="Uncommon customization" type="info">
+  Most providers should omit `providerTypeNameOverride` and rely on the default
+  behavior of prefixing resource type names with `packageName`. Only use this
+  configuration to ship a variant provider that must share resource type names
+  with another provider.
+</Callout>
+
+By default, Terraform resource and action type names are prefixed with the `packageName` value from `gen.yaml`. Set the `providerTypeNameOverride` configuration to replace that prefix with a different value, while retaining `packageName` for Go module naming, binary naming, and Terraform Registry publishing.
+
+The common use case for this is supporting a variant provider, such as a beta provider, that intentionally shares resource type names with a related provider. It mirrors the `google` and `google-beta` provider pattern, where both providers expose the same resource type names so Terraform configurations can switch between them using the [`provider` meta-argument](https://developer.hashicorp.com/terraform/language/meta-arguments/resource-provider).
+
+In this example, a beta provider published as `examplecloud-beta` exposes resources with the `examplecloud` prefix to match the stable `examplecloud` provider:
+
+```yaml
+terraform:
+  packageName: examplecloud-beta
+  providerTypeNameOverride: examplecloud
+```
+
+Without this configuration, resources would be named `examplecloud-beta_thing`. With this configuration, resources are instead named `examplecloud_thing`, matching the resource type names of the stable provider. Terraform configurations can then select the beta implementation using the `provider` meta-argument:
+
+```hcl
+resource "examplecloud_thing" "example" {
+  provider = examplecloud-beta
+
+  # ...
+}
+```
