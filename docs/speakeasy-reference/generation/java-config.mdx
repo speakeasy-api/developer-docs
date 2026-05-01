@@ -1,16 +1,29 @@
 import { Table } from "@/mdx/components";
 
-# Java Configuration Options
+# Java configuration options
 
 This section details the available configuration options for the Java SDK. All configuration is managed in the `gen.yaml` file under the `java` section.
 
-## Version and general configuration
+## Identity and publishing
 
 ```yml
 java:
   version: 1.2.3
+  templateVersion: v2
   projectName: "openapi"
-  description: "A description of your SDK"
+  groupID: "com.mycompany"
+  artifactID: "my-sdk"
+  packageName: "com.mycompany.sdk"
+  ossrhURL: "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+  githubURL: "https://github.com/mycompany/my-sdk"
+  companyName: "My Company"
+  companyURL: "https://www.mycompany.com"
+  companyEmail: "support@mycompany.com"
+  description: "SDK enabling Java developers to easily integrate with the MyCompany API."
+  license:
+    name: "The MIT License (MIT)"
+    url: "https://mit-license.org/"
+    shortName: "MIT"
 ```
 
 <Table
@@ -22,57 +35,46 @@ java:
       description: "The current version of the SDK.",
     },
     {
+      name: "templateVersion",
+      required: "false",
+      default: "v2",
+      description: "The template version to use. Must be `v2`.",
+    },
+    {
       name: "projectName",
       required: "true",
       default: "openapi",
       description:
-        "Assigns Gradle `rootProject.name`, which names the Gradle build. See [Gradle Naming](https://docs.gradle.org/current/userguide/multi_project_builds.html#naming_recommendations).",
+        "Assigns Gradle `rootProject.name`, which gives a name to the Gradle build. See [Gradle Naming](https://docs.gradle.org/current/userguide/multi_project_builds.html#naming_recommendations).",
     },
-    {
-      name: "description",
-      required: "false",
-      default: "SDK enabling Java developers to easily integrate with the {CompanyName} API.",
-      description:
-        "A description of the SDK that will be included in the generated Gradle build file.",
-    },
-  ]}
-  columns={[
-    { key: "name", header: "Name" },
-    { key: "required", header: "Required" },
-    { key: "default", header: "Default Value" },
-    { key: "description", header: "Description" },
-  ]}
-/>
-
-## Publishing
-
-```yml
-java:
-  groupID: "com.mycompany"
-  artifactID: "my-sdk"
-  githubURL: "https://github.com/mycompany/my-sdk"
-  companyName: "My Company"
-  companyURL: "https://www.mycompany.com"
-  companyEmail: "support@mycompany.com"
-```
-
-<Table
-  data={[
     {
       name: "groupID",
       required: "true",
       default: "org.openapis",
       description:
-        "The group ID used for namespacing the package. Typically the reversed domain of an organization.",
+        "The groupID to use for namespacing the package. This is usually the reversed domain name of the organization. If publishing is enabled, it will also be used as the artifact's groupId (e.g. `<groupId>.my-artifact`).",
     },
     {
       name: "artifactID",
       required: "true",
       default: "openapi",
       description:
-        "The artifact ID used for namespacing the package, usually the name of the project.",
+        "The artifactID is used as the final simple name in the base package if `packageName` is not specified. This is usually the name of the project. If publishing is enabled, it will also be used as the artifactId (e.g. `com.yourorg.<artifactId>`).",
     },
-
+    {
+      name: "packageName",
+      required: "false",
+      default: "`<groupId>.<artifactId>`",
+      description:
+        "The base package name for generated classes. If not present, `<groupId>.<artifactId>` will be used.",
+    },
+    {
+      name: "ossrhURL",
+      required: "false",
+      default: "N/A",
+      description:
+        "The URL of the staging repository to publish the SDK artifact to.",
+    },
     {
       name: "githubURL",
       required: "for publishing",
@@ -84,21 +86,35 @@ java:
       name: "companyName",
       required: "for publishing",
       default: "My Company",
-      description: "The name of your company. Sets metadata required by Maven.",
+      description: "The name of the company. Sets metadata required by Maven.",
     },
     {
       name: "companyURL",
       required: "for publishing",
       default: "www.mycompany.com",
       description:
-        "Your company's homepage URL. Sets metadata required by Maven.",
+        "The company homepage URL. Sets metadata required by Maven.",
     },
     {
       name: "companyEmail",
       required: "for publishing",
       default: "info@mycompany.com",
       description:
-        "A support email address for your company. Sets metadata required by Maven.",
+        "A support email address for the company. Sets metadata required by Maven.",
+    },
+    {
+      name: "description",
+      required: "false",
+      default: "SDK enabling Java developers to easily integrate with the {CompanyName} API.",
+      description:
+        "The description to use in the Maven POM file.",
+    },
+    {
+      name: "license",
+      required: "false",
+      default: "MIT License",
+      description:
+        "License information. Defaults to the MIT license if not otherwise specified.",
     },
   ]}
   columns={[
@@ -109,68 +125,56 @@ java:
   ]}
 />
 
-## Base package name
-
-This package will be where the primary SDK class is located
-(and sub-packages will hold various types of associated generated classes):
-
-```yaml
-java:
-  packageName: com.mycompany.sdk
-```
-
-## Additional Dependencies
+## Build and language
 
 ```yml
 java:
+  languageVersion: 11
   additionalDependencies:
-    - "implementation:com.fasterxml.jackson.core:jackson-databind:2.12.3"
+    - "implementation:com.fasterxml.jackson.core:jackson-databind:2.16.2"
     - "testImplementation:junit:junit:4.13.2"
+  additionalPlugins:
+    - 'id("org.jetbrains.kotlin.jvm") version "1.9.0"'
+  generateSpringBootStarter: true
+  enableFormatting: false
 ```
 
 <Table
   data={[
     {
+      name: "languageVersion",
+      required: "false",
+      default: "11",
+      description:
+        "The Java version for the generated SDK (11-21). This will be used to set the source and target compatibility in the Gradle build file.",
+    },
+    {
       name: "additionalDependencies",
       required: "false",
       default: "[]",
       description:
-        "Adds additional dependencies to include in `build.gradle`. Format: `scope:groupId:artifactId:version`.",
+        "Additional dependencies to include in `build.gradle`. Format: an array of `scope:groupId:artifactId:version` strings.",
     },
     {
       name: "additionalPlugins",
       required: "false",
       default: "[]",
       description:
-        'Adds additional plugins to include in `build.gradle`. Format: `id("plugin.id") version "x.x.x"`.',
+        'Additional plugins to include in `build.gradle`. Format: an array of strings, e.g. `id("plugin.id") version "x.x.x"`.',
     },
-  ]}
-  columns={[
-    { key: "name", header: "Name" },
-    { key: "required", header: "Required" },
-    { key: "default", header: "Default Value" },
-    { key: "description", header: "Description" },
-  ]}
-/>
-
-## License
-
-```yml
-java:
-  license:
-    name: "The MIT License (MIT)"
-    url: "https://mit-license.org/"
-    shortName: "MIT"
-```
-
-<Table
-  data={[
     {
-      name: "license",
+      name: "generateSpringBootStarter",
       required: "false",
-      default: "MIT License",
+      default: "true",
       description:
-        "License information. Defaults to the MIT license if not provided.",
+        "Generate Spring Boot starters for the Java SDK.",
+    },
+    {
+      name: "enableFormatting",
+      required: "false",
+      default: "false",
+      description:
+        "Enable automatic code formatting for generated Java files using dprint.",
     },
   ]}
   columns={[
@@ -181,60 +185,14 @@ java:
   ]}
 />
 
-## Method and parameter management
+## API surface shape
 
 ```yml
 java:
   maxMethodParams: 4
-```
-
-<Table
-  data={[
-    {
-      name: "[maxMethodParams](/docs/customize/methods)",
-      required: "false",
-      default: "4",
-      description:
-        "Maximum number of parameters before an input object is created. `0` means input objects are always used.",
-    },
-  ]}
-  columns={[
-    { key: "name", header: "Name" },
-    { key: "required", header: "Required" },
-    { key: "default", header: "Default Value" },
-    { key: "description", header: "Description" },
-  ]}
-/>
-
-## Security configuration
-
-```yml
-java:
   flattenGlobalSecurity: true
-```
-
-<Table
-  data={[
-    {
-      property: "[flattenGlobalSecurity](/docs/customize/authentication/overview)",
-      description:
-        "Enables inline security credentials during SDK instantiation. **Recommended: `true`**",
-      type: "boolean",
-      default: "true",
-    },
-  ]}
-  columns={[
-    { key: "property", header: "Property" },
-    { key: "description", header: "Description" },
-    { key: "type", header: "Type" },
-    { key: "default", header: "Default" },
-  ]}
-/>
-
-## Import management
-
-```yml
-java:
+  operationScopedParams: true
+  respectTitlesForPrimitiveUnionMembers: true
   imports:
     paths:
       callbacks: models/callbacks
@@ -247,15 +205,43 @@ java:
 <Table
   data={[
     {
-      field: "paths",
+      name: "[maxMethodParams](/docs/customize/methods)",
+      required: "false",
+      default: "4",
+      description:
+        "The maximum number of parameters a method can have before the resulting SDK endpoint is no longer \"flattened\" and an input object is created instead. `0` will use input objects always.",
+    },
+    {
+      name: "[flattenGlobalSecurity](/docs/customize/authentication/overview)",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Flatten the global security configuration if there is only a single option in the spec.",
+    },
+    {
+      name: "operationScopedParams",
+      required: "false",
+      default: "true",
+      description:
+        "When falling back to global parameters, only applies those declared at the operation level.",
+    },
+    {
+      name: "imports",
       required: "false",
       default: "{}",
       description:
-        "Customizes where different parts of the SDK (e.g., callbacks, errors, and operations) will be imported from.",
+        "Configuration for model import structure (folder layout for `shared`/`operations`/`errors`/`callbacks`/`webhooks`).",
+    },
+    {
+      name: "respectTitlesForPrimitiveUnionMembers",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Use title or `x-speakeasy-name-override` for primitive union member field names instead of type-based defaults.",
     },
   ]}
   columns={[
-    { key: "field", header: "Field" },
+    { key: "name", header: "Name" },
     { key: "required", header: "Required" },
     { key: "default", header: "Default Value" },
     { key: "description", header: "Description" },
@@ -292,7 +278,7 @@ java:
       component: "webhooks",
       default: "models/webhooks",
       description:
-        "The directory for webhook models, if your SDK includes support for webhooks.",
+        "The directory for webhook models, if the SDK includes support for webhooks.",
     },
   ]}
   columns={[
@@ -302,11 +288,13 @@ java:
   ]}
 />
 
-## Error and response handling
+## Errors
 
 ```yml
 java:
-  clientServerStatusCodesAsErrors: false
+  clientServerStatusCodesAsErrors: true
+  defaultErrorName: "APIException"
+  baseErrorName: ""
 ```
 
 <Table
@@ -316,7 +304,224 @@ java:
       required: "false",
       default: "true",
       description:
-        "Whether to treat 4xx and 5xx status codes as errors. Options: `true` or `false`.",
+        "Whether to treat 4xx and 5xx status codes as errors.",
+    },
+    {
+      name: "defaultErrorName",
+      required: "false",
+      default: "`APIException` (new) / `SDKException` (legacy)",
+      description:
+        "The name of the default exception that is thrown when an API error occurs.",
+    },
+    {
+      name: "baseErrorName",
+      required: "false",
+      default: "N/A",
+      description:
+        "The name of the base error class used for HTTP error responses.",
+    },
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "required", header: "Required" },
+    { key: "default", header: "Default Value" },
+    { key: "description", header: "Description" },
+  ]}
+/>
+
+## Async and streaming
+
+```yml
+java:
+  asyncMode: "enabled"
+  prefixModeMethodNames: true
+  nullFriendlyParameters: true
+  enableStreamingUploads: true
+  multipartArrayFormat: "standard"
+```
+
+<Table
+  data={[
+    {
+      name: "asyncMode",
+      required: "false",
+      default: "auto (`enabled` for new SDKs and SDKs without registered hooks)",
+      description:
+        "Whether to generate reactive/async API methods that use non-blocking operations. Values: `enabled` or `disabled`.",
+    },
+    {
+      name: "prefixModeMethodNames",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Use `to` prefix for sync/async mode-switching methods (`toSync`/`toAsync`) instead of bare names. Follows RxJava/Mutiny conventions and avoids collisions with SubSDK accessor names.",
+    },
+    {
+      name: "nullFriendlyParameters",
+      required: "false",
+      default: "on for new SDKs",
+      description: "Whether to use null-friendly parameters.",
+    },
+    {
+      name: "enableStreamingUploads",
+      required: "false",
+      default: "on for new SDKs (auto-on if `nullFriendlyParameters: true`)",
+      description:
+        "Whether to enable streaming uploads for sync SDKs, allowing users to pass various stream-oriented types (e.g. Blob) for bytes fields instead of byte arrays.",
+    },
+    {
+      name: "multipartArrayFormat",
+      required: "false",
+      default: "`standard` (new) / `legacy` (existing)",
+      description:
+        "Format for array field names in multipart form data. `legacy` appends `[]` to array field names (e.g., `files[]`). `standard` uses the field name as-is. Set to `standard` for correct multipart/form-data handling.",
+    },
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "required", header: "Required" },
+    { key: "default", header: "Default Value" },
+    { key: "description", header: "Description" },
+  ]}
+/>
+
+## Unions and enums
+
+```yml
+java:
+  unionStrategy: "populated-fields"
+  forwardCompatibleUnionsByDefault: true
+  forwardCompatibleEnumsByDefault: true
+  generateOptionalUnionAccessors: true
+  generateUnionDocs: true
+  inferUnionDiscriminators: true
+```
+
+<Table
+  data={[
+    {
+      name: "unionStrategy",
+      required: "false",
+      default: "populated-fields",
+      description:
+        "Strategy for deserializing union types. `left-to-right` tries each type in order and returns the first valid match. `populated-fields` uses sophisticated candidate scoring based on mapped fields, enum fields, and JSON size to select the best matching union member.",
+    },
+    {
+      name: "forwardCompatibleUnionsByDefault",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Enable forward compatibility for unions in responses. When true, unions are open to unknown values with raw JSON fallback. Individual unions can be controlled with `x-speakeasy-unknown-values: allow/disallow`.",
+    },
+    {
+      name: "forwardCompatibleEnumsByDefault",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Make enums forward compatible by default. When enabled, provides an API to access the raw value when the enum value fails to map to any of the known enum members. Forces `unionStrategy: populated-fields`.",
+    },
+    {
+      name: "generateOptionalUnionAccessors",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Generate optional accessor methods for non-discriminated union types instead of the generic `value()` method. When enabled, generates `Optional<SubType> subType()` accessors for each union member.",
+    },
+    {
+      name: "generateUnionDocs",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Generate Supported Types documentation for union model pages. Non-discriminated unions show factory method examples; discriminated unions show a discriminator-value-to-type mapping table.",
+    },
+    {
+      name: "inferUnionDiscriminators",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Infer union discriminators for `oneOf`s missing explicit OpenAPI discriminator mapping. This is a common option shared across languages.",
+    },
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "required", header: "Required" },
+    { key: "default", header: "Default Value" },
+    { key: "description", header: "Description" },
+  ]}
+/>
+
+## Models and docs
+
+```yml
+java:
+  inputModelSuffix: "input"
+  outputModelSuffix: "output"
+  showSetterGetterTypesInDocs: true
+  explicitDocImports: true
+```
+
+<Table
+  data={[
+    {
+      name: "inputModelSuffix",
+      required: "false",
+      default: "input",
+      description:
+        "The suffix to add to models with writeOnly fields that are created as input models. This is a common option shared across languages.",
+    },
+    {
+      name: "outputModelSuffix",
+      required: "false",
+      default: "output",
+      description:
+        "The suffix to add to models with readOnly fields that are created as output models. This is a common option shared across languages.",
+    },
+    {
+      name: "showSetterGetterTypesInDocs",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Show separate Setter Type and Getter Type columns in model documentation instead of a single Type column. Only takes effect when `nullFriendlyParameters` is also enabled.",
+    },
+    {
+      name: "explicitDocImports",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Use explicit imports instead of wildcard imports in doc usage examples to avoid ambiguous class references.",
+    },
+  ]}
+  columns={[
+    { key: "name", header: "Name" },
+    { key: "required", header: "Required" },
+    { key: "default", header: "Default Value" },
+    { key: "description", header: "Description" },
+  ]}
+/>
+
+## Customization and logging
+
+```yml
+java:
+  enableCustomCodeRegions: false
+  enableSlf4jLogging: true
+```
+
+<Table
+  data={[
+    {
+      name: "[enableCustomCodeRegions](/docs/customize/code/code-regions/overview)",
+      required: "false",
+      default: "false",
+      description:
+        "Allow custom code to be inserted into the generated SDK.",
+    },
+    {
+      name: "enableSlf4jLogging",
+      required: "false",
+      default: "on for new SDKs",
+      description:
+        "Enable SLF4j logging integration. Users can configure their preferred SLF4j implementation (Logback, Log4j2, etc.).",
     },
   ]}
   columns={[
