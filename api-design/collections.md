@@ -461,7 +461,7 @@ automatically.
 Instead of creating custom formats it may be easier for API developers and
 consumers alike to use an existing "data format" standard.
 
-- [CollectionJSON](http://amundsen.com/media-types/collection/format/)
+- CollectionJSON
 - [HAL](http://stateless.co/hal_specification.html)
 - [JSON:API](https://jsonapi.org/)
 - [OData](https://www.odata.org/)

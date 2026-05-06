@@ -341,24 +341,6 @@ const meta = {
                   },
                 },
               },
-              "snippet-ai": {
-                title: "SnippetAI",
-                display: "hidden",
-                items: {
-                  overview: {
-                    title: "Overview",
-                  },
-                  "integrate-via-react": {
-                    title: "Integrate via React",
-                  },
-                  "integrate-via-web-component": {
-                    title: "Integrate via Web Component",
-                  },
-                  "integrate-via-script": {
-                    title: "Integrate via Script",
-                  },
-                },
-              },
             },
           },
           languages: {
