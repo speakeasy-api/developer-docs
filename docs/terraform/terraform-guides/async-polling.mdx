@@ -1,0 +1,165 @@
+---
+title: "Async resource provisioning with polling"
+description: "Use an overlay to wait for create and delete API operations to finish before Terraform continues."
+image: "/media/examples/generic.png"
+date: 2026-05-06
+authors:
+  - name: Ash Godfrey
+  - image_url: "/media/author-headshots/ash.jpg"
+tags:
+  - Terraform
+is_featured: true
+featured_image: "/media/examples/generic.png"
+---
+
+# Async resource provisioning with polling
+
+Many infrastructure APIs accept a create or delete request immediately and finish the work in the background. The API returns a `202` (or `204`) with an identifier, and the resource is not actually usable, or fully removed, until a subsequent `GET` confirms the new state.
+
+Speakeasy-generated Terraform providers can wait for those transitions automatically with the [`x-speakeasy-polling`](/docs/customize/runtime/polling) extension wired into the `create` and `delete` entity operations. This guide shows how to apply polling without touching the base OpenAPI document, by layering an [overlay](/docs/openapi/overlays).
+
+## Scenario: a database that provisions asynchronously
+
+The base API exposes a `Database` resource with an asynchronous create and delete:
+
+- `POST /databases` returns `202 Accepted` once the request is queued.
+- `GET /databases/{id}` returns the current `status`: `pending`, `ready`, or `failed`.
+- `DELETE /databases/{id}` returns `204 No Content` while tear-down continues asynchronously.
+
+### Base spec (excerpt)
+
+```yaml filename="openapi.yaml"
+paths:
+  /databases:
+    post:
+      operationId: createDatabase
+      x-speakeasy-entity-operation: Database#create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DatabaseRequest"
+      responses:
+        "202":
+          description: Database creation accepted; provisioning asynchronously.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Database"
+
+  /databases/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getDatabase
+      x-speakeasy-entity-operation: Database#read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Database"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteDatabase
+      x-speakeasy-entity-operation: Database#delete
+      responses:
+        "204":
+          description: Deletion accepted; tear-down is asynchronous.
+
+components:
+  schemas:
+    Database:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [pending, ready, failed]
+```
+
+## Overlay: add polling to create and delete
+
+Apply polling as an overlay so the base spec stays untouched. The overlay does two things:
+
+1. Declares named polling strategies on the `GET` operation.
+2. Wires those strategies into the create and delete entity operations so Terraform waits after each lifecycle step.
+
+```yaml filename="overlay.yaml"
+overlay: 1.0.0
+info:
+  title: Add async polling to Database
+  version: 0.0.0
+actions:
+  # 1. Define polling strategies on the read operation.
+  - target: $.paths['/databases/{id}'].get
+    update:
+      x-speakeasy-polling:
+        - name: WaitForReady
+          successCriteria:
+            - condition: $statusCode == 200
+            - condition: $response.body#/status == "ready"
+          failureCriteria:
+            - condition: $statusCode == 200
+            - condition: $response.body#/status == "failed"
+        - name: WaitForDeleted
+          successCriteria:
+            - condition: $statusCode == 404
+
+  # 2. Attach the read operation as a follow-up to create and delete,
+  #    using each polling strategy.
+  - target: $.paths['/databases/{id}'].get
+    update:
+      x-speakeasy-entity-operation:
+        - Database#read
+        - entityOperation: Database#create#2
+          options:
+            polling:
+              name: WaitForReady
+              delaySeconds: 2
+              intervalSeconds: 5
+              limitCount: 120
+        - entityOperation: Database#delete#2
+          options:
+            polling:
+              name: WaitForDeleted
+              intervalSeconds: 5
+              limitCount: 60
+```
+
+Apply the overlay alongside the base spec with `speakeasy overlay apply -s openapi.yaml -o overlay.yaml`, or attach it to a Terraform source with `speakeasy configure sources`.
+
+## What this produces
+
+- After `terraform apply` creates a database, the provider calls `GET /databases/{id}` on a 5-second interval, after a 2-second initial delay, until `status == "ready"`. Polling fails fast if `status == "failed"` or after 120 attempts.
+- After `terraform destroy`, the provider polls until the `GET` returns `404`, confirming tear-down completed.
+- The `#2` suffix on `Database#create#2` and `Database#delete#2` tells the generator to run the `GET` as a second step of the create or delete lifecycle. That is how the read operation is reused as a wait step without colliding with the normal `Database#read`.
+
+## Tuning knobs
+
+The behavior of each strategy is controlled by a small set of fields on `x-speakeasy-polling`. Per-resource values under `options.polling` (shown in the overlay above) override the defaults declared on the operation.
+
+- `delaySeconds`: Initial wait before the first poll.
+- `intervalSeconds`: Time between polls.
+- `limitCount`: Maximum poll attempts before giving up.
+- `successCriteria`: All conditions must be true within a single poll response to stop polling successfully.
+- `failureCriteria`: All conditions must be true within a single poll response to stop polling and surface an error. Use multiple criteria to assert against the same response (e.g. `$statusCode == 200` _and_ `$response.body#/status == "failed"`); failure does not compose across separate polls.
+
+Conditions use OpenAPI [runtime expressions](https://spec.openapis.org/oas/v3.1.0#runtime-expressions). The two most common contexts are `$statusCode` and `$response.body#/<json-pointer>`. See the [polling reference](/docs/customize/runtime/polling) for the full criterion grammar, including regex matching.
+
+## Related
+
+- [API operation polling in entity mapping](/docs/terraform/customize-terraform/entity-mapping#api-operation-polling)
+- [`x-speakeasy-polling` reference](/docs/customize/runtime/polling)
+- [OpenAPI overlays](/docs/openapi/overlays)
