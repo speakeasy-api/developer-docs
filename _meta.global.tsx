@@ -463,14 +463,6 @@ const meta = {
                   },
                 },
               },
-              unity: {
-                title: "Unity [beta]",
-                items: {
-                  "methodology-unity": {
-                    title: "Unity design [coming soon]",
-                  },
-                },
-              },
             },
           },
           guides: {
