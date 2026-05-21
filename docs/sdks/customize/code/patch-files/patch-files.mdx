@@ -1,0 +1,133 @@
+---
+title: Patch files
+description: "Persist edits to generated SDKs as standalone unified-diff artifacts, applied on every generation — no Git repository required."
+---
+
+import { Callout } from "@/mdx/components";
+
+# Patch files
+
+Patch files capture modifications to generated SDKs as standalone unified-diff artifacts. Drop `.patch` files into `.speakeasy/patches/`, and Speakeasy reapplies them after every generation.
+
+Use patch files when:
+
+- The SDK is not checked into a Git repository, or Git tooling is not available in the generation environment.
+- You want each edit captured as a separate, code-reviewable diff artifact instead of an in-place 3-way merge.
+
+## Patch files compared to custom code
+
+|                           | Patch files                  | [Custom code](/docs/sdks/customize/code/custom-code/custom-code) |
+|---------------------------|------------------------------|------------------------------------------------------------------|
+| Git repo required         | No                           | Yes                                                              |
+| Edits live in             | `.speakeasy/patches/*.patch` | The generated files themselves                                   |
+| File create/delete/rename | Not supported                | Supported                                                        |
+| Best for                  | Reviewable diff artifacts    | In-place editing with automatic preservation                     |
+
+<Callout title="Composability" type="info">
+  Patch files can be combined with [custom code](/docs/sdks/customize/code/custom-code/custom-code) — patches apply first, then the persistent-edits merge runs on the result.
+</Callout>
+
+## Creating a patch file
+
+Suppose Speakeasy generates the following TypeScript model:
+
+```typescript filename="src/models/payment.ts"
+export class Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+}
+```
+
+Suppose the goal is to drop the `id` field, pin `currency` to `"USD"`, and add a `needsAction()` helper — all surviving every regeneration:
+
+**1. Back up the pristine generated file** before editing, so a clean baseline exists for the diff:
+
+```bash
+cp src/models/payment.ts src/models/payment.ts.orig
+```
+
+**2. Edit the generated file directly.**
+
+```typescript filename="src/models/payment.ts"
+export class Payment {
+  amount: number;
+  currency: "USD" = "USD";
+  status: PaymentStatus;
+
+  needsAction(): boolean {
+    return this.status === PaymentStatus.RequiresAction;
+  }
+}
+```
+
+**3. Produce a unified diff against the pristine generated content.**
+
+```bash
+diff -u src/models/payment.ts.orig src/models/payment.ts > .speakeasy/patches/src/models/payment.ts.patch
+```
+
+Or inside a Git repo:
+
+```bash
+git diff src/models/payment.ts > .speakeasy/patches/src/models/payment.ts.patch
+```
+
+The patch path under `.speakeasy/patches/` mirrors the generated file's path relative to the SDK root. So `src/models/payment.ts` becomes `.speakeasy/patches/src/models/payment.ts.patch`:
+
+```diff filename=".speakeasy/patches/src/models/payment.ts.patch"
+diff --git a/src/models/payment.ts b/src/models/payment.ts
+--- a/src/models/payment.ts
++++ b/src/models/payment.ts
+@@ -1,6 +1,9 @@
+ export class Payment {
+-  id: string;
+   amount: number;
+-  currency: string;
++  currency: "USD" = "USD";
+   status: PaymentStatus;
++
++  needsAction(): boolean {
++    return this.status === PaymentStatus.RequiresAction;
++  }
+ }
+```
+
+**4. Restore the pristine file** so it is back to its unedited state.
+
+**5. Re-run `speakeasy run`.** Speakeasy applies the patch and writes the patched file. All three edits — the removed `id` field, the pinned `currency`, and the `needsAction()` method — now persist across regenerations.
+
+**6. Commit `.speakeasy/patches/` to source control** alongside the SDK. Patches are the durable record of edits — losing them means losing the customizations on the next regeneration.
+
+<Callout title="Current limitations" type="warning">
+  Patch files currently modify the contents of generated files only. Diffs that create, delete, or rename files are rejected, and disk-only files (manually authored or [`.genignore`d](/docs/sdks/customize/code/custom-code/genignore)) are not visible to the patch pipeline.
+</Callout>
+
+## Handling conflicts
+
+When the generated content changes in a way that the patch can no longer apply cleanly, Speakeasy:
+
+- Rebases the patch onto the new generated output.
+- Writes any unresolved hunks as Git-style conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) into the affected file.
+- Marks the generation step as failed and lists the conflicted files.
+
+To resolve:
+
+1. Open each conflicted file and edit it to the desired final content.
+2. Regenerate the patch from the resolved file:
+
+   ```bash
+   git diff <file> > .speakeasy/patches/<file>.patch
+   ```
+
+3. Discard the working-copy edits and re-run `speakeasy run`.
+
+<Callout title="Stale patches" type="info">
+  Exact-path patches (e.g. `.speakeasy/patches/foo.ts.patch`) whose target is no longer generated log a warning but do not block generation. Generic patches whose hunks target a missing file fail the generation with `cannot modify missing file` — remove or update them when the corresponding generated files go away.
+</Callout>
+
+## Next steps
+
+- See the [technical reference](/docs/sdks/customize/code/patch-files/patch-files-reference) for the apply pipeline, path normalization rules, and error semantics.
+- For in-place editing with automatic merging, see [custom code](/docs/sdks/customize/code/custom-code/custom-code).

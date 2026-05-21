@@ -208,6 +208,17 @@ const meta = {
                       },
                     },
                   },
+                  "patch-files": {
+                    title: "Patch files",
+                    items: {
+                      "patch-files": {
+                        title: "Overview",
+                      },
+                      "patch-files-reference": {
+                        title: "Technical reference",
+                      },
+                    },
+                  },
                   "code-regions": {
                     title: "Code regions",
                     items: {
