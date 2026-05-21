@@ -1,579 +1,417 @@
 ---
 title: How to generate an OpenAPI document with NestJS
-description: "Learn how to generate an OpenAPI document for your NestJS API and use it to automatically generate and customize client SDKs across different languages."
+description: "Learn how to generate an OpenAPI document for a NestJS Train Travel API and use it to generate SDKs with Speakeasy."
 ---
 
 import { Callout } from "@/mdx/components";
 
 # How to generate an OpenAPI document with NestJS
 
-This guide walks you through generating an OpenAPI document for a [NestJS](https://nestjs.com/) API and using Speakeasy to create an SDK based on the generated document.
+Generating an OpenAPI document in NestJS is often less work than it first appears. Controllers, DTOs, validation decorators, and response models already describe a large part of the API contract, which means much of the structure needed for OpenAPI is already present in the application code.
+
+This tutorial shows how to turn that existing structure into a useful OpenAPI document and then use it with Speakeasy to generate SDKs. The example in this guide uses a train travel API domain with stations, trips, bookings, and payments, with a focus on keeping the generated document clear enough for both reference docs and SDK generation.
 
 <Callout title="Example code" type="info">
-Clone the [Speakeasy NestJS example repo](https://github.com/speakeasy-api/nestjs-openapi-example.git) to follow along with the example code in this tutorial. The `initial-app` branch has the initial state of the app that we'll use to start this tutorial.
+  Follow this guide with the NestJS example in this repository at
+  <code>examples/frameworks-nestjs</code>.
 </Callout>
 
-Here's what we'll do:
+Here is what this guide covers:
 
-1. Add the NestJS OpenAPI module to a NestJS project.
-2. Generate an OpenAPI document using the NestJS OpenAPI module.
-3. Improve the OpenAPI document for better downstream SDK generation.
-4. Use the Speakeasy CLI to generate an SDK based on the OpenAPI document.
-5. Use a Speakeasy OpenAPI extension to improve the generated SDK.
-
-We'll also take a look at how you can use the generated SDK.
-
-Your NestJS project might not be as simple as our example app, but the steps below should translate well to any NestJS project.
-
-## The SDK generation pipeline
-
-NestJS has an [OpenAPI (Swagger) module](https://github.com/nestjs/swagger) for generating OpenAPI documents. We'll begin by installing, configuring, and initializing the NestJS [OpenAPI (Swagger) module](https://github.com/nestjs/swagger). We will also use the [Scalar UI](https://www.npmjs.com/package/@scalar/nestjs-api-reference) to add an interactive documentation UI for the API.
-
-The quality of your OpenAPI document determines the quality of generated SDKs and documentation, so we'll look into ways you can improve the generated document based on the Speakeasy [OpenAPI best practices](/docs/best-practices).
-
-We'll then use the improved OpenAPI document to generate an SDK using Speakeasy.
-
-Finally, we'll use a simplified example to demonstrate how to use the SDK we generated and how to add SDK generation to a CI/CD pipeline so that Speakeasy automatically generates fresh SDKs whenever your NestJS API changes in the future.
+1. Install and configure `@nestjs/swagger` and Scalar API Reference.
+2. Generate an OpenAPI 3.2 document from NestJS controllers and DTOs.
+3. Add stable `operationId`, tags, and component schemas for SDK quality.
+4. Add security schemes and Speakeasy extensions.
+5. Write `openapi.yaml` and generate SDKs from it.
 
 ## Requirements
 
-This guide assumes that you have an existing NestJS app (or a clone of our [example application](https://github.com/speakeasy-api/nestjs-openapi-example.git)) and basic familiarity with NestJS.
+This guide assumes a NestJS application and basic familiarity with controllers, DTOs, and decorators.
 
-The following should be installed on your machine:
+Most of the work in this flow happens by adding precise metadata to code that already exists, rather than maintaining a separate OpenAPI file by hand.
 
-- [Node.js version 16 or above](https://nodejs.org/en/download) (we used Node v20.17.0).
-- The [NestJS CLI](https://docs.nestjs.com/cli/overview), which can be installed with the following command once you have Node.js:
-
-  ```bash filename="Terminal"
-  npm install -g @nestjs/cli
-  ```
-
-- The [JS-YAML](https://www.npmjs.com/package/js-yaml) package, which we'll use to convert the OpenAPI document to a YAML file.
-- The [Speakeasy CLI](/docs/speakeasy-cli/getting-started), which we'll use to generate an SDK from the OpenAPI document.
-
-## Adding `@nestjs/swagger` to a NestJS project
-
-Install the NestJS OpenAPI (Swagger) and Scalar API Reference modules:
+Install Node.js and the NestJS CLI:
 
 ```bash filename="Terminal"
- npm install --save @nestjs/swagger @scalar/nestjs-api-reference
+npm install -g @nestjs/cli
 ```
 
-In the `bootstrap` function of your application entry file, initialize Swagger using the `SwaggerModule` class:
+Verify the CLI:
 
-```typescript filename="main.ts"
-const config = new DocumentBuilder()
-  .setTitle('Pet API')
-  .setDescription('Create a cat or dog record and view pets by id')
-  .setVersion('1.0')
-  .addTag('library')
-  .build();
-
-const document = SwaggerModule.createDocument(app, config); // serializable object - conform to OpenAPI
-SwaggerModule.setup('api', app, document, {
-  swaggerUiEnabled: false,
-});
-
-app.use(
-  '/api',
-  apiReference({
-    spec: {
-      content: document,
-    },
-  }),
-);
+```bash filename="Terminal"
+nest --version
 ```
 
-Add the required imports:
+Install Speakeasy CLI for SDK generation:
 
-```typescript filename="main.ts"
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+```bash filename="Terminal"
+brew install speakeasy-api/homebrew-tap/speakeasy
+```
+
+### npm dependency versions used in this example
+
+The NestJS train travel example currently uses:
+
+```json filename="examples/frameworks-nestjs/package.json"
+{
+  "dependencies": {
+    "@nestjs/common": "^11.1.22",
+    "@nestjs/core": "^11.1.22",
+    "@nestjs/platform-express": "^11.1.22",
+    "@nestjs/swagger": "^11.4.4",
+    "@scalar/nestjs-api-reference": "^1.1.16",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "js-yaml": "^4.1.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  }
+}
+```
+
+## Add Swagger to NestJS
+
+Install the OpenAPI and docs dependencies:
+
+```bash filename="Terminal"
+npm install @nestjs/swagger @scalar/nestjs-api-reference
+```
+
+Configure Swagger and Scalar in `src/main.ts`.
+
+Start with the base document metadata:
+
+```typescript filename="src/main.ts"
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  const config = new DocumentBuilder()
+    .setOpenAPIVersion('3.2.0')
+    .setTitle('Train Travel API')
+    .setDescription('Find stations, discover trips, and create bookings across Europe.')
+    .setVersion('1.2.1')
+    .addServer('https://api.example.com', 'Production server')
+    .addServer('http://localhost:3000', 'Local development server')
+    .build();
+}
+```
+
+NestJS Swagger supports OpenAPI 3.2 directly through `DocumentBuilder.setOpenAPIVersion()`.
+
+Add Scalar and write the generated document to `openapi.yaml`:
+
+```typescript filename="src/main.ts"
+import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { writeFileSync } from 'fs';
+import * as yaml from 'js-yaml';
 import { apiReference } from '@scalar/nestjs-api-reference';
-```
-
-In the above code:
-
-- The `SwaggerModule.createDocument` method returns a serializable [OpenAPI document](https://spec.openapis.org/oas/v3.0.4.html#openapi-document) object that we'll convert to an OpenAPI YAML document file using JS-YAML.
-- We use `DocumentBuilder` to create the base structure of the OpenAPI document. The [`DocumentBuilder` methods](https://github.com/nestjs/swagger/blob/master/lib/document-builder.ts) set the properties that identify the purpose and owner of the document, such as the title and description properties.
-- We use the `createDocument()` method to define the API routes by passing in two arguments: the `app` instance and the document `config`. We can also provide a third argument, [`SwaggerDocumentOptions`](https://docs.nestjs.com/openapi/introduction#document-options).
-- We use `SwaggerModule.setup()` to expose the OpenAPI document at `/api-yaml` for the YAML format and `/api-json` for the JSON format.
-- The `app.use('/api', ...)` method mounts the Scalar API Reference component to the `/api` route. The `apiReference` function takes the `document` object as a parameter, which represents the OpenAPI document.
-
-Run the NestJS HTTP development server:
-
-```bash filename="Terminal"
-npm run start:dev
-```
-
-Open your browser and navigate to [`http://localhost:3000/api`](http://localhost:3000/api). You should see the Scalar UI with three API endpoints in the sidebar.
-
-![Scalar UI](/assets/openapi/nestjs/scalar-ui.png)
-
-For each API endpoint, you can see which parameters are required and try out the different API endpoints.
-
-Open `http://localhost:3000/api-yaml` to see the following basic OpenAPI document in YAML format:
-
-```yaml
-openapi: 3.0.0
-paths:
-  /pets:
-    post:
-      operationId: PetsController_create
-      parameters: []
-      responses:
-        "201":
-          description: ""
-  /pets/cats/{id}:
-    get:
-      operationId: PetsController_findOneCat
-      parameters:
-        - name: id
-          required: true
-          in: path
-          schema:
-            type: string
-      responses:
-        "200":
-          description: ""
-  /pets/dogs/{id}:
-    get:
-      operationId: PetsController_findOneDog
-      parameters:
-        - name: id
-          required: true
-          in: path
-          schema:
-            type: string
-      responses:
-        "200":
-          description: ""
-info:
-  title: Pet API
-  description: Create a cat or dog record and view pets by id
-  version: "1.0"
-  contact: {}
-tags:
-  - name: library
-    description: ""
-servers: []
-components:
-  schemas: {}
-```
-
-Note that the document uses OpenAPI Specification version 3.0.0.
-
-## Supported OpenAPI Specification versions in NestJS and Speakeasy
-
-Speakeasy currently supports the OpenAPI Specification versions 3.0.x and 3.1.x. We recommend using OpenAPI Specification version 3.1 if possible, as it's fully compatible with [JSON Schema](https://json-schema.org/), which gives you access to a large ecosystem of tools and libraries. NestJS supports OpenAPI Specification version 3.0.x.
-
-## Adding OpenAPI `info` in NestJS
-
-Let's improve the OpenAPI document by better describing it. We'll add more fields to the [info object](https://spec.openapis.org/oas/v3.0.4.html#info-object), which contains metadata about the API.
-
-Add the following `DocumentBuilder` methods to the `config` section of the document (`main.ts`) to supply more data about the API:
-
-```typescript filename="main.ts"
-.setContact(
-  'Speakeasy support',
-  'http://www.example.com/support',
-  'support@example.com',
-)
-.setTermsOfService('http://example.com/terms/')
-.setLicense(
-  'Apache 2.0',
-  'https://www.apache.org/licenses/LICENSE-2.0.html',
-)
-```
-
-## Updating NestJS to generate OpenAPI components schemas
-
-In the example app, [NestJS core decorators](https://docs.nestjs.com/custom-decorators) define the structure and functionality of the Pets Controller and its API routes.
-
-We can add [OpenAPI decorators](https://docs.nestjs.com/openapi/decorators) to better describe our API. The OpenAPI document lacks details about the POST request body, data schema, and API response.
-
-Add the following OpenAPI decorators, with the `Api` prefix to distinguish them from the core decorators, to the `@Get('cats/:id')` route handler:
-
-```typescript filename="pets.controller.ts"
-@ApiOperation({ summary: 'Get cat' })
-@ApiResponse({
-  description: 'The found record',
-  type: Cat,
-})
-@ApiBadRequestResponse({ description: 'Bad Request' })
-```
-
-Import these decorators from `'@nestjs/swagger'`:
-
-```typescript filename="pets.controller.ts"
 import {
-  ApiBadRequestResponse,
-  ApiBody,
-  ApiExtension,
-  ApiForbiddenResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-  getSchemaPath,
+  DocumentBuilder,
+  SwaggerDocumentOptions,
+  SwaggerModule,
 } from '@nestjs/swagger';
-```
+import { AppModule } from './app.module';
 
-Add the following OpenAPI decorators to the `@Get('dogs/:id')` route handler:
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
 
-```typescript filename="pets.controller.ts"
-@ApiOperation({ summary: 'Get dog' })
-@ApiResponse({
-  description: 'The found record',
-  type: Dog,
-})
-@ApiBadRequestResponse({ description: 'Bad Request' })
-```
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      errorHttpStatusCode: 400,
+    }),
+  );
 
-Add the following OpenAPI decorators to the `@Post()` route handler:
-
-```typescript filename="pets.controller.ts"
-@ApiOperation({ summary: 'Create a pet' })
-@ApiBody({
-  schema: {
-    oneOf: [{ $ref: getSchemaPath(Cat) }, { $ref: getSchemaPath(Dog) }],
-    discriminator: {
-      propertyName: 'type',
-      mapping: {
-        cat: getSchemaPath(Cat),
-        dog: getSchemaPath(Dog),
+  const config = new DocumentBuilder()
+    .setOpenAPIVersion('3.2.0')
+    .setTitle('Train Travel API')
+    .setDescription('Find stations, discover trips, and create bookings across Europe.')
+    .setVersion('1.2.1')
+    .addTag('Resources', 'Top-level navigation tag for related resources')
+    .addTag('Stations', 'Find and filter train stations')
+    .addTag('Trips', 'Timetables and routes for train trips')
+    .addTag('Bookings', 'Create and manage trip bookings')
+    .addServer('https://api.example.com', 'Production server')
+    .addServer('http://localhost:3000', 'Local development server')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Bearer token authentication',
       },
-    },
-  },
-  description: 'Create a pet cat or dog',
-})
-@ApiOkResponse({
-  schema: {
-    oneOf: [{ $ref: getSchemaPath(Cat) }, { $ref: getSchemaPath(Dog) }],
-    discriminator: {
-      propertyName: 'type',
-      mapping: {
-        cat: getSchemaPath(Cat),
-        dog: getSchemaPath(Dog),
+      'BearerAuth',
+    )
+    .addOAuth2(
+      {
+        type: 'oauth2',
+        flows: {
+          authorizationCode: {
+            authorizationUrl: 'https://auth.example.com/oauth2/authorize',
+            tokenUrl: 'https://auth.example.com/oauth2/token',
+            scopes: {
+              'bookings:read': 'Read bookings',
+              'bookings:write': 'Create and update bookings',
+            },
+          },
+        },
       },
-    },
-  },
-})
-@ApiForbiddenResponse({ description: 'Forbidden' })
-@ApiBadRequestResponse({ description: 'Bad Request' })
+      'OAuth2',
+    )
+    .build();
+
+  const options: SwaggerDocumentOptions = {
+    operationIdFactory: (_controllerKey: string, methodKey: string) => methodKey,
+  };
+
+  const document = SwaggerModule.createDocument(app, config, options);
+
+  writeFileSync('openapi.yaml', yaml.dump(document, { noRefs: true }));
+
+  SwaggerModule.setup('api-json', app, document);
+  app.use('/api', apiReference({ spec: { content: document } }));
+
+  await app.listen(3000);
+}
+
+bootstrap();
 ```
 
-The `@ApiBody()` and `@ApiOkResponse` decorators use the [Schema Object](https://spec.openapis.org/oas/v3.0.4.html#schemaObject), which defines the input and output data types. The allowed data types are defined by the `Cat` and `Dog` data transfer objects (DTO) schema. A DTO schema defines how data will be sent over the network.
+## Describe routes with OpenAPI decorators
 
-Now, run the NestJS HTTP server and open `http://localhost:3000/api-yaml/`. You'll see the OpenAPI endpoints description is more fleshed out.
+NestJS route decorators define runtime behavior. OpenAPI decorators add the details needed for generated docs and SDKs.
 
-The POST request originally looked like the following:
+Start small and build outward. A single well-described collection route is enough to verify that tags, parameters, and response schemas are being emitted the way the document needs them.
 
-```yaml
-/pets:
-  post:
-    operationId: PetsController_create
-    parameters: []
-    responses:
-      "201":
-        description: ""
+Start with a simple collection route:
+
+```typescript filename="src/train/train.controller.ts"
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+
+@ApiTags('Resources')
+@Controller()
+export class TrainController {
+  @Get('stations')
+  @ApiTags('Stations')
+  @ApiOperation({ summary: 'Get a list of train stations' })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'country', required: false, type: String })
+  @ApiOkResponse({ type: [Station] })
+  getStations(@Query('search') search?: string, @Query('country') country?: string) {}
+}
 ```
 
-It should now look as follows:
+Add DTO-backed query parameters for routes like `GET /trips`:
 
-```yaml focus=6:38
-/pets:
-  post:
-    operationId: PetsController_create
-    summary: Create pet
-    parameters: []
-    requestBody:
-      required: true
-      description: Create a pet cat or dog
-      content:
-        application/json:
-          schema:
-            oneOf:
-              - $ref: "#/components/schemas/Cat"
-              - $ref: "#/components/schemas/Dog"
-            discriminator:
-              propertyName: type
-              mapping:
-                cat: "#/components/schemas/Cat"
-                dog: "#/components/schemas/Dog"
-    responses:
-      "200":
-        description: ""
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - $ref: "#/components/schemas/Cat"
-                - $ref: "#/components/schemas/Dog"
-              discriminator:
-                propertyName: type
-                mapping:
-                  cat: "#/components/schemas/Cat"
-                  dog: "#/components/schemas/Dog"
-      "400":
-        description: Bad Request
-      "403":
-        description: Forbidden
+```typescript filename="src/train/dto/trips-query.dto.ts"
+import { IsBoolean, IsDateString, IsOptional, IsUUID } from 'class-validator';
+
+export class TripsQueryDto {
+  /**
+   * Origin station ID.
+   * @example 'efdbb9d1-02c2-4bc3-afb7-6788d8782b1e'
+   */
+  @IsUUID()
+  readonly origin!: string;
+
+  /**
+   * Destination station ID.
+   * @example 'b2e783e1-c824-4d63-b37a-d8d698862f1d'
+   */
+  @IsUUID()
+  readonly destination!: string;
+
+  /**
+   * Desired departure date in ISO 8601.
+   * @example '2026-05-21T09:00:00Z'
+   */
+  @IsDateString()
+  readonly date!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  readonly bicycles?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  readonly dogs?: boolean;
+}
 ```
 
-The [Reference Object](https://spec.openapis.org/oas/v3.0.4.html#reference-object) (`$ref`) is a reference identifier that specifies the location, as a URI, of the value being referenced. It references the `schemas` field of the [Components Object](https://spec.openapis.org/oas/v3.0.4.html#components-object), which holds reusable schema objects.
+Then use it in the controller:
 
-If you look at the `components` schema, you'll see the `properties` objects are empty.
-
-```yaml mark=5,8
-components:
-  schemas:
-    Cat:
-      type: object
-      properties: {}
-    Dog:
-      type: object
-      properties: {}
+```typescript filename="src/train/train.controller.ts"
+@Get('trips')
+@ApiTags('Trips')
+@ApiOperation({ summary: 'Get available train trips' })
+@ApiOkResponse({ type: [Trip] })
+getTrips(@Query() query: TripsQueryDto): Trip[] {
+  return this.trainService.getTrips(query);
+}
 ```
 
-To make the model properties visible to the `SwaggerModule`, we can annotate each property using the `@ApiProperty()` decorator. For example:
+## Ensure schemas include property metadata
 
-```typescript filename="cat.entity.ts" mark=1
-@ApiProperty({ example: 'Panama', description: 'The name of the cat' })
-@IsString()
-readonly name: string;
-```
+Without the Swagger plugin, generated component schemas can stay too thin for high-quality docs or SDKs. Enabling comment introspection fills in descriptions and examples from the model definitions already used by the app.
 
-This can be tedious, especially with medium- to large-sized projects. You can use the NestJS [Swagger CLI plugin](https://docs.nestjs.com/openapi/cli-plugin#cli-plugin) to automate this annotation.
+Enable the Nest Swagger plugin in `nest-cli.json`:
 
-To enable the plugin, open your `nest-cli.json` file, add the following `plugins` configuration, and restart the server:
-
-```json filename="nest-cli.json" mark=7
+```json filename="nest-cli.json"
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "plugins": ["@nestjs/swagger"]
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "introspectComments": true
+        }
+      }
+    ]
   }
 }
 ```
 
-You'll now see that the `properties` fields are populated as follows:
+With comment introspection enabled, doc comments on DTO and entity fields become descriptions and examples in `components.schemas`.
 
-```yaml
-components:
-  schemas:
-    Cat:
-      type: object
-      properties:
-        type:
-          type: string
-        name:
-          type: string
-        age:
-          type: number
-        breed:
-          type: string
-        environment:
-          type: string
-          enum:
-            - indoor
-            - outdoor
-      required:
-        - type
-        - name
-        - age
-        - breed
-        - environment
-    Dog:
-      type: object
-      properties:
-        type:
-          type: string
-        name:
-          type: string
-        age:
-          type: number
-        breed:
-          type: string
-        size:
-          type: string
-          enum:
-            - small
-            - medium
-            - large
-      required:
-        - type
-        - name
-        - age
-        - breed
-        - size
-```
+Example entity:
 
-The plugin annotates all DTO properties with the `@ApiProperty` decorator, sets the `type` or `enum` property depending on the type, sets validation rules based on `class-validator` decorators, and carries out various other [automated actions](https://docs.nestjs.com/openapi/cli-plugin#overview).
+```typescript filename="src/train/entities/station.entity.ts"
+import { IsString, IsUUID } from 'class-validator';
 
-You can generate descriptions for properties and endpoints, and create example values for properties based on comments:
-
-```typescript filename="cat.entity.ts" mark=1:4
+export class Station {
   /**
-   * The type of pet
-   * @example 'cat'
+   * Unique identifier for the station.
+   * @example 'efdbb9d1-02c2-4bc3-afb7-6788d8782b1e'
    */
-  @IsEnum(['cat'])
-  readonly type: 'cat';
+  @IsUUID()
+  readonly id!: string;
+
+  /**
+   * Human-readable station name.
+   * @example 'Berlin Hauptbahnhof'
+   */
+  @IsString()
+  readonly name!: string;
+}
 ```
 
-For this to work, `introspectComments` must be set to `true` in the `options` property of the plugin:
+This produces component schemas with stable names and useful descriptions instead of empty object definitions.
 
-```json filename="nest-cli.json"
-"plugins": [
-  {
-    "name": "@nestjs/swagger",
-    "options": {
-      "introspectComments": true
-    }
-  }
-]
-```
+## Add stable `operationId` values and tags
 
-The example and description will then be added to the OpenAPI document `components` schema:
+SDK method names are derived from `operationId`, and SDK groupings are derived from tags.
 
-```yaml focus=8:9
-components:
-  schemas:
-    Cat:
-      type: object
-      properties:
-        type:
-          type: string
-          description: The type of pet
-          example: cat
-```
+Default operation names can become verbose, especially once controller names are included. Tightening them here keeps generated SDK method names shorter and easier to scan.
 
-Add comments that provide a description and example value for each property of the `Cat` and `Dog` entities.
+Use `SwaggerDocumentOptions` to keep `operationId` values short and stable:
 
-The Scalar UI will allow you to access the example value for the request body and a successful response. Click on the **Test Request** button of the request to display a modal, where you can try a request to the endpoint:
-
-![Scalar UI Try Request](/assets/openapi/nestjs/scalar-ui-try-request.png)
-
-You can see an example of a request body in the **Body** section of the modal:
-
-![Scalar UI example request body](/assets/openapi/nestjs/scalar-ui-example-req-body.png)
-
-By toggling the **200** option under **Responses**, you can also see the details of the example data schemas:
-
-![Scalar UI example schema](/assets/openapi/nestjs/scalar-ui-example-schema.png)
-
-## Customizing the OpenAPI `operationId` with NestJS
-
-In the OpenAPI document, each HTTP request has an `operationId` that identifies the operation. In SDKs, the `operationId` is also used to generate method names and documentation.
-
-By default, the NestJS OpenAPI (Swagger) module uses the NestJS `controllerKey` and `methodKey` to name the `operationID` something like `PetsController_findOneDog`.
-
-A long operation name is not ideal. We can use the `operationIdFactory` method in the [Swagger document options](https://docs.nestjs.com/openapi/introduction#document-options) to instruct the module to generate more concise names using only the `methodKey`.
-
-Define the following `options` in the `bootstrap` function:
-
-```typescript filename="main.ts"
+```typescript filename="src/main.ts"
 const options: SwaggerDocumentOptions = {
-  operationIdFactory: (controllerKey: string, methodKey: string) => methodKey,
+  operationIdFactory: (_controllerKey: string, methodKey: string) => methodKey,
 };
-```
 
-Pass the `options` to the `SwaggerModule` as follows:
-
-```typescript filename="main.ts"
 const document = SwaggerModule.createDocument(app, config, options);
 ```
 
-Import `SwaggerDocumentOptions` from `@nestjs/swagger`:
+This keeps operation names like `getStations`, `getTrips`, and `createBooking` instead of controller-prefixed names.
 
-```typescript filename="main.ts" focus=4
-import {
-  SwaggerModule,
-  DocumentBuilder,
-  SwaggerDocumentOptions,
-} from '@nestjs/swagger';
+Use route tags to keep generated docs and SDK groups readable:
+
+```typescript filename="src/train/train.controller.ts"
+@ApiTags('Resources')
+@Controller()
+export class TrainController {
+  @Get('bookings')
+  @ApiTags('Bookings')
+  @ApiOperation({ summary: 'List existing bookings' })
+  @ApiOkResponse({ type: [Booking] })
+  listBookings(): Booking[] {
+    return this.trainService.listBookings();
+  }
+}
 ```
 
-## Adding OpenAPI tags to NestJS routes
+## Add security and Speakeasy retries
 
-Whether you're building a big application or only have a handful of operations, we recommend adding tags to all your NestJS routes so you can group them by tag in the generated SDK code and documentation.
+After the basic route and schema structure is in place, add the parts that most directly affect SDK behavior: authentication and retry behavior.
 
-### Adding tags
+Define security schemes in `DocumentBuilder`:
 
-To add an OpenAPI tag to a route in NestJS, add the `@ApiTags` decorator:
-
-```typescript filename="pets.controller.ts"
-@Get('cats/:id')
-@ApiTags('cats')
+```typescript filename="src/main.ts"
+const config = new DocumentBuilder()
+  .addBearerAuth(
+    {
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      description: 'Bearer token authentication',
+    },
+    'BearerAuth',
+  )
+  .addOAuth2(
+    {
+      type: 'oauth2',
+      flows: {
+        authorizationCode: {
+          authorizationUrl: 'https://auth.example.com/oauth2/authorize',
+          tokenUrl: 'https://auth.example.com/oauth2/token',
+          scopes: {
+            'bookings:read': 'Read bookings',
+            'bookings:write': 'Create and update bookings',
+          },
+        },
+      },
+    },
+    'OAuth2',
+  )
+  .build();
 ```
 
-### Adding metadata to tags
+Apply those schemes at the controller level:
 
-We've already added metadata to the `@ApiTags('cats')` decorator using other decorators provided by `@nestjs/swagger`, such as `@ApiOperation` and `@ApiResponse`.
+```typescript filename="src/train/train.controller.ts"
+import { ApiBearerAuth, ApiOAuth2 } from '@nestjs/swagger';
 
-We can add metadata to the root tag field in the OpenAPI document.
-
-Add the following to the `config` section of the OpenAPI document:
-
-```typescript filename="main.ts"
-.addTag('Pets', 'Pets operations', {
-  url: 'https://example.com/api',
-  description: 'Operations API endpoint',
-})
+@ApiBearerAuth('BearerAuth')
+@ApiOAuth2(['bookings:read', 'bookings:write'], 'OAuth2')
+@Controller()
+export class TrainController {}
 ```
 
-You can add more than one tag by using additional `.addTag()` method calls:
+Add Speakeasy retry behavior globally:
 
-```typescript filename="main.ts"
-.addTag('cats')
-.addTag('dogs')
+```typescript filename="src/main.ts"
+const config = new DocumentBuilder()
+  .addExtension('x-speakeasy-retries', {
+    strategy: 'backoff',
+    backoff: {
+      initialInterval: 500,
+      maxInterval: 60000,
+      maxElapsedTime: 3600000,
+      exponent: 1.5,
+    },
+    statusCodes: ['5XX'],
+    retryConnectionErrors: true,
+  })
+  .build();
 ```
 
-## Adding a list of servers to the NestJS OpenAPI document
+Override retries for one operation when needed:
 
-When validating an OpenAPI document, Speakeasy expects a list of servers at the root of the OpenAPI document. We'll add a server using the `DocumentBuilder` method, `addServer()`.
-
-Insert the `addServer()` method in the `config` of the OpenAPI document:
-
-```typescript filename="main.ts"
-.addServer('http://localhost:3000/', 'Development server')
-```
-
-## Adding retries to your SDK with `x-speakeasy-retries`
-
-[OpenAPI document extensions](/openapi/extensions) allow us to add vendor-specific functionality to the OpenAPI document.
-
-- Extension fields must be prefixed with `x-`.
-- Speakeasy uses extensions that start with `x-speakeasy-`.
-
-Let's use a Speakeasy extension that adds retries to requests from Speakeasy SDKs by adding a top-level `x-speakeasy-retries` schema to our OpenAPI document. We can also override the retry strategy per operation.
-
-### Adding global retries
-
-Apply the Speakeasy retries extension globally by adding the `addExtension()` method from `DocumentBuilder` to the `config` section of the OpenAPI document:
-
-```typescript filename="main.ts"
-.addExtension('x-speakeasy-retries', {
-  strategy: 'backoff',
-  backoff: {
-    initialInterval: 500,
-    maxInterval: 60000,
-    maxElapsedTime: 3600000,
-    exponent: 1.5,
-  },
-  statusCodes: ['5XX'],
-  retryConnectionErrors: true,
-})
-```
-
-### Adding retries per method
-
-To create a unique retry strategy for a single route, use the `ApiExtension` decorator to add `x-speakeasy-retries` to a NestJS controller route handler as follows:
-
-```typescript filename="pets.controller.ts"
+```typescript filename="src/train/train.controller.ts"
+@Post('bookings')
+@ApiTags('Bookings')
+@ApiOperation({ summary: 'Create a booking' })
+@ApiBody({ type: CreateBookingDto })
+@ApiCreatedResponse({ type: Booking })
 @ApiExtension('x-speakeasy-retries', {
   strategy: 'backoff',
   backoff: {
@@ -585,194 +423,136 @@ To create a unique retry strategy for a single route, use the `ApiExtension` dec
   statusCodes: ['5XX'],
   retryConnectionErrors: true,
 })
+createBooking(@Body() payload: CreateBookingDto): Booking {
+  return this.trainService.createBooking(payload);
+}
 ```
 
-##  Generating an SDK based on your OpenAPI document
+## Save the document and generate SDKs
 
-Before creating an SDK, we need to save the NestJS-generated OpenAPI document to a file. We'll use JS-YAML to do this.
+In this example, `package.json` includes:
 
-### Saving the OpenAPI document to a YAML file
-
-Add the following imports to your application entry file:
-
-```typescript filename="main.ts"
-import * as yaml from 'js-yaml';
-import { writeFileSync } from 'fs';
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "nest build",
+    "generate:openapi": "npm run build && GENERATE_OPENAPI_ONLY=true node dist/main.js"
+  }
+}
 ```
 
-In the `bootstrap` function, convert the OpenAPI document to a YAML string and save it as a file:
-
-```typescript filename="main.ts"
-const yamlString = yaml.dump(document);
-writeFileSync('openapi.yaml', yamlString);
-```
-
-When you run the NestJS dev server, an `openapi.yaml` file will be generated in your root directory.
-
-### Linting the OpenAPI document with Speakeasy
-
-The Speakeasy CLI has an OpenAPI [linting](/docs/linting) command that checks the OpenAPI document for errors and style issues.
-
-Run the linting command:
+Generate OpenAPI:
 
 ```bash filename="Terminal"
-speakeasy lint openapi --schema ./openapi.yaml
+npm run generate:openapi
 ```
 
-A lint report will be displayed in the terminal, showing errors, warnings, and hints:
+The generated file contains OpenAPI 3.2 metadata, route parameters derived from DTOs, security requirements, and component schemas generated from entities.
 
-![Speakeasy Lint report](/assets/openapi/nestjs/speakeasy-lint-report.png)
+Example output:
 
-The Speakeasy Linter uses a [recommended set of rules](/docs/linting/linting#speakeasy-recommended), which you can [configure](/docs/linting#configuration).
+```yaml filename="openapi.yaml"
+openapi: 3.2.0
 
-### Generating an SDK from the Speakeasy CLI
+paths:
+  /stations:
+    get:
+      operationId: getStations
+      tags:
+        - Resources
+        - Stations
 
-We'll use the [`quickstart`](/docs/speakeasy-cli/quickstart) command for a guided SDK setup.
+  /trips:
+    get:
+      operationId: getTrips
+      parameters:
+        - name: origin
+          required: true
+          in: query
+          schema:
+            type: string
+            format: uuid
 
-Run the command using the Speakeasy CLI:
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/oauth2/authorize
+          tokenUrl: https://auth.example.com/oauth2/token
+          scopes:
+            'bookings:read': Read bookings
+            'bookings:write': Create and update bookings
+
+  schemas:
+    Station:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+```
+
+Generate an SDK:
 
 ```bash filename="Terminal"
 speakeasy quickstart
 ```
 
-Following the prompts, provide the OpenAPI document location, name the SDK `SDK`, and select `TypeScript` as the SDK language.
-
-In the terminal, you'll see the steps taken by Speakeasy to generate the SDK.
-
-```txt
-│ Workflow - success
-│ └─Target: sdk - success
-│   └─Source: SDK-OAS - success
-│     └─Validating Document - success
-│     └─Diagnosing OpenAPI - success
-│     └─Tracking OpenAPI Changes - success
-│       └─Snapshotting OpenAPI Revision - success
-│       └─Storing OpenAPI Revision - success
-│     └─Computing Document Changes - success
-│       └─Downloading prior revision - success
-│       └─Computing changes - success
-│       └─Uploading changes report - success
-│   └─Validating gen.yaml - success
-│   └─Generating Typescript SDK - success
-│     └─Setup Environment - success
-│     └─Load and Validate Document - success
-│     └─Generate SDK - success
-│     └─Compile SDK - success
-│     └─Setup Environment - success
-│     └─Load and Validate Document - success
-│     └─Generate SDK - success
-│   └─Generating Code Samples - success
-│     └─Snapshotting Code Samples - success
-│       └─Snapshotting Code Samples - success
-│       └─Uploading Code Samples - success
-```
-
-Speakeasy [validates](/docs/concepts#validation) the OpenAPI document to check that it's ready for code generation. Validation issues will be printed in the terminal. The generated SDK will be saved as a folder in your project.
-
-## Adding SDK generation to your GitHub Actions
-
-The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows for integrating the Speakeasy CLI into CI/CD pipelines to automatically regenerate SDKs when the OpenAPI document changes.
-
-You can set up Speakeasy to automatically push a new branch to your SDK repositories so that your engineers can review and merge the SDK changes.
-
-For an overview of how to set up automation for your SDKs, see the Speakeasy [SDK Workflow Matrix](/docs/workflow-reference/generation-reference).
-
-## Using your SDK
-
-Once you've generated your SDK, you can [publish](/docs/publish-sdk) it for use. For TypeScript, you can publish it as an npm package.
-
-A quick, non-production-ready way to see your SDK in action is to copy your SDK folder to a frontend TypeScript project and use it there.
-
-For example, you can create a Vite project that uses TypeScript:
+Or run Speakeasy directly:
 
 ```bash filename="Terminal"
-npm create vite@latest
+speakeasy generate sdk --schema ./openapi.yaml --lang typescript --out ./sdk-typescript
 ```
 
-Copy the SDK folder from your NestJS app to the `src` directory of your TypeScript Vite project.
+## Validate the document
 
-Delete the SDK folder in your NestJS project.
+Lint the generated OpenAPI file:
 
-In the SDK `README.md` file, you'll find documentation about your Speakeasy SDK.
+```bash filename="Terminal"
+speakeasy lint openapi --schema ./openapi.yaml
+```
 
-Note that the SDK is not ready for production use. To get it production-ready, follow the steps outlined in your Speakeasy workspace.
+## Example SDK usage
 
-The SDK includes Zod as a bundled dependency, as can be seen in the `sdk-typescript/package.json` file.
+After generating a TypeScript SDK, call operations using methods named from `operationId` values.
 
-Replace the code in the `src/main.ts` file with the following lines of code:
-
-```typescript filename="main.ts"
-import { SDK } from './sdk-typescript/src/'; // Adjust the path as necessary eg if your generated SDK has a different name
-import { catsFindOneCat } from './sdk-typescript/src/funcs/catsFindOneCat';
+```typescript filename="sdk-usage.ts"
+import { SDK } from './sdk-typescript/src';
+import { getStations, createBooking } from './sdk-typescript/src/funcs';
 
 const sdk = new SDK();
+
 async function run() {
-  const res = await catsFindOneCat(sdk, {
-    id: "0",
+  const stations = await getStations(sdk, { search: 'Berlin' });
+  if (!stations.ok) throw stations.error;
+
+  const booking = await createBooking(sdk, {
+    tripId: 'ea399ba1-6d95-433f-92d1-83f67b775594',
+    passengerName: 'Alex Rider',
+    hasBicycle: false,
+    hasDog: true,
   });
+  if (!booking.ok) throw booking.error;
 
-  if (!res.ok) {
-    throw res.error;
-  }
-
-  const { value: result } = res;
-
-  // Handle the result
-  console.log(result);
+  console.log(booking.value);
 }
 
 run();
 ```
 
-Run the Vite dev server:
+## Automate in CI
 
-```bash filename="Terminal"
-npm run dev
-```
+Use the Speakeasy [sdk-generation-action](https://github.com/speakeasy-api/sdk-generation-action) to regenerate SDKs when the OpenAPI document changes.
 
-Enable CORS in your NestJS dev server by adding the following configuration to the `bootstrap` function above the `await app.listen(3000);` line:
+## Summary
 
-```typescript filename="main.ts"
-app.enableCors({
-  origin: 'http://localhost:5173', // Vite's default port
-  methods: 'GET,POST,PUT,DELETE,OPTIONS',
-  allowedHeaders: 'Content-Type, Authorization',
-  credentials: true,
-});
-```
+The NestJS app now emits an OpenAPI 3.2 document for a train travel domain and is ready for SDK generation. The key parts are:
 
-Run the NestJS dev server as well:
-
-```bash filename="Terminal"
-npm run start:dev
-```
-
-You'll see the following logged in your browser dev tools console:
-
-```javascript
-{type: 'cat', name: 'Shadow', age: 8, breed: 'Bombay', environment: 'indoor'}
-```
-
-The SDK functions are type safe and include TypeScript autocompletion for arguments and outputs.
-
-If you try to use an incorrect type for an argument:
-
-```typescript filename="main.ts"
-const res = await catsFindOneCat(sdk, {
-  id: 1,
-});
-```
-
-You'll get a TypeScript error:
-
-```
-Type 'number' is not assignable to type 'string'
-```
-
-## Further reading
-
-This guide covered the basics of generating an OpenAPI document using NestJS. Here are some resources to help you learn more about OpenAPI, the NestJS OpenAPI module, and Speakeasy:
-
-- [NestJS OpenAPI (Swagger) module documentation](https://typespec.io/docs): Learn more about generating an OpenAPI document using NestJS. The topics covered include types and parameters, operations, security, mapped types, and decorators.
-- [Speakeasy documentation](/docs): Speakeasy has extensive documentation covering how to generate SDKs from OpenAPI documents, customize SDKs, and more.
-- [Speakeasy OpenAPI reference](/openapi): View a detailed reference for the OpenAPI Specification.
+- Configure `@nestjs/swagger` with `setOpenAPIVersion('3.2.0')`.
+- Use DTOs and entity comments to generate strong schemas and parameters.
+- Set tags, `operationId`, security, and retries for SDK quality.
+- Write `openapi.yaml` and generate SDKs from the produced document.
