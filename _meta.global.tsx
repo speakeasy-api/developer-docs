@@ -682,9 +682,6 @@ const meta = {
           "cloudflare-deployment": {
             title: "Deploy to Cloudflare Workers",
           },
-          "gram-deployment": {
-            title: "Deploy to Gram",
-          },
           "custom-prompts": {
             title: "Custom Prompts",
           },
