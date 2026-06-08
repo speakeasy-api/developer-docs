@@ -136,6 +136,13 @@ python:
         "Specify additional dependencies to include in the generated `pyproject.toml` file.",
     },
     {
+      name: "optionalDependencies",
+      required: "false",
+      default: "`{}`",
+      description:
+        "Define optional dependency groups (PyPI extras) in the generated `pyproject.toml` file. Each key becomes an extra that installs the listed packages on demand.",
+    },
+    {
       name: "compileCommands",
       required: "false",
       default: "N/A",
@@ -167,6 +174,47 @@ python:
 
 <Callout title="Default compilation pipeline" type="info">
 When `compileCommands` is not set, the default pipeline runs based on the package manager (`uv` or `poetry`) and includes bytecode compilation (`compileall`), linting (`pylint -j=0`), and type checking (`mypy` and `pyright` in parallel). To reduce pylint parallelism and avoid OOM errors in CI, use `compileCommands` with `-j=1`.
+</Callout>
+
+### Optional dependencies
+
+Use `optionalDependencies` to declare optional dependency groups, known as extras, in the generated `pyproject.toml` file. Extras let end users install packages that the SDK needs only for specific functionality, keeping the default installation lightweight.
+
+Each top-level key under `optionalDependencies` is the name of an extra. Each extra holds a map of package names to [PEP 508](https://peps.python.org/pep-0508/) version specifiers:
+
+```yml
+python:
+  optionalDependencies:
+    http2:
+      h2: ">=4.0.0"
+    cli:
+      click: ">=8.1.0"
+      rich: ">=13.0.0"
+```
+
+This configuration generates the following `[project.optional-dependencies]` table:
+
+```toml
+[project.optional-dependencies]
+cli = [
+    "click >=8.1.0",
+    "rich >=13.0.0",
+]
+http2 = [
+    "h2 >=4.0.0",
+]
+```
+
+End users then install an extra by name:
+
+```bash
+pip install my-package[http2]
+```
+
+Extras and their packages are sorted alphabetically in the output. An extra with no packages renders as an empty list, such as `http2 = []`. Both the `uv` and `poetry` package managers support `optionalDependencies`.
+
+<Callout title="Optional vs. additional dependencies" type="info">
+Use `additionalDependencies` for packages the SDK always needs, since they are installed with the base package. Use `optionalDependencies` for packages the SDK needs only for specific features, since they are installed only when an end user requests the matching extra.
 </Callout>
 
 ## API surface shape
