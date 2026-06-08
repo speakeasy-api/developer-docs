@@ -1,405 +1,262 @@
 ---
-title: How To Generate an OpenAPI Spec With Fastify
-description: "Learn how to create an OpenAPI spec for your Fastify API and use it to automatically generate and customize client SDKs across different languages."
+title: How to generate OpenAPI with Fastify
+description: "Learn how to create an OpenAPI document for a Fastify API and use it to automatically generate and customize client SDKs across different languages."
 ---
 
 import { Callout } from "@/mdx/components";
 
-# How to generate an OpenAPI/Swagger spec with Fastify
+# How to generate OpenAPI with Fastify
 
-In this tutorial, we'll show you how to generate an OpenAPI specification using [Fastify](https://fastify.dev/). We will also show how you can use Speakeasy to generate client SDKs for your API based on the specification.
+Properly investing in an API requires creating an OpenAPI document that accurately describes the API, enabling documentation, testing, security scans, governance, SDK generation, and more. OpenAPI is a powerful tool for API teams, but it can be daunting to create and maintain an OpenAPI document on top of building the actual API.
+
+With the rise in popularity of API design-first, some APIs might have declared their OpenAPI before writing the code, but for many simple uses like quickly building a backend for a single frontend within the same team, most Fastify users have already done the hard part: defining their API routes and schemas, which can be used to generate an OpenAPI document. 
+
+Once the Fastify OpenAPI plugin has generated the OpenAPI document from those existing route definitions, it can be used for documentation and SDK generation, which is a pretty powerful pipeline. See how to do this with Speakeasy for the SDK, and Scalar for the docs, and help API consumers integrate with the API easily.
 
 <Callout title="Example code" type="info">
-  If you want to follow along with the example code in this tutorial, you can
-  clone the [Speakeasy Fastify example
-  repo](https://github.com/speakeasy-api/guide-fastify-example).
+  Follow this guide with the Fastify example in this repository at
+  <code>examples/frameworks-fastify</code>.
 </Callout>
 
-Here's what we'll cover:
+Here is what we will cover:
 
-1.  How to add `@fastify/swagger` to a Fastify project.
-2.  Generate an OpenAPI specification using the Fastify CLI.
-3.  Improve the generated OpenAPI specification for better downstream SDK generation.
-4.  Use the Speakeasy CLI to generate a client SDK based on our generated OpenAPI specification.
-5.  Use the Speakeasy OpenAPI extensions to improve generated SDKs.
-6.  How to automate this process as part of a CI/CD pipeline.
-
-Your Fastify project might not be as simple as our example app, but the steps below should translate well to any Fastify project. We'll also look at how to gradually add routes to OpenAPI so that you have the option to ship an SDK that improves API coverage over time.
-
-## The SDK Generation Pipeline
-
-Fastify ships with the [`@fastify/swagger`](https://github.com/fastify/fastify-swagger) plugin, which provides convenient shortcuts for generating good OpenAPI specifications. We'll start this tutorial by registering `@fastify/swagger` in a Fastify project to generate a spec.
-
-The quality of your OpenAPI specification will ultimately determine the quality of generated SDKs and documentation, so we'll dive into ways you can improve the generated specification.
-
-With our new and improved OpenAPI specification in hand, we'll take a look at how to generate SDKs using Speakeasy.
-
-Finally, we'll add this process to a CI/CD pipeline so that Speakeasy automatically generates fresh SDKs whenever your Fastify API changes in the future.
+1. Install and configure `@fastify/swagger`, and don't worry it supports OpenAPI v3.x.
+2. Generate an OpenAPI document from route schemas.
+3. Add reusable component schemas with `fastify.addSchema()`.
+4. Define stable `operationId` and tags for SDK ergonomics.
+5. Add Speakeasy extensions like `x-speakeasy-retries`.
+6. Generate SDKs from the produced OpenAPI document.
 
 ## Requirements
 
-This guide assumes that you have an existing Fastify app or you'll clone our example application, and that you have a basic familiarity with Fastify.
+This guide assumes there is a Fastify application serving up API endpoints, and the reader has basic familiarity with route schemas.
 
-You'll need [Node.js installed](https://nodejs.org/en/download) (we used Node v20.5.1), and you'll need to install the [Fastify CLI](https://github.com/fastify/fastify-cli/).
+## Install Fastify CLI and dependencies
 
-Once you have Node.js, you can install the Fastify CLI by running the following in the terminal:
+To make sure the Fastify CLI is available for generating OpenAPI, install it globally:
 
 ```bash
-npm install fastify-cli --global
+npm install --global fastify-cli@^8
 ```
 
-Make sure `fastify` is in your `$PATH`:
+Verify your CLI:
 
 ```bash
 fastify version
 ```
 
-If you can't run `fastify` using the steps above, you can use `npx` to run `fastify-cli` by replacing `fastify` with `fastify-cli` in our code samples.
+If `fastify` is not available on path, use `npx fastify-cli` in commands.
 
-For example:
+The specific versions of packages will change over time, but these are the versions being used in this guide and the sample code that goes with it.
 
-```bash
-# fastify version
-npx fastify-cli version
-```
-
-Install the [Speakeasy CLI](/docs/speakeasy-cli/getting-started) to generate the SDK once you have generated your OpenAPI spec.
-
-## How To Add "@fastify/swagger" to a Fastify Project
-
-In your Fastify project folder, run the following in the terminal to install `@fastify/swagger`:
-
-```bash
-npm install --save @fastify/swagger
-```
-
-To register `@fastify/swagger` in our Fastify app, we added a new plugin. Here's the simplified plugin we added as `plugins/openapi.js`:
-
-```javascript filename="plugins/openapi.js"
-import swagger from "@fastify/swagger";
-import fp from "fastify-plugin";
-
-export default fp(async (fastify) => {
-  fastify.register(swagger);
-});
-```
-
-Without any further configuration, you can generate an OpenAPI specification by running the Fastify CLI:
-
-```bash
-fastify generate-swagger app.js
-```
-
-This should print a basic OpenAPI spec in JSON format.
-
-<Callout title="Tip" >
-If you find YAML more readable than JSON, you can add `--yaml=true` to your `fastify` commands:
-
-```bash
-fastify generate-swagger --yaml=true app.js
-```
-
-The option to output YAML is [brand new](https://github.com/fastify/fastify-cli/pull/662) and, while merged, hasn't made it to a release when we wrote this tutorial.
-
-</Callout>
-
-## Supported OpenAPI Versions in Fastify and Speakeasy
-
-Fastify can generate OpenAPI specifications in [OpenAPI version 2.0](https://spec.openapis.org/oas/v2.0.html) (formerly known as _Swagger_) or [OpenAPI version 3.0.3](https://spec.openapis.org/oas/v3.1.2.html).
-
-Speakeasy supports OpenAPI 3.x.
-
-We need to configure Fastify to ensure we output an OpenAPI spec that conforms to OpenAPI 3.0.3.
-
-### How To Generate a Specification in OpenAPI Version 3.0.3 Using Fastify
-
-In Fastify, the version of the generated OpenAPI specification is determined by the Fastify options object. To use OpenAPI 3.0.3, the options object should contain an object with the key `openapi` at its root.
-
-Continuing our example above, we'll add an options object when we register `@fastify/swagger` in `plugins/openapi.js`:
-
-```javascript filename="plugins/openapi.js" mark=5:7
-import swagger from "@fastify/swagger";
-import fp from "fastify-plugin";
-
-export default fp(async (fastify) => {
-  fastify.register(swagger, {
-    openapi: {},
-  });
-});
-```
-
-To verify that we now have an OpenAPI 3.0.3 spec, run:
-
-```bash
-fastify generate-swagger app.js
-```
-
-The output should start with the following JSON:
-
-```json mark=2
+```json filename="examples/frameworks-fastify/package.json"
 {
-  "openapi": "3.0.3"
-  //...
-}
-```
-
-## How To Add OpenAPI "info" in Fastify
-
-Without customization, `@fastify/swagger` generates the following `info` object for our API:
-
-```json
-{
-  //...
-  "info": {
-    "version": "8.10.1",
-    "title": "@fastify/swagger"
+  "dependencies": {
+    "@fastify/autoload": "^6.3.0",
+    "@fastify/sensible": "^6.0.0",
+    "@fastify/swagger": "^9.7.0",
+    "@scalar/fastify-api-reference": "^1.25.11",
+    "fastify": "^5.8.0",
+    "fastify-cli": "^8.0",
+    "fastify-plugin": "^5.1.0"
+  },
+  "devDependencies": {
+    "standard": "^17.1.0"
   }
 }
 ```
 
-We can customize this object by updating our options object in `plugins/openapi.js`:
+Not all of these are required for every setup, but the autoload plugin cuts down on boilerplate for this example. The key one for OpenAPI generation is `@fastify/swagger`, and `@scalar/fastify-api-reference` is used in this example to serve up API documentation from the generated OpenAPI document.
 
-```javascript filename="plugins/openapi.js" mark=7:21
-import swagger from "@fastify/swagger";
+Install those new dependencies and lets get Fastify setup.
+
+```bash
+npm install 
+```
+
+## Register Fastify "Swagger" plugin
+
+Register it in `plugins/openapi.js`:
+
+```javascript filename="plugins/openapi.js"
 import fp from "fastify-plugin";
+import swagger from "@fastify/swagger";
+import scalar from "@scalar/fastify-api-reference";
 
 export default fp(async (fastify) => {
-  fastify.register(swagger, {
+  await fastify.register(swagger, {
     openapi: {
+      openapi: "3.1.2",
       info: {
-        title: "Speakeasy Bar API",
-        description: "This is a sample API for Speakeasy Bar.",
-        termsOfService: "http://example.com/terms/",
+        title: "Train Travel API",
+        description: "API for finding and booking train trips across Europe.",
         contact: {
-          name: "Speakeasy Bar Support",
-          url: "http://www.example.com/support",
+          name: "Train Support",
+          url: "https://example.com/support",
           email: "support@example.com",
         },
         license: {
-          name: "Apache 2.0",
-          url: "https://www.apache.org/licenses/LICENSE-2.0.html",
+          name: "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International",
+          url: "https://creativecommons.org/licenses/by-nc-sa/4.0/",
         },
-        version: "1.0.1",
+        version: "1.2.1",
       },
+      servers: [
+        {
+          url: "https://try.microcks.io/rest/Train+Travel+API/1.0.0",
+          description: "Mock Server",
+        },
+        {
+          url: "https://api.example.com",
+          description: "Production",
+        },
+      ],
     },
+  });
+
+  await fastify.register(scalar, {
+    routePrefix: "/reference",
   });
 });
 ```
 
-Fastify copies this `info` object verbatim, which results in the following `info` object in our JSON:
+Generate OpenAPI from your app:
+
+```bash
+fastify generate-swagger app.js > openapi.json
+```
+
+What happens next will depend very much on how the routes are defined and how much information has been put into `fastify.addSchema()` already. This is one of the few frameworks around that has done a lot of the legwork already in terms of defining schemas for validation, so the generated OpenAPI document is often pretty good right out of the gate, and can be improved incrementally from there.
 
 ```json
 {
+  "openapi": "3.1.2",
   "info": {
-    "title": "Speakeasy Bar API",
-    "description": "This is a sample API for Speakeasy Bar.",
-    "termsOfService": "http://example.com/terms/",
+    "title": "Train Travel API",
+    "description": "API for finding and booking train trips across Europe.",
     "contact": {
-      "name": "Speakeasy Bar Support",
-      "url": "http://www.example.com/support",
+      "name": "Train Support",
+      "url": "https://example.com/support",
       "email": "support@example.com"
     },
     "license": {
-      "name": "Apache 2.0",
-      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+      "name": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International",
+      "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
     },
-    "version": "1.0.1"
-  }
-  //...
-}
-```
-
-Another common pattern we've seen, included here for completeness, is to reuse information from the project's `package.json` when generating OpenAPI specs. This pattern takes [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) quite literally, and someone editing the package might not realize the downstream consequences.
-
-To pull information from `package.json` in `plugins/openapi.js`:
-
-```javascript filename="plugins/openapi.js" mark=9:11
-import swagger from "@fastify/swagger";
-import fp from "fastify-plugin";
-import packageJson from "../package.json";
-
-export default fp(async (fastify) => {
-  fastify.register(swagger, {
-    openapi: {
-      info: {
-        title: packageJson.name,
-        description: packageJson.description,
-        version: packageJson.version,
-        //...
-      },
-    },
-  });
-});
-```
-
-## Update Fastify to Generate OpenAPI Component Schemas
-
-Fastify handles validation and serialization for Fastify apps based on schemas defined as JSON Schema but does not enforce separating schemas into reusable components.
-
-Let's start with a hypothetical example in a route definition, `routes/drink/index.js`:
-
-```javascript filename="routes/drink/index.js" mark=11:16
-export default async function (fastify, opts) {
-  const schema = {
-    params: {
-      type: "object",
-      properties: {
-        drinkId: { type: "string" },
-      },
-    },
-    response: {
-      200: {
-        type: "object",
-        properties: {
-          id: { type: "string" },
-          name: { type: "string" },
-          description: { type: "string" },
-        },
-      },
-    },
-  };
-
-  fastify.get("/:drinkId/", { schema }, async function (request, reply) {
-    const { drinkId } = request.params;
-    return {
-      id: drinkId,
-      name: "Example Drink Name",
-      description: "Example description",
-    };
-  });
-}
-```
-
-The example above would generate the following OpenAPI schema for this route:
-
-```json
-{
-  "paths": {
-    "/drink/{drinkId}/": {
-      "get": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "drinkId",
-            "required": true
+    "version": "1.2.1"
+  },
+  "components": {
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 authorization code flow.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://example.com/oauth/authorize",
+            "tokenUrl": "https://example.com/oauth/token",
+            "scopes": {
+              "read": "Read access",
+              "write": "Write access"
+            }
           }
+        }
+      }
+    },
+    "schemas": {
+      "Wrapper-Collection": {
+        // ...
+      },
+      "Links-Self": {
+        // ...
+      },
+      "Links-Pagination": {
+        // ...
+      },
+      "Booking": {
+        "description": "A booking for a train trip.",
+        "type": "object",
+        "required": [
+          "trip_id",
+          "passenger_name"
         ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    }
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "trip_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "passenger_name": {
+            "type": "string"
+          },
+          "has_bicycle": {
+            "type": "boolean"
+          },
+          "has_dog": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/bookings": {
+      "post": {
+        "operationId": "create-booking",
+        "tags": [
+          "Bookings"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "trip_id",
+                  "passenger_name"
+                ],
+                "properties": {
+                  "trip_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "passenger_name": {
+                    "type": "string"
+                  },
+                  "has_bicycle": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "has_dog": {
+                    "type": "boolean",
+                    "default": false
                   }
                 }
               }
             }
           }
-        }
-      }
-    }
-  }
-}
-```
-
-Note how the response schema is presented inline. If we defined the schema for another route that returns a drink object similarly, our OpenAPI spec, resulting SDK, and documentation would not present a drink as a reusable component schema.
-
-Fastify provides methods to add and reuse schemas in an application.
-
-As a start, let's separate the response schema and use the Fastify `addSchema` method:
-
-```javascript filename="routes/drink/index.js" mark=2:9,30
-export default async function (fastify, opts) {
-  fastify.addSchema({
-    $id: "Drink",
-    type: "object",
-    properties: {
-      name: { type: "string" },
-      description: { type: "string" },
-    },
-  });
-
-  const schema = {
-    params: {
-      type: "object",
-      properties: {
-        drinkId: { type: "string" },
-      },
-    },
-    response: {
-      200: {
-        $ref: "Drink",
-      },
-    },
-  };
-
-  fastify.get("/:drinkId/", { schema }, async function (request, reply) {
-    const { drinkId } = request.params;
-    return {
-      id: drinkId,
-      name: "Example Drink Name",
-      description: "Example description",
-    };
-  });
-}
-```
-
-We added a field called `$id` to our drink schema, then called `fastify.addSchema()` to add this shared schema to the Fastify app. To use this shared schema, we reference it using the JSON Schema `$ref` keyword, referencing the shared schema `$id` field.
-
-This generates the following OpenAPI schema:
-
-```json
-{
-  "components": {
-    "schemas": {
-      "def-0": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          }
         },
-        "title": "Drink"
-      }
-    }
-  },
-  "paths": {
-    "/drink/{drinkId}/": {
-      "get": {
-        "parameters": [
+        "security": [
           {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "drinkId",
-            "required": true
+            "OAuth2": [
+              "write"
+            ]
           }
         ],
         "responses": {
-          "200": {
-            "description": "Default Response",
+          "201": {
+            "description": "A booking with a self link.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/def-0"
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Booking" },
+                    { "properties": { "links": { "$ref": "#/components/schemas/Links-Self" } } }
+                  ]
                 }
               }
             }
@@ -407,273 +264,317 @@ This generates the following OpenAPI schema:
         }
       }
     }
-  }
+  },
+  "servers": [
+    {
+      "url": "https://api.example.com",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "OAuth2": [
+        "read"
+      ]
+    }
+  ]
 }
 ```
 
-Note how, instead of defining the response schema inline with the path schema, we now have a component schema `def-0`, which our path's response schema references as `#/components/schemas/def-0`.
+This output has been chopped for brevity, but you can see the OpenAPI version, the `info` section from the plugin config, the reusable schemas from `fastify.addSchema()`, and the paths generated from route definitions with request body and response schemas.
 
-This is already more useful. But if we were to generate an SDK or documentation based on this schema, the autogenerated name `def-0` would lead to documentation and methods for a schema component named `def-0`.
+Where are those schemas coming from? Two places:
 
-Our next task is to customize this name.
+1. Generally reusable components
+2. Route-specific schemas defined inline in route definitions
 
-## Creating Useful OpenAPI "$ref" references in Fastify
+## Add Reusable Component Schemas
 
-By default, Fastify keeps track of all schemas added with `fastify.addSchema()` and numbers them. The default internal [function that builds these references](https://github.com/fastify/fastify-swagger/blob/ff0260811c0c319f4973665fd15517937e287040/lib/mode/dynamic.js#L17) looks like this:
+Use `fastify.addSchema()` untethered from any actual routes, to define reusable schemas in one place.
 
-```javascript filename="fastify-swagger/lib/mode/dynamic.js"
-function buildLocalReference(json, baseUri, fragment, i) {
-  if (!json.title && json.$id) {
-    json.title = json.$id;
-  }
-  return `def-${i}`;
-}
-```
+Here various components are being defined like a collection wrapper to standardize JSON collection responses, and some handy links that can be cherry-picked into various resources. Then domain-specific schemas like `Station`, `Trip`, and `Booking` are defined, which can be referenced from route definitions with `$ref: "SchemaName"`. These are defined once so they can be reused across request and response for `GET`/`POST`/`PATCH` routes.
 
-This function makes it clear where the `def-0` reference in our generated OpenAPI specification came from.
 
-Fastify allows us to override the `buildLocalReference` function as part of our OpenAPI options object in `plugins/openapi.js`:
-
-```javascript filename="plugins/openapi.js" mark=13:17
-import swagger from "@fastify/swagger";
+```javascript filename="models/schemas.js"
 import fp from "fastify-plugin";
 
 export default fp(async (fastify) => {
-  fastify.register(swagger, {
-    openapi: {
-      info: {
-        title: "Speakeasy Bar API",
-        description: "This is a sample API for Speakeasy Bar.",
-        version: "1.0.1",
-      },
+  fastify.addSchema({
+    $id: "Wrapper-Collection",
+    type: "object",
+    properties: {
+      data: { type: "array", items: { type: "object" } },
+      links: { type: "object", readOnly: true },
     },
-    refResolver: {
-      buildLocalReference(json, baseUri, fragment, i) {
-        return json.$id || `id-${i}`;
-      },
+  });
+
+  fastify.addSchema({
+    $id: "Links-Self",
+    type: "object",
+    properties: { self: { type: "string", format: "uri" } },
+  });
+
+  fastify.addSchema({
+    $id: "Links-Pagination",
+    type: "object",
+    properties: {
+      next: { type: "string", format: "uri" },
+      prev: { type: "string", format: "uri" },
+    },
+  });
+
+  fastify.addSchema({
+    $id: "Station",
+    type: "object",
+    required: ["id", "name", "address", "country_code"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      name: { type: "string" },
+      address: { type: "string" },
+      country_code: { type: "string" },
+      timezone: { type: "string" },
+    },
+  });
+
+  fastify.addSchema({
+    $id: "Trip",
+    type: "object",
+    properties: {
+      id: { type: "string", format: "uuid" },
+      origin: { type: "string", format: "uuid" },
+      destination: { type: "string", format: "uuid" },
+      departure_time: { type: "string", format: "date-time" },
+      arrival_time: { type: "string", format: "date-time" },
+      price: { type: "number" },
+      operator: { type: "string" },
+      bicycles_allowed: { type: "boolean" },
+      dogs_allowed: { type: "boolean" },
+    },
+  });
+
+  fastify.addSchema({
+    $id: "Booking",
+    type: "object",
+    required: ["trip_id", "passenger_name"],
+    properties: {
+      id: { type: "string", format: "uuid", readOnly: true },
+      trip_id: { type: "string", format: "uuid" },
+      passenger_name: { type: "string" },
+      has_bicycle: { type: "boolean" },
+      has_dog: { type: "boolean" },
     },
   });
 });
 ```
 
-By overriding `buildLocalReference` in the snippet above, we help Fastify to use the `$id` field as the component schema's reference. If we were to regenerate the OpenAPI spec now, we would see that `def-0` is replaced by `Drink`.
+Then reference those schemas from route responses:
 
-## Customizing OpenAPI "operationId" Using Fastify
-
-Each path's `operationId` field in the OpenAPI specification is used to generate method names and documentation in SDKs.
-
-To add `operationId` to a route, add the field to the route's schema. For example:
-
-```javascript filename="routes/drink/index.js" mark=3
-fastify.get(
-  "/:drinkId/",
-  { schema: { operationId: "getDrink" } },
-  async function ({ params: { drinkId } }) {
-    return {
-      id: drinkId,
-    };
-  },
-);
+```javascript filename="routes/stations.js"
+  fastify.post(
+    "/bookings",
+    {
+      schema: {
+        operationId: "create-booking",
+        tags: ["Bookings"],
+        security: [{ OAuth2: ["write"] }],
+        body: {
+          type: "object",
+          required: ["trip_id", "passenger_name"],
+          properties: {
+            trip_id: { type: "string", format: "uuid" },
+            passenger_name: { type: "string" },
+            has_bicycle: { type: "boolean", default: false },
+            has_dog: { type: "boolean", default: false },
+          },
+        },
+        response: {
+          201: {
+            allOf: [
+              { $ref: "Booking" },
+              { properties: { links: { $ref: "Links-Self" } } },
+            ],
+          },
+        },
+      },
+    },
+    async function (request, reply) {
+      // ... implementation
+    }
 ```
 
-This would generate the following OpenAPI schema:
+The `body` schema is emitted directly into the generated OpenAPI document as the `requestBody` for that operation. Any request that doesn't match — wrong type, missing required field, bad format — is rejected with a `400` before the handler is invoked.
+
+For example, sending a non-UUID `trip_id`:
+
+```bash
+curl -s -X POST http://localhost:3000/bookings \
+  -H "Content-Type: application/json" \
+  -d '{"trip_id": 123, "passenger_name": "John Doe"}' | jq .
+```
+
+Fastify automatically returns the following error.
 
 ```json
 {
-  "/drink/{drinkId}/": {
-    "get": {
-      "operationId": "getDrink",
-      "responses": {
-        "200": {
-          "description": "Default Response"
-        }
-      }
-    }
-  }
+  "statusCode": 400,
+  "code": "FST_ERR_VALIDATION",
+  "error": "Bad Request",
+  "message": "body/trip_id must match format \"uuid\""
 }
 ```
 
-## Add OpenAPI Tags to Fastify Routes
+The error path (`body/trip_id`) and the failing keyword (`format`) are both surfaced automatically from AJV, with no extra error-handling code required in the route.
 
-At Speakeasy, whether you're building a big application or only have a handful of operations, we recommend adding tags to all your Fastify routes so you can group them by tag in generated SDK code and documentation.
+## Customizing operationId using Fastify
 
-### Add OpenAPI Tags to Routes in Fastify
+With the OpenAPI now improving, its time to make the SDK generation more predictable.
 
-To add OpenAPI tags to a route in Fastify, add the `tags` keyword with a list of tags to the route's schema. Here's a simplified example from `routes/drink/index.js`:
+Each path's `operationId` field in the OpenAPI document is used to generate method names and documentation in SDKs.
 
-```javascript filename="routes/drink/index.js" mark=3
-fastify.get(
-  "/:drinkId/",
-  { schema: { tags: ["drinks"] } },
-  async function ({ params: { drinkId } }) {
-    return {
-      id: drinkId,
-    };
+To add `operationId` to a route, add the field to the route's schema. For example:
+
+```javascript filename="routes/stations.js"
+fastify.get("/stations", {
+  schema: {
+    operationId: "getStations",
+    tags: ["Stations"],
+    querystring: {
+      type: "object",
+      properties: {
+        country_code: { type: "string", description: "Filter by country code" }
+      }
+    },
   },
-);
+});
 ```
 
-### Add Metadata to Tags
+## Add OpenAPI tags to Fastify routes
 
-We can add a description and external documentation link to each tag by adding a list of tag objects to the Swagger options object in `plugins/openapi.js`:
+At Speakeasy, whether building a big application or only having a handful of operations, it's a good idea to add tags to all Fastify routes to group them by tag in generated SDK code and documentation.
 
-```javascript filename="plugins/openapi.js" mark=8:17
-import swagger from "@fastify/swagger";
-import fp from "fastify-plugin";
+To add tags to a route, include the `tags` array in the route's schema:
 
-export default fp(async (fastify) => {
-  fastify.register(swagger, {
-    openapi: {
-      info: {
-        tags: [
-          {
-            name: "drinks",
-            description: "Drink-related endpoints",
-            externalDocs: {
-              description: "Find out more",
-              url: "http://swagger.io",
+```javascript filename="routes/stations.js"
+fastify.get('/stations', {
+  schema: {
+    operationId: 'get-stations',
+    tags: ['Stations'],
+    // ...
+  },
+}, async function (request, reply) { /* ... */ });
+```
+
+### Add metadata to tags
+
+Tag descriptions can be added in `plugins/openapi.js` via the top-level `tags` array in the `openapi` config:
+
+```javascript filename="plugins/openapi.js"
+openapi: {
+  // ...
+  tags: [
+    {
+      name: "Stations",
+      description: "Find and filter train stations across Europe.",
+    },
+    {
+      name: "Trips",
+      description: "Timetables and routes for train trips between stations.",
+    },
+    {
+      name: "Bookings",
+      description: "Create and manage bookings for train trips.",
+    },
+    {
+      name: "Payments",
+      description: "Pay for bookings and view payment status.",
+    },
+  ],
+}
+```
+
+Fastify copies the tags list into the generated OpenAPI document verbatim. Any tag used on a route but not listed here will still appear in the output, but without a description.
+
+
+## Add Security and Speakeasy Retries
+
+When using Speakeasy to generate an SDK, customize it to follow custom rules for retrying failed requests. For instance, if the server fails to return a response within a specified time, the SDK can retry the request without clobbering the server.
+
+Add retries to SDKs generated by Speakeasy by adding a top-level `x-speakeasy-retries` schema to the OpenAPI spec. Override the retry strategy per operation by adding `x-speakeasy-retries` to specific endpoints.
+
+```javascript filename="plugins/openapi.js"
+openapi: {
+  security: [{ OAuth2: ["read"] }],
+  components: {
+    securitySchemes: {
+      OAuth2: {
+        type: "oauth2",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "https://example.com/oauth/authorize",
+            tokenUrl: "https://example.com/oauth/token",
+            scopes: {
+              read: "Read access",
+              write: "Write access",
             },
           },
-        ],
-      },
-    },
-  });
-});
-```
-
-As with the other keys in the `info` options, Fastify copies the list of tags to the generated OpenAPI spec verbatim.
-
-## Add a List of Servers to the Fastify OpenAPI Spec
-
-When validating an OpenAPI spec, Speakeasy expects a list of servers at the root of the spec. We'll add this to our options object in `plugins/openapi.js`:
-
-```javascript filename="plugins/openapi.js" mark=7:12
-import swagger from "@fastify/swagger";
-import fp from "fastify-plugin";
-
-export default fp(async (fastify) => {
-  fastify.register(swagger, {
-    openapi: {
-      servers: [
-        {
-          url: "http://localhost",
-          description: "Development server",
         },
-      ],
-    },
-  });
-});
-```
-
-## Add Retries to Your SDK With "x-speakeasy-retries"
-
-If you are using Speakeasy to generate your SDK, we can customize it to follow custom rules for retrying failed requests. For instance, if your server fails to return a response within a specified time, you may want your users to retry their request without clobbering your server.
-
-Add retries to SDKs generated by Speakeasy by adding a top-level `x-speakeasy-retries` schema to your OpenAPI spec. You can also override the retry strategy per operation by adding `x-speakeasy-retries`.
-
-### Adding Global Retries
-
-```javascript filename="plugins/openapi.js" mark=7:17
-import swagger from "@fastify/swagger";
-import fp from "fastify-plugin";
-
-export default fp(async (fastify) => {
-  fastify.register(swagger, {
-    openapi: {
-      "x-speakeasy-retries": {
-        strategy: "backoff",
-        backoff: {
-          initialInterval: 500,
-          maxInterval: 60000,
-          maxElapsedTime: 3600000,
-          exponent: 1.5,
-        },
-        statusCodes: ["5XX"],
-        retryConnectionErrors: true,
-      },
-    },
-  });
-});
-```
-
-Fastify respects OpenAPI extensions that start with `x-` and copies these to the root of the generated OpenAPI specification.
-
-### Adding Retries per Method
-
-If we want to add a unique retry strategy to a single route, we can add `x-speakeasy-retries` to the route's schema:
-
-```javascript filename="routes/drink/index.js" mark=5:15
-fastify.get(
-  "/:drinkId/",
-  {
-    schema: {
-      "x-speakeasy-retries": {
-        strategy: "backoff",
-        backoff: {
-          initialInterval: 500,
-          maxInterval: 60000,
-          maxElapsedTime: 3600000,
-          exponent: 1.5,
-        },
-        statusCodes: ["5XX"],
-        retryConnectionErrors: true,
       },
     },
   },
-  async function (request, reply) {
-    const { drinkId } = request.params;
-    return {
-      id: drinkId,
-      name: "Example Drink Name",
-      description: "Example description",
-    };
+  "x-speakeasy-retries": {
+    strategy: "backoff",
+    backoff: {
+      initialInterval: 500,
+      maxInterval: 60000,
+      maxElapsedTime: 3600000,
+      exponent: 1.5,
+    },
+    statusCodes: ["5XX"],
+    retryConnectionErrors: true,
   },
-);
+}
 ```
 
-Once again, when generating an OpenAPI spec, Fastify will copy route-specific OpenAPI extensions without any changes.
+## How To Generate an SDK Based on OpenAPI Spec
 
-## How To Generate an SDK Based on Your OpenAPI Spec
-
-Before generating an SDK, we need to save the Fastify-generated OpenAPI spec to a file. We'll add the following script to our `package.json` to generate `openapi.json` in the root of our project:
+Before generating an SDK, save the Fastify-generated OpenAPI spec to a file. Add the following script to `package.json` to generate `openapi.json` in the root of the project:
 
 ```json filename="package.json"
 {
   "scripts": {
     "openapi": "fastify generate-swagger app.js > openapi.json"
   }
-  //...
 }
 ```
 
-Then we run the following in the terminal:
+Then run the following in the terminal:
 
 ```bash
 npm run openapi
 ```
 
-After following the steps above, we have an OpenAPI spec that is ready to use as the basis for a new SDK. Now we'll use Speakeasy to generate an SDK.
+After following the steps above, the OpenAPI spec is ready to use as the basis for a new SDK. Use Speakeasy to generate an SDK.
 
-In the root directory of your project, run the following:
+In the root directory of the project, run the following:
 
 ```bash
 speakeasy quickstart
 ```
 
-Follow the onscreen prompts to provide the necessary configuration details for your new SDK such as the name, schema location and output path. Enter `openapi.json` when prompted for the OpenAPI document location and select TypeScript when prompted for which language you would like to generate.
+Follow the onscreen prompts to provide the necessary configuration details for your new SDK, such as the name, schema location, and output path. Enter `openapi.json` when prompted for the OpenAPI document location and select TypeScript when prompted for which language you would like to generate.
 
-## Add SDK Generation to Your GitHub Actions
+## Add SDK Generation to GitHub Actions
 
-The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows that can integrate the Speakeasy CLI in your CI/CD pipeline, so your SDKs are regenerated when your OpenAPI spec changes.
+The Speakeasy [sdk-generation-action](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows that can integrate the Speakeasy CLI in a CI/CD pipeline, so SDKs are regenerated when the OpenAPI spec changes.
 
-You can set up Speakeasy to automatically push a new branch to your SDK repositories so that your engineers can review and merge the SDK changes.
+Set up Speakeasy to automatically push a new branch to SDK repositories so that engineers can review and merge the SDK changes.
 
 For an overview of how to set up automation for your SDKs, see the Speakeasy documentation about [SDK Generation Action and Workflows](/docs/speakeasy-reference/workflow-file).
 
 ## Summary
 
-In this tutorial, we've learned how to generate an OpenAPI specification for your Fastify API. We also learn how to integrate Fastify with Speakeasy to generate SDKs. The tutorial guides you through step-by-step instructions on how to do this, from adding `@fastify/swagger` to a Fastify project and generating an OpenAPI specification to improving the generated OpenAPI specification for better SDK generation.
+This tutorial covered how to generate an OpenAPI specification for a Fastify API and how to integrate Fastify with Speakeasy to generate SDKs. The tutorial provided step-by-step instructions, from adding `@fastify/swagger` to a Fastify project and generating an OpenAPI specification, to improving the generated OpenAPI specification for better SDK generation.
 
-It also covers how to use the Speakeasy OpenAPI extensions to improve generated SDKs and how to automate SDK generation as part of a CI/CD pipeline.
+It also covered how to use the Speakeasy OpenAPI extensions to improve generated SDKs and how to automate SDK generation as part of a CI/CD pipeline.
 
-Following these steps, you can successfully generate OpenAPI specifications for your Fastify app and improve your API operations.
+Following these steps will successfully generate OpenAPI specifications for Fastify applications and improve API operations.
