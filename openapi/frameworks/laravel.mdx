@@ -1,17 +1,17 @@
 ---
-title: How To Generate a OpenAPI/Swagger Spec for Laravel APIs
+title: How To Generate an OpenAPI/Swagger Spec for Laravel APIs
 description: "Learn how to create a Swagger/OpenAPI spec for your Laravel API."
 ---
 
 import { Callout, YouTube } from "@/mdx/components";
 
-# How To Generate a OpenAPI for Laravel
+# How To Generate an OpenAPI for Laravel
 
 <YouTube videoId="dn5U_pidRw0" />
 
 You're investing in your API, and that means finally creating an OpenAPI document that accurately describes your API. With the rise in popularity of API-first design some APIs might have declared their OpenAPI before writing the code, but for many the code-first workflow is still fundamental for older APIs. If you're working with an existing Laravel application, you can generate a complete OpenAPI document directly from the API's source code.
 
-A few excellent tools have come and gone over the years, but these days [Scribe](https://scribe.knuckles.wtf/laravel) is the go to for generating API documentation form Laravel source code, and it happily exports OpenAPI to be used in a variety of other tools: like Speakeasy.
+A few excellent tools have come and gone over the years, but these days [Scribe](https://scribe.knuckles.wtf/laravel) is the go-to choice for generating API documentation from Laravel source code, and it happily exports OpenAPI to be used in a variety of other tools, like Speakeasy.
 
 ## What is Scribe all about
 
@@ -19,10 +19,11 @@ Scribe is a robust documentation solution for PHP APIs. It helps you generate co
 
 Scribe introspects the API source code itself, and without AI fudging the results it will accurately turn routing, controllers, Eloquent models, and all sorts of code into the best and most accurate API descriptions possible. Then it can be exported as OpenAPI, or Postman collections (if you're into that sort of thing.)
 
-The first step is to install a package, and explore the options available.
+The first step is to install (or upgrade to) Scribe v5 and explore the options available.
 
 ```bash
-composer require --dev knuckleswtf/scribe
+composer require --dev knuckleswtf/scribe:^5.0
+composer update knuckleswtf/scribe
 ```
 
 Once installed, publish the package configuration to access the full variety of config options.
@@ -31,16 +32,24 @@ Once installed, publish the package configuration to access the full variety of 
 php artisan vendor:publish --tag=scribe-config
 ```
 
-There are a lot of [config options](https://scribe.knuckles.wtf/laravel/reference/config) available, and we'll look at some good ones later. For now let's see what a basic generation looks like.
+There are a lot of [config options](https://scribe.knuckles.wtf/laravel/reference/config) available, and we'll look at some good ones later. For now just open the config file and set the `openapi.enabled` option to `true` to enable OpenAPI generation, and make sure the version is set to `3.1.0` for the best compatibility with Speakeasy.
+
+```php
+    'openapi' => [
+        'enabled' => true,
+        'version' => '3.1.0',
+```
+
+Now it's time to generate the documentation and OpenAPI document for the first time. Run the following command:
 
 ```bash
 php artisan scribe:generate
 ```
 
-The command above will generate both HTML documentation and an OpenAPI specification file. By default, the OpenAPI document will be saved in `storage/app/private/scribe/openapi.yaml`, but the command will let you know exactly where it's stored.
+The command above will generate both HTML documentation and an OpenAPI specification file. By default (for `type: laravel`), the OpenAPI document is saved in `storage/app/scribe/openapi.yaml`, but the command will let you know exactly where it's stored.
 
 ```yaml
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: 'Laravel API Documentation'
   description: ''
@@ -455,7 +464,7 @@ class HealthController extends Controller
 }
 ```
 
-Now when `php artisan scribe:generated` is run again, the `/api/health` endpoint will have a proper summary and description. The summary is taken from the first line of the docblock, and the description is taken from the rest of the docblock, which will work just as well in traditional PHP documentation tools as well a the OpenAPI documentation tools after export. 
+Now when `php artisan scribe:generate` is run again, the `/api/health` endpoint will have a proper summary and description. The summary is taken from the first line of the docblock, and the description is taken from the rest of the docblock, which will work just as well in traditional PHP documentation tools as well as OpenAPI documentation tools after export.
 
 ```yaml
 /api/health:
@@ -746,16 +755,14 @@ Let's take a look at the resulting OpenAPI for the request body now:
 
 As you can see, a lot more information is provided which will help anyone who wants to interact with this API.
 
-## Upgrading to OpenAPI v3.1
+## Outputting other OpenAPI versions
 
-Update Scribe to v5.6.0 or later and set the OpenAPI version in `config/scribe.php`:
+This article and sample code outputs OpenAPI v3.1, but other versions can be configured in `config/scribe.php`. For example if an older tool needs to use OpenAPI v3.0, the following can be set:
 
 ```php
     'openapi' => [
-        'version' => '3.1.3',
+        'version' => '3.0.0',
 ```
-
-This will generate an OpenAPI v3.1 document, which has several advantages over v3.0, including support for JSON Schema, better handling of nullable types, and improved support for webhooks.
 
 ## Summary
 

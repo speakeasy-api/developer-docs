@@ -1,0 +1,148 @@
+---
+title: Patch files reference
+description: "Technical reference for the patch files feature: apply pipeline, layout, lookup rules, and error behavior."
+---
+
+# Patch files reference
+
+Reference for the [patch files](/docs/sdks/customize/code/patch-files/patch-files) feature.
+
+## How it works
+
+During generation, Speakeasy:
+
+1. Renders templates and produces the in-memory generated files.
+2. Looks for a matching patch file under `.speakeasy/patches/` for each generated file.
+3. Tries to apply the patch against the in-memory generated file using a Git-compatible diff parser/applier built into Speakeasy — no `git` binary on the PATH is required at generation time. The outcome falls into one of three branches:
+   - **Clean apply.** The patch applies without conflict. The patched content replaces the in-memory virtual file and proceeds to the disk-write step.
+   - **Conflict.** The patch's context lines no longer match the regenerated content (typically because the upstream OpenAPI spec or templates changed in the patched region). Speakeasy rebases the patch onto the fresh output, writes any unresolved hunks as Git-style conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) into the affected file, and fails the generation step with the list of conflicted files. The conflict markers are intentional — they invite a human to resolve the divergence and regenerate the patch from the resolved file.
+   - **Hard error.** Any other apply failure (malformed patch syntax, unsupported diff operation, filesystem read error other than `ENOENT`) is surfaced directly. The generation step fails without rebase and without writing conflict markers. Errors across multiple patches are aggregated so a single run reports every malformed patch at once.
+4. Writes the result to disk. With custom code disabled, the patched content is written immediately. With custom code enabled, the write is deferred so the persistent-edits subsystem can reconcile patched content against on-disk manual edits first — see [Interaction with custom code](#interaction-with-custom-code).
+
+## Location
+
+All patch files live under `.speakeasy/patches/` at the SDK output root. Subdirectories mirror the layout of the generated SDK:
+
+```text
+my-sdk/
+├── .speakeasy/
+│   ├── gen.yaml
+│   └── patches/
+│       ├── src/
+│       │   └── models/
+│       │       └── payment.ts.patch     ← patches src/models/payment.ts
+│       └── package.json.patch           ← patches package.json
+├── src/
+│   └── models/
+│       └── payment.ts
+└── package.json
+```
+
+The presence of any `.patch` file under `.speakeasy/patches/` enables the feature for that generation — there is no change needed in `gen.yaml`.
+
+## File format
+
+Each patch file is a unified diff in `git diff` format:
+
+```diff
+diff --git a/<path> b/<path>
+--- a/<path>
++++ b/<path>
+@@ -<old_start>,<old_count> +<new_start>,<new_count> @@
+ <context>
+-<removed>
++<added>
+ <context>
+```
+
+Speakeasy parses patches with Git-compatible semantics — quoted paths, multi-file diffs, and other valid `git diff` headers are accepted — but any tool that emits a unified diff (`git diff`, `diff -u`, IDE export) can author one. At generation time Speakeasy applies the patches in-process, so no `git` binary on the PATH is required.
+
+## Lookup rules
+
+For each generated file Speakeasy looks for `.speakeasy/patches/<relative_path>.patch`:
+
+- Path separators are normalized to `/`.
+- `.` and `..` segments are resolved (e.g. `a/./b` → `a/b`, `a/b/../c` → `a/c`).
+- The lookup is exact: `src/models/foo.ts` is patched only by `.speakeasy/patches/src/models/foo.ts.patch`.
+
+A patch whose filename does not match any generated file is still attempted as a "generic" multi-file patch against the in-memory generated file tree, using the diff's `+++` headers. Generic patches can only modify files that exist in the current generation's virtual file set — disk-only files (manually authored, `.genignore`d, or carried over from prior runs) cannot be patched.
+
+Stale-patch behavior splits along path type:
+
+- **Exact-path orphan** (e.g. `.speakeasy/patches/foo.go.patch` when `foo.go` is no longer generated): skipped, warning logged, generation continues.
+- **Generic patch with missing targets**: `ApplyPatchset` errors (`cannot modify missing file`) and generation fails.
+
+## Supported operations
+
+Patch files support the following diff operations against the generated file set:
+
+- Modifying file contents.
+- Creating new files.
+- Deleting files.
+- Renaming and copying files.
+
+Only regular files are accepted — git modes `100644` and `100755`. The following are rejected with an error:
+
+- Binary patches.
+- Mode-only patches (no content change).
+- Symlinks (mode `120000`).
+- Submodules / gitlinks (mode `160000`).
+- Any other non-regular file mode.
+
+### Creating files
+
+A diff that adds a file uses the standard `git diff` new-file header. The `---` side is `/dev/null` and the `+++` side is the path to write:
+
+```diff
+diff --git a/src/utils/format.ts b/src/utils/format.ts
+new file mode 100644
+--- /dev/null
++++ b/src/utils/format.ts
+@@ -0,0 +1,3 @@
++export function format(value: string): string {
++  return value.trim();
++}
+```
+
+If the target path already exists on disk as a non-generated file (e.g. hand-authored), the create is rejected with `patch would write <path>, but a non-generated file already exists there`. Remove or rename the conflicting file before applying.
+
+### Deleting files
+
+A diff that removes a file uses the standard `git diff` deleted-file header. The `+++` side is `/dev/null`:
+
+```diff
+diff --git a/src/models/legacy.ts b/src/models/legacy.ts
+deleted file mode 100644
+--- a/src/models/legacy.ts
++++ /dev/null
+@@ -1,3 +0,0 @@
+-export class Legacy {
+-  id: string;
+-}
+```
+
+When combined with [custom code](/docs/sdks/customize/code/custom-code/custom-code), a delete targeting a user-modified tracked file fails with `patch would remove user-modified file <path>` to avoid silently discarding manual edits.
+
+### Renaming files
+
+Standard `git diff` rename headers are accepted (`rename from` / `rename to`, with or without an accompanying content hunk). The same source/target rules as create and delete apply.
+
+## Error behavior
+
+| Error                                                    | Behavior                                                |
+|----------------------------------------------------------|---------------------------------------------------------|
+| Conflicts with regenerated content                       | Rebased onto fresh output; conflict markers; step fails |
+| Malformed                                                | Errors aggregated across all patches; step fails        |
+| Binary patch                                             | Rejected with error                                     |
+| Mode-only patch                                          | Rejected with error                                     |
+| Symlink or submodule (modes `120000` / `160000`)         | Rejected with error                                     |
+| Create over a non-generated file already on disk         | Rejected with error                                     |
+| Delete or rename of a user-modified tracked file         | Rejected with error (custom code only)                  |
+| Target under `.speakeasy/` or `.git/` (protected paths)  | Rejected with error                                     |
+| Exact-path orphan (lookup file no longer generated)      | Warning logged; generation continues                    |
+| Generic patch targeting a file not in current generation | `cannot modify missing file`; step fails                |
+| Filesystem read error (non-`ENOENT`)                     | Surfaced as error                                       |
+
+## Interaction with custom code
+
+Patch files and [custom code](/docs/sdks/customize/code/custom-code/custom-code) (`persistentEdits`) are independent and can be used together. Speakeasy applies patch files after the regular generation pass and before the persistent-edits merge, so patched content participates in the 3-way merge for files that also have manual edits on disk.

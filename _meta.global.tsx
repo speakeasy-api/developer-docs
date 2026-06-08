@@ -208,6 +208,17 @@ const meta = {
                       },
                     },
                   },
+                  "patch-files": {
+                    title: "Patch files",
+                    items: {
+                      "patch-files": {
+                        title: "Overview",
+                      },
+                      "patch-files-reference": {
+                        title: "Technical reference",
+                      },
+                    },
+                  },
                   "code-regions": {
                     title: "Code regions",
                     items: {
@@ -463,14 +474,6 @@ const meta = {
                   },
                 },
               },
-              unity: {
-                title: "Unity [beta]",
-                items: {
-                  "methodology-unity": {
-                    title: "Unity design [coming soon]",
-                  },
-                },
-              },
             },
           },
           guides: {
@@ -679,9 +682,6 @@ const meta = {
           "cloudflare-deployment": {
             title: "Deploy to Cloudflare Workers",
           },
-          "gram-deployment": {
-            title: "Deploy to Gram",
-          },
           "custom-prompts": {
             title: "Custom Prompts",
           },
@@ -746,6 +746,9 @@ const meta = {
                   "tool-annotations": {
                     title: "Tool annotations",
                   },
+                  "tool-tags": {
+                    title: "Tool tags",
+                  },
                   "mcp-sdk": {
                     title: "Using the MCP SDK",
                   },
@@ -791,6 +794,9 @@ const meta = {
                 items: {
                   "deploy-mcp-server": {
                     title: "Deploy an MCP server",
+                  },
+                  "tool-filtering": {
+                    title: "Tag-based tool filtering",
                   },
                   "tool-call-healing": {
                     title: "Tool call healing",

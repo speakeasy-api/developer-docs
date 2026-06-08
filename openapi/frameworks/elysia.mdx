@@ -7,31 +7,22 @@ import { Callout } from "@/mdx/components";
 
 # How to generate an OpenAPI document with ElysiaJS
 
-This guide walks you through generating an OpenAPI document for an [ElysiaJS](https://elysiajs.com/) API and using Speakeasy to create an SDK based on the generated document.
+[ElysiaJS](https://elysiajs.com/) is an amazing modern Web/API framework which puts OpenAPI as a first-class feature, not something that has been tacked on as an afterthought. Let's take a look at how OpenAPI fits in with usual API development flows in Elysia, how to customize the generated OpenAPI document, and how to use Speakeasy to create an SDK based on the generated document.
 
-Here's what we'll do:
+First of all, what is OpenAPI and how does it fit in? OpenAPI is a specification for describing REST APIs. It allows you to define your API endpoints, request and response formats, authentication methods, and more in a standardized format. This standardized format can then be used to generate documentation, SDKs, and even test cases for your API.
 
-1. Add a Swagger endpoint, which uses Scalar UI, to an Elysia Bun app using the Elysia Swagger plugin.
+Some folks create all the OpenAPI descriptions before writing any code, which can be an incredibly powerful workflow known as the API Design-first Workflow. Everyone can agree on "the contract" before any code is written (or generated automatically), and the OpenAPI document can be used as a source of truth for both frontend and backend teams. However, it's not the only workflow. With Elysia, you can write your API code and OpenAPI documentation in parallel, and the OpenAPI plugin will generate an OpenAPI document based on your code and the metadata you provide in your route definitions. This makes more sense for smaller teams and companies that need a more agile approach.
+
+## The plan
+
+Here is how this guide is going to help you turn your Elysia API into a well-documented, SDK-accessible API with OpenAPI and Speakeasy:
+
+1. Automatically generate beautiful modern API reference documentation using Scalar UI via the Elysia OpenAPI plugin.
 2. Improve the OpenAPI document to prepare it for code generation.
-3. Convert the JSON OpenAPI document to YAML.
-4. Use the Speakeasy CLI to generate an SDK based on the OpenAPI document.
-5. Add a Speakeasy OpenAPI extension to improve the generated SDK.
-
-We'll also take a look at how you can use the generated SDK.
+3. Use the Speakeasy CLI to generate an SDK based on the OpenAPI document.
+4. Add a Speakeasy OpenAPI extension to improve the generated SDK.
 
 Your Elysia project might not be as simple as our example app, but the steps below should translate well to any Elysia project.
-
-## The OpenAPI generation pipeline
-
-The Elysia [Swagger plugin](https://github.com/elysiajs/elysia-swagger) generates a Swagger API documentation endpoint. By default, Elysia uses the OpenAPI Specification and [Scalar UI](https://scalar.com/), an open-source interactive document UI for OpenAPI.
-
-We'll first add the Swagger plugin to an existing Elysia app.
-
-Then, we'll improve the plugin-generated OpenAPI document according to Speakeasy [best practices](https://www.speakeasy.com/docs/best-practices). The quality of an OpenAPI document determines the quality of the SDKs and documentation it's used to create.
-
-Next, we'll use Speakeasy to generate an SDK based on the OpenAPI document.
-
-Finally, we'll use a simplified example to demonstrate how to use the generated SDK and how to add SDK creation to a CI/CD pipeline so that Speakeasy automatically generates fresh SDKs whenever your Elysia API changes in the future.
 
 ## Requirements
 
@@ -39,10 +30,9 @@ This guide assumes that you have an existing Elysia app and basic familiarity wi
 
 <Callout title="Example repository" type="info">
   If you don't have an Elysia app or if you want to follow the guide step by
-  step, you can clone the [Speakeasy ElysiaJS example
-  repo](https://github.com/speakeasy-api/elysia-openapi-example) to access the
-  example code used in this tutorial. The `initial-app` branch contains the
-  initial state of the app that we'll use to start this tutorial.
+  step, you can clone the [Speakeasy examples
+  repo](https://github.com/speakeasy-api/examples) and `cd frameworks-elysia` to access the
+  example code used in this tutorial.
 </Callout>
 
 The following should be installed on your machine:
@@ -50,44 +40,40 @@ The following should be installed on your machine:
 - [Bun](https://bun.sh/): The Node.js alternative that Elysia is built on.
 - [Speakeasy CLI](https://www.speakeasy.com/docs/speakeasy-cli/getting-started): The tool you'll use to generate an SDK from the OpenAPI document.
 
-## Adding the Swagger plugin to an Elysia project
+## Adding the OpenAPI plugin to an Elysia project
 
-The Elysia Swagger plugin automatically generates an API documentation page for your server.
-
-First, install the Swagger plugin:
+First, install the OpenAPI plugin:
 
 ```bash filename="Terminal"
-bun add @elysiajs/swagger
+bun add @elysia/openapi
 ```
 
-Import the plugin, then register it by passing in an instance of `swagger` to the `use()` method and chaining the `use()` method to the `Elysia` instance:
+Then import the plugin, and register it by passing in an instance of `openapi` to the `use()` method and chaining the `use()` method to the `Elysia` instance:
 
 ```typescript filename="index.ts"
 // !mark
-import { swagger } from "@elysiajs/swagger";
+import { openapi } from "@elysia/openapi";
 import { Elysia } from "elysia";
-import { users } from "./controllers/users";
+import { stationsController } from "./controllers/stations";
+import { tripsController } from "./controllers/trips";
+import { bookingsController } from "./controllers/bookings";
 
 const app = new Elysia()
-  .onError(({ error, code }) => {
-    console.log({ code });
-    if (code === "NOT_FOUND") return "Not Found :(";
-    if (code === "VALIDATION") return "Invalid user";
-    console.error(error);
-  })
-  .use(users)
+  .use(stationsController)
+  .use(tripsController)
+  .use(bookingsController)
   // !mark
-  .use(swagger())
+  .use(openapi())
   .listen(3000);
 ```
 
-In Elysia, a [plugin](https://elysiajs.com/essential/plugin) is a reusable component. In fact, everything in Elysia is a component, including Elysia instances, plugins, routers, stores, and more. Components split apps into small pieces, making it easier to add, remove, or modify app features. It's important that we use [method chaining](https://elysiajs.com/key-concept.html#method-chaining) for type inference in our Elysia code. In the above code block, we use the `onError` lifecycle method to catch any error that's thrown on the server.
+In Elysia, a [plugin](https://elysiajs.com/essential/plugin) is a reusable component. In fact, everything in Elysia is a component, including Elysia instances, plugins, routers, stores, and more. Components split apps into small pieces, making it easier to add, remove, or modify app features. It's important that we use [method chaining](https://elysiajs.com/key-concept.html#method-chaining) for type inference in our Elysia code. 
 
-Run the Bun development server with `bun run dev` and open `http://localhost:3000/swagger` to see the Scalar UI with five API endpoints:
+Run the Bun development server with `bun run dev` and open `http://localhost:3000/openapi` to see the Scalar UI with five API endpoints:
 
 ![Scalar UI](/assets/openapi/elysia/scalar.png)
 
-The API routes are listed in the navigation pane on the left. Click **`/users/` GET** to navigate to the section for the `/users/` GET request API endpoint:
+The API routes are listed in the navigation pane on the left. Click **`/bookings` GET** to navigate to one of the Train Travel resource endpoints:
 
 ![GET request API endpoint](/assets/openapi/elysia/scalar-get.png)
 
@@ -95,57 +81,61 @@ Each section shows information about an API endpoint, such as its path parameter
 
 The code block on the right shows an example curl request. Click the **Shell cURL** dropdown menu to change the language or library used in the example request:
 
-![Change example request dropdown menu](/assets/openapi/elysia/scalar-change-example-request.png)
+![Change example request dropdown menu](/assets/openapi/elysia/scalar-change-sample-request.png)
 
 Click the **Test Request** button to open an API client that lets you test your API endpoints. Then, click **Send** to test the request:
 
 ![Scalar API client](/assets/openapi/elysia/scalar-api-client.png)
 
-In the response, you should get an array containing one user.
+In the response, the API returns Train Travel resource data, such as bookings and stations.
 
-The user data in the Elysia server is stored temporarily in a singleton `Users` class :
+The Train Travel sample defines reusable schemas for resource objects:
 
-```typescript filename="users.ts"
-class Users {
-  constructor(
-    public data: UserInfo[] = [
-      {
-        id: "1",
-        name: "Alice",
-        age: 20
-      }
-    ]
-) {}
-```
-
-This class is added to the `Elysia` instance using the
-[`decorate`](https://elysiajs.com/essential/handler.html#decorate) method:
-
-```typescript filename="users.ts" mark=2
-export const users = new Elysia({ prefix: "/users" }).decorate(
-  "users",
-  new Users(),
+```typescript filename="src/train/schemas.ts"
+export const stationSchema = t.Object(
+  {
+    id: t.String({ format: "uuid", example: "efdbb9d1-02c2-4bc3-afb7-6788d8782b1e" }),
+    name: t.String({ example: "Berlin Hauptbahnhof" }),
+    address: t.String({ example: "Invalidenstrasse 10557 Berlin, Germany" }),
+    country_code: t.String({ example: "DE" }),
+    timezone: t.String({ example: "Europe/Berlin" }),
+  },
+  {
+    description: "A train station.",
+  },
 );
 ```
 
-This adds the `Users` class to the [context](https://elysiajs.com/essential/handler.html#context) that contains information for each request. You can access the context in route handlers.
+These route groups are added to the `Elysia` instance:
+
+```typescript filename="src/index.ts" mark=1:10
+import { stationsController } from "./controllers/stations";
+import { tripsController } from "./controllers/trips";
+import { bookingsController } from "./controllers/bookings";
+
+const app = new Elysia()
+  .use(stationsController)
+  .use(tripsController)
+  .use(bookingsController);
+```
+
+This keeps resources isolated by domain (`stations`, `trips`, `bookings`) and makes route metadata easier to maintain.
 
 ## Viewing the OpenAPI document and modifying its root object
 
-Open `http://localhost:3000/swagger/json` to view the OpenAPI document in JSON format:
+Open `http://localhost:3000/openapi/json` to view the OpenAPI document in JSON format:
 
-```json
-{
-  "openapi": "3.0.3",
-  "info": {
-    "title": "Elysia Documentation",
-    "description": "Development documentation",
-    "version": "0.0.0"
+```yaml
+openapi: 3.0.3
+info:
+    "title": "Train Travel API",
+    "description": "API for finding and booking train trips across Europe.",
+    "version": "1.0.50"
   },
   "paths": {
-    "/users/": {
+    "/bookings": {
       "get": {
-        "operationId": "getUsers",
+        "operationId": "getBookings",
         "responses": {
           "200": {
 
@@ -162,33 +152,78 @@ Add the following TypeScript configuration option to your `tsconfig.json` file t
  "resolveJsonModule": true,
 ```
 
-Add the following configuration object to the `swagger` plugin:
+Add the following configuration object to the `openapi` plugin:
 
 ```typescript filename="index.ts"
-import { swagger } from "@elysiajs/swagger";
+import { openapi } from "@elysia/openapi";
 import { Elysia } from "elysia";
 // !mark
 import packageJson from "../package.json";
-import { users } from "./controllers/users";
+import { stationsController } from "./controllers/stations";
+import { tripsController } from "./controllers/trips";
+import { bookingsController } from "./controllers/bookings";
 
 const app = new Elysia()
   .onError(({ error, code }) => {
-    if (code === "NOT_FOUND") return "Not Found :(";
-    if (code === "VALIDATION") return "Invalid user";
+    if (code === "NOT_FOUND") {
+      return {
+        type: "https://example.com/errors/not-found",
+        title: "Not Found",
+        status: 404,
+        detail: "The requested resource was not found.",
+      };
+    }
     console.error(error);
   })
-  .use(users)
+  .use(stationsController)
+  .use(tripsController)
+  .use(bookingsController)
   .use(
     // !mark(2:12)
-    swagger({
+    openapi({
       documentation: {
         info: {
-          title: "Users app documentation",
+          title: "Train Travel API",
+          description: "API for finding and booking train trips across Europe.",
           version: packageJson.version,
         },
-        externalDocs: {
-          description: "Find out more about the Users API",
-          url: "www.example.com",
+        servers: [
+          {
+            url: "https://api.example.com",
+            description: "Production",
+          },
+          {
+            url: "http://localhost:3000",
+            description: "Development server",
+          },
+        ],
+        tags: [
+          { name: "Stations", description: "Find and filter train stations across Europe." },
+          { name: "Trips", description: "Timetables and routes for train trips between stations." },
+          { name: "Bookings", description: "Create and manage bookings for train trips." },
+          { name: "Payments", description: "Pay for bookings and view payment status." },
+        ],
+        security: [
+          {
+            OAuth2: ["read"],
+          },
+        ],
+        components: {
+          securitySchemes: {
+            OAuth2: {
+              type: "oauth2",
+              flows: {
+                authorizationCode: {
+                  authorizationUrl: "https://example.com/oauth/authorize",
+                  tokenUrl: "https://example.com/oauth/token",
+                  scopes: {
+                    read: "Read access",
+                    write: "Write access",
+                  },
+                },
+              },
+            },
+          },
         },
       },
     }),
@@ -196,7 +231,7 @@ const app = new Elysia()
   .listen(3000);
 ```
 
-This configures the [root document object](https://spec.openapis.org/oas/v3.1.2.html#openapi-object) of the OpenAPI document.
+This configures the [root document object](https://spec.openapis.org/oas/v3.0.3.html#openapi-object) of the OpenAPI document.
 
 The `info` object is a required property used to add metadata about the API. The `externalDocs` object lets you extend your documentation by referencing an external resource.
 
@@ -206,148 +241,139 @@ The `operationId` is the identifier for an operation. It is case sensitive and m
 
 ## OpenAPI Specification versions supported by Elysia and Speakeasy
 
-Speakeasy currently supports the OpenAPI Specification versions 3.0.x and 3.1.x and recommends you use version 3.1, as it's fully compatible with [JSON Schema](https://json-schema.org/), which gives you access to a large ecosystem of tools and libraries.
+Speakeasy currently supports the OpenAPI Specification versions 3.0 to 3.2. The recommendation is to use at least version 3.1, as it's fully compatible with [JSON Schema](https://json-schema.org/), which gives you access to a [large ecosystem of tools and libraries](https://json-schema.org/tools).
 
-However, we use OpenAPI Specification version 3.0.3 in this guide, as it is the version Elysia supports.
+The guide uses OpenAPI v3.0.3 as it is the latest version Elysia supports at time of writing, although we have sent them a pull request to get them to v3.1. 🤞
 
-To check which version you are using, open `http://localhost:3000/swagger/json` and see the OpenAPI Specification version in the root document object.
+To check which version you are using, open `http://localhost:3000/openapi/json` and see the OpenAPI Specification version in the root document object.
 
 ## Adding example data to a data model and the POST request body
 
-The API routes in the Scalar UI don't have example values for the path parameters, requests, or responses. The `user` model doesn't have example values either. It's important to add examples to make your API more user-friendly.
+The API routes in the Scalar UI should include example values for parameters, requests, and responses. Clear examples make API usage easier for SDK consumers.
 
-Let's start by adding example values to the `userInfo` model:
+Let's start by adding example values to the booking creation model:
 
-```typescript filename="users.ts"
-const userInfo = t.Object(
+```typescript filename="src/train/schemas.ts"
+export const createBookingRequestSchema = t.Object(
   {
-    id: t.String({
-      example: "1",
+    trip_id: t.String({
+      format: "uuid",
+      example: "ea399ba1-6d95-433f-92d1-83f67b775594",
     }),
-    name: t.String({
-      example: "Alice",
-    }),
-    age: t.Number({
-      example: 20,
-    }),
+    passenger_name: t.String({ example: "John Doe" }),
+    has_bicycle: t.Optional(t.Boolean({ example: true })),
+    has_dog: t.Optional(t.Boolean({ example: false })),
   },
   {
-    title: "User",
-    description: "User object",
+    description: "Booking details.",
     example: {
-      id: "1",
-      name: "Alice",
-      age: 20,
+      trip_id: "ea399ba1-6d95-433f-92d1-83f67b775594",
+      passenger_name: "John Doe",
+      has_bicycle: true,
+      has_dog: false,
     },
-  },
-);
-```
-
-The Elysia schema builder, `t`, gives compile-time and runtime type safety. It also registers the model as a reusable OpenAPI [Components Object](https://spec.openapis.org/oas/v3.1.2.html#components-object) schema, which you can see at the bottom of your OpenAPI document:
-
-```json
-"components": {
-  "schemas": {
-    "user": {
-      "example": {
-        "id": "1",
-        "name": "Alice",
-        "age": 20
-      },
-      "type": "object",
-      "properties": {
-        "id": {
-          "example": "1",
-          "type": "string"
-        },
-        "name": {
-          "example": "Alice",
-          "type": "string"
-        },
-        "age": {
-          "example": 20,
-          "type": "number"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "age"
-      ]
-    }
   }
-}
+);
+
 ```
 
-You'll also see the example values in the **`user`** model in the Scalar UI:
+The Elysia schema builder, `t`, gives compile-time and runtime type safety. It also registers the model as a reusable OpenAPI [Components Object](https://spec.openapis.org/oas/v3.0.3.html#components-object) schema, which you can see at the bottom of your OpenAPI document:
 
-![Example values in user model](/assets/openapi/elysia/scalar-user-model-examples.png)
+```yaml
+components:
+  schemas:
+    CreateBookingRequest:
+      description: A booking for a train trip.
+      type: object
+      required:
+        - id
+        - trip_id
+        - passenger_name
+        - has_bicycle
+        - has_dog
+      properties:
+        id:
+          format: uuid
+          example: 1725ff48-ab45-4bb5-9d02-88745177dedb
+          type: string
+        trip_id:
+          format: uuid
+          example: ea399ba1-6d95-433f-92d1-83f67b775594
+          type: string
+        passenger_name:
+          example: John Doe
+          type: string
+        has_bicycle:
+          example: true
+          type: boolean
+        has_dog:
+          example: false
+          type: boolean
+```
 
-The `userInfo` schema is used in the `post()` and `patch()` routes. Elysia HTTP request methods accept three arguments: the path, the function used to respond to the client, and the hook used to define extra metadata. Add an example to the `body` in the hook object of the `post()` route:
+You'll also see these example values reflected in the Scalar model view:
 
-```typescript filename="users.ts" mark=4:9
-body:
-  t.Omit(
-    userInfo, ['id'],
-    {
-      example: {
-        name: "Alice",
-        age: 20
-      }
-    }
-  ),
+![Example values in booking model](/assets/openapi/elysia/scalar-model-examples.png)
+
+The booking request schema is used by the booking `post()` route. Elysia HTTP request methods accept three arguments: the path, the handler, and a hook object for extra metadata. Add the schema to the `body` in the hook object:
+
+```typescript filename="src/controllers/bookings.ts" mark=1:6
+{
+  type: "json",
+  body: createBookingRequestSchema,
+  detail: {
+    operationId: "create-booking",
+  },
+}
 ```
 
 If you look at your OpenAPI document now, you'll see that the `content` of the POST request body has three possible types: `application/json`, `multipart/form-data`, or `text/plain`. To limit it to `application/json`, set the `type` in the hook object of the `post()` route:
 
-```typescript filename="users.ts" mark=14
-.post('/',({ users, body: user }) =>
-  users.add(user),
-  {
-    body:
-      t.Omit(
-        userInfo, ['id'],
-        {
-          example: {
-            name: "Alice",
-            age: 20
-          }
-        }
-      ),
-    type: 'json',
+```typescript filename="src/controllers/bookings.ts" mark=1:17
+  .post(
+    "/",
+    ({ body, set, error }) => {
+      // ... implementation ...
+    },
+    {
+      type: "json",
+      body: createBookingRequestSchema,
 ```
 
 ## Adding extra information to a route using the detail field
 
-The [`detail`](https://elysiajs.com/plugins/openapi.html#detail) field is used to define a route for the OpenAPI document. It extends the [OpenAPI Operation Object](https://swagger.io/specification#operation-object), which describes an API operation within a path.
+The [`detail`](https://elysiajs.com/plugins/openapi.html#detail) field is used to define a route for the OpenAPI document. It extends the [OpenAPI Operation Object](https://spec.openapis.org/oas/v3.0.3.html#operation-object), which describes an API operation within a path.
 
 Add the following `detail` field to the hook object of the `post()` route:
 
-```typescript filename="users.ts"  mark=2:5
-type: 'json',
+```typescript filename="src/controllers/bookings.ts"  mark=2:5
+type: "json",
 detail: {
-  summary: 'Create user',
-  description: 'Add user to the database',
+  operationId: "create-booking",
+  summary: "Create a booking",
+  description: "A booking is a temporary hold on a trip.",
 },
 ```
 
 Add the following `responses` property to the `detail` object:
 
-```typescript filename="users.ts"
+```typescript filename="src/controllers/bookings.ts"
 responses: {
-  200: {
-    description: 'The created users assigned id',
+  201: {
+    description: "Booking successful",
     content: {
-      'application/json': {
+      "application/json": {
         schema: {
-          $ref: '#/components/schemas/id',
+          $ref: "#/components/schemas/Booking",
         },
         examples: {
-          "Created user": {
+          "Created booking": {
             value: {
-              id: "1",
-              name:  "Alice",
-              age: 20
+              id: "1725ff48-ab45-4bb5-9d02-88745177dedb",
+              trip_id: "ea399ba1-6d95-433f-92d1-83f67b775594",
+              passenger_name: "John Doe",
+              has_bicycle: true,
+              has_dog: false,
             }
           }
         }
@@ -357,99 +383,79 @@ responses: {
 },
 ```
 
-The [Responses Object](https://spec.openapis.org/oas/v3.1.2.html#responses-object) is used to list the possible responses returned from the POST request. There is one possible response listed - a successful response. This response has a [`schema`](https://spec.openapis.org/oas/v3.1.2.html#schema-object) that defines the content of the response. The `id` schema is referenced using [`$ref`](https://spec.openapis.org/oas/v3.1.2.html#reference-object), the reference identifier that specifies the URI location of the value being referenced. Let's define this `id` model.
+The [Responses Object](https://spec.openapis.org/oas/v3.0.3.html#responses-object) lists possible outcomes for the POST request. The success response includes a [`schema`](https://spec.openapis.org/oas/v3.0.3.html#schema-object) that describes the returned booking payload. The schema can be referenced with [`$ref`](https://spec.openapis.org/oas/v3.0.3.html#reference-object).
 
-Add the following `idObject` model to the `users.ts` file, below the `userInfo` model:
+Add the booking schema in `src/train/schemas.ts`:
 
-```typescript filename="users.ts"
-const idObject = t.Object(
+```typescript filename="src/train/schemas.ts"
+export const bookingSchema = t.Object(
   {
-    id: t.String({
-      example: "1",
-    }),
+    id: t.String({ format: "uuid", example: "1725ff48-ab45-4bb5-9d02-88745177dedb" }),
+    trip_id: t.String({ format: "uuid", example: "ea399ba1-6d95-433f-92d1-83f67b775594" }),
+    passenger_name: t.String({ example: "John Doe" }),
+    has_bicycle: t.Boolean({ example: true }),
+    has_dog: t.Boolean({ example: false }),
   },
   {
-    title: "ID object",
-    description: "ID object",
-    example: {
-      id: "1",
-    },
+    description: "A booking for a train trip.",
   },
 );
 ```
 
-Create a [reference model](https://elysiajs.com/tutorial/features/openapi/#reference-model) for the model:
+Create the bookings route group where this schema is used:
 
-```typescript filename="users.ts" mark=5
-export const users = new Elysia({ prefix: "/users" })
-  .decorate("users", new Users())
-  .model({
-    user: userInfo,
-    id: idObject,
-  });
+```typescript filename="src/controllers/bookings.ts" mark=1
+export const bookingsController = new Elysia({ prefix: "/bookings" })
 ```
 
-A reference model lets us reuse a model by referencing its name.
+This route group owns booking-related endpoints and their OpenAPI metadata.
 
 It's also good practice to add possible error responses. Add the following `500` response to the `responses` property:
 
-```typescript filename="users.ts"
+```typescript filename="src/controllers/bookings.ts"
 500: {
-  description: 'Server error',
+  description: "Internal Server Error",
   content: {
-    'application/json': {
+    "application/problem+json": {
       schema: {
-        $ref: '#/components/schemas/errorResponse'
+        $ref: "#/components/schemas/Problem",
       },
-      examples: {
-        "Server error": {
-          value: {
-            message: 'There was an error',
-            status: 500
-          }
-        }
-      }
     }
   }
 }
 ```
 
-Add the definition for the `errorResponse` model below the `idObject` model:
+Add a reusable problem schema for error responses:
 
-```typescript filename="users.ts"
-const errorResponse = t.Object(
+```typescript filename="src/train/schemas.ts"
+export const problemSchema = t.Object(
   {
-    status: t.Number({
-      example: 404,
-    }),
-    message: t.String({
-      example: "User not found :(",
-    }),
-  },
-  {
-    title: "Error response",
-    description: "Error response object",
-    example: {
-      status: 404,
-      message: "User not found :(",
-    },
+    type: t.String({ example: "https://example.com/errors/not-found" }),
+    title: t.String({ example: "Not Found" }),
+    status: t.Number({ example: 404 }),
+    detail: t.String({ example: "The requested resource was not found." }),
   },
 );
 ```
 
-Create a reference model for the `errorResponse` model:
+Reference this problem schema in route responses:
 
-```typescript filename="users.ts" mark=6
-export const users = new Elysia({ prefix: "/users" })
-  .decorate("users", new Users())
-  .model({
-    user: userInfo,
-    id: idObject,
-    errorResponse: errorResponse,
-  });
+```typescript filename="src/controllers/bookings.ts" mark=3:12
+detail: {
+  responses: {
+    404: {
+      description: "Not Found",
+      content: {
+        "application/problem+json": {
+          schema: problemSchema,
+        },
+      },
+    },
+  },
+}
 ```
 
-You'll now see example responses for the **Create user** POST route in Scalar:
+You'll now see example responses for the **Create booking** POST route in Scalar:
 
 ![Example POST request responses](/assets/openapi/elysia/scalar-example-responses.png)
 
@@ -461,41 +467,47 @@ We recommend adding tags to all your Elysia routes. This allows you to group the
 
 To add OpenAPI tags to a route, use the `tags` property to pass in an array of tags in the hook object of the `post()` route:
 
-```typescript filename="users.ts"
-tags: ["Users"];
+```typescript filename="src/controllers/bookings.ts"
+tags: ["Bookings"];
 ```
 
 ### Adding tags to the root OpenAPI document object and adding metadata to tags
 
-Add the following `tags` array to the configuration object of the `swagger` plugin:
+Add the following `tags` array to the configuration object of the `openapi` plugin:
 
-```typescript filename="index.ts" mark=13:20
+```typescript filename="index.ts"
   .use(
-    swagger(
+    openapi(
       {
       documentation: {
         info: {
-          title: 'Users app documentation',
+          title: 'Train Travel API',
           version: packageJson.version,
         },
-        externalDocs: {
-          description: 'Find out more about the Users API',
-          url: 'www.example.com',
-        },
-        tags: [{
-          name: 'Users',
-          description: 'Users operations',
-          externalDocs: {
-            description: 'Find more info here',
-            url: 'https://example.com',
+        tags: [
+          {
+            name: 'Stations',
+            description: 'Find and filter train stations across Europe.',
           },
-        }],
+          {
+            name: 'Trips',
+            description: 'Timetables and routes for train trips between stations.',
+          },
+          {
+            name: 'Bookings',
+            description: 'Create and manage bookings for train trips.',
+          },
+          {
+            name: 'Payments',
+            description: 'Pay for bookings and view payment status.',
+          },
+        ],
       }
     })
   )
 ```
 
-This adds a `tags` array to the root OpenAPI document object. In the above code, we add metadata to the tag by passing in a [Tag Object](https://spec.openapis.org/oas/v3.1.2.html#tag-object) (instead of a string) to the tag array item.
+This adds a `tags` array to the root OpenAPI document object. In the above code, we add metadata to the tag by passing in a [Tag Object](https://spec.openapis.org/oas/v3.0.3.html#tag-object) (instead of a string) to the tag array item.
 
 After adding tags to your routes, you'll see that they are organized by tags in Scalar:
 
@@ -503,42 +515,32 @@ After adding tags to your routes, you'll see that they are organized by tags in 
 
 ## Adding example data, extra information, and tags to the other API routes
 
-Let's improve the other API route operations like we improved the **Create user** route.
+Let's improve the other API route operations with the same pattern used for **Create booking**.
 
-Replace the **Get all users** route with the following lines of code:
+Replace the **Get stations** route with the following lines of code:
 
-```typescript filename="users.ts" mark=2:58
-.get('/', ({ users }) => users.data,
+```typescript filename="src/controllers/stations.ts"
+.get('/', ({ query }) => {
+  const rows = listStations({ search: query.search, country: query.country });
+  return {
+    data: rows,
+    links: {
+      self: 'https://api.example.com/stations?page=1&limit=10',
+    },
+  };
+},
   {
     detail: {
-      summary: 'Get all users',
-      description: 'Get all users from the database',
+      operationId: 'get-stations',
+      summary: 'Get a list of train stations',
+      description: 'Returns a paginated and searchable list of all train stations.',
       responses: {
         200: {
-          description: 'The array of users',
+          description: 'OK',
           content: {
             'application/json': {
               schema: {
-                type: 'array',
-                items: {
-                  $ref: '#/components/schemas/user'
-                },
-              },
-              examples: {
-                basic: {
-                  value: [
-                    {
-                      id: "1",
-                      name: "Alice",
-                      age: 20
-                    },
-                    {
-                      id: "2",
-                      name: "Bob",
-                      age: 25
-                    }
-                  ]
-                }
+                $ref: '#/components/schemas/Wrapper-Collection',
               }
             }
           },
@@ -562,219 +564,178 @@ Replace the **Get all users** route with the following lines of code:
           }
         }
       },
-      tags: ['Users']
+      tags: ['Stations']
     },
   }
 )
 ```
 
-Replace the **Get user** route with the following lines of code:
+Replace the **Get trips** route with the following lines of code:
 
-```typescript filename="users.ts" mark=5:53
-.get('/:id',({ users, params: { id }, error }) => {
-    return users.data.find(user => user.id === id) ?? error(404, 'User not found :(')
+```typescript filename="src/controllers/trips.ts" mark=1:34
+.get('/', ({ query, error }) => {
+    if (!query.origin || !query.destination || !query.date) {
+      return error(400, {
+        type: 'https://example.com/errors/bad-request',
+        title: 'Bad Request',
+        status: 400,
+        detail: 'origin, destination, and date are required.',
+      })
+    }
+
+    return {
+      data: listTrips({
+        origin: query.origin,
+        destination: query.destination,
+        bicycles: query.bicycles,
+        dogs: query.dogs,
+      }),
+      links: {
+        self: `https://api.example.com/trips?origin=${query.origin}&destination=${query.destination}&date=${query.date}`,
+      },
+    }
   },
   {
-    params: 'id',
     detail: {
-      summary: 'Get user',
-      description: 'Get user by id from the database',
+      operationId: 'get-trips',
+      summary: 'Get available train trips',
+      description: 'Returns a list of available train trips between origin and destination stations.',
       responses: {
         200: {
-          description: 'The user object',
+          description: 'A list of available train trips',
           content: {
             'application/json': {
               schema: {
-                $ref: '#/components/schemas/user',
-              },
-              examples: {
-                basic: {
-                  value:
-                    {
-                      id: "1",
-                      name: "Alice",
-                      age: 20
-                    }
-                }
+                $ref: '#/components/schemas/Wrapper-Collection',
               }
             }
           },
+        },
+        400: {
+          description: 'Bad Request',
+          content: {
+            'application/problem+json': {
+              schema: {
+                $ref: '#/components/schemas/Problem'
+              }
+            }
+          }
+        }
+      },
+      tags: ['Trips']
+    },
+  },
+)
+```
+
+Replace the **Delete booking** route with the following lines of code:
+
+```typescript filename="src/controllers/bookings.ts" mark=1:31
+.delete('/:bookingId', ({ params, set, error }) => {
+    const removed = deleteBooking(params.bookingId)
+
+    if (!removed) {
+      return error(404, {
+        type: 'https://example.com/errors/not-found',
+        title: 'Not Found',
+        status: 404,
+        detail: 'The requested resource was not found.',
+      })
+    }
+
+    set.status = 204
+    return ''
+  },
+  {
+    detail: {
+      operationId: 'delete-booking',
+      summary: 'Delete a booking',
+      description: 'Deletes a booking, cancelling the hold on the trip.',
+      responses: {
+        204: {
+          description: 'Booking deleted',
         },
         404: {
-          description: 'User not found',
+          description: 'Not Found',
           content: {
-            'application/json': {
+            'application/problem+json': {
               schema: {
-                $ref: '#/components/schemas/errorResponse'
-              },
-              examples: {
-                "User not found": {
-                  value: {
-                    message: 'User not found :(',
-                    status: 404
-                  }
-                }
+                $ref: '#/components/schemas/Problem'
               }
             }
           }
         }
       },
-      tags: ['Users']
-    },
-  },
-)
-```
-
-Replace the **Delete user** route with the following lines of code:
-
-```typescript filename="users.ts" mark=5:49
-.delete('/:id', ({ users, params: { id }, error }) => {
-    return users.remove(id) ?? error(422, 'Invalid user')
-  },
-  {
-    params: 'id',
-    detail: {
-      summary: 'Delete user',
-      description: 'Delete user by id from the database',
-      responses: {
-        200: {
-          description: 'Deleting user was successful',
-          content: {
-            'application/json': {
-              schema: {
-                $ref: '#/components/schemas/successResponse'
-              },
-              examples: {
-                success: {
-                  value: {
-                    success: true
-                  }
-                }
-              }
-            }
-          },
-        },
-        422: {
-          description: 'Invalid user',
-          content: {
-            'application/json': {
-              schema: {
-                $ref: '#/components/schemas/errorResponse'
-              },
-              examples: {
-                "Invalid user": {
-                  value: {
-                    message: 'Invalid user',
-                    status: 422
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      tags: ['Users']
+      tags: ['Bookings']
     },
   }
 )
 ```
 
-Add the definition for the `successResponse` model below the `errorResponse` model:
+Add a schema for payment responses:
 
-```typescript filename="users.ts"
-const successResponse = t.Object(
+```typescript filename="src/train/schemas.ts"
+export const bookingPaymentSchema = t.Object(
   {
-    success: t.Boolean({
-      example: true,
-    }),
-  },
-  {
-    title: "Success response",
-    description: "Success response object",
-    example: {
-      success: true,
-    },
+    id: t.String({ format: 'uuid', example: '2e3b4f5a-6b7c-8d9e-0f1a-2b3c4d5e6f7a' }),
+    amount: t.Number({ example: 49.99 }),
+    currency: t.String({ example: 'gbp' }),
+    status: t.Union([t.Literal('pending'), t.Literal('succeeded'), t.Literal('failed')]),
   },
 );
 ```
 
-Create a reference model for the `successResponse` model:
+Add the payment route that returns this payment response shape:
 
-```typescript filename="users.ts" mark=7
-export const users = new Elysia({ prefix: "/users" })
-  .decorate("users", new Users())
-  .model({
-    user: userInfo,
-    id: idObject,
-    errorResponse: errorResponse,
-    successResponse: successResponse,
-  });
+```typescript filename="src/controllers/bookings.ts" mark=1:18
+.post('/:bookingId/payment', ({ params, body, error }) => {
+  const booking = findBooking(params.bookingId)
+
+  if (!booking) {
+    return error(404, {
+      type: 'https://example.com/errors/not-found',
+      title: 'Not Found',
+      status: 404,
+      detail: 'The requested resource was not found.',
+    })
+  }
+
+  const payment = createBookingPayment(params.bookingId, body)
+  return {
+    ...payment,
+    links: { booking: `https://api.example.com/bookings/${booking.id}` },
+  }
+})
 ```
 
-Replace the **Update user** route with the following lines of code:
+Replace this section with the **Create booking payment** route:
 
-```typescript filename="users.ts" mark=7:63
-.patch(
-  '/:id',({ users, params: { id }, body: user, error }) => {
-    return users.update(id, user) ?? error(422, 'Invalid user')
+```typescript filename="src/controllers/bookings.ts" mark=1:25
+.post(
+  '/:bookingId/payment',
+  ({ params, body, error }) => {
+    const booking = findBooking(params.bookingId)
+
+    if (!booking) {
+      return error(404, {
+        type: 'https://example.com/errors/not-found',
+        title: 'Not Found',
+        status: 404,
+        detail: 'The requested resource was not found.',
+      })
+    }
+
+    return createBookingPayment(params.bookingId, body)
   },
   {
-    params: 'id',
-    body:
-      t.Partial(
-        t.Omit(
-          userInfo, ['id'],
-          {
-            example: {
-              age: 21
-            }
-          }
-        ),
-      ),
     type: 'json',
+    body: bookingPaymentRequestSchema,
     detail: {
-      summary: 'Update user',
-      description: 'Update user by id from the database',
-      responses: {
-        200: {
-          description: 'Update was successful',
-          content: {
-            'application/json': {
-              schema: {
-                $ref: '#/components/schemas/successResponse'
-              },
-              examples: {
-                Success: {
-                  value: {
-                    success: true
-                  }
-                }
-              }
-            }
-          },
-        },
-        422: {
-          description: 'Invalid user',
-          content: {
-            'application/json': {
-              schema: {
-                $ref: '#/components/schemas/errorResponse'
-              },
-              examples: {
-                "Invalid user": {
-                  value: {
-                    message: 'Invalid user',
-                    status: 422
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      tags: ['Users']
+      operationId: 'create-booking-payment',
+      summary: 'Pay for a booking',
+      tags: ['Payments'],
     },
-  }
+  },
 )
 ```
 
@@ -782,24 +743,24 @@ Replace the **Update user** route with the following lines of code:
 
 When validating an OpenAPI document, [Speakeasy expects a list of servers](https://www.speakeasy.com/docs/best-practices#openapi-best-practices) at the root of the document.
 
-Add a server by adding a `servers` property to the configuration object of the `swagger` plugin:
+Add a server by adding a `servers` property to the configuration object of the `openapi` plugin:
 
-```typescript filename="index.ts" mark=13:18
+```typescript filename="index.ts" mark=13:22
 .use(
-  swagger(
+  openapi(
     {
     documentation: {
       info: {
-        title: 'Users app documentation',
+        title: 'Train Travel API',
         version: packageJson.version,
-      },
-      externalDocs: {
-        description: 'Find out more about the Users API',
-        url: 'www.example.com',
       },
       servers: [
         {
-          url: 'http://localhost:3000/',
+          url: 'https://api.example.com',
+          description: 'Production',
+        },
+        {
+          url: 'http://localhost:3000',
           description: 'Development server',
         },
       ],
@@ -820,12 +781,16 @@ Let's add a Speakeasy extension that adds retries to requests from Speakeasy SDK
 
 ### Adding global retries
 
-Apply the Speakeasy retries extension globally by adding the following `'x-speakeasy-retries'` property to the configuration object of the `swagger` plugin:
+Apply the Speakeasy retries extension globally by adding the following `'x-speakeasy-retries'` property to the configuration object of the `openapi` plugin:
 
-```typescript filename="users.ts" mark=7:17
+```typescript filename="index.ts" mark=13:28
 servers: [
   {
-    url: 'http://localhost:3000/',
+    url: 'https://api.example.com',
+    description: 'Production',
+  },
+  {
+    url: 'http://localhost:3000',
     description: 'Development server',
   },
 ],
@@ -846,47 +811,99 @@ servers: [
 
 You can create a unique retry strategy for a single route by adding a `'x-speakeasy-retries'` property to the route's hook object:
 
-```typescript filename="users.ts" mark=1:11
+```typescript filename="src/controllers/bookings.ts" mark=1:12
       'x-speakeasy-retries': {
         strategy: 'backoff',
         backoff: {
           initialInterval: 300,
           maxInterval: 40000,
           maxElapsedTime: 3000000,
-          exponent: 1.2,
+          exponent: 0.3,
         },
         statusCodes: ['5XX'],
         retryConnectionErrors: true,
       },
-      tags: ['Users']
+      tags: ['Bookings']
     },
   }
 )
-.delete('/:id', ({ users, params: { id }, error }) => {
+.get('/:bookingId', ({ params, error }) => {
 ```
 
 ## Creating an SDK based on your OpenAPI document
 
-Before creating an SDK, we need to save the Elysia Swagger plugin-generated OpenAPI document to a file. OpenAPI files are written as JSON or YAML; we'll save it as a YAML file, as it's easier to read.
+Before creating an SDK, we need to save the Elysia OpenAPI plugin-generated document to a file. OpenAPI files are written as JSON or YAML; we'll save it as a YAML file, as it's easier to read.
 
-### Saving the OpenAPI document to a YAML file using a Bun script
+### Exporting OpenAPI as a YAML file using a Bun script
 
-Let's create a script that uses the [JS-YAML](https://github.com/nodeca/js-yaml) library to convert the JSON OpenAPI document to a YAML string.
+Elysia OpenAPI mainly only seems interested in serve the YAML or rendered API reference documentation over HTTP, but what if we need a `openapi.yaml`? Some folks will run the server then download that YAML via HTTP, but there's a sneaky trick we can use to do it without needing to run the server.
 
-Install the library and its types:
+The main application setup for Elysia in `src/index.ts` creates an app instance and listens to a port in one step, but we can split that app setup and listening into two steps. This allows us to create an app instance without starting a server, which we can use to request the OpenAPI document in JSON format directly from the app instance in a script.
+
+This can be done with a new `src/app.ts` which contains everything the `src/index.ts` file contained, except for the `.listen(3000)` part, and exports a `createApp` function that returns the Elysia app instance:
+
+```ts filename="src/app.ts"
+import { Elysia } from "elysia";
+import { stationsController } from "./controllers/stations";
+import { tripsController } from "./controllers/trips";
+import { bookingsController } from "./controllers/bookings";
+import { openapi } from "@elysia/openapi";
+import packageJson from "../package.json";
+
+export const createApp = () =>
+  new Elysia()
+    .use(stationsController)
+    .use(tripsController)
+    .use(bookingsController)
+    .use(
+      openapi({
+        openapiVersion: "3.1.2",
+        documentation: {
+          info: {
+            title: "Train Travel API",
+            description:
+              "API for finding and booking train trips across Europe.",
+            version: packageJson.version,
+            // ...
+      })
+    );
+
+export type App = ReturnType<typeof createApp>;
+```
+
+Now to get `src/index.ts` working, we just need to import the `createApp` function and call it to create an app instance, then call `.listen(3000)` on that instance:
+
+```ts filename="src/index.ts"
+import { createApp } from './app'
+
+createApp().listen(3000)
+```
+
+With that done, time to reuse that application creation to generate an OpenAPI YAML file. First, install the `js-yaml` package to convert the OpenAPI JSON to YAML:
 
 ```bash filename="Terminal"
 bun add js-yaml @types/js-yaml
 ```
 
-Create a script called `generateOpenAPIYamlFile.ts` in the `src` folder and add the following lines of code to it:
+Then create a script called `generateOpenAPIDocument.ts` in the `src` folder and add the following lines of code to it:
 
-```typescript filename="generateOpenAPIYamlFile.ts"
+```typescript filename="generateOpenAPIDocument.ts"
 import * as yaml from "js-yaml";
+import { createApp } from "./app";
 
-async function generateOpenAPIYaml() {
+async function generateOpenAPI() {
   try {
-    const response = await fetch("http://localhost:3000/swagger/json");
+    const app = createApp();
+    const response = await app.handle(
+      new Request("http://elysia/openapi/json")
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to generate OpenAPI JSON: ${response.status} ${response.statusText}`
+      );
+    }
+
     const openAPIObject = await response.json();
 
     // Convert to YAML
@@ -901,24 +918,23 @@ async function generateOpenAPIYaml() {
   }
 }
 
-generateOpenAPIYaml();
+generateOpenAPI();
 ```
 
-This script fetches the JSON OpenAPI document from the Scalar OpenAPI document endpoint, converts it to a YAML string, and then saves it as a file.
+To run this functionality add this script in `package.json`:
 
-Add the following script to your `package.json` file:
-
-```bash filename="Terminal"
-"generate:openapi": "bun run src/generateOpenAPIYamlFile.ts"
+```json filename="package.json"
+  "scripts": {
+    "generate:openapi": "bun run src/generateOpenAPIDocument.ts"
 ```
 
-Run the development server and then run the `generate:openapi` script using the following command:
+Run the `generate:openapi` script using the following command:
 
 ```bash filename="Terminal"
 bun run generate:openapi
 ```
 
-This generates an `openapi.yaml` file in your root folder.
+This generates an `openapi.yaml` file in your root folder, which we can then use for all sorts of things, such as generating an SDK with Speakeasy.
 
 ### Linting the OpenAPI document with Speakeasy
 
@@ -999,7 +1015,7 @@ Note that the SDK is not ready for production use. To get it production-ready, f
 
 The SDK includes Zod as a bundled dependency, as can be seen in the `sdk-typescript/package.json` file.
 
-Replace the code in the `src/main.ts` file with the following example code taken from the `sdk-typescript/docs/sdks/users/README.md` file:
+Replace the code in the `src/main.ts` file with the following example code adapted from the generated bookings SDK usage docs:
 
 ```typescript filename="main.ts"  
 import { SDK } from "./sdk-typescript/src/"; // Adjust the path as necessary e.g. if your generated SDK has a different name
@@ -1007,7 +1023,7 @@ import { SDK } from "./sdk-typescript/src/"; // Adjust the path as necessary e.g
 const sdk = new SDK();
 
 async function run() {
-  const result = await sdk.users.getUsers();
+  const result = await sdk.bookings.getBookings();
 
   // Handle the result
   console.log({ result });
@@ -1033,14 +1049,9 @@ bun add @elysiajs/cors
 Import the CORS plugin, then register it by passing the plugin into the `use()` method and chaining the `use()` method to the `Elysia` instance:
 
 ```typescript filename="index.ts"
-// !mark(1,8:12)
 import { cors } from "@elysiajs/cors";
 
 const app = new Elysia()
-  .onError(({ error, code }) => {
-    if (code === "NOT_FOUND") return "Not Found :(";
-    console.error(error);
-  })
   .use(
     cors({
       origin: "http://localhost:5173",
@@ -1052,13 +1063,20 @@ Open `http://localhost:5173` in your browser, then open your browser dev tools. 
 
 ```
 {
-  "result": [
-    {
-      "id": "1",
-      "name": "Alice",
-      "age": 20
+  "result": {
+    "data": [
+      {
+        "id": "1725ff48-ab45-4bb5-9d02-88745177dedb",
+        "trip_id": "ea399ba1-6d95-433f-92d1-83f67b775594",
+        "passenger_name": "John Doe",
+        "has_bicycle": true,
+        "has_dog": false
+      }
+    ],
+    "links": {
+      "self": "https://api.example.com/bookings?page=1&limit=10"
     }
-  ]
+  }
 }
 ```
 
@@ -1067,19 +1085,19 @@ The SDK functions are type safe and include TypeScript autocompletion for argume
 Consider the following example scenario:
 
 ```typescript filename="main.ts"
-const userOne = result[0].email;
+const firstBooking = result.data[0].email;
 ```
 
 When you try to access a property that doesn't exist, as in the code block above, you get a TypeScript error:
 
 ```
-Property 'email' does not exist on type 'User'.
+Property 'email' does not exist on type 'Booking'.
 ```
 
 ## Further reading
 
-This guide covered the basics of generating an OpenAPI document using Elysia. Here are some resources to help you learn more about OpenAPI, the Elysia Swagger plugin, and Speakeasy:
+This guide covered the basics of generating an OpenAPI document using Elysia. Here are some resources to help you learn more about OpenAPI, the Elysia OpenAPI plugin, and Speakeasy:
 
-- [Elysia Swagger plugin](https://elysiajs.com/plugins/openapi): Learn more about using Elysia to generate OpenAPI documents. Elysia has first-class support for OpenAPI and follows the OpenAPI Specification by default.
+- [Elysia OpenAPI plugin](https://elysiajs.com/plugins/openapi): Learn more about using Elysia to generate OpenAPI documents. Elysia has first-class support for OpenAPI and follows the OpenAPI Specification by default.
 - [Speakeasy documentation](https://www.speakeasy.com/docs): Speakeasy has extensive documentation covering how to generate SDKs from OpenAPI documents, customize SDKs, and more.
 - [Speakeasy OpenAPI reference](https://www.speakeasy.com/openapi): Review a detailed reference on the OpenAPI Specification.
