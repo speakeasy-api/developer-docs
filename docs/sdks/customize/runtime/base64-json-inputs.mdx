@@ -1,0 +1,98 @@
+---
+description: "Learn how to opt JSON string fields into accepting binary IO or filesystem path inputs that are base64-encoded at request time."
+sidebar_label: "Base64 JSON file inputs"
+slug: "/customize-sdks/base64-json-inputs/"
+---
+
+import { Callout } from "@/mdx/components";
+
+# Base64 JSON file inputs
+
+Use the `x-speakeasy-base64-input-mode` extension to let a JSON string field accept binary IO streams or filesystem paths in addition to a pre-encoded base64 string. The generated SDK base64-encodes non-string inputs at request construction time and the wire payload is always a JSON string.
+
+<Callout title="Supported languages" type="info">
+Implemented for Python only. Other targets currently ignore the extension.
+</Callout>
+
+## Configuring the extension
+
+Add `x-speakeasy-base64-input-mode: file` to a JSON string property marked as base64 — either `format: byte` (OpenAPI 3.0+) or `contentEncoding: base64` (OpenAPI 3.1+). Without the extension, the field remains a plain `str`.
+
+```yaml
+properties:
+  dataByte:
+    type: string
+    format: byte
+    x-speakeasy-base64-input-mode: file
+  dataContentEncoding:
+    type: string
+    contentEncoding: base64
+    x-speakeasy-base64-input-mode: file
+```
+
+## Generated Python
+
+Opted-in fields are typed as `Base64EncodedString`, a `pydantic` alias that runs a `BeforeValidator` to convert non-string inputs to a base64 string before storage.
+
+```python
+from os import PathLike
+from typing import IO, Union
+
+Base64FileInput = Union[IO[bytes], PathLike[str]]
+
+Base64EncodedString = Annotated[str, BeforeValidator(encode_base64_file_input)]
+```
+
+The `encode_base64_file_input` validator accepts:
+
+- A `PathLike` value — the file at that path is read in binary mode and base64-encoded.
+- A binary IO object (any `io.IOBase` returning `bytes`) — the stream is read and base64-encoded.
+- A `str` — passed through unchanged (treated as already encoded).
+
+Any other value raises a `TypeError`.
+
+The generated request model exposes the field as a plain `str` after validation, so downstream attribute reads remain statically typed as `str` even when the same component is reused on the response side.
+
+```python
+class Base64InputFileModeRequest(BaseModel):
+    data_byte: Annotated[Base64EncodedString, pydantic.Field(alias="dataByte")]
+    data_content_encoding: Annotated[
+        Base64EncodedString, pydantic.Field(alias="dataContentEncoding")
+    ]
+```
+
+SDK methods accept the wider input union at the call site:
+
+```python
+def post_base64_input_mode(
+    self,
+    *,
+    data_byte: Union[Base64EncodedString, Union[str, Base64FileInput]],
+    data_content_encoding: Union[Base64EncodedString, Union[str, Base64FileInput]],
+) -> models.operations.PostBase64InputModeResponse:
+    ...
+```
+
+## Usage
+
+```python
+# filesystem path
+sdk.post_base64_input_mode(
+    data_byte=Path("./payload.bin"),
+    data_content_encoding="dGVzdA==",
+)
+
+# open binary stream
+with open("./payload.bin", "rb") as fh:
+    sdk.post_base64_input_mode(data_byte=fh, data_content_encoding=fh)
+
+# pre-encoded base64 string
+sdk.post_base64_input_mode(data_byte="dGVzdA==", data_content_encoding="dGVzdA==")
+```
+
+## Limitations
+
+- Python (`pythonv2`) only.
+- Accepted non-string inputs are restricted to `Union[IO[bytes], os.PathLike]`. `bytes` and `bytearray` literals are not auto-encoded; encode them with `base64.b64encode(...).decode("ascii")` before passing them in.
+- Generated SDK methods emit `# type: ignore[arg-type]` at the request construction site to bridge the wider method-argument union (`Union[str, Base64FileInput]`) and the declared field type (`str`). At runtime the `BeforeValidator` converts the value before the `str` validator runs, so the suppression is aligned with sound runtime behavior.
+- Schema components reused across request and response leak the wider input union into the response-side `TypedDict`. A hand-built response literal will type-check with `BytesIO`/`PathLike` even though the wire only ever carries a `str`. Prefer `BaseModel` attribute access on responses, which stays typed as `str`.

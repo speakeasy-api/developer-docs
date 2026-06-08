@@ -101,6 +101,50 @@ authentication may need to be provided.
 # .... more openapi documents can be added here
 ```
 
+A location can be one of:
+
+- A local file path (`./openapi.yaml`)
+- A remote URL (`https://example.com/openapi.yaml`)
+- A Speakeasy Registry reference (`registry.speakeasy.com/my-org/my-api`)
+- A reference to another source in the same workflow, using the `source:` prefix (see [Source references](#source-references))
+
+### Source references
+
+A source can use the output of another source in the same workflow as one of its inputs by setting the location to `source:<source-name>`. Speakeasy builds a dependency graph (DAG) across sources and resolves each referenced source first, then feeds its resolved document into the dependent source.
+
+This is useful when you want to apply an overlay or transformation to a single input _before_ it is merged into a larger combined document, rather than applying it to the whole merged result. For example, scoping an overlay to one service's spec before merging all services together:
+
+```yaml
+sources:
+  # Apply an overlay to just the ordering API before it is merged.
+  ordering-overlaid:
+    inputs:
+      - location: ./specs/ordering.openapi.yaml
+    overlays:
+      - location: ./overlays/ordering-unauthorized-text-plain.yaml
+    # No output is required. The resolved document is passed
+    # directly to any source that references it.
+
+  # Merge several specs, pulling in the overlaid ordering spec by reference.
+  petstore-platform:
+    inputs:
+      - location: ./specs/petstore.openapi.yaml
+      - location: source:ordering-overlaid
+      - location: ./specs/inventory.openapi.yaml
+    overlays:
+      - location: ./overlays/merged-security-schemes.yaml
+    output: ./merged_spec/petstore-merged-spec.yaml
+    registry:
+      location: registry.speakeasy.com/my-org/my-api
+```
+
+Notes:
+
+- Use the bare source name with the `source:` prefix (`source:ordering-overlaid`). A plain `ordering-overlaid` without the prefix is treated as a file path and will not resolve.
+- `output` is optional on a referenced source. When omitted, Speakeasy resolves the document to a temporary location and passes it to the dependent source automatically. Set `output` only when you also want the intermediate document written to a stable path.
+- Speakeasy validates the graph before running. Referencing a source that does not exist fails with `source "<name>" references unknown source "<missing>"`, and a cycle fails with `circular source dependency detected: a -> b -> a`.
+- Diamond dependencies are supported. If two sources reference the same upstream source, it is resolved once and reused.
+
 ### Model namespace
 
 When merging multiple OpenAPI documents, schema components with the same name can cause naming conflicts in generated code. The `modelNamespace` option allows each input document to specify a namespace for its schema components, ensuring unique names in the merged output.

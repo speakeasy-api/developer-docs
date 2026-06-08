@@ -57,7 +57,6 @@ speakeasy [flags]
 * [speakeasy configure](/docs/speakeasy-reference/cli/configure)	 - Configure your Speakeasy SDK Setup.
 * [speakeasy diff](/docs/speakeasy-reference/cli/diff)	 - Compare spec revisions and show SDK changes
 * [speakeasy lint](/docs/speakeasy-reference/cli/lint)	 - Lint/Validate OpenAPI documents and Speakeasy configuration files
-* [speakeasy mcp](/docs/speakeasy-reference/cli/mcp)	 - Commands for MCP server management
 * [speakeasy merge](/docs/speakeasy-reference/cli/merge)	 - Merge multiple OpenAPI documents into a single document
 * [speakeasy openapi](/docs/speakeasy-reference/cli/openapi)	 - Utilities for working with OpenAPI documents
 * [speakeasy overlay](/docs/speakeasy-reference/cli/overlay)	 - Work with OpenAPI Overlays
