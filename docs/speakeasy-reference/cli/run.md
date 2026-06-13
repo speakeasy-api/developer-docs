@@ -49,7 +49,7 @@ speakeasy run [flags]
       --skip-upload-spec          skip uploading the spec to the registry
       --skip-versioning           skip automatic SDK version increments
   -s, --source string             source to run. specify 'all' to run all sources
-  -t, --target string             target to run. specify 'all' to run all targets
+  -t, --target string             target ID to run (as defined under 'targets' in workflow.yaml). specify 'all' to run all targets, or a comma-separated list of target IDs (e.g. 'my-first-target,my-second-target') to run a specific subset with --parallel
       --verbose                   Verbose logging
   -w, --watch                     launch the web studio for improving the quality of the generated SDK
 ```
