@@ -1064,36 +1064,6 @@ const meta = {
               },
             },
           },
-          /*
-            Elements
-          */
-          "__group-elements": {
-            type: "separator",
-            title: <SidebarSeparator>{"Elements"}</SidebarSeparator>,
-          },
-          "gram-elements": {
-            title: "Elements",
-            display: "children",
-            items: {
-              "elements-overview": {
-                title: "Introduction",
-                theme: {
-                  layout: "full",
-                  toc: false,
-                },
-              },
-              quickstart: {
-                title: "Quickstart",
-                theme: {
-                  layout: "default",
-                  toc: true,
-                },
-              },
-              plugins: {
-                title: "Plugins",
-              },
-            },
-          },
         },
       },
 
