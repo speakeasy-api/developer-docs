@@ -1,8 +1,8 @@
 ---
+title: "overlay"
 asIndexPage: true
 ---
 
-# overlay  
 `speakeasy overlay`  
 
 
@@ -10,7 +10,7 @@ Work with OpenAPI Overlays
 
 ## Details
 
-# Overlay
+## Overlay
 
 Command group for working with OpenAPI Overlays.
 

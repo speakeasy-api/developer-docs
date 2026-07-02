@@ -1,8 +1,8 @@
 ---
+title: "suggest"
 asIndexPage: true
 ---
 
-# suggest  
 `speakeasy suggest`  
 
 
@@ -11,7 +11,7 @@ Automatically improve your OpenAPI document with an LLM
 ## Details
 
 
-# Suggest 
+## Suggest 
 
 Automatically optimise your OpenAPI document for SDK generation with an LLM powered suggestions
 

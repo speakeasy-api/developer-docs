@@ -1,4 +1,7 @@
-# clean  
+---
+title: "clean"
+---
+
 `speakeasy clean`  
 
 

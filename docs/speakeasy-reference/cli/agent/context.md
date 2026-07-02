@@ -1,4 +1,7 @@
-# context  
+---
+title: "context"
+---
+
 `speakeasy agent context`  
 
 

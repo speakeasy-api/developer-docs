@@ -1,4 +1,7 @@
-# diff  
+---
+title: "diff"
+---
+
 `speakeasy openapi diff`  
 
 

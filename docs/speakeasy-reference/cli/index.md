@@ -1,8 +1,8 @@
 ---
+title: "speakeasy"
 asIndexPage: true
 ---
 
-# speakeasy  
 `speakeasy`  
 
 
@@ -10,7 +10,7 @@ The Speakeasy CLI tool provides access to the Speakeasy.com platform
 
 ## Details
 
-# Speakeasy
+## Speakeasy
 
 A CLI tool for interacting with the [Speakeasy platform](https://www.speakeasy.com/) and its APIs.
 

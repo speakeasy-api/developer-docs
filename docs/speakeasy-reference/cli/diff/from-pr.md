@@ -1,4 +1,7 @@
-# from-pr  
+---
+title: "from-pr"
+---
+
 `speakeasy diff from-pr`  
 
 
@@ -6,7 +9,7 @@ Compare specs from a GitHub PR
 
 ## Details
 
-# Diff From PR
+## Diff From PR
 
 Compare spec revisions from a GitHub pull request created by Speakeasy.
 

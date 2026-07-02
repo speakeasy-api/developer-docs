@@ -1,8 +1,8 @@
 ---
+title: "configure"
 asIndexPage: true
 ---
 
-# configure  
 `speakeasy configure`  
 
 
@@ -10,7 +10,7 @@ Configure your Speakeasy SDK Setup.
 
 ## Details
 
-# Configure
+## Configure
 
 Configure your Speakeasy workflow file.
 

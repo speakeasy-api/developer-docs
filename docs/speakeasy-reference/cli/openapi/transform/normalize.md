@@ -1,4 +1,7 @@
-# normalize  
+---
+title: "normalize"
+---
+
 `speakeasy openapi transform normalize`  
 
 

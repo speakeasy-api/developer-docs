@@ -1,8 +1,8 @@
 ---
+title: "diff"
 asIndexPage: true
 ---
 
-# diff  
 `speakeasy diff`  
 
 
@@ -10,7 +10,7 @@ Compare spec revisions and show SDK changes
 
 ## Details
 
-# Diff
+## Diff
 
 Compare OpenAPI spec revisions and show **SDK-level changes** - how the generated
 SDK methods, models, and types would differ between two spec versions.

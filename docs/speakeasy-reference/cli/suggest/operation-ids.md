@@ -1,4 +1,7 @@
-# operation-ids  
+---
+title: "operation-ids"
+---
+
 `speakeasy suggest operation-ids`  
 
 

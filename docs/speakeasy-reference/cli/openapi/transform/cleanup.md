@@ -1,4 +1,7 @@
-# cleanup  
+---
+title: "cleanup"
+---
+
 `speakeasy openapi transform cleanup`  
 
 

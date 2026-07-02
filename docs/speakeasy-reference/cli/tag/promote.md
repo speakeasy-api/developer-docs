@@ -1,4 +1,7 @@
-# promote  
+---
+title: "promote"
+---
+
 `speakeasy tag promote`  
 
 

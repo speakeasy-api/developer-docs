@@ -1,4 +1,7 @@
-# openapi  
+---
+title: "openapi"
+---
+
 `speakeasy lint openapi`  
 
 
@@ -6,7 +9,7 @@ Lint an OpenAPI document
 
 ## Details
 
-# Lint 
+## Lint 
 ## OpenAPI
 
 Validates an OpenAPI document is valid and conforms to the Speakeasy OpenAPI specification.

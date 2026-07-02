@@ -1,4 +1,7 @@
-# error-types  
+---
+title: "error-types"
+---
+
 `speakeasy suggest error-types`  
 
 

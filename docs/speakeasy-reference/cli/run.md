@@ -1,4 +1,7 @@
-# run  
+---
+title: "run"
+---
+
 `speakeasy run`  
 
 
@@ -6,7 +9,7 @@ Run all the workflows defined in your workflow.yaml file. This can include multi
 
 ## Details
 
-# Run 
+## Run 
  Execute the workflow(s) defined in your `.speakeasy/workflow.yaml` file.
 
 A workflow can consist of multiple targets that define a source OpenAPI document that can be downloaded from a URL, exist as a local file, or be created via merging multiple OpenAPI documents together and/or overlaying them with an OpenAPI overlay document.

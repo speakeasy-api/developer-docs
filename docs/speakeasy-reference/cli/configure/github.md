@@ -1,4 +1,7 @@
-# github  
+---
+title: "github"
+---
+
 `speakeasy configure github`  
 
 

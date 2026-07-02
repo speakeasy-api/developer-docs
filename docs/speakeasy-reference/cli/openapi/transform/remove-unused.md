@@ -1,4 +1,7 @@
-# remove-unused  
+---
+title: "remove-unused"
+---
+
 `speakeasy openapi transform remove-unused`  
 
 

@@ -1,4 +1,7 @@
-# file  
+---
+title: "file"
+---
+
 `speakeasy patches view-diff file`  
 
 

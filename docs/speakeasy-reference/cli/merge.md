@@ -1,4 +1,7 @@
-# merge  
+---
+title: "merge"
+---
+
 `speakeasy merge`  
 
 

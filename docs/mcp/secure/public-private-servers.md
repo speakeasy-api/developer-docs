@@ -62,7 +62,7 @@ Gram OAuth provides a UI-based authentication flow as an alternative to manually
 
 With private servers, the documentation page cannot be made public. Access must be granted through one of the authentication methods above.
 
-# Pass-through Authentication vs. Managed Authentication
+## Pass-through Authentication vs. Managed Authentication
 
 Pass-through authentication allows users to directly provide their API credentials to access the underlying services, while managed authentication uses stored Gram environments to handle credentials centrally.
 

@@ -1,8 +1,8 @@
 ---
+title: "view-diff"
 asIndexPage: true
 ---
 
-# view-diff  
 `speakeasy patches view-diff`  
 
 

@@ -1,4 +1,7 @@
-# tests  
+---
+title: "tests"
+---
+
 `speakeasy configure tests`  
 
 

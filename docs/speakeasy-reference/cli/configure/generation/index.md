@@ -1,8 +1,8 @@
 ---
+title: "generation"
 asIndexPage: true
 ---
 
-# generation  
 `speakeasy configure generation`  
 
 

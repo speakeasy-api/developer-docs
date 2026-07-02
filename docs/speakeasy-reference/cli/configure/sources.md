@@ -1,4 +1,7 @@
-# sources  
+---
+title: "sources"
+---
+
 `speakeasy configure sources`  
 
 

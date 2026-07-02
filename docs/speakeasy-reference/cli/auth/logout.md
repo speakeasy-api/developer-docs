@@ -1,4 +1,7 @@
-# logout  
+---
+title: "logout"
+---
+
 `speakeasy auth logout`  
 
 

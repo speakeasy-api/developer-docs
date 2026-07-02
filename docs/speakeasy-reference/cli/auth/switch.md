@@ -1,4 +1,7 @@
-# switch  
+---
+title: "switch"
+---
+
 `speakeasy auth switch`  
 
 

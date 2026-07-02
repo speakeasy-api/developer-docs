@@ -1,4 +1,7 @@
-# apply  
+---
+title: "apply"
+---
+
 `speakeasy tag apply`  
 
 

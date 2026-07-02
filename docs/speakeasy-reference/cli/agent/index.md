@@ -1,8 +1,8 @@
 ---
+title: "agent"
 asIndexPage: true
 ---
 
-# agent  
 `speakeasy agent`  
 
 

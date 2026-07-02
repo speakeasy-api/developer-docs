@@ -1,4 +1,7 @@
-# view-pristine  
+---
+title: "view-pristine"
+---
+
 `speakeasy patches view-pristine`  
 
 

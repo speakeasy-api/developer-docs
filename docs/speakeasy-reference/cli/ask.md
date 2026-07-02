@@ -1,4 +1,7 @@
-# ask  
+---
+title: "ask"
+---
+
 `speakeasy ask`  
 
 

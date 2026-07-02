@@ -1,4 +1,7 @@
-# config  
+---
+title: "config"
+---
+
 `speakeasy lint config`  
 
 

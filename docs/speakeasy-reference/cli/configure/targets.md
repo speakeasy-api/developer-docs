@@ -1,4 +1,7 @@
-# targets  
+---
+title: "targets"
+---
+
 `speakeasy configure targets`  
 
 

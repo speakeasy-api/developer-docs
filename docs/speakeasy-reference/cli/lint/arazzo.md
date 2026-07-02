@@ -1,4 +1,7 @@
-# arazzo  
+---
+title: "arazzo"
+---
+
 `speakeasy lint arazzo`  
 
 

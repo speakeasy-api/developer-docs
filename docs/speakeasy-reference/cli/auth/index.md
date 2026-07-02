@@ -1,8 +1,8 @@
 ---
+title: "auth"
 asIndexPage: true
 ---
 
-# auth  
 `speakeasy auth`  
 
 

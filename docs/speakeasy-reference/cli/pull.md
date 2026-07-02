@@ -1,4 +1,7 @@
-# pull  
+---
+title: "pull"
+---
+
 `speakeasy pull`  
 
 

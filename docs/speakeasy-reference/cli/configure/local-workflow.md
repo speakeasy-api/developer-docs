@@ -1,4 +1,7 @@
-# local-workflow  
+---
+title: "local-workflow"
+---
+
 `speakeasy configure local-workflow`  
 
 

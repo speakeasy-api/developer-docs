@@ -1,4 +1,7 @@
-# status  
+---
+title: "status"
+---
+
 `speakeasy status`  
 
 

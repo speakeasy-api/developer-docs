@@ -1,4 +1,7 @@
-# files  
+---
+title: "files"
+---
+
 `speakeasy diff files`  
 
 
@@ -6,7 +9,7 @@ Compare two local spec files
 
 ## Details
 
-# Diff Files
+## Diff Files
 
 Compare two OpenAPI spec files directly from disk and show SDK-level changes.
 

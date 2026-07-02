@@ -1,4 +1,7 @@
-# activate  
+---
+title: "activate"
+---
+
 `speakeasy billing activate`  
 
 

@@ -1,4 +1,7 @@
-# registry  
+---
+title: "registry"
+---
+
 `speakeasy diff registry`  
 
 
@@ -6,7 +9,7 @@ Compare specs by registry namespace and digests
 
 ## Details
 
-# Diff Registry
+## Diff Registry
 
 Compare two OpenAPI spec revisions from the Speakeasy registry and show SDK-level changes.
 

@@ -1,4 +1,7 @@
-# setup-skills  
+---
+title: "setup-skills"
+---
+
 `speakeasy agent setup-skills`  
 
 

@@ -1,4 +1,7 @@
-# update  
+---
+title: "update"
+---
+
 `speakeasy update`  
 
 

@@ -1,4 +1,7 @@
-# repro  
+---
+title: "repro"
+---
+
 `speakeasy repro`  
 
 
@@ -6,7 +9,7 @@ Reproduce a failed generation locally
 
 ## Details
 
-# Reproduce a failed generation locally
+## Reproduce a failed generation locally
 
 Download and reproduce a failed SDK generation locally for debugging purposes.
 

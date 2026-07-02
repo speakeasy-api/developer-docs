@@ -1,4 +1,7 @@
-# publishing  
+---
+title: "publishing"
+---
+
 `speakeasy configure publishing`  
 
 

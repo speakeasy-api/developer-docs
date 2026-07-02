@@ -1,8 +1,8 @@
 ---
+title: "lint"
 asIndexPage: true
 ---
 
-# lint  
 `speakeasy lint`  
 
 
@@ -10,7 +10,7 @@ Lint/Validate OpenAPI documents and Speakeasy configuration files
 
 ## Details
 
-# Lint 
+## Lint 
  The `lint` command provides a set of commands for linting OpenAPI docs and more.
 
 ## Usage

@@ -1,4 +1,7 @@
-# filter-operations  
+---
+title: "filter-operations"
+---
+
 `speakeasy openapi transform filter-operations`  
 
 

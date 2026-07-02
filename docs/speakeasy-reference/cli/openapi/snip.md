@@ -1,4 +1,7 @@
-# snip  
+---
+title: "snip"
+---
+
 `speakeasy openapi snip`  
 
 

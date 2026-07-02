@@ -1,8 +1,8 @@
 ---
+title: "patches"
 asIndexPage: true
 ---
 
-# patches  
 `speakeasy patches`  
 
 

@@ -1,8 +1,8 @@
 ---
+title: "tag"
 asIndexPage: true
 ---
 
-# tag  
 `speakeasy tag`  
 
 

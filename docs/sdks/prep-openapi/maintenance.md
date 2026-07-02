@@ -3,8 +3,6 @@ description: "Learn how Speakeasy automatically suggests improvements to OpenAPI
 title: "Speakeasy Suggest"
 ---
 
-# Speakeasy Suggest
-
 Maintaining an OpenAPI schema can be time-consuming, is influenced by the idiosyncrasies of server-side frameworks
 used to generate it, and directly affects downstream artifacts like documentation and SDKs. Speakeasy Suggest is an
 AI-powered tool that manages the details of creating excellent OpenAPI documents.
@@ -12,7 +10,7 @@ AI-powered tool that manages the details of creating excellent OpenAPI documents
 Speakeasy Suggest reduces the burden of perfecting OpenAPI documents by automatically suggesting improvements using
 AI. This represents the first of many AI-powered features designed to make spec maintenance easier.
 
-# Auto-fix with the Speakeasy Studio UI
+## Auto-fix with the Speakeasy Studio UI
 
 The Speakeasy Studio UI provides the easiest way to get automatic suggestions. The studio interacts with local
 OpenAPI documents to fix issues, manage overlays, regenerate SDKs, and more.

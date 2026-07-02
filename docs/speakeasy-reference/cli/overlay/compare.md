@@ -1,4 +1,7 @@
-# compare  
+---
+title: "compare"
+---
+
 `speakeasy overlay compare`  
 
 

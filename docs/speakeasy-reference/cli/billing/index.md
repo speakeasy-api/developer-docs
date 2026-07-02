@@ -1,8 +1,8 @@
 ---
+title: "billing"
 asIndexPage: true
 ---
 
-# billing  
 `speakeasy billing`  
 
 

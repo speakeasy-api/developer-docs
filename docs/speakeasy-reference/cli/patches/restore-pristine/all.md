@@ -1,4 +1,7 @@
-# all  
+---
+title: "all"
+---
+
 `speakeasy patches restore-pristine all`  
 
 

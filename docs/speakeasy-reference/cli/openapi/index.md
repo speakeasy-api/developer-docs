@@ -1,8 +1,8 @@
 ---
+title: "openapi"
 asIndexPage: true
 ---
 
-# openapi  
 `speakeasy openapi`  
 
 
@@ -10,7 +10,7 @@ Utilities for working with OpenAPI documents
 
 ## Details
 
-# OpenAPI 
+## OpenAPI 
  The `openapi` command provides a set of commands for visualizing, linting and transforming OpenAPI documents.
 
 ## Usage

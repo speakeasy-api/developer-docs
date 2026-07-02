@@ -1,4 +1,7 @@
-# validate  
+---
+title: "validate"
+---
+
 `speakeasy overlay validate`  
 
 

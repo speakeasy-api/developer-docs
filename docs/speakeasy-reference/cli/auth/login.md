@@ -1,4 +1,7 @@
-# login  
+---
+title: "login"
+---
+
 `speakeasy auth login`  
 
 

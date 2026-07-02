@@ -1,8 +1,8 @@
 ---
+title: "restore-pristine"
 asIndexPage: true
 ---
 
-# restore-pristine  
 `speakeasy patches restore-pristine`  
 
 

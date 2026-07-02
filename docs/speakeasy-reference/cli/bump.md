@@ -1,4 +1,7 @@
-# bump  
+---
+title: "bump"
+---
+
 `speakeasy bump`  
 
 
@@ -6,7 +9,7 @@ Bumps the version of a Speakeasy Generation Target
 
 ## Details
 
-# Bump
+## Bump
 
 Bumps the version of a Speakeasy Generation Target, run within the target's directory. Allows the bumping of patch, minor, and major versions or setting to a specific version.
 

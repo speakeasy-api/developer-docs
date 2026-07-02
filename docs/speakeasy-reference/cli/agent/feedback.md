@@ -1,4 +1,7 @@
-# feedback  
+---
+title: "feedback"
+---
+
 `speakeasy agent feedback`  
 
 

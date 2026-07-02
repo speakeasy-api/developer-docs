@@ -1,4 +1,7 @@
-# convert-swagger  
+---
+title: "convert-swagger"
+---
+
 `speakeasy openapi transform convert-swagger`  
 
 

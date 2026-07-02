@@ -1,4 +1,7 @@
-# check  
+---
+title: "check"
+---
+
 `speakeasy configure generation check`  
 
 
