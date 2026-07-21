@@ -329,6 +329,21 @@ Always write "frontend" and "backend" as single words.
 
 Don't give "internet" an initial capital unless it appears at the start of a sentence.
 
+#### OpenAPI description document vs OpenAPI specification
+
+"The OpenAPI Specification" (capitalized, often abbreviated OAS) refers to the
+standard itself, published by the OpenAPI Initiative.
+
+A YAML or JSON document that describes an API and conforms to the standard is
+an "OpenAPI description" or "OpenAPI description document", not a "spec" or
+"specification".
+
+- ❌ Upload your OpenAPI spec.
+- ❌ Generate an SDK from your OpenAPI specification.
+- ✅ Upload your OpenAPI description document.
+- ✅ Generate an SDK from your OpenAPI description.
+- ✅ This guide assumes familiarity with the OpenAPI Specification.
+
 #### npm
 
 Always write "npm" in lowercase. Never capitalize as "NPM" or treat it as an acronym. See [npm branding guidelines](https://docs.npmjs.com/policies/logos-and-usage).
