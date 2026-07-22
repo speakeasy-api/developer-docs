@@ -5,9 +5,11 @@ description: Learn how authorization works in the Model Context Protocol.
 
 import { Callout } from "@/mdx/components";
 
-# What is MCP authorization?
+<Callout title="Governing MCP across your organization?" type="info">
+  Speakeasy's [AI control plane](/product/ai-control-plane) connects, secures, and observes every agent and MCP server from one entry point — with SSO, RBAC, runtime guardrails, and a full audit trail.
+</Callout>
 
-Imagine giving an AI assistant the keys to your database, customer records, or financial systems. Since the Model Context Protocol (MCP) allows agentic clients to access various parts of your systems as [tools](/mcp/building-servers/protocol-reference/tools) and [resources](/mcp/building-servers/protocol-reference/resources), how do you ensure that only the right agents can access the right tools?
+Imagine giving an AI assistant the keys to your database, customer records, or financial systems. Since the Model Context Protocol (MCP) allows agentic clients to access various parts of your systems as [tools](/mcp/core-concepts/tools) and [resources](/mcp/core-concepts/resources), how do you ensure that only the right agents can access the right tools?
 
 This is where authorization comes in.
 
@@ -33,22 +35,26 @@ Without proper authorization, you risk an agent accessing sensitive data it's no
 
 ### OAuth 2.1 within MCP
 
-MCP uses a subset of the [OAuth 2.1 framework](https://oauth.net/2.1/) for authorization. OAuth 2.1 is mandatory, and the MCP Specification establishes [specific requirements](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization) for implementing it in your server.
+MCP uses a subset of the [OAuth 2.1 framework](https://oauth.net/2.1/) for authorization. Authorization is optional in the specification, but when an HTTP-based MCP server supports it, the [June 2025 revision](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization) defines a clear model: your MCP server acts as an OAuth 2.1 *resource server*, and a separate *authorization server* handles the user and issues tokens.
 
-1. **Mandatory PKCE implementation**: All MCP clients must use [Proof Key for Code Exchange](https://oauth.net/2/pkce/) (PKCE) to prevent authorization code interception attacks.
-2. **Metadata discovery support**: MCP servers should support [RFC8414](https://tools.ietf.org/html/rfc8414) for automatic endpoint discovery.
-3. **Dynamic client registration**: MCP servers should support [RFC7591](https://tools.ietf.org/html/rfc7591) to enable seamless client onboarding.
-4. **Standardized error handling**: MCP servers must respond with specific HTTP status codes (`401`, `403`, `400`) for different authorization scenarios.
+The specification sets out the following requirements:
 
-### Implementing OAuth in MCP
+1. **Mandatory PKCE**: All MCP clients must use [Proof Key for Code Exchange](https://oauth.net/2/pkce/) (PKCE) to prevent authorization code interception attacks.
+2. **Protected resource metadata**: MCP servers must implement [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) and serve an OAuth Protected Resource Metadata document at `/.well-known/oauth-protected-resource`. A `401 Unauthorized` response must include a `WWW-Authenticate` header pointing to that metadata, and clients read it to discover which authorization server to use.
+3. **Authorization server metadata**: The authorization server must publish [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) metadata (at `/.well-known/oauth-authorization-server`), which clients use to find its endpoints.
+4. **Resource indicators**: MCP clients must send the [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html) `resource` parameter on every authorization and token request, identifying the MCP server the token is for. The server must then validate that a token was issued specifically for it (audience validation), which is what stops a stolen or misdirected token from being replayed against a different service.
+5. **Dynamic client registration**: MCP clients and authorization servers should support [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591) so clients can register without manual configuration. Where the authorization server doesn't support it, clients fall back to a pre-registered client ID.
+6. **Standardized error handling**: MCP servers must respond with specific HTTP status codes (`401`, `403`, `400`) for different authorization scenarios.
 
-Here are a few ways you can implement OAuth when building your MCP server:
+### Where the authorization server lives
 
-1. **Self-contained OAuth**: Your MCP server acts as both the resource provider and the authorization provider.
-2. **Third-party OAuth provider**: Your MCP server integrates with established providers like Auth0.
-3. **Custom OAuth provider**: You use your existing OAuth infrastructure behind your own API infrastructure to provide authorization for your MCP server.
+The specification keeps the resource server (your MCP server) separate from the authorization server that issues tokens. That gives you three practical options:
 
-Each approach has its own trade-offs, so you'll need to choose the one that best fits your needs.
+1. **Delegate to a third-party provider**: Point your Protected Resource Metadata at an established authorization server such as Auth0, Okta, WorkOS, or your own identity platform. This is the least work and the recommended default.
+2. **Run your own authorization server**: Host an authorization server alongside your MCP server. It remains a distinct role from the resource server even when the two share a domain.
+3. **Reuse your existing OAuth infrastructure**: If your API already has an OAuth setup, expose it as the authorization server for your MCP server.
+
+Earlier drafts of the specification allowed the MCP server to act as its own combined authorization and resource server. The current model keeps the two roles distinct, which is what makes audience-bound tokens and the [confused-deputy](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices#confused-deputy-problem) protections work.
 
 ## How does MCP authorization work in real-world applications?
 
@@ -56,7 +62,7 @@ Let's walk through an example to understand how you'd implement authorization in
 
 ### Scenario: A document management system
 
-Suppose you've built a document management MCP server that exposes these [tools](/mcp/tools):
+Suppose you've built a document management MCP server that exposes these [tools](/mcp/core-concepts/tools):
 
 - `createDocument`
 - `readDocument`
@@ -173,7 +179,7 @@ sequenceDiagram
     participant Server as MCP Server
     participant Auth as Identity Provider
 
-    Client->>Server: Connect to /sse endpoint
+    Client->>Server: Connect to the MCP endpoint
     Server-->>Client: 401 Unauthorized + auth URL
     Client->>Server: Redirect to /oauth/authorize
     Server->>Auth: Forward to provider's OAuth endpoint
@@ -244,7 +250,17 @@ This setup creates a secure proxy pattern - the MCP server mediates interactions
 
 This double-layer approach provides extra security by keeping the provider's tokens isolated from clients.
 
-For more details on how this works, see the [remote-servers](/mcp/using-mcp/remote-servers) page.
+<Callout title="Proxying safely" type="info">
+  When your MCP server proxies to a third-party authorization server with a
+  static client ID, it becomes a potential [confused
+  deputy](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices#confused-deputy-problem).
+  The specification requires proxy servers to obtain the user's consent for each
+  dynamically registered client before forwarding to the upstream authorization
+  server, and forbids passing the client's token through to the upstream API -
+  the server must exchange it for a separate token issued to the server itself.
+</Callout>
+
+For more details on how this works, see the [remote-servers](/mcp/deploying-mcp-servers) page.
 
 ### Authorization Code Flow with PKCE
 
@@ -254,14 +270,14 @@ The PKCE extension prevents authorization code interception attacks by requiring
 
 <Callout title="Note" type="info">
   Authorization in MCP is tightly integrated with the [transport
-  layer](/mcp/transports). During the transport initialization handshake, the
+  layer](/mcp/core-concepts/transports). During the transport initialization handshake, the
   MCP server can immediately communicate its authorization requirements to the
   client.
 </Callout>
 
 ## Authorization and root boundaries
 
-MCP [roots](/mcp/roots) can be used in tandem with authorization to provide an additional layer of access control. While authorization determines which actions a user can perform, roots determine **which resources are visible** to the client.
+MCP [roots](/mcp/core-concepts/roots) can be used in tandem with authorization to provide an additional layer of access control. While authorization determines which actions a user can perform, roots determine **which resources are visible** to the client.
 
 For example, you might implement both in a tool like `readDocument` to make sure that a client can read only the documents within their authorized roots and only if they have the right permissions:
 
@@ -290,3 +306,5 @@ Here are a few best practices to keep in mind when implementing authorization in
 4. **Provide clear permission errors**: Help users understand why access was denied.
 5. **Use TLS for all communications**: Encrypt all authorization-related traffic.
 6. **Implement rate limiting**: Protect against brute-force and denial-of-service attacks.
+
+To roll authorization out across an organization, see [MCP authorization for every team](/blog/release-mcp-authorization) and the [MCP gateway](/product/mcp-gateway), which centralizes SSO, RBAC, and audit for every MCP server. For governing a whole fleet of agents alongside your servers, see the [agent control plane](/resources/agent-control-plane).

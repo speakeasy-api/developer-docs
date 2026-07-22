@@ -1,11 +1,13 @@
 ---
 title: "Authenticating MCP servers"
-description: How Dynamic Client Registration turned simple auth into an architectural maze
+description: How OAuth works in MCP, why Dynamic Client Registration is the hard part, and how the OAuth proxy pattern bridges the gap.
 ---
 
-import { Callout } from "@/lib/mdx/components";
+import { Callout } from "@/mdx/components";
 
-# Authenticating MCP servers: a work in progress
+<Callout title="Governing MCP across your organization?" type="info">
+  Speakeasy's [AI control plane](/product/ai-control-plane) connects, secures, and observes every agent and MCP server from one entry point — with SSO, RBAC, runtime guardrails, and a full audit trail.
+</Callout>
 
 The Model Context Protocol (MCP) Specification is clear about what is expected from MCP servers to implement OAuth support. Those words may seem reassuring, especially if you already implement OAuth in your products.
 
@@ -20,24 +22,26 @@ In this guide, we'll explain this mismatch in plain terms, offer alternatives, a
 In an ideal universe, here's how MCP OAuth would work: Your company already has an OAuth server[^1] that perfectly complies with the MCP Specification. All you need to do is host a well-formed `/.well-known/oauth-protected-resource` file on your MCP server, and you're done! The MCP client handles the entire OAuth flow automatically.
 
 <Callout type="default">
-  While the MCP Specification technically describes using
-  `/.well-known/oauth-protected-resource` for discovery, most current MCP
-  clients (including Claude itself) actually look for
-  `/.well-known/oauth-authorization-server` directly at the MCP server's domain.
-  This is how the OAuth dance works in practice today. The gap between
-  specification and implementation is prevalent in the MCP ecosystem.
+  The [June 2025 revision of the
+  specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)
+  settled how discovery works: the MCP server is an OAuth resource server that
+  publishes `/.well-known/oauth-protected-resource` (RFC 9728) and returns it
+  via the `WWW-Authenticate` header on a `401`. The client reads that document
+  to find the *separate* authorization server, then fetches the authorization
+  server's own `/.well-known/oauth-authorization-server` metadata (RFC 8414).
+  Current MCP clients follow this flow, but you'll still find older servers and
+  clients that expected the MCP server to be its own authorization server.
 </Callout>
 
 In reality, however, only a handful of OAuth providers have added support for the specific features required by the MCP Specification. Most OAuth providers would need to change their implementation significantly to support MCP's requirements.
 
-The MCP Specification requires your OAuth provider to support:
+The specification splits the requirements across the two roles. Your MCP server (the resource server) must publish Protected Resource Metadata (RFC 9728), and clients must send the RFC 8707 `resource` parameter. Your authorization server needs to support:
 
 - OAuth 2.1 with mandatory PKCE[^2]
-- **Dynamic Client Registration (DCR)**[^3]
-- Authorization Server Metadata
-- Protected Resource Metadata
+- Authorization Server Metadata (RFC 8414)
+- **Dynamic Client Registration (DCR)**[^3], which clients and authorization servers _should_ support
 
-That second requirement, Dynamic Client Registration, is where everything falls apart.
+That last item, Dynamic Client Registration, is where the friction usually starts. It's a recommendation rather than a hard requirement, but without it clients can't onboard automatically, and support for it is uneven across OAuth providers.
 
 ## The DCR problem
 
@@ -49,9 +53,9 @@ The idea of end users finding your application's OAuth registration page, fillin
 
 Here's the crux of the issue: MCP clients have no standardized way to handle client IDs or client secrets[^4]. They need to be able to register themselves dynamically as OAuth clients to perform the authentication dance.
 
-But here's the thing, and it cannot be stressed enough: **most OAuth providers do not support Dynamic Client Registration** (and yours probably doesn't either).
+But here's the thing, and it cannot be stressed enough: **many OAuth providers still don't support Dynamic Client Registration** (and yours may not either).
 
-Google? Nope. GitHub? Not a chance. Microsoft Azure AD? Don't even think about it. Your company's homegrown OAuth solution that Bob from IT built five years ago? Definitely not.
+Support is improving as MCP adoption grows, and some providers and identity platforms (such as WorkOS and Auth0) now offer it, but the big consumer identity providers you'd reach for first have historically not. Google, GitHub, and Microsoft Entra ID (formerly Azure AD) have all lacked open DCR, and your company's homegrown OAuth solution that Bob from IT built five years ago almost certainly doesn't have it either.
 
 If you're thinking, "But wait, I've seen MCP servers with OAuth!" you're right, but most are not doing what you think they're doing.
 
@@ -155,9 +159,9 @@ What should be a simple authentication problem has turned into an architectural 
 
 ## Looking forward
 
-The MCP OAuth situation represents a fundamental tension between the protocol's vision of seamless, user-centric authentication and the realities of existing OAuth infrastructure. The specification's requirements, while well-intentioned, create significant implementation barriers for teams looking to build on MCP.
+The June 2025 revision of the specification settled the biggest architectural question by making the MCP server a plain OAuth resource server that delegates to a separate authorization server, discovered through Protected Resource Metadata (RFC 9728) and bound to its audience with Resource Indicators (RFC 8707). That removes the ambiguity about whether your MCP server should also be an authorization server: it shouldn't.
 
-For now, teams implementing MCP need to carefully evaluate their authentication requirements and choose an approach that balances compliance with the specification against the practical realities of their infrastructure.
+What the specification can't fix on its own is uneven Dynamic Client Registration support across existing OAuth providers, which is why the OAuth proxy pattern is still common. As more identity platforms add DCR and ship MCP-aware authorization servers, expect the proxy to fade for greenfield builds. For now, teams implementing MCP still need to weigh how much of the flow they run themselves against what they can delegate to a provider that already speaks the spec.
 
 ---
 

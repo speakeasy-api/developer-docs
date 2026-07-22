@@ -3,8 +3,6 @@ title: What are MCP roots?
 description: Learn about MCP roots, how they are used, and how to implement them effectively.
 ---
 
-# What are MCP roots?
-
 MCP roots are context-defining [URIs](https://en.wikipedia.org/wiki/Uniform_Resource_Identifier) that establish operational boundaries for MCP servers. They function as "safe zones" or "allowed directories" that an AI agent can access when interacting with your system. When an MCP client provides roots for servers, it's essentially saying, "You're allowed to work within these specific areas."
 
 While roots are sometimes described as a **security** feature, the MCP Specification does not dictate how servers must implement root handling. So when the client tells the server which areas it can work within, the server may ignore this rule and still be within the specification.
@@ -68,87 +66,16 @@ Here's an example of a roots list response from a client:
 
 The `uri` indicates the precise resource location, while the optional `name` field gives the root an identifier that can be used by an LLM.
 
-## Implementing MCP roots in Python
+## How roots work in practice
 
-Let's look at examples of how to implement MCP roots using [FastMCP](https://github.com/jlowin/fastmcp/):
+Roots are a client capability, not a server feature. The MCP client owns and declares which roots it exposes; the server asks for them at runtime rather than defining them itself. The flow looks like this:
 
-### Server implementation
+1. During initialization, the client advertises the `roots` capability.
+2. The client maintains the list of roots (for example, the folders a user has opened in their editor) and can update it, notifying the server with a `notifications/roots/list_changed` message.
+3. When the server needs the current boundaries, it sends a `roots/list` request to the client and receives the array of `{ uri, name }` entries shown above.
+4. The server scopes its file and network access to those roots, rejecting anything outside them.
 
-```python filename="server-example.py"
-from fastmcp import FastMCP
-import asyncio
-from mcp.server.stdio import stdio_server
-from mcp.server import InitializationOptions, NotificationOptions
-
-# Create an MCP server
-app = FastMCP("Roots Example Server")
-
-# Define roots using the standard resource pattern
-@app.resource("roots://list")
-def list_roots():
-    return {
-        "roots": [
-            {
-                "uri": "file:///home/projects/roots-example/frontend",
-                "name": "Frontend Repository"
-            },
-            {
-                "uri": "https://api.openf1.org/",
-                "name": "F1 API Endpoint"
-            }
-        ]
-    }
-
-# Define a simple tool that processes a file
-@app.tool()
-def process_file(filename: str) -> str:
-    return f"Processing file: {filename}"
-
-# Server entrypoint
-async def main():
-    async with stdio_server() as (read_stream, write_stream):
-        await mcp.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="roots-example-server",
-                server_version="0.1.0",
-                capabilities=mcp.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Client implementation
-
-```python filename="client-example.py"
-from fastmcp import Client
-from fastmcp.client.transports import FastMCPTransport
-import asyncio
-
-async def client_example():
-    # Connect to a running MCP server and specify the roots we want to use
-    async with Client(transport_url="stdio:", roots=["roots://list"]) as client:
-        # Call a tool on the server
-        result = await client.call_tool("process_file", {"filename": "data.csv"})
-        print(result)
-
-if __name__ == "__main__":
-    asyncio.run(client_example())
-```
-
-In these examples:
-
-- The server is initialized with a descriptive name.
-- Roots are defined using the `@app.resource` decorator with `roots://list`.
-- A simple tool demonstrates how tools can be used within the scope of roots.
-- The client specifies which roots it wants to use when connecting to the server.
-- The client calls a tool on the server, which will operate within the boundaries defined by roots.
+The exact SDK API for requesting roots (server side) and supplying them (client side) differs between SDKs and continues to evolve, so follow the official reference for runnable code: the [MCP roots specification](https://modelcontextprotocol.io/specification/2025-06-18/client/roots) and your SDK's roots documentation (for example, [FastMCP](https://github.com/jlowin/fastmcp/)).
 
 ## Implementation patterns
 
@@ -242,4 +169,4 @@ async def list_resources():
 
 ### Roots vs tools
 
-MCP roots are distinct from [MCP tools](/mcp/tools), which are callable server-side actions. While MCP roots define where operations can occur, MCP tools define what actions can be performed.
+MCP roots are distinct from [MCP tools](/mcp/core-concepts/tools), which are callable server-side actions. While MCP roots define where operations can occur, MCP tools define what actions can be performed.

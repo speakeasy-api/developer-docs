@@ -1,9 +1,13 @@
 ---
 title: "Customer support"
-description: Learn how to use Gram to host MCP servers for internal APIs, creating automated workflows that connect Claude to your existing tools.
+description: Connect Zendesk, Slack, and an internal API through MCP servers to build an automated customer support workflow in Claude.
 ---
 
-# Customer support with MCP (Zendesk + Slack + internal licensing API)
+import { Callout } from "@/mdx/components";
+
+<Callout title="Running MCP workflows in production?" type="info">
+  Speakeasy's [AI control plane](/product/ai-control-plane) connects, secures, and observes every agent and MCP server from one entry point — with SSO, RBAC, runtime guardrails, and a full audit trail.
+</Callout>
 
 Customer support teams switch between tools constantly: checking Slack for context about customer issues, finding tickets in Zendesk, adding comments, and then handling the issues in internal dashboards or waiting for dedicated teams to handle those issues.
 
@@ -69,7 +73,7 @@ Claude will search both systems and present the information. At this point, the 
 
 The Zendesk and Slack integrations already save time. Instead of customer support agents having to go through Zendesk and scroll through Slack channels, Claude gathers everything in seconds. But it's likely that the customer support agents still have to switch to another system to handle the license issue.
 
-You can automate this final step by creating an MCP server for the internal License API. If you have an OpenAPI document for your API, Gram can generate the MCP server in minutes.
+You can automate this final step by creating an MCP server for the internal License API. If you have an OpenAPI document for your API, you can generate the MCP server from it in minutes.
 
 ## Create the License MCP server
 
@@ -88,50 +92,37 @@ chmod +x setup.sh
 
 The API runs at `http://127.0.0.1:8000` and includes the OpenAPI documentation. In production, you would use your actual internal tool API instead.
 
-### Create the MCP server on Gram
+### Create the License MCP server
 
-Usually, building an MCP server manually requires writing code with the MCP SDK, TypeScript, or FastMCP, then managing the hosting infrastructure.
+Building an MCP server by hand means writing code against the MCP SDK and then managing hosting yourself. Because the License API already has an OpenAPI document, you can generate the server from it instead — see [generating MCP tools from OpenAPI](/mcp/tool-design/generate-mcp-tools-from-openapi) for the available approaches and their trade-offs.
 
-We'll use [Gram](https://getgram.ai) to generate an MCP servers from OpenAPI the existing OpenAPI documents and handle the hosting on its free tier. 
+Whichever tool you use, you'll:
 
-[Sign up for Gram](https://getgram.ai) and follow these steps:
-
-- On the [**Toolsets** page](/docs/mcp/build/toolsets/create-default-toolset), upload the License API's OpenAPI document.
-- Create a toolset named `License` and enable the tools you need.
-
-    ![Enable all tools](/assets/mcp/using-mcp/customer-support/gram-enable-all-tools.png)
-
-- In the [**Auth** tab](/docs/mcp/secure/environments), set `LICENSE_API_SERVER_URL` to the URL of your internal tool API. If you're following this guide with the local License API, expose the API with [ngrok](https://ngrok.com/) by running the `ngrok http 127.0.0.1:8000` command and using the forwarding URL to fill in the `LICENSE_API_SERVER_URL` variable.
-
-- In **Settings**, create a [Gram API key](/docs/mcp/secure/api-keys).
+- Generate a `License` toolset from the API's OpenAPI document, enabling the tools you need.
+- Point the server at your internal API. If you're following along with the local License API, expose it with [ngrok](https://ngrok.com/) by running `ngrok http 127.0.0.1:8000` and using the forwarding URL as the API's base URL.
+- [Deploy the server](/mcp/deploying-mcp-servers) so your MCP client can reach it, and [secure it](/mcp/securing-mcp-servers) with an API key or OAuth.
 
 ### Install the MCP server in Claude Desktop
-
-In your License toolset's MCP tab, copy the **Managed Authentication** configuration.
-
-![Use Managed authentication](/assets/mcp/using-mcp/customer-support/gram-managed-authentication-config.png)
 
 Open the Claude Desktop application, navigate to **Settings -> Developer**, and click **Edit Config**.
 
 ![Edit config](/assets/mcp/using-mcp/customer-support/claude-desktop-edit-config.png)
 
-Open the `claude_desktop_config.json` file, copy the **Managed Authentication** configuration from Gram, and replace `<your-key-here>` with the value of the Gram API key you created.
+Add your deployed License server to `claude_desktop_config.json`. For a remote server, [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridges Claude Desktop to the server's URL and attaches your credentials:
 
 ```json
 {
   "mcpServers": {
-    "GramLicense": {
+    "license": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://app.getgram.ai/mcp/xxxxxlu",
+        "https://<your-license-mcp-server-url>",
         "--header",
-        "Gram-Environment:default",
-        "--header",
-        "Authorization:${GRAM_KEY}"
+        "Authorization:${LICENSE_API_KEY}"
       ],
       "env": {
-        "GRAM_KEY": "Bearer `<your-key-here>`"
+        "LICENSE_API_KEY": "Bearer <your-api-key>"
       }
     }
   }
@@ -149,18 +140,16 @@ Your `claude_desktop_config.json` should look like this:
 ```json
 {
   "mcpServers": {
-    "GramLicense": {
+    "license": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://app.getgram.ai/mcp/<your-mcp-server-slug>",
+        "https://<your-license-mcp-server-url>",
         "--header",
-        "Gram-Environment:default",
-        "--header",
-        "Authorization:${GRAM_KEY}"
+        "Authorization:${LICENSE_API_KEY}"
       ],
       "env": {
-        "GRAM_KEY": "Bearer <your-gram-api-key>"
+        "LICENSE_API_KEY": "Bearer <your-api-key>"
       }
     },
     "zendesk": {
@@ -207,7 +196,7 @@ The specific response will vary based on your actual data, but you'll observe Cl
 
 ## Final thoughts
 
-You've built a customer support workflow that connects Zendesk, Slack, and an internal License API through MCP servers. Gram hosted the internal API integration without requiring infrastructure management or custom MCP server code.
+You've built a customer support workflow that connects Zendesk, Slack, and an internal License API through MCP servers. Generating the License server from its OpenAPI document connected the internal API without writing custom MCP server code.
 
 The License API represents any internal service with an OpenAPI document. You can replace it with your existing systems to create workflows for:
 
