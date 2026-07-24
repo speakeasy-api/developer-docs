@@ -1,0 +1,96 @@
+---
+title: "Add tools with TypeScript"
+description: "Write custom tools with the TypeScript functions framework, test them locally, and deploy them as a source."
+---
+
+import { Callout } from "@/mdx/components";
+
+For tools with custom business logic, data transformations, or multi-step workflows, the TypeScript functions framework (Gram Functions) creates serverless functions exposed as tools. Unlike OpenAPI-sourced tools, which wrap existing API endpoints, functions run custom code in isolated environments.
+
+Function-sourced tools are ideal for:
+
+- **Custom business logic** — calculations, data processing, or decision-making beyond simple API calls, like aggregating data from multiple sources
+- **Data transformations** — filter, enrich, or summarize data before returning it to the LLM
+- **Multi-step workflows** — orchestrate several API calls or operations in a single tool
+
+The same steps appear in the dashboard under **Connect > Sources > Add Source > Write custom code**.
+
+## Before you start
+
+This guide assumes:
+
+- An account and project exist (see [Getting started](/docs/ai-control-plane/getting-started))
+- Node.js version 22.18.0 or later is installed
+
+## Step 1: Create a project
+
+Scaffold a new project:
+
+```bash
+npm create @gram-ai/function@latest
+```
+
+The scaffolder prompts for:
+
+- **Framework** — **Gram Functions** (the simplest path, batteries included) or the official **Model Context Protocol SDK** for advanced use cases
+- Project name, directory, and git initialization
+- Dependency installation
+- **CLI installation** — the `gram` CLI is required to deploy; the scaffolder offers to install it and run `gram auth` to authenticate
+
+The project contains `src/gram.ts` (the tools) and `src/server.ts` (a local MCP server for testing):
+
+```bash
+└── src
+   ├── gram.ts   # Edit me!
+   └── server.ts
+└── package.json
+└── README.md
+```
+
+## Step 2: Write tools
+
+Open `src/gram.ts` and define tools — as many as needed:
+
+```typescript
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+const gram = new Gram().tool({
+  name: "greet",
+  description: "Greet someone special",
+  inputSchema: { name: z.string() },
+  async execute(ctx, input) {
+    return ctx.json({ message: `Hello, ${input.name}!` });
+  },
+});
+
+export default gram;
+```
+
+For the full framework reference — annotations, tags, environment configuration — see [Creating TypeScript tools](/docs/ai-control-plane/connect/sources/gram-functions).
+
+<Callout title="Tools, not servers" type="info">
+  These are tools, not a finished MCP server. After deploying, tools can be sliced into multiple MCP servers or combined with tools from other sources.
+</Callout>
+
+Test locally before deploying — `npm run dev` starts the project under MCP Inspector, so tools can be called interactively from the browser.
+
+## Step 3: Build and deploy
+
+```bash
+npm run build
+npm run push
+```
+
+Build bundles the functions; push stages the bundle and creates a deployment (under the hood it runs the `gram` CLI: `gram stage function` followed by `gram push`). Once the deployment completes, the functions source and its tools appear under **Connect > Sources** in the dashboard. Deployment history and retries live under [Deployments](/docs/ai-control-plane/connect/deployments).
+
+## Step 4: Create an MCP server
+
+Go to **Distribute > MCP** and click **New MCP Server**, then add the deployed tools on the server's **Tools** tab. The server's detail page links a hosted installation page with per-client setup instructions. See [MCP Servers](/docs/ai-control-plane/distribute/mcp-servers) for visibility, publishing, and team access.
+
+## What's next?
+
+- [Learn the full functions framework](/docs/ai-control-plane/connect/sources/gram-functions)
+- [Tag tools so clients can filter by tag](/docs/ai-control-plane/connect/sources/gram-functions/tool-tags)
+- [Learn about best practices for curating toolsets](/docs/ai-control-plane/reference/concepts/toolsets)
+- [Add OpenAPI-sourced tools](/docs/ai-control-plane/connect/sources/openapi)

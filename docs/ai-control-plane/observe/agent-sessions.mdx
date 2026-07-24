@@ -1,0 +1,70 @@
+---
+title: Agent Sessions
+description: "Browse agent chat sessions, review full transcripts with tool calls, and investigate flagged risk findings."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Agent Sessions** page lists agent chat sessions captured for organization members in a project, with risk indicators for sessions that triggered security findings. Open it from **Observe > Agent Sessions** in the dashboard.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this page requires the `org:admin` scope. Viewing other members' session transcripts requires the `chat:read` scope, which is not a default of any role (including Admin) and must be granted through a custom role. Access is included in the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) but not the Member role, and even Admins see only their own sessions unless explicitly granted `chat:read`; each transcript open is audit-logged.
+</Callout>
+
+## Narrow to a session
+
+The search box matches against chat ID, user ID, and session title, and runs server-side across all sessions in the project. Combine it with the filter toolbar to reduce the list:
+
+- **Date range**: presets from 15 minutes to 90 days (the default is 30 days), or a custom from/to range
+- **Agent type**: a multiselect of the agent sources actually present in the project's sessions, such as Claude Code or Cursor
+- **Risk**: **All**, **With Risk**, or **No Risk**
+- **Min risk score**: sessions with at least N risk findings; setting a threshold clears a **No Risk** selection, and when a threshold is set the risk toggle is implied
+- **Account type**: **All**, **Team**, or **Personal**
+
+Sort the list with the **Sort by** control by **Date** (last-message timestamp) or **Message Count**, in either direction. The list paginates 50 sessions per page.
+
+Every search term, filter, and sort choice persists in the URL, and opening a session appends its chat ID. A filtered view with a session open is fully shareable as a link.
+
+Each row shows a risk indicator with the finding count, the short trace ID with a copy button for the full chat ID, created and last-activity times, the session title, the owner, the source agent, the duration, the message count, and the cost when known. Sessions can be deleted from the row's context menu with **Delete chat**.
+
+![The Agent Sessions list with per-session risk counts, owners, source agents, durations, message counts, and costs](/assets/docs/ai-control-plane/observe/agent-sessions-list.webp)
+
+## Move through the transcript
+
+Selecting a session opens a detail panel with the full transcript. The header shows metadata badges for the trace ID, message count, tool-call count, source, cost, and token total, and a **Details** popover lists the user, account, source, duration, and per-direction token counts.
+
+![A session transcript open in the detail panel, with the Session details popover showing duration, message and tool-call counts, cost, and token totals, and a flagged message masked with a reveal toggle](/assets/docs/ai-control-plane/observe/agent-sessions-transcript.webp)
+
+The transcript is virtualized, so long sessions load in pages as the view scrolls toward either edge. Break buttons load earlier or remaining messages, a **Load all messages** banner fetches the entire conversation in one click, and a floating **Start of thread** button jumps back to message 1. Turn dividers carry the turn timestamp, system prompts collapse into a **System prompt** disclosure, and multi-generation chats show **Conversation segment** dividers.
+
+### Filter by message type
+
+A segmented filter bar toggles **User**, **Assistant**, and **Tool calls** message types on and off, filtering the loaded transcript in place. Turning off the last remaining type resets the view to all messages.
+
+### Search the whole conversation
+
+The find-in-conversation bar (**Search this conversation…**) searches the entire thread server-side, not just the loaded pages, and returns matching messages with surrounding context. The match counter counts individual occurrences across message text, tool names, tool arguments, and tool output. Press Enter for the next match and Shift+Enter for the previous one, wrapping at either end, or use the chevrons. Navigating to a match centers the row, expands a collapsed tool card holding the match, pins open any collapsed tool group containing it, and highlights the active occurrence. Queries are limited to 200 characters, and Escape clears the search.
+
+### Expand tool calls
+
+Tool calls render as expandable cards pairing the assistant's call with its result, showing the tool name, **Arguments**, and **Output**. Runs of two or more consecutive tool calls collapse into a group titled **Executed N tools**; flagged tools and groups stay pinned open. The **Actions** dropdown in the header also opens a **Tool calls** sub-view listing the session's tool-call telemetry logs, with tool name, HTTP status, platform URN, timestamp, and log body.
+
+### Read token and cost annotations
+
+For Claude sessions, user messages carry a per-turn cost badge. Its **Turn cost** popover breaks down input, output, cache read, and cache creation tokens, plus total tokens, cost, request count, models, and duration, and notes when attribution is estimated by turn order. Tool cards add meta rows for **Arguments size**, **Output size**, **Total size**, and **Turn cost**, which helps locate the tool call inflating a session's spend.
+
+### Export the session
+
+Platform admins see **Export data** in the **Actions** dropdown. The export downloads a JSON file containing the full server-fetched transcript (independent of what is loaded in the panel), up to 100 of the session's telemetry logs, and its risk results, ready for offline analysis.
+
+## Go from a finding to the exact message
+
+The risk workflow connects the list-level filters to the specific flagged message. Filter the list with **With Risk** or a **Min risk score** threshold, then open a session. The panel dims non-flagged messages and auto-scrolls to the first finding. Flagged turns get a red divider labeled with the risk count; clicking it opens a findings popover. Risk matches highlight inline in message text and inside tool **Arguments** and **Output** sections, and sensitive matches are masked with a reveal toggle.
+
+Inside a session, platform admins can also flip the **Risky only** switch. This loads every flagged message server-side, so findings deep in a long transcript appear regardless of how much of the conversation has been paged in.
+
+When a finding is a false positive, choose **Create exclusion** from the finding's popover or the turn's **Actions** menu. The in-place editor suppresses matching findings retroactively and going forward without re-running analysis, and the session's risk count decrements immediately.
+
+Tool-call telemetry for a session is queried by chat ID, so the transcript, the **Tool calls** sub-view, and the export all describe the same trace. For tool-level investigation across sessions, see [Tool Logs](/docs/ai-control-plane/observe/tool-logs).

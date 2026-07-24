@@ -1,0 +1,68 @@
+---
+title: "Roles & permissions"
+description: "Define roles, assign scoped permissions to members, and review past authorization challenges."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Roles & Permissions** page manages access control for a team by defining roles, assigning permissions, and reviewing past authorization challenges. Open it from **Organization settings > Secure > Roles & Permissions** in the dashboard.
+
+The page contains three tabs, with counts shown for the first two: **Roles**, **Members**, and **Authorization Challenges**.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this page requires the `org:read` scope, which both the Admin and Member default roles include. Creating, editing, or deleting roles and assigning roles to members requires the `org:admin` scope, held only by Admins by default.
+</Callout>
+
+## Roles
+
+The **Roles** tab manages role definitions and their scope grants. Create, edit, or delete a role, and use the grant drawer to add resource-scoped permission rules — down to individual MCP servers and tool selectors. These are the same grants that appear on each MCP server's **Team Access** tab (see [MCP servers](/docs/ai-control-plane/distribute/mcp-servers)).
+
+## Scopes
+
+A role is a set of scopes. Each scope unlocks a slice of the platform:
+
+| Scope | What it makes available | Implies |
+| --- | --- | --- |
+| `org:read` | View organization pages: team, billing usage, audit logs, domains, and settings | — |
+| `org:admin` | Organization administration: invites and role assignment, API keys, billing actions, publishing to collections, and the [Observe](/docs/ai-control-plane/observe) and [Secure](/docs/ai-control-plane/secure) sections | `org:read` |
+| `project:read` | View project surfaces: sources, deployments, and the catalog | — |
+| `project:write` | Add and modify sources, retry deployments, and manage plugins | `project:read` |
+| `mcp:read` | View MCP servers and their configuration | — |
+| `mcp:connect` | Connect to MCP servers and call their tools, in the playground and from clients | — |
+| `mcp:write` | Create and configure MCP servers, curate tools, and add catalog servers | `mcp:read`, `mcp:connect` |
+| `environment:read` | View environments and their entries | — |
+| `environment:write` | Create environments and manage their variables and secrets | `environment:read` |
+| `skill:read` | View skills and their manifests | — |
+| `skill:write` | Add and version skills | `skill:read` |
+| `chat:read` | Read other members' agent session transcripts in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) | — |
+
+Write scopes imply their read counterparts, so a role granting `mcp:write` never needs `mcp:read` added separately.
+
+<Callout title="Transcript access is never a default" type="info">
+  No role includes `chat:read` by default, including Admin. Grant it through a custom role only where transcript review is required; every transcript open is audit-logged.
+</Callout>
+
+## System roles
+
+Two preset roles ship with the platform:
+
+| Role | Scopes | Effective access |
+| --- | --- | --- |
+| Admin | Every standard scope | Full administration: manage the organization, all projects, servers, environments, and skills, plus the Observe and Secure sections |
+| Member | `org:read`, `project:read`, `mcp:read`, `mcp:connect`, `skill:read` | Read and connect: browse the org and projects, view servers and skills, and use tools — no write access, no environment access, no org administration |
+
+Member is the baseline every invited or directory-synced member receives, so editing a system role changes access for everyone holding it at once: widening Member raises the floor for the whole organization, and narrowing Admin risks cutting administrators off from management surfaces (the platform refuses to remove the last admin, but won't stop an over-narrowed Admin role). For targeted needs, prefer creating a custom role and granting it to specific members over editing the presets.
+
+## Members
+
+The **Members** tab assigns roles to organization members. A member can hold several roles; their access is the union of all of them.
+
+When Directory Sync (SCIM) is enabled, an alert notes that roles are assigned from the identity provider rather than on this page.
+
+## Authorization challenges
+
+The **Authorization Challenges** tab lists past denied-access events: who tried to do what, and which scope the request was missing. Unresolved challenges also surface on the organization home page.
+
+Challenges are actionable, not just a record. Opening a challenge leads into the grant flow: add the missing permission to one of the member's roles from the grant drawer — scoped as narrowly as needed, down to a specific server or tool — and subsequent attempts succeed without the member re-requesting anything. This turns real denials into precise role updates instead of guessing at permissions up front.

@@ -1,0 +1,64 @@
+---
+title: MCP Servers
+description: "Host sources as MCP servers, control visibility and publishing, and manage per-server team access."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **MCP** page hosts the project's sources as MCP servers that agents connect to. Open it from **Distribute > MCP** in the dashboard.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this page requires the `mcp:read` or `mcp:write` scope. Creating a server with **New MCP Server** and editing settings, visibility, auth, tool filtering, or team access require the `mcp:write` scope, and publishing a server to a collection requires the `org:admin` scope. Full access is included in the [default Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions); the default Member role includes `mcp:read`, so Members can view MCP server pages but cannot create, edit, or publish.
+</Callout>
+
+## Server list
+
+The **Hosted MCP Servers** section lists every source exposed as an MCP server — OpenAPI-backed, functions, catalog servers, and custom remote MCP alike. View as cards or a table (columns: name, visibility, URL, tools), search, filter (including servers included in plugins), and create servers with **New MCP Server**.
+
+A **Built-in MCP Servers** section lists platform-provided servers, such as **MCP Logs**, ready to connect from any MCP client.
+
+## Server detail
+
+Each server's detail page carries the connection surface and full configuration, in tabs:
+
+- **Overview** — tool calls, failed calls, error rate, and average latency versus the previous period, tool call trends, top tools by calls and by failure rate, and top users
+- **Tools** — curate exactly which tools the server exposes, with tag-based filtering
+- **Resources** and **Prompts** — additional MCP capabilities the server serves
+- **Authentication** — configure OAuth so clients authenticate before reaching the server
+- **Team Access** — see below
+- **Settings** — see below
+
+The sidebar shows the server's MCP URL with a copy button and a link to its hosted installation page, which lists per-client setup instructions.
+
+## Settings: visibility, publishing, and domains
+
+The **Settings** tab controls how the server is distributed:
+
+- **Visibility** — disabled, private, or public; making a server public warns when system environment variables are attached
+- **Custom Slug** and **Custom Domain** — control the server's URL
+- **Server Instructions** — the instructions returned to LLMs when they connect
+- **Publishing** — organization admins publish servers to collections so others in the organization can discover and install them
+- **Export JSON** — export the MCP configuration
+- A danger zone for disabling or deleting the server
+
+## Team Access
+
+The **Team Access** tab shows who can use the server: every member with their role and read, write, and connect access levels. Access derives from role grants scoped to the server — down to individual tools, where a member's badge opens the exact tool list they can use. Roles are configured in the organization's roles and permissions settings.
+
+## Tunneled MCP servers
+
+Tunneled MCP servers expose an MCP server that runs inside a private network — with no inbound connectivity — through the platform. A lightweight tunnel agent runs next to the private server and opens a single outbound connection to the platform's tunnel gateway; MCP traffic is relayed back over that connection, so nothing in the private network is ever exposed directly.
+
+### Setting up a tunnel
+
+Add a tunneled server from **Connect > Sources** with **Add Source > Tunneled MCP Server**. Creating one issues a tunnel key — shown once, with rotation available later — and generates ready-to-copy setup commands for Docker, Kubernetes, or the CLI. The agent needs four settings: the gateway URL, the tunnel key, the internal MCP endpoint to proxy to, and a service version. A sample server variant deploys a hello-world MCP server alongside the agent to try the flow end to end.
+
+### Key capabilities
+
+- **A hosted URL for a private server** — creating a tunneled source automatically links an MCP server with a default endpoint, so agents connect to it like any other hosted server
+- **Full governance** — tunneled servers go through the same proxy stack as every other server: authentication, usage metering, toolsets, and team access all apply, and calls appear in [Tool Logs](/docs/ai-control-plane/observe/tool-logs) as the Tunneled MCP target type
+- **Never public** — tunneled servers front private networks, so public visibility is refused outright; every connection is authenticated
+- **Live connection visibility** — the source's detail view shows connection status (**Connected**, **Never connected**, or **Inactive**), live tunnel sessions with heartbeats and agent versions, and active request streams
+- **Key lifecycle** — rotate the tunnel key at any time (running agents disconnect and restart with the new key); deleting the source also removes its linked servers and endpoints

@@ -1,0 +1,90 @@
+---
+title: Tool Logs
+description: "The raw stream of tool executions across MCP servers, skills, and local tools, with trace expansion and attribute filters."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Tool Logs** page is the raw execution log for every tool call the platform observes across hosted MCP servers, tunneled and shadow MCP servers, skills, and local tools. Open it from **Observe > Tool Logs** in the dashboard. Where [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) answers "what happened in this conversation", Tool Logs answers "what happened in this tool call" and lets an investigation cut across every session at once.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this page requires the `org:admin` scope. Access is included in the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) but not the Member role: the nav entry stays visible, but opening the page shows an access-restricted notice.
+</Callout>
+
+## Log stream
+
+The log list is an infinite-scrolling table with columns for timestamp, source and tool, user, agent, and status. Status badges are **Success**, **Error**, **Blocked**, and **Pending**. Target types are labeled **Hosted MCP**, **Tunneled MCP**, **Shadow MCP**, **Skill**, and **Local Tools**. Tool calls that arrive without an agent hook are labeled **Direct**.
+
+![The Tool Logs stream with source badges, users, agents, and status per tool call](/assets/docs/ai-control-plane/observe/tool-logs-stream.webp)
+
+## Structured filters
+
+The filter bar narrows the stream using pre-aggregated summaries, so these filters stay fast at any volume:
+
+- **Server** filters by MCP server name, grouped into **Hosted MCP** and **Shadow MCP** with per-server event counts from the selected time window.
+- **User** filters by member email, listing every user seen in the window.
+- **Date range** offers presets from 15 minutes to 90 days (default 7 days) plus custom ranges.
+- **Role** resolves org roles to their member emails.
+- **Agent** filters by the coding agent that made the call, such as Claude Code, Cursor, or Codex.
+- **Type** selects among **Hosted MCP Servers**, **Tunneled MCP Servers**, **Shadow MCP Servers**, **Local Tools**, and **Skills**.
+- **Status** and **Account type** round out the bar, and a clear-all control resets everything in one step.
+
+Every selection is written to the URL, so a narrowed view survives refreshes and bookmarks. The **More filters** panel collects the full set in one sheet, with **Reset to default** to start over.
+
+![The Filters panel with server, user, date range, role, agent, type, status, account type, and custom attribute controls](/assets/docs/ai-control-plane/observe/tool-logs-filters.webp)
+
+## Attribute filters
+
+For anything the structured bar doesn't cover, the **Custom attributes** control builds filters against raw log attributes. The input doubles as free-text search and a filter builder, with the placeholder "Search by URN or filter (e.g. http.response.status_code != 200)".
+
+Typing opens a guided flow: pick an attribute key from the keys actually present in the selected time range, pick an operator, then type a value. Four operators are available:
+
+| Operator | Name | Matches |
+| --- | --- | --- |
+| `=` | equals | Exact match |
+| `!=` | not equals | Excludes an exact match |
+| `~` | contains | Partial match anywhere in the value |
+| `in` | in | Any value in a comma-separated list (`value1, value2, ...`) |
+
+Freeform expressions work too — typing `http.response.status_code != 200` and pressing Enter parses directly into a filter chip. A **Sample filter queries** popover offers ready-made starting points:
+
+| Search | Expression | What it finds |
+| --- | --- | --- |
+| Non-2xx responses | `http.response.status_code != 200` | Every call whose upstream API answered with anything but 200 |
+| Server errors only | `http.response.status_code = 500` | Calls that hit upstream 500s |
+| Error-level logs | `severity_text = ERROR` | Log entries recorded at error severity, whatever their HTTP status |
+| POST requests only | `http.request.method = POST` | Calls that performed writes via POST |
+| Tool names containing "search" | `gram.tool.name ~ search` | Every tool whose name includes the term, across all servers |
+
+The same shapes combine for narrower questions: `gram.tool.name ~ issue` plus `http.response.status_code != 200` isolates failing issue-related tools, and `http.request.method in POST, PUT, DELETE` finds every mutating call in the window.
+
+Chips are editable in place. Click a chip to change its operator or value, remove it with its close button, or clear all chips at once. Adding an `=` or `in` filter replaces any existing filter on the same key and operator, while `!=` and `~` filters stack, so layering multiple exclusions is safe.
+
+Attribute filters scan raw logs rather than the pre-aggregated summaries. When one is active, a "Custom search — may be slower" badge appears as a reminder that server, user, agent, type, and date filters stay fast while attribute filters may take longer.
+
+### Shareable views
+
+Attribute filters serialize into the URL as `?af=` and free-text search as `?q=`, alongside the structured filter params. Every filtered view is a link. To hand off an investigation, narrow the stream, copy the URL, and paste it into a ticket or chat. The recipient lands on the exact same view.
+
+## Trace expansion
+
+Clicking a row expands it and loads the other logs in the same trace, correlated by the trace or trigger ID the entry carries. Child rows show a tree connector, a severity badge (info, warn, error, or debug), a timestamp, and the log message, so the full lifecycle of a single tool call reads top to bottom. A blocked trace shows an inline **Blocked** banner with the block reason when the policy provided one.
+
+## Log detail
+
+Clicking a child log opens the detail sheet with **Details** and **Raw Data** tabs. The header carries copyable badges for the service, platform URN, trace ID, span ID, and time. The **Details** tab highlights the server, tool, LLM client, and MCP server URL, with collapsible **Tool Input** and **Tool Output** sections showing pretty-printed arguments and results (hidden when tool I/O logging is disabled), a flattened **Attributes** section, and the raw message. Failed calls surface a **Tool Error** callout, and blocked calls surface the **Block Reason**.
+
+### Building filters from a log
+
+Every filterable attribute row in the detail sheet is a dropdown offering **Filter by**, **Exclude**, **Contains**, and **Copy value**. Selecting one adds the corresponding chip to the page's attribute filter bar and updates the URL immediately, so a single interesting log can pivot into a query without retyping keys or values.
+
+## Debugging workflows
+
+The pieces combine into a few common investigations:
+
+- **Find a failing tool.** Set **Status** to **Error**, or add `http.response.status_code != 200` from the sample queries. Expand a failing trace to read its child logs, open the detail sheet, and check the **Tool Error** callout and the tool input that triggered it.
+- **Isolate one user's calls.** Pick the user's email in the **User** filter, tighten the **Date range** to the incident window, and add attribute filters from any suspicious log to narrow further.
+- **Chase a pattern across servers.** Start from one bad log, use **Filter by** on its attributes to pin the tool or status, then remove the **Server** filter to see whether the same pattern appears elsewhere.
+- **Share the evidence.** Once the view shows the problem, copy the URL. Teammates open the identical filtered stream and can keep refining it.

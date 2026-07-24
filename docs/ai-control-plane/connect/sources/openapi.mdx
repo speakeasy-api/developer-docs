@@ -1,0 +1,84 @@
+---
+title: "Add tools from an OpenAPI spec"
+description: "Upload an OpenAPI document to generate a tool for every endpoint, curate them into an MCP server, and connect AI clients."
+---
+
+import { Callout } from "@/mdx/components";
+
+The quickest way to expose an API to AI agents is uploading an OpenAPI document. The platform generates a tool definition for every operation in the spec, and those tools can then be curated into an MCP server.
+
+OpenAPI-sourced tools are ideal for:
+
+- **Internal workflows** — let teams query data and automate processes from their AI clients, like checking usage data or toggling feature flags
+- **In-app agents** — let chat agents inside an application perform API workflows on behalf of a user from natural language requests
+- **Automated workflows** — drive platforms like n8n, such as triaging GitHub issues and creating Linear tickets from them
+
+## Before you start
+
+This guide assumes:
+
+- An account and project exist (see [Getting started](/docs/ai-control-plane/getting-started))
+- An OpenAPI document is available for the API
+
+<Callout title="No spec handy?" type="info">
+  Follow along with the [National Weather Service's OpenAPI document](https://api.weather.gov/openapi.json) — copy the JSON and save it to a file.
+</Callout>
+
+## Step 1: Import the OpenAPI document
+
+In the dashboard, go to **Connect > Sources** and choose **Add Source > From your API**. The import wizard has three steps:
+
+- **Upload OpenAPI Specification** — upload the document as a file or import it from a URL; JSON and YAML both work
+- **Name Your API** — the generated tools are scoped under this name (at least three characters, unique per project)
+- **Generate Tools** — a deployment runs and turns every operation in the spec into a tool
+
+When generation completes, a toolset named after the API is created automatically with all the generated tools. If no tools were generated, the wizard surfaces the deployment logs to diagnose the spec.
+
+<Callout title="Spec quality matters" type="info">
+  The quality of the OpenAPI document directly shapes the quality of the generated tools. Learn about writing better OpenAPI documents in the [OpenAPI hub](/openapi).
+</Callout>
+
+## Step 2: Create an MCP server
+
+Specs often describe dozens or hundreds of operations, and exposing all of them degrades LLM performance. Curate a focused subset instead.
+
+Go to **Distribute > MCP** and click **New MCP Server**. On the server's **Tools** tab, add the tools to expose — the generated toolset from step 1 makes this a quick selection. See [toolsets](/docs/ai-control-plane/reference/concepts/toolsets) for curation concepts.
+
+## Step 3: Set environment variables
+
+If the API requires authentication, the server needs credentials. Go to **Distribute > Environments**, open or create an environment, and use **Fill for MCP Server** to prefill placeholder entries for everything the server needs; fill in the values and save.
+
+<Callout title="Variable names" type="info">
+  Generated variable names derive from the API name given in step 1. Not every prefilled variable is required — for example, a server URL variable is unnecessary when the spec already defines the server URL.
+</Callout>
+
+## Step 4: Test in the playground
+
+Open **Connect > Playground**, pick the new server, and chat with a model that calls the tools live. The logs panel shows each call's request and response — see the [Playground](/docs/ai-control-plane/connect/playground) docs.
+
+## Step 5: Connect an AI client
+
+The server's detail page shows its MCP URL with a copy button and links to a hosted installation page with per-client setup instructions for Claude, Cursor, and other MCP clients.
+
+Server visibility is controlled in the server's settings: private servers require authentication, and public servers can be used by anyone with the configuration. See [MCP Servers](/docs/ai-control-plane/distribute/mcp-servers) for visibility, publishing, and team access.
+
+## Tag tools for filtering
+
+Native OpenAPI operation `tags` are ingested automatically and become filter tags on the generated tools:
+
+```yaml
+paths:
+  /invoices:
+    post:
+      tags: [billing, finance]
+      summary: Create an invoice
+      operationId: createInvoice
+```
+
+With [tag-based tool filtering](/docs/ai-control-plane/distribute/mcp-servers/tool-filtering) enabled, MCP clients connect to a focused subset of the server's tools by selecting one or more tags. Tags can also be overridden later with [tool variations](/docs/ai-control-plane/reference/concepts/tool-variations#tags).
+
+## What's next?
+
+- [Learn about best practices for curating toolsets](/docs/ai-control-plane/reference/concepts/toolsets)
+- [Improve tool names and descriptions with tool variations](/docs/ai-control-plane/reference/concepts/tool-variations)
+- [Add custom-code tools with TypeScript](/docs/ai-control-plane/connect/sources/typescript)

@@ -1,0 +1,156 @@
+---
+title: Platform security
+description: The security posture, architecture, and data handling practices of the AI Control Plane.
+---
+
+import { Callout } from "@/mdx/components";
+
+<Callout title="Terminology" type="info">
+  In this document, "Customer" refers to the user of the platform. "End User"
+  refers to a user of an MCP server hosted by the platform on behalf of the
+  Customer.
+</Callout>
+
+The AI Control Plane is designed as a high-performance, security-first, serverless tools platform. It routes requests from a hosted MCP server (often hosted at `mcp.your-company.com`) to production APIs, following all modern security practices for web application development and data storage.
+
+## Certifications
+
+The platform maintains the following security certifications and compliance standards:
+
+- **SOC 2 Type II** - Independently audited controls for security, availability, and confidentiality
+- **ISO 27001** - International standard for information security management
+- **GDPR compliant** - Data processing agreements available with privacy by design
+- **CCPA compliant** - User data deletion on request
+
+<div style={{ display: "flex", alignItems: "center", gap: "2.5rem", margin: "1.5rem 0" }}>
+  <img
+    src="/assets/docs/ai-control-plane/soc-2-type-2-badge.svg"
+    alt="SOC 2 Type II certification badge"
+    width="140"
+  />
+  <img
+    src="/assets/docs/ai-control-plane/iso-27001-badge.svg"
+    alt="ISO 27001 certification badge"
+    width="140"
+  />
+</div>
+
+### Industry affiliations
+
+Speakeasy is affiliated with The Linux Foundation, the Cloud Security Alliance, and the Agentic AI Foundation.
+
+{/* Mirrors the homepage FoundationLogos treatment exactly: same assets,
+    monochrome filter, sizes, and centered row layout. */}
+<div className="flex w-full flex-wrap items-center justify-center gap-x-10 gap-y-6 md:gap-x-14 lg:gap-x-16" style={{ margin: "2rem 0" }}>
+  <a href="https://www.linuxfoundation.org/" target="_blank" rel="noreferrer" className="block transition-opacity hover:opacity-80">
+    <img
+      src="/assets/foundations/linux-foundation.svg"
+      alt="The Linux Foundation logo"
+      width="182"
+      height="60"
+      className="h-10 w-auto object-contain filter-[brightness(0)_opacity(0.5)] md:h-12 dark:filter-[brightness(0)_invert(1)_opacity(0.55)]"
+    />
+  </a>
+  <a href="https://cloudsecurityalliance.org/" target="_blank" rel="noreferrer" className="block transition-opacity hover:opacity-80">
+    <img
+      src="/assets/foundations/cloud-security-alliance.svg"
+      alt="Cloud Security Alliance logo"
+      width="168"
+      height="60"
+      className="h-10 w-auto object-contain filter-[brightness(0)_opacity(0.5)] md:h-12 dark:filter-[brightness(0)_invert(1)_opacity(0.55)]"
+    />
+  </a>
+  <a href="https://aaif.io/" target="_blank" rel="noreferrer" className="block transition-opacity hover:opacity-80">
+    <img
+      src="/assets/foundations/agentic-ai-foundation.svg"
+      alt="Agentic AI Foundation logo"
+      width="248"
+      height="60"
+      className="h-10 w-auto object-contain filter-[brightness(0)_opacity(0.5)] md:h-12 dark:filter-[brightness(0)_invert(1)_opacity(0.55)]"
+    />
+  </a>
+</div>
+
+## Architecture overview
+
+{/* Security architecture diagram is not yet available */}
+
+The platform is hosted on Speakeasy servers provisioned in Google Cloud Platform and consists of two main components:
+
+### Control plane
+
+The control plane includes:
+
+- **Dashboard** - Web interface for managing toolsets and configurations
+- **Metadata database** - Storage for toolset metadata
+- **Authentication service** - Customer authentication provided through WorkOS
+
+### Data plane
+
+The data plane consists of a request proxy that:
+
+- Processes requests from MCP endpoints
+- Forwards requests to APIs according to the grouping of endpoints in a toolset
+- Processes requests to LLM inference providers, routed through OpenRouter, when using the in-app playground feature
+
+## Authentication
+
+Authentication in the platform is shared with the Speakeasy platform. Access is granted through Organizations with login support available through Google and GitHub identity providers. Unauthenticated sessions are not supported.
+
+SSO support is available on request to enterprise customers.
+
+## Encryption
+
+All data processed by the platform is encrypted in transit. HTTPS is the standard protocol for all MCP servers hosted by the platform.
+
+For Customers using platform-managed authentication, Customer keys and secrets are encrypted using symmetric key encryption (AES-GCM) in the database, in addition to the encryption defaults provided by Google Cloud SQL. OAuth access and refresh tokens obtained through managed OAuth flows are encrypted before storage in the same way.
+
+## Business continuity and disaster recovery
+
+If the platform experiences downtime, there is no impact to the Customer's API uptime. MCP servers hosted by the platform will become unavailable, meaning requests from MCP clients to those specific servers will not be processed.
+
+Metadata on Customer toolsets is stored in Google Cloud SQL with:
+
+- Multi-region replication
+- Failover redundancy
+- Encrypted connections
+
+## Data storage FAQ
+
+### Does the platform store API or customer data?
+
+The platform does not store Customer data. It only processes data in transit.
+
+### Can the platform store API secrets?
+
+By default, the platform does not store API secrets.
+
+Customers have the option to store API secrets if they choose to use platform-managed authentication and API keys. When an MCP server uses a managed OAuth flow, End User access and refresh tokens are encrypted before being stored so the platform can complete the flow on the End User's behalf.
+
+### What data does the platform store?
+
+The platform only stores metadata. Customer data is only processed in transit.
+
+Stored data on the platform's servers includes:
+
+- Email addresses used to log in to the platform
+- Metadata on created tools, specifically:
+  - Date and time of tool creation
+  - Corresponding API endpoint
+  - Specification version
+  - Error details for any errors that occurred during creation
+- Metadata on tool calls, specifically:
+  - Tool used
+  - Time
+  - Request origin
+  - Request shape
+  - Request success or failure
+- Point-in-time snapshots of API specifications for comparing changes
+
+Tool call telemetry is retained for 90 days.
+
+## Further reading
+
+- [Enterprise features](/enterprise)
+- [Adding OAuth to MCP servers](/docs/ai-control-plane/distribute/mcp-servers/secure-with-oauth)
+- [API keys](/docs/ai-control-plane/org-admin/api-keys)

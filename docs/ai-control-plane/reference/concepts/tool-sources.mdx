@@ -1,0 +1,321 @@
+---
+title: Tool sources
+description: How the platform uses OpenAPI documents, functions, and external MCP servers to generate tools.
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+**Sources** are the starting point for creating tools that can be utilized by
+AI agents via MCP servers. A source is any input that describes available
+functionality:
+
+- OpenAPI documents
+- Gram Functions (TypeScript, JavaScript, or Python)
+- External MCP servers, added from the [catalog](/docs/ai-control-plane/connect/catalog), registered by URL as custom remote servers, or connected from a private network as [tunneled MCP servers](/docs/ai-control-plane/distribute/mcp-servers#tunneled-mcp-servers)
+
+Sources can be uploaded via the dashboard or using the
+[CLI](/docs/ai-control-plane/reference/command-line). Once uploaded, a
+[deployment](/docs/ai-control-plane/reference/concepts/deployments) creates
+[tool definitions](/docs/ai-control-plane/reference/concepts/tool-definitions).
+These tools can then be curated into
+[toolsets](/docs/ai-control-plane/reference/concepts/toolsets), which are
+organized collections tailored to specific use cases or workflows. Each toolset
+can be served as an **MCP server**, which can be installed into LLM clients for
+automated usage.
+
+## Gram Functions
+
+Gram Functions are snippets of code that define arbitrary tasks for AI agents
+to execute via MCP servers. Unlike OpenAPI-based tools that map to existing
+REST API endpoints, Gram Functions can call multiple APIs, connect to remote
+databases over TCP/HTTP, and perform complex data transformations with
+third-party libraries.
+
+Functions are particularly useful for:
+
+- Performing calculations, data transformations, or complex business logic
+  that doesn't map to a single API endpoint.
+- Orchestrating multiple API calls within a single tool to create
+  workflow-based operations.
+- Integrating third-party services or databases that don't have OpenAPI
+  documents.
+- Implementing conditional logic, iteration, or other control flow that can't
+  be expressed in a declarative API specification.
+
+Functions run on a managed runtime. The supported runtimes are Node.js 22
+(`nodejs:22`), Node.js 24 (`nodejs:24`), and Python 3.12 (`python:3.12`).
+
+### Basic structure
+
+At its core, a Gram Function is a zip file containing two files:
+
+**`manifest.json`** - A metadata file describing the tools:
+
+```json filename="manifest.json"
+{
+  "version": "0.0.0",
+  "tools": [
+    {
+      "name": "add",
+      "description": "Add two numbers",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "a": { "type": "number" },
+          "b": { "type": "number" }
+        },
+        "required": ["a", "b"]
+      }
+    },
+    {
+      "name": "square_root",
+      "description": "Calculate the square root of a number",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "a": { "type": "number" }
+        },
+        "required": ["a"]
+      }
+    }
+  ]
+}
+```
+
+The manifest includes each tool's name, description, and JSON Schema for input
+validation. It can also declare required environment variables, tags, and MCP
+tool annotations such as the read-only and destructive hints.
+
+**`functions.js`** - A bundled JavaScript file that exports a `handleToolCall` function:
+
+```javascript filename="functions.js"
+export async function handleToolCall({ name, input }) {
+  switch (name) {
+    case "add":
+      return json({ value: input.a + input.b });
+    case "square_root":
+      return json({ value: Math.sqrt(input.a) });
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+```
+
+When this zip file is uploaded, the platform uses the manifest to expose the
+tools and invokes `handleToolCall` to execute them.
+
+<Callout title="Note" type="info">
+  The code entrypoint must be named `functions` with an extension matching the
+  runtime: `functions.js`, `functions.mjs`, `functions.ts`, or `functions.mts`
+  for Node.js, and `functions.py` for Python.
+</Callout>
+
+<Callout title="Bundle size limit" type="warning">
+
+The zipped bundle (containing both the manifest and the code entrypoint) must
+not exceed **15MB**. Keep functions lean by avoiding large dependencies and
+using tree-shaking when bundling.
+
+</Callout>
+
+### Environment variables
+
+Environment variables defined in the project can be accessed within functions
+using the `process.env` object. For example, an environment variable named
+`MY_MCP_MULTIPLIER` can be accessed in a function like this:
+
+```javascript filename="functions.js" /process.env.MY_MCP_MULTIPLIER/
+// functions.js
+export async function handleToolCall({ name, input }) {
+  switch (name) {
+    case "multiply":
+      return json({ value: input.a * process.env.MY_MCP_MULTIPLIER });
+    // other cases...
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+```
+
+### Using the framework
+
+While these files can be created manually, the
+[`@gram-ai/functions`](https://github.com/speakeasy-api/gram/tree/main/ts-framework/functions)
+TypeScript framework simplifies the entire workflow. The framework handles
+manifest generation, bundling, input validation, and packaging automatically.
+
+To create a new function project, use the scaffolding tool:
+
+```bash
+pnpm create @gram-ai/function@latest --template gram
+```
+
+Here's a basic example using the framework:
+
+```typescript filename="src/functions.ts"
+import { Gram } from "@gram-ai/functions";
+import * as z from "zod/mini";
+
+const gram = new Gram().tool({
+  name: "calculate_discount",
+  description: "Calculate the final price after applying a discount percentage",
+  inputSchema: {
+    originalPrice: z.number().positive(),
+    discountPercent: z.number().min(0).max(100),
+  },
+  async execute(ctx, input) {
+    const discount = input.originalPrice * (input.discountPercent / 100);
+    const finalPrice = input.originalPrice - discount;
+
+    return ctx.json({
+      originalPrice: input.originalPrice,
+      discount: discount,
+      finalPrice: finalPrice,
+    });
+  },
+});
+
+export default gram;
+```
+
+The framework automatically generates the manifest and bundles the code at
+build time.
+
+For more details on creating and deploying Gram Functions, see the
+[Gram Functions guide](/docs/ai-control-plane/connect/sources/gram-functions).
+
+## OpenAPI documents
+
+OpenAPI documents describe the functionality of REST APIs in a standardized
+format known as the OpenAPI Specification. These files are widely used to
+generate API documentation, SDKs, and client libraries. Similarly, the platform
+leverages OpenAPI documents to generate tools that enable LLMs to interact with
+REST APIs. OpenAPI-sourced tools are especially useful for:
+
+- Making it easy for end-users to leverage a REST API via AI agents.
+- Automating workflows that involve multiple API calls.
+- Enhancing LLMs with real-time data and functionality from an API.
+
+Though most users upload these documents for their own REST APIs, _tools may be
+generated using an OpenAPI document for any API_. Some examples of public APIs
+that have OpenAPI documents include:
+
+<Table
+  data={[
+    {
+      api: "Asana",
+      documentation:
+        "[developers.asana.com](https://developers.asana.com/reference/rest-api-reference)",
+      openapiDocument:
+        "[asana_oas.yaml](https://raw.githubusercontent.com/Asana/openapi/master/defs/asana_oas.yaml)",
+    },
+    {
+      api: "GitHub REST API",
+      documentation:
+        "[docs.github.com/en/rest](https://docs.github.com/en/rest)",
+      openapiDocument:
+        "[api.github.com.yaml](https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.yaml)",
+    },
+    {
+      api: "National Weather Service",
+      documentation:
+        "[weather.gov/documentation/services-web-api](https://www.weather.gov/documentation/services-web-api)",
+      openapiDocument: "[openapi.json](https://api.weather.gov/openapi.json)",
+    },
+  ]}
+  columns={[
+    { key: "api", header: "API" },
+    { key: "documentation", header: "Documentation" },
+    { key: "openapiDocument", header: "OpenAPI Document" },
+  ]}
+/>
+
+<Callout title="Note" type="info">
+  The platform works best with documents using [OpenAPI
+  3.1.x](https://spec.openapis.org/oas/v3.1.1) and its corresponding JSON Schema
+  version. See the section on [Limitations of OpenAPI
+  3.0.x](#limitations-of-openapi-30x) for more details.
+</Callout>
+
+### Optimizing OpenAPI documents
+
+Because tools are generated directly from endpoint descriptions in the OpenAPI document, it's essential that those descriptions are accurate and informative. However, writing descriptions that serve both humans and LLMs can be challenging.
+
+Short descriptions may be readable for humans, but LLMs often require more context to interpret intent and usage correctly. To bridge this gap, the platform supports the `x-gram` extension in OpenAPI documents, allowing LLM-optimized metadata to be provided specifically for tool generation and usage.
+
+```yaml filename="openapi.yaml" {8,9,22-33}
+openapi: 3.1.0
+info:
+  title: E-commerce API
+  version: 1.0.0
+paths:
+  /products/{merchant_id}/{product_id}:
+    get:
+      summary: Get a product
+      operationId: E-Commerce V1 / product
+      tags: [ecommerce]
+      parameters:
+        - name: merchant_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-gram:
+        name: get_product
+        summary: ""
+        description: |
+          <context>
+            This endpoint returns details about a product for a given merchant.
+          </context>
+          <prerequisites>
+            - If you are presented with a product or merchant slug then you must first resolve these to their respective IDs.
+            - Given a merchant slug use the `resolve_merchant_id` tool to get the merchant ID.
+            - Given a product slug use the `resolve_product_id` tool to get the product ID.
+          </prerequisites>
+        responseFilterType: jq
+      responses:
+        "200":
+          description: Details about a product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+```
+
+Without the `x-gram` extension, the generated tool would be named `ecommerce_e_commerce_v1_product`, and have the description `"Get a product by its ID"`, resulting in a poor quality tool. The `x-gram` extension allows a tool's name and description to be customized without altering the original information in the OpenAPI document. The `x-speakeasy-mcp` extension is also recognized as an alternative and works the same way.
+
+The `x-gram` extension also supports [response filtering](/docs/ai-control-plane/reference/concepts/toolsets) through the `responseFilterType` property, which helps LLMs process API responses more effectively.
+
+Using the `x-gram` extension is optional. With the [tool variations](/docs/ai-control-plane/reference/concepts/tool-variations) feature, a tool's name and description can be modified when curating tools into toolsets. However, it might be worth using the `x-gram` extension to make an OpenAPI document clean, descriptive, and LLM-ready before bringing it into the platform, so the team doesn't need to fix tool names and descriptions later.
+
+### Operation tags
+
+Native OpenAPI operation `tags` are ingested automatically and become the source tags for the generated tool. In the example above, the `get_product` tool inherits the `ecommerce` tag from its operation.
+
+These tags drive [tag-based tool filtering](/docs/ai-control-plane/distribute/mcp-servers/tool-filtering), which lets MCP clients connect to a focused subset of a server's tools. A tag set through [tool variations](/docs/ai-control-plane/reference/concepts/tool-variations#tags) overrides the operation tags; see the [precedence rules](/docs/ai-control-plane/distribute/mcp-servers/tool-filtering#effective-tag-precedence-rules) for details.
+
+### Limitations of OpenAPI 3.0.x
+
+Many LLMs don't support the JSON Schema version used in OpenAPI 3.0.x documents. When these documents are uploaded, they are transparently upgraded to 3.1.0 using the steps defined in [Migrating from OpenAPI 3.0 to 3.1.0](https://www.openapis.org/blog/2021/02/16/migrating-from-openapi-3-0-to-3-1-0). When this happens, line numbers may no longer match the original OpenAPI document. It's recommended to upgrade OpenAPI documents to 3.1.x for a more streamlined experience.
+
+<Callout title="OpenAPI resources" type="default">
+For more information on how to write, understand, and manage OpenAPI documents, check out the [OpenAPI documentation](/openapi).
+
+Speakeasy also provides a comprehensive OpenAPI editor and CLI that help with editing, saving, and linting OpenAPI documents. Log in at [app.speakeasy.com](https://app.speakeasy.com) using the same credentials used to access the platform.
+
+</Callout>
+
+## External MCP servers
+
+Existing MCP servers can be brought into the platform as sources alongside OpenAPI documents and Gram Functions:
+
+- **Catalog servers** — third-party MCP servers imported from the [catalog](/docs/ai-control-plane/connect/catalog), powered by the MCP Registry.
+- **Custom remote MCP servers** — existing remote servers registered by URL. Requests are proxied using the streamable HTTP transport.
+- **Tunneled MCP servers** — MCP servers running inside a private network, connected through an outbound tunnel. See [tunneled MCP servers](/docs/ai-control-plane/distribute/mcp-servers#tunneled-mcp-servers).
+
+Tools from external MCP servers deploy like any other source and can be combined with API tools and Gram Functions in a single toolset.
