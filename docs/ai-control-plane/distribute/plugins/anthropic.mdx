@@ -1,0 +1,61 @@
+---
+title: "Anthropic"
+description: "Connect the org's plugin marketplace to a Claude org and distribute plugins to Claude Code and Claude Cowork."
+---
+
+import { Callout } from "@/mdx/components";
+
+Plugins reach Anthropic surfaces through the org's GitHub-backed plugin marketplace. This page covers connecting that marketplace to a Claude org and distributing plugins to Claude Code and Claude Cowork. For wiring up the observability plugin's telemetry (OTEL export and user attribution), see [Logging & Telemetry > Anthropic](/docs/ai-control-plane/org-admin/logging-and-telemetry/anthropic).
+
+<Callout type="info">
+  In Claude and Cursor, a plugin marketplace is a shareable, configurable collection of plugins backed by a GitHub repo. The platform hosts a marketplace on the org's behalf containing the observability plugin and any custom plugins. Once the marketplace is connected to the Claude org, each plugin can be enabled, disabled, or required from Claude admin settings.
+</Callout>
+
+## Access requirements
+
+<Callout type="info">
+  Publishing the marketplace requires the `project:write` scope, held by the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions). The Claude-side steps require admin access to the Claude organization.
+</Callout>
+
+## Claude Code
+
+In the Claude org settings, open the **Claude Code** tab (claude.ai/admin-settings/claude-code), scroll to **Managed settings**, and click **Manage**. Merge the following JSON into the dialog, replacing the marketplace values with the ones shown on the dashboard's **Distribute > Plugins** page. If the dialog already carries the telemetry `env` block from [Logging & Telemetry > Anthropic](/docs/ai-control-plane/org-admin/logging-and-telemetry/anthropic), merge into the same JSON document.
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "<org>-gram": {
+      "autoUpdate": true,
+      "source": {
+        "url": "<marketplace-git-url>",
+        "source": "git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "<org>-observability@<org>-speakeasy": true
+  }
+}
+```
+
+### Confirm the plugin is installed
+
+Restart Claude Code and confirm the plugin appears under `/plugins` → **Installed** (it may require scrolling).
+
+## Claude Cowork
+
+### Add a user to the plugin marketplace
+
+On the dashboard's **Distribute > Plugins** page, click **Re-publish**, enter a GitHub username in the dialog, and hit **Publish**. Then follow the link to the plugin repo and accept the invitation to collaborate (check email or GitHub notifications if it doesn't appear). Only the user who will add the marketplace to the company Claude org needs this step.
+
+### Add the marketplace to Claude Cowork
+
+In the **Plugins** tab of the Claude organization settings, click **Add Plugins**, then **Sync from GitHub**. If a message appears about enabling the GitHub connector for the Claude org, enable it and repeat this step. In the repo dropdown, select the org's plugin repo — it is named `<speakeasy-org>-<speakeasy-project>-plugins` under the `speakeasy-plugins` GitHub org.
+
+### Update plugin availability
+
+Scroll down to the newly added marketplace. It may say "Syncing plugins from repository..." for a short while. Once the plugins load, a plugin named after the org (for example, `<org> observability`) appears — it contains the agent hooks that power most control plane features, so mark it **Required** for a real rollout (**Available to install** works for a proof of concept). Set any other plugins, such as default MCPs, to **Available to install** so users can opt in.
+
+### Manually enable a non-required plugin
+
+Skip this step for plugins marked **Required**. In the Claude Desktop app's **Cowork** tab, click **Customize** in the left nav, click the **+** icon next to **Organization plugins**, and in the modal click the **+** icon on the desired plugin's card.

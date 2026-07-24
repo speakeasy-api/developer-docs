@@ -1,0 +1,68 @@
+---
+title: "Anthropic"
+description: "Enable the observability plugin and OTEL export for Claude Code and Claude Cowork so sessions are attributed to users and metrics flow into the platform."
+---
+
+import { Callout } from "@/mdx/components";
+
+The observability plugin and Claude's OTEL exporter connect a Claude org to the platform. They are the prerequisite for most governance features on Anthropic surfaces: observability of AI usage across the company (tokens, cost, clients, MCP, skills), security flagging and blocking, [shadow MCP detection](/docs/ai-control-plane/secure/shadow-mcp), and more. Claude Code and Claude Cowork are configured separately.
+
+The observability plugin itself is delivered through the org's plugin marketplace — see [distributing plugins to Anthropic](/docs/ai-control-plane/distribute/plugins/anthropic) for the marketplace setup. This page covers the telemetry side.
+
+## Access requirements
+
+<Callout type="info">
+  Creating the API key requires the `org:admin` scope, held by the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions). The Claude-side steps require admin access to the Claude organization.
+</Callout>
+
+<Callout title="Why OTEL is required" type="info">
+  The platform uses Claude's OTEL exporter to associate Claude sessions with users. Without it there is no way of knowing who performed which action, so most features will not work. The same telemetry powers cost and token metrics when that setting is enabled.
+</Callout>
+
+## Create an API key
+
+In the dashboard, open **Organization settings > API Keys** (see [API keys](/docs/ai-control-plane/org-admin/api-keys)) and create a new key with the **Hooks** scope. Copy the key — it replaces the `<MY_KEY>` placeholder below, producing a header string like `"Gram-Project=default,Gram-Key=gram_live_abc..."`. The same key works for both Claude Code and Cowork.
+
+## Claude Code
+
+<Callout type="info">
+  Alternative path: these settings can also be distributed via MDM. Claude managed settings are easier; MDM gives more control over the rollout.
+</Callout>
+
+In the Claude org settings, open the **Claude Code** tab (claude.ai/admin-settings/claude-code), scroll to **Managed settings**, and click **Manage**. Merge the following JSON into the dialog, replacing the API key placeholder. If the dialog already carries the plugin marketplace settings from [distributing plugins to Anthropic](/docs/ai-control-plane/distribute/plugins/anthropic), merge this `env` block into the same JSON document.
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "https://app.getgram.ai/rpc/hooks.otel",
+    "OTEL_EXPORTER_OTLP_HEADERS": "Gram-Project=default,Gram-Key=<MY_KEY>",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_METRICS_EXPORTER": "otlp"
+  }
+}
+```
+
+<Callout title="Trust prompt" type="warning">
+  Claude treats the OTEL exporter settings as sensitive. After this step, everyone in the Claude org is asked whether they trust the settings the next time they start Claude Code, and must mark them as trusted to continue (this just requires hitting Enter).
+</Callout>
+
+### Confirm telemetry is flowing
+
+- Restart Claude Code and execute any tool call — use an MCP server, or ask Claude to run `echo hi there`.
+- Open [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the dashboard. The tool call should appear immediately (for a local tool call, set the **Type** filter to include local tools).
+
+## Claude Cowork
+
+Install the observability plugin from the org's marketplace first — see [distributing plugins to Anthropic](/docs/ai-control-plane/distribute/plugins/anthropic), and mark the observability plugin **Required** for a real rollout. Then enable OTEL export:
+
+- In the **Cowork** tab of the Claude org settings, scroll to **Monitoring** and set:
+  - OTLP endpoint: `https://app.getgram.ai/rpc/hooks.otel`
+  - OTLP protocol: `http/json`
+  - OTLP headers: `Gram-Project=default,Gram-Key=<MY_KEY>`
+- Save the settings.
+
+### Verify
+
+Restart Claude Desktop, use a connector or MCP server from the Cowork tab, and confirm the call appears immediately in [Tool Logs](/docs/ai-control-plane/observe/tool-logs).
