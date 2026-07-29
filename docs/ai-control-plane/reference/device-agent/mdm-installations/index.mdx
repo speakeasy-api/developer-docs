@@ -1,0 +1,91 @@
+---
+title: MDM installations
+description: "Deploy the device agent through your MDM, verify the rollout with agent coverage, and export it as compliance evidence — with guides for Jamf Pro, Iru (formerly Kandji), Intune, Drata, and Vanta."
+---
+
+import { Callout, StatusBadge } from "@/mdx/components";
+
+Rolling the device agent out through an MDM has two halves. First, **deploy**: your MDM installs the agent and delivers its managed configuration so every device enrolls without any interactive login. Second, **verify**: connect the same MDM to the dashboard so the platform can pull your managed-device inventory and show exactly which devices are covered by a running agent — and which aren't. Optionally, a third: **export** that coverage into your compliance platform so it becomes continuously-tested evidence.
+
+This page covers the shared concepts. The provider guides cover the console-specific recipes, including how to mint scope-limited credentials for each:
+
+**Inventory sources** (your MDM — deploy the agent, pull the fleet):
+
+- [Jamf Pro](/docs/ai-control-plane/reference/device-agent/mdm-installations/jamf) — deploy and verify (inventory integration supported)
+- [Iru (formerly Kandji)](/docs/ai-control-plane/reference/device-agent/mdm-installations/iru) — deploy and verify (inventory integration supported)
+- [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune) — deploy and verify (inventory integration supported)
+
+**Evidence destinations** (your compliance platform — push coverage as evidence):
+
+- [Drata](/docs/ai-control-plane/reference/device-agent/mdm-installations/drata) — per-device records into a dedicated Custom Connection, mapped to a control test
+- [Vanta](/docs/ai-control-plane/reference/device-agent/mdm-installations/vanta) — per-device Custom Resources with a Custom Test over real coverage
+
+## The managed configuration
+
+The agent recognizes a user through a managed configuration delivered by IT — no browser flow and no manual enrollment on the device. It's a schema-versioned document (`v: 1`) carrying the user's work email, an organization token, and optional settings:
+
+```json
+{
+  "v": 1,
+  "email": "jane.doe@example.com",
+  "org_token": "spk_org_…",
+  "org_slug": "example-corp"
+}
+```
+
+It can be delivered through two channels:
+
+- **Configuration Profile (macOS, preferred)** — a Custom Settings payload (`com.apple.ManagedClient.preferences`) targeting the preferences domain **`com.speakeasy.agent`**, materialized by the OS at `/Library/Managed Preferences/com.speakeasy.agent.plist`. Declarative, MDM-native, no standing script, and users cannot edit it without removing the profile. When a device has both a profile and the JSON file, the profile wins per field.
+- **Script-dropped `managed.json` (works everywhere)** — a script or package payload writes the JSON file to a fixed system path:
+
+  | OS | Path |
+  | --- | --- |
+  | macOS | `/Library/Application Support/Speakeasy/managed.json` |
+  | Linux | `/etc/speakeasy/managed.json` |
+  | Windows | `%ProgramData%\Speakeasy\managed.json` |
+
+Two constraints catch most first deployments, regardless of MDM:
+
+- **The configuration must be readable by the logged-in user**, not just root — the agent runs as that user. For the JSON file use `0644 root:wheel` (or `0640` with the user's group); `0600` silently breaks enrollment. Profiles have no permission trap — the OS owns the plist.
+- **The agent reads its configuration at daemon startup.** Any policy that writes the file must restart the daemon afterwards (`speakeasyd -service restart`), on every run — a rotated token sits inert on disk until the next restart. The same restart rule applies to profile updates.
+
+<Callout type="warning">
+  The `org_token` is a credential, but the device cannot keep it secret from its own user: the agent runs as the logged-in user, who can therefore read the configuration. Treat the token as a revocable, organization-scoped credential — scope its permissions on that assumption and rotate it rather than trying to hide it. Pass it into your MDM as a script parameter or templated variable, never as a literal in a script body.
+</Callout>
+
+### Verify on the device
+
+After the policy has run and the daemon restarted, `speakeasy status` on a target device should report the enrolled email with `source: managed` — surfaced in the menu bar UI as "Provisioned by IT". If it reports `source: local` or `source: none`, the usual causes are, in order: the daemon hasn't restarted since the configuration changed, the file permissions are too tight, or the file is at the wrong path.
+
+## Verify the rollout with agent coverage
+
+Deploying tells you what your MDM *pushed*; it doesn't tell you what's actually *running*. **MDM Integrations** closes that gap: the platform pulls the managed-device inventory from your MDM on a schedule and joins it against the agent's own heartbeats, so the dashboard can show, per managed device, whether its assigned user has a live agent. Jamf Pro, Iru (formerly Kandji), and Microsoft Intune are supported; see the per-provider guides for setup.
+
+<Callout type="info">
+  Agent presence is attested **per assigned user, not per device**. The agent reports a heartbeat for the enrolled user roughly every minute; a device counts as covered when its MDM-assigned user has a recent heartbeat from *some* device. It proves "this device's user runs the agent," not "this specific device is monitored." Device-level attestation via hardware-serial reconciliation is planned.
+</Callout>
+
+Each managed device lands in exactly one coverage state:
+
+| State | Meaning |
+| --- | --- |
+| <StatusBadge variant="success">Agent active</StatusBadge> | The assigned user's device agent reported a heartbeat within the active window. |
+| <StatusBadge variant="warning">Agent stale</StatusBadge> | The assigned user's agent has gone quiet while the MDM still sees the device checking in — the drift case. The agent may have been disabled or removed. |
+| <StatusBadge variant="danger">No agent</StatusBadge> | The assigned user has never reported an agent heartbeat. |
+| <StatusBadge variant="neutral">No email in MDM</StatusBadge> | The MDM record has no assigned-user email, so coverage cannot be attested. Set the user's email on the device record in your MDM. |
+| <StatusBadge variant="neutral">Unknown user</StatusBadge> | The MDM-assigned email doesn't match any member of the organization. |
+| <StatusBadge variant="neutral">Missing from MDM</StatusBadge> | The device stopped appearing in the MDM inventory — likely unenrolled or retired. |
+
+The summary also counts **agent users without a managed device**: people reporting agent heartbeats whose email matches no device in the MDM inventory — the inverse gap, useful for spotting agents running on unmanaged hardware.
+
+The two lists an IT admin works during a rollout are **No agent** (deploy the agent to these users' devices) and **Agent stale** (the agent was running and stopped — investigate whether it was disabled).
+
+## Export coverage as compliance evidence
+
+With an inventory source connected, an evidence destination ([Drata](/docs/ai-control-plane/reference/device-agent/mdm-installations/drata) or [Vanta](/docs/ai-control-plane/reference/device-agent/mdm-installations/vanta)) turns the same coverage into audit-ready evidence. All destinations share the same semantics:
+
+- **One record per present managed device**, carrying the serial, hostname, assigned-user email, and the user's agent status. Devices missing from the MDM are excluded until they reappear.
+- **Snapshot replacement on a schedule.** Every push is the complete current state: departed devices drop out automatically, retries can never duplicate records, and cycles where nothing changed are skipped.
+- **Per-user attestation, by name.** The pushed properties are `assigned_user_agent_active` and `assigned_user_agent_last_seen_at` — never "device monitored" — because agent presence attaches to the device's assigned user, not the machine. Phrase your control tests over those properties so auditors consume exactly the claim the platform can support.
+
+Every integration — sources and destinations — connects the same way: **Device Agent → MDM Integrations** in the dashboard, then save the credentials, test the connection, and enable it. New connections start paused so invalid credentials never generate failed sync attempts, and each provider guide covers minting a scope-limited credential so the stored secret can do nothing beyond its one job.

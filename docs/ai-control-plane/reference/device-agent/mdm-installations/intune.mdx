@@ -1,0 +1,30 @@
+---
+title: "Microsoft Intune"
+description: "Deploy the device agent with Microsoft Intune on macOS and Windows."
+---
+
+Intune deploys the device agent's managed configuration on both macOS and Windows. Shared concepts — the configuration schema, delivery channels, and coverage states — are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+
+## macOS
+
+**Preferred: a Configuration Profile.** Upload a `.mobileconfig` (or use Intune's preference-file settings) carrying a Custom Settings payload targeting the preferences domain **`com.speakeasy.agent`**, with the standard plist form of the configuration (see the [shared schema](/docs/ai-control-plane/reference/device-agent/mdm-installations#the-managed-configuration)).
+
+**Fallback: a shell script.** **Devices → Scripts → Add → macOS**: upload a script that writes `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644` and restarts the daemon. Run it as root, and leave "run script only once" **off** so rotated tokens reach devices.
+
+## Windows
+
+Use **Devices → Scripts** (PowerShell) or a packaged Win32 app that drops `managed.json` under `%ProgramData%\Speakeasy\`, with an ACL granting the logged-in user read access — the agent runs as that user and only reads the file.
+
+## Connect Intune to the dashboard
+
+The inventory pull runs through Microsoft Graph with a scope-limited app registration:
+
+1. In **Entra ID → App registrations**, create an app registration for the integration.
+2. Under **API permissions**, add the Microsoft Graph **application** permission **`DeviceManagementManagedDevices.Read.All`** — reading the managed-device inventory is all the integration needs — and grant admin consent. The tenant needs an active Intune license.
+3. Under **Certificates & secrets**, create a client secret and copy its value.
+4. In the dashboard, open **Device Agent → MDM Integrations**, then **Connect** on the Microsoft Intune row.
+5. Enter the **directory (tenant) ID**, the **application (client) ID**, and the **client secret**. Credentials are stored encrypted and are never shown again after saving.
+6. **Save**, then **Test connection** — the test performs a real managed-devices read, validating the tenant id, the credentials, and the admin-consented permission together.
+7. Enable the connection. New connections start paused: the flow is save, test, then enable.
+
+Once enabled, the inventory syncs hourly. The integration reads each device's Intune-recorded email address (falling back to the user principal name) to attribute devices to people — coverage can only be attested for devices with an assigned user.

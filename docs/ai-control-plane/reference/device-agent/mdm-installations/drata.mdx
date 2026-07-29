@@ -1,0 +1,59 @@
+---
+title: "Drata"
+description: "Push per-device agent-coverage evidence into Drata so AI usage on endpoints becomes a continuously-tested control."
+---
+
+import { Callout } from "@/mdx/components";
+
+Drata is an evidence destination, not an MDM: once an MDM inventory source (Jamf Pro or Iru) is connected, the platform pushes one record per managed device into a Drata **Custom Connection** on a schedule, so "AI usage on endpoints is monitored" becomes a continuously-tested control instead of quarterly screenshots. Shared concepts — the coverage model and what the evidence attests — are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+
+## 1. Create a scope-limited API key
+
+In Drata, go to **Settings → API Keys** and create a key for this integration. Grant it only the **Custom Connections** capability (read and write) — it needs nothing else. The key is shown once; store it in your password manager.
+
+## 2. Create a dedicated Custom Connection
+
+Create a Custom Connection that only this integration writes to. Pushes replace the connection's records wholesale, and the integration refuses connections carrying more than one resource — reusing an existing connection risks its data.
+
+Via the API (or equivalently in the Drata console), create it with exactly this record schema:
+
+```bash
+curl -s -X POST https://public-api.drata.com/public/v2/custom-connections \
+  -H "Authorization: Bearer <YOUR_API_KEY>" -H "Content-Type: application/json" \
+  -d '{
+    "name": "Speakeasy Device Agent Coverage",
+    "providerTypes": ["CUSTOM"],
+    "workspaceIds": [<WORKSPACE_ID>],
+    "displayNameKey": "hostname",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "serialNumber": { "type": "string" },
+        "hostname": { "type": "string" },
+        "assignedUserEmail": { "type": "string" },
+        "assignedUserAgentActive": { "type": "boolean" },
+        "assignedUserAgentLastSeenAt": { "type": "string" }
+      }
+    }
+  }'
+```
+
+The response's `id` is the **connection id** — the one value you paste into the dashboard. (The record resource is created automatically with the connection; the integration discovers it itself.)
+
+## 3. Connect in the dashboard
+
+1. Open **Device Agent → MDM Integrations**, then **Connect** on the Drata row.
+2. Select your Drata **region** (`us`, `eu`, or `apac`), and enter the **connection id** and **API key**. Credentials are stored encrypted and are never shown again after saving.
+3. **Save**, then **Test connection** — the test fetches the connection and discovers its record resource, so it validates the key, the region, and the connection id together.
+4. Enable the connection. New connections start paused: the flow is save, test, then enable.
+
+Once enabled, evidence pushes hourly (skipping cycles where nothing changed). Each push is a complete snapshot: departed devices drop out of the record set automatically, and retries can never duplicate records.
+
+## 4. Wire it to a control
+
+In Drata, map the connection to a test on the relevant control (for example, your SOC 2 monitoring control). Phrase the test over `assignedUserAgentActive` — one device whose assigned user has no live agent fails the test and routes to an owner.
+
+<Callout type="info">
+  Agent presence is attested **per assigned user, not per device**: `assignedUserAgentActive` means the device's MDM-assigned user has a recent agent heartbeat from some device, and `assignedUserAgentLastSeenAt` is omitted entirely for a user who has never reported one. Phrase tests over these properties — the integration deliberately never claims "device monitored".
+</Callout>

@@ -1,0 +1,36 @@
+---
+title: "Iru (formerly Kandji)"
+description: "Deploy the device agent with Iru (formerly Kandji) and connect the tenant to the dashboard for agent coverage across the managed fleet."
+---
+
+import { Callout } from "@/mdx/components";
+
+Iru — Kandji until its late-2025 rebrand — supports both halves of an MDM rollout: **deploying** the agent's managed configuration to your Apple fleet, and **verifying** the rollout by connecting the tenant to the dashboard so agent coverage is computed from the real inventory. Shared concepts — the configuration schema, delivery channels, and coverage states — are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+
+## Deploy with a Custom Profile (preferred)
+
+1. In the Iru library, add a **Custom Profile**.
+2. Supply a Custom Settings payload (`com.apple.ManagedClient.preferences`) targeting the preferences domain **`com.speakeasy.agent`** with the standard plist form of the configuration (see the [shared schema](/docs/ai-control-plane/reference/device-agent/mdm-installations#the-managed-configuration)).
+3. Template per-user values (like the email) with Iru's variables so one profile serves the fleet, and assign it to the target Blueprints.
+
+## Deploy with a Custom Script (fallback)
+
+For the `managed.json` file path:
+
+1. **Library → Add New → Custom Script** (not a Custom Profile — profiles deliver plists, not arbitrary JSON files).
+2. Have the script write `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644`, then restart the daemon.
+3. Set the execution frequency to a recurring schedule (for example every 15 minutes), not "run once" — otherwise a rotated token never reaches devices.
+
+## Connect Iru to the dashboard
+
+1. In the Iru console, go to **Settings → Access → API Token** and create a token with only the **Device list** permission enabled. Copy the token and the tenant's **API URL** shown on the same page (`https://yourtenant.api.iru.com`; the legacy `https://yourtenant.api.kandji.io` form also works).
+2. In the dashboard, open **Device Agent → MDM Integrations**, then **Connect** on the Iru row.
+3. Enter the API URL and the token. Credentials are stored encrypted and are never shown again after saving.
+4. **Save**, then **Test connection** — the test runs a real request against your tenant using the saved credentials.
+5. Enable the connection. New connections start paused so that invalid credentials never generate failed sync attempts: the flow is save, test, then enable.
+
+<Callout type="info">
+  The integration reads each device record's **assigned user email** to attribute devices to people — coverage can only be attested for devices whose records carry one. If your fleet shows a large "No email in MDM" count, assign users to devices in Iru (directory-integrated enrollment usually does this automatically).
+</Callout>
+
+Once enabled, the inventory syncs hourly. Each schedule can be paused, resumed, or run immediately with **Sync now** from the integration's detail page, which also shows the coverage breakdown and the searchable device inventory.
