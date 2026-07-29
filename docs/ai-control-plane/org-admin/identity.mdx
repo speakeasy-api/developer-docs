@@ -4,6 +4,7 @@ description: "Connect an identity provider to manage sign-in and membership thro
 ---
 
 import { Callout } from "@/mdx/components";
+import IdentityFlowDiagram from "@/components/astro/docs/IdentityFlowDiagram";
 
 The **IDP and SSO** page connects the organization to an identity provider for sign-in and membership management. Open it from **Organization settings > Identity > IDP and SSO** in the dashboard.
 
@@ -13,18 +14,36 @@ The **IDP and SSO** page connects the organization to an identity provider for s
   Viewing this page requires the `org:read` scope, so both default Admin and Member roles can see it. Configuring SSO or Directory Sync requires the `org:admin` scope, held by Admins only, and the features are entitlement-gated by plan. Roles and scopes are managed in [Roles & Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions).
 </Callout>
 
-## Identity cards
-
-The page shows an **Identity** heading with two cards.
-
-The **Single Sign-On** card lets the team set up Single Sign-On (SSO) to sign in to Speakeasy with the organization's identity provider. When SSO is active, the card shows a **Connected** badge.
-
-The **Directory Sync** card provisions members automatically from the identity provider. Roles map from IdP groups, so no manual invites or role assignments are needed.
-
 ## Configuring a connection
 
-Each card has a **Configure** button. Its behavior depends on the current state:
+The page shows two cards, **Single Sign-On** and **Directory Sync**. Each has a **Configure** button whose behavior depends on the current state:
 
 - When the feature is already active, the button opens the admin portal for managing the connection.
 - When the feature is available but not yet set up, the button enters the setup wizard at the matching step. See [getting started](/docs/ai-control-plane/getting-started) for the full wizard flow.
 - When the feature isn't included in the current plan, the button contacts the team to enable SSO and Directory Sync.
+
+## How federated sign-in works
+
+Speakeasy identity keeps enterprise roles and members in lockstep between the organization's identity provider and the AI Control Plane. Sign-in is federated: the organization's IDP does the authentication, and the Speakeasy identity layer is the broker. The flow is synchronous and runs on every sign-in, typically in about 500ms end to end.
+
+<IdentityFlowDiagram flow="sign-in" />
+
+- **Sign in** - The user clicks **Sign in**, and the Control Plane delegates the entire chain to the Speakeasy identity layer.
+- **Redirect** - The identity layer routes to the organization's federated connection (for example Okta, Azure AD, or Google). The user sees the company's own sign-in screen, not a Speakeasy one.
+- **Authenticate** - The user authenticates under the organization's credentials and policies (MFA, device trust, conditional access), and the IDP posts the assertion back.
+- **Callback** - The identity layer hands an authorization code back to the Control Plane through the OAuth callback.
+- **Exchange** - The Control Plane exchanges the code for a signed ID token.
+- **Identity** - The validated token provides the user, email, display name, and the original IDP user id linking back to the directory.
+- **Session** - The session cookie is set and the user lands in their workspace. This last write is typically a no-op upsert, because Directory Sync has already provisioned the user and their memberships.
+
+## How Directory Sync works
+
+Directory Sync keeps the Control Plane's users and roles current from the organization's directory of record. It runs continuously and asynchronously, with no admin intervention needed after setup.
+
+<IdentityFlowDiagram flow="directory-sync" />
+
+- **Push** - When an admin adds, edits, or removes a user, or changes a group's membership, the directory pushes the change to the Speakeasy identity layer via SCIM.
+- **Poll** - The Control Plane's sync worker polls the identity layer's event stream about every 30 seconds, tracking a cursor per organization.
+- **Apply** - User and membership events apply in a single transaction, so a member's account already exists by the time they first sign in.
+- **Groups** - Group membership events (additions, removals, and renames) arrive in the same poll.
+- **Roles** - Each group maps to a Control Plane role. Grants are inserted or revoked, and the cursor advances in the same transaction as the writes, giving exactly-once semantics: no event is applied twice or dropped.
