@@ -1,0 +1,111 @@
+---
+title: "Govern agent actions with enterprise identity"
+description: "The full authorization path from the identity provider to a single MCP tool call: how every allow-or-deny decision is made and recorded."
+---
+
+import { Callout } from "@/mdx/components";
+
+An agent connects to an MCP server and asks to call `create_refund`. Before that call executes, the platform answers two questions: who is driving this session, and is that person allowed to make this exact call?
+
+Most gateways answer the first question with a shared service account and the second with a server-level allowlist, which leaves security asking "who issued this refund, and why were they allowed to?" with no better answer than "the agent used the service account." This guide walks the full authorization path on the platform, from the identity provider down to the disposition of a single tool.
+
+## Authenticate agent sessions through the IdP
+
+Private MCP servers reject anonymous traffic. When an agent connects without credentials, the server responds with a `401` and a `WWW-Authenticate` header pointing at OAuth protected-resource metadata, the standard MCP authorization handshake. The agent's client (Claude, Cursor, or a custom harness) starts an OAuth flow, and the person behind the agent signs in through the company's identity provider.
+
+<video controls={false} loop={true} autoPlay={true} muted={true} playsInline={true} width="100%">
+  <source
+    src="/assets/blog/governing-agent-actions-with-enterprise-identity/agent-identity.mp4"
+    type="video/mp4"
+  />
+</video>
+
+With [Directory Sync](/docs/ai-control-plane/org-admin/identity) connected, the MCP gateway gets a rich set of identity metadata that stays current:
+
+- Users, groups, and attributes flow in from Okta or Entra and stay fresh.
+- Role assignments track group membership, so someone joining a team gets the matching access automatically.
+- When someone is deprovisioned, their access disappears with them instead of outliving them as a stale grant.
+
+Every session established through a supported agent then carries a detailed identity profile: this user, in this organization, holding these roles.
+
+## Authorize the connection to an MCP server
+
+With identity resolved, the first authorization gate fires when the session attaches to a server: the caller must hold the `mcp:connect` scope for that specific server.
+
+Permissions are grants: a scope paired with a selector that says which resources it reaches. Roles are named bundles of grants. The built-in Admin role holds every scope; the built-in Member role holds the read-and-connect subset, and [custom roles](/docs/ai-control-plane/org-admin/roles-and-permissions) narrow further. A grant that lets a role connect to one server in one project looks like this:
+
+```json
+{
+  "scope": "mcp:connect",
+  "selectors": [
+    {
+      "resource_kind": "mcp",
+      "resource_id": "<server-id>",
+      "project_id": "<project-id>"
+    }
+  ]
+}
+```
+
+Selectors support explicit wildcards (`"resource_id": "*"` reaches every server), so a role can be as broad or as narrow as the team it describes. A grant only constrains the keys it names: pin `project_id` and the grant follows the project; leave it off and the grant applies everywhere the scope does.
+
+If no grant satisfies the check, the session never attaches. The agent doesn't see a degraded server; it sees a denied connection, tied to the person whose session it was.
+
+## Authorize each tool call
+
+Connecting to a server is not the same as being allowed to use everything on it. Each individual `tools/call` passes through a second check (same `mcp:connect` scope, same server) that carries two more dimensions: the tool name and the tool's disposition.
+
+Disposition is derived from the tool's MCP annotations at call time. Tools declaring `readOnlyHint` evaluate as `read_only`; `destructiveHint` maps to `destructive`; the rest of the vocabulary is `idempotent` and `open_world`. Because the disposition comes from the tool's own metadata, policy can target classes of behavior instead of a per-tool list that goes stale every deploy.
+
+A support role that can connect to the billing server but only invoke tools that declare themselves read-only looks like this:
+
+```json
+{
+  "scope": "mcp:connect",
+  "selectors": [
+    {
+      "resource_kind": "mcp",
+      "resource_id": "<billing-server-id>",
+      "disposition": "read_only"
+    }
+  ]
+}
+```
+
+With that grant, `get_invoice` succeeds and `create_refund` (a destructive tool on the same server) is denied, for this user, on this call, with no change to the server itself. Add a `tool` key instead to name specific tools rather than classes of them.
+
+## How an allow-or-deny decision evaluates
+
+When a check fires, the engine evaluates it in four steps:
+
+- **Load the caller's grants.** Everything the principal holds, through their synced role and any direct grants, is assembled for the organization.
+- **Expand scopes.** Higher privileges satisfy lower ones: `mcp:write` satisfies an `mcp:read` check, and either satisfies `mcp:connect`. The same family never needs to be granted three times.
+- **Match selectors.** For every key a grant constrains, the value must equal the check's value or be `*`. Keys the grant doesn't mention are skipped, which is why a grant scoped to `"disposition": "read_only"` still satisfies the connection-level check that doesn't ask about disposition.
+- **Apply denies.** Deny rules evaluate as a separate pass with stricter matching, and a matching deny always beats a matching allow.
+
+That last step is the safety property worth dwelling on. When multiple grants touch the same resource, the outcome isn't order-dependent or "last rule wins": deny wins. Suppose the Member role grants `mcp:connect` on every server, and a deny rule exists for destructive tools on the billing server. A member's session connects fine and reads fine, and the moment the agent reaches for `create_refund`, the deny matches and the allow doesn't matter. "Allowed" never happens by accident because two rules overlapped.
+
+## Audit every decision
+
+The hardest question in access control is retrospective: not "what can this person do" but "why was this specific call allowed three weeks ago."
+
+Every check described above can be recorded as an authorization challenge that captures:
+
+- Who was challenged, as a directory identity rather than a token id.
+- What scope was required, against which server and tool.
+- Whether the outcome was allow or deny.
+- How many grants were evaluated to reach that outcome.
+
+Because tool-call telemetry is stamped with the caller's directory snapshot (their attributes, groups, and role slugs at the moment of the call), the record composes: this person, in these groups, holding these roles, made this call, and here is the rule that permitted it.
+
+Denied challenges are actionable from the [Roles & Permissions page](/docs/ai-control-plane/org-admin/roles-and-permissions): opening a challenge leads into the grant flow, where the missing permission can be added to one of the member's roles, scoped as narrowly as needed.
+
+<Callout title="Rolling out" type="info">
+  Directory Sync and identity-stamped telemetry are available now. Authorization challenge logging is gated per organization; contact the team to have it enabled.
+</Callout>
+
+## Get started
+
+Directory Sync is configured from the [IDP and SSO page](/docs/ai-control-plane/org-admin/identity) through the admin portal. Once connected, roles track the IdP automatically, every session resolves to a real person, and every tool call evaluates against grants that can be read, reasoned about, and audited.
+
+For the announcement and product context, see the blog post [From your IdP to a tool call: how agent authorization works](/blog/governing-agent-actions-with-enterprise-identity).
