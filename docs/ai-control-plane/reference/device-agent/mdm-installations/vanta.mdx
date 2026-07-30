@@ -26,9 +26,8 @@ In the integration's **Resources** tab, define a Custom Resource for device cove
 | `serial_number` | string | Hardware serial from the MDM |
 | `hostname` | string | Device name from the MDM |
 | `assigned_user_email` | string | The MDM-assigned user (empty when unassigned) |
-| `agent_active` | boolean | Whether the attested agent has a recent heartbeat |
-| `agent_attestation` | string | `"device"` (this machine reported in) or `"user"` (only its assigned user did) |
-| `agent_last_seen_at` | string | The attested agent's latest heartbeat; omitted when none has ever reported |
+| `assigned_user_agent_active` | boolean | Whether that user has a recent agent heartbeat |
+| `assigned_user_agent_last_seen_at` | string | The user's latest heartbeat; omitted when they have never reported one |
 
 Copy the **resource id** from the resource definition — the third and final value the dashboard needs.
 
@@ -43,15 +42,8 @@ Once enabled, evidence pushes hourly as a **full-state sync**: each push is the 
 
 ## 4. Define the Custom Test
 
-Create a Custom Test over the resource — for example, *fail when any resource has `agent_active` = false* — and map it to the relevant SOC 2 / ISO controls. One stale device fails the test and routes to an owner.
+Create a Custom Test over the resource — for example, *fail when any resource has `assigned_user_agent_active` = false* — and map it to the relevant SOC 2 / ISO controls. One stale device fails the test and routes to an owner.
 
 <Callout type="info">
-  Each resource states its own attestation strength in `agent_attestation`, and both values can appear in one push:
-
-  - `"device"` — that machine's own agent reported in, matched on hardware serial. `agent_active` means **this device** is running the agent.
-  - `"user"` — matched on the MDM-assigned user's email. `agent_active` means only that **the assigned user** runs the agent on some machine, which is strictly weaker.
-
-  A machine whose agent cannot read a hardware serial stays `"user"` even once your organization is on device-level matching, so the strength genuinely varies row by row. `agent_last_seen_at` is omitted entirely when no agent has ever reported, rather than sent as null or a zero timestamp.
-
-  If your auditor requires per-device attestation, phrase the Custom Test to require both `agent_active` = true **and** `agent_attestation` = `"device"`. Testing `agent_active` alone accepts the weaker claim.
+  Agent presence is attested **per assigned user, not per device**: the property names say exactly that, and `assigned_user_agent_last_seen_at` is omitted for a user who has never reported a heartbeat rather than sent as null or a zero timestamp. Phrase the Custom Test over these properties — the integration deliberately never claims "device monitored".
 </Callout>
