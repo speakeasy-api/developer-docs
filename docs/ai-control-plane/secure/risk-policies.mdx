@@ -7,6 +7,10 @@ import { Callout } from "@/mdx/components";
 
 The **Risk Policies** page configures the policies that scan agent session interactions for secrets, sensitive information, and prompt-defined risks. Open it from **Secure > Risk Policies** in the dashboard.
 
+A policy binds four things: the detection rules that decide what counts as a finding, the scope that decides which content those rules examine, the action taken when they match, and the audience of users the policy applies to. Findings feed [Risk Events](/docs/ai-control-plane/secure/risk-events) and [Risk Overview](/docs/ai-control-plane/secure/risk-overview).
+
+Every detection setting trades recall against accuracy. Widening what a policy examines catches more real risk and also produces more false positives. The controls on this page exist to place that tradeoff deliberately, per policy, rather than accepting one global compromise.
+
 ## Access requirements
 
 <Callout type="info">
@@ -15,33 +19,190 @@ The **Risk Policies** page configures the policies that scan agent session inter
 
 ## Policy list
 
+The page has two tabs: **Policies** and **Exclusions**.
+
 The policy table shows each policy's name, action, severity, categories or prompt, scope, audience, and created and updated dates. Each policy has an enabled toggle and row actions to edit or delete — deleting shows the impact and affected rule groups before confirming. Create a policy with **New Policy**.
 
-## Policy editor
+## Policy types
 
-The editor is a stepped wizard. Standard policies step through **Detect > Scope > Action > Review**; prompt policies through **Guardrail > Scope > Evaluate > Action > Review**.
+Two kinds of policy exist, and the choice is made before the editor opens:
 
-### Detect
+- **Built-in detector** — scans for secrets, sensitive data, and risky tool calls using the built-in detector catalog and custom rules
+- **Prompt-based** — describes the behavior to catch in plain language, and an LLM judge evaluates each in-scope message
 
-Choose detector categories to enable: secrets, financial data, PII, government IDs, healthcare data, shadow MCP, destructive tool use, account identity, and prompt injection. Each category can be customized to enable or disable its individual rules — see [Detection Rules](/docs/ai-control-plane/secure/detection-rules) for the full catalog.
+Both editors are stepped wizards. Built-in detector policies step through **Detect > Scope > Action > Review**; prompt-based policies through **Guardrail > Scope > Evaluate > Action > Review**. Any step is reachable at any time, and the active step is held in the URL, so browser navigation moves between steps and a step is shareable as a link.
 
-### Scope
+## Detectors
 
-Choose which session content the policy evaluates: select message types directly, or write a CEL expression for precise inclusion. An exemptions expression skips the whole policy for any matching message.
+The **Detect** step turns on detector categories. A category can be enabled wholesale, or expanded to enable and disable its individual rules — see [Detection Rules](/docs/ai-control-plane/secure/detection-rules) for the full catalog and for authoring custom rules.
 
-### Action
+| Category | Detects | Notes |
+| -------- | ------- | ----- |
+| Secrets | API keys, tokens, private keys, credentials | |
+| Financial information | Credit cards, bank accounts, routing numbers, IBAN codes | |
+| Personal identifiable information | Phone numbers, email addresses, IP and MAC addresses | |
+| Government identifiers | SSNs, passport numbers, national IDs, tax IDs | Covers US, UK, EU, and APAC identifier formats |
+| Healthcare information | Medical record numbers, patient data, Medicare IDs | |
+| Off-policy content | Requests that violate acceptable use guidelines | |
+| Prompt injection | Indirect injection through tool output and hidden instructions | |
+| Shadow MCP | Tool calls that don't come from a Speakeasy-issued MCP server | Requires Speakeasy hooks on the agent. See [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp) |
+| Destructive tools | MCP tool calls annotated as destructive | Requires Speakeasy hooks and Gram-issued tool metadata |
+| Destructive CLI commands | Shell, git, database, and cloud CLI patterns such as `rm -rf`, `git push --force`, `DROP TABLE`, and `kubectl delete ns` | Covers native terminal tools and MCP-routed tools whose arguments carry destructive content |
+| Non-corporate accounts | Sessions authenticated with a personal AI account, or an account whose email domain is off the approved list | Approved domains are set on the policy |
+| Custom patterns | Organization-specific patterns | Authored on the Detection Rules page |
 
-Decide what happens on a finding:
+Detectors differ in cost and performance. Pattern and classifier-backed detectors are cheap enough to run broadly, while LLM judges cost a model call per evaluated message. Detection scope is what keeps the expensive ones affordable.
 
-- **Flag or block** — record the finding, or stop the interaction
-- **Severity** — a 0.1–10 severity score assigned to findings
-- **Detection sensitivity** — the confidence threshold for a match
-- **Audience** — evaluate for everyone in the organization, or target specific members and roles
+Three categories detect activity that has already happened rather than content in flight, so they can only flag and never block: destructive tools, destructive CLI commands, and non-corporate accounts.
 
-### Prompt policies
+Most findings carry a match span marking the exact portion of the original content that triggered the detector. Spans drive the highlighting in session transcripts, and they supply the value that prefills an exclusion.
 
-Prompt policies add a natural-language guardrail: describe the behavior to detect in plain language, with AI-assisted suggestions, and an evaluate step to tune it before it goes live.
+## Prompt-based policies
 
-## Blocked access requests
+A prompt-based policy replaces the detector catalog with a plain-language guardrail. Use one when the risk is contextual rather than a pattern — an exfiltration attempt through `curl`, a refund issued without prior authorization, a delete against production.
 
-Policies that block access feed an approval requests queue where blocked resource-access attempts are reviewed and project-scoped access rules are managed.
+### How prompt-based policies work
+
+The guardrail describes the behavior to flag. An LLM judge evaluates each in-scope message against that description and returns a verdict: a binary decision, a confidence score, and a human-readable rationale carried alongside the finding, so a reviewer sees why the judge flagged the message rather than only that it did.
+
+The judge reads the same scan surfaces the deterministic detectors do, so a guardrail can reason about a prompt, an assistant message, a tool call and its arguments, or a tool response.
+
+The **Guardrail** step also configures the judge:
+
+- **Model** — defaults to Gemini 3.1 Flash Lite, with Claude Sonnet 4.6 and Claude Haiku 4.5 also available
+- **Temperature** — lower is more deterministic and repeatable, higher allows more nuanced judgment but less consistent results
+- **On judge error** — fail open lets the message through when the judge times out or errors, avoiding false blocks; fail closed treats the error as a match, which is stricter but can interrupt legitimate traffic
+
+Leaving the policy name blank generates a name from the guardrail.
+
+### Crafting a prompt-based policy
+
+Start from a template — no production deletes, external data transfer, or PII exposure — or write the guardrail directly.
+
+Pair the guardrail with a detection scope rather than asking it to do all the work. A policy that catches exfiltration through `curl` is best expressed as a scope that selects shell tool calls and a guardrail that judges intent within them. Narrowing the scope cuts the judge's cost and removes the traffic most likely to produce false positives.
+
+The **Evaluate** step replays the guardrail against live agent sessions before it goes live. It runs the judge over recent sessions, searchable by session, and shows what each would produce. Editing the guardrail re-judges automatically after a short pause, so competing wordings can be compared against the same traffic.
+
+Each replayed session takes a verdict of correct, false positive, or missed. Those verdicts build a scorecard measuring how well the guardrail agrees with human judgment, and they persist with the policy, so a later edit is measured against the same review set. The **Review** step surfaces the scorecard again and links back to the sessions behind each verdict.
+
+Evaluation uses the same detection scope the policy will use in production, so replay verdicts match live scanning behavior.
+
+## Action and severity
+
+The **Action** step decides what happens when a policy fires.
+
+Policies audit by default. An auditing policy records findings and never interrupts the session, which makes it safe to enable a new policy broadly and study what it catches before deciding whether it should enforce anything.
+
+### Enforcement
+
+Enforcement is opt-in, and builds on the agent harness permission-control primitives:
+
+- **Log for review** — record the finding and let the session continue. The default
+- **Warn and confirm** — warn the user and require an acknowledgement before the action proceeds. Where confirmation isn't possible, this falls back to blocking
+- **Deny the request** — reject matching prompts and tool calls outright
+
+An acknowledgement suppresses re-prompting for the same call for a grace period, so an agent that retries immediately isn't challenged twice.
+
+Where an outright rejection is too blunt, a blocked user can request a just-in-time bypass instead. Bypass requests run through an RBAC-protected approval flow rather than the blanket permission-bypass mode agent harnesses usually offer, so an exception is scoped to one policy or resource, attributable to the approver, and revocable. See [bypass requests](#bypass-requests).
+
+### Severity
+
+**Severity** is a 0.1 to 10 score that findings surface as a Low, Medium, High, or Critical badge. Severity does not change what a policy detects — it groups and filters findings for triage across Risk Events and Risk Overview.
+
+### Custom messages
+
+Warning and blocking policies accept a custom message shown to the user, and blank falls back to a default message. Warning messages support the `%{match}`, `%{entity}`, `%{policy}`, and `%{rule}` placeholders, substituted when the warning is raised.
+
+## Audiences
+
+The audience controls which users a policy evaluates:
+
+- **Everyone** — every user in the organization
+- **Specific users** — individual organization members, selected by search
+- **Specific roles** — every member of the selected [roles](/docs/ai-control-plane/org-admin/roles-and-permissions), including members added to those roles later
+
+Targeting requires at least one user or role. Audiences make staged rollout possible: run a new enforcing policy against a small group, confirm the findings are real, then widen it.
+
+## Narrowing what a policy flags
+
+Two controls reduce noise, and they act at opposite ends of the pipeline. Detection scope runs before detection and decides what is ever examined. Exclusions are a post-filter, suppressing findings that have already been produced.
+
+Reach for detection scope when whole classes of message are irrelevant to the policy — it removes the scanning work and the cost along with the noise. Reach for an exclusion when the policy is right but a specific value or rule keeps producing false positives.
+
+### Detection scope
+
+The **Scope** step chooses which session content a policy evaluates. Scope is set per detector category, so one policy can watch tool calls for destructive commands while watching prompts for secrets.
+
+Scanning covers four surfaces: user prompts, assistant messages, tool calls, and tool responses. Detectors perform best against the surfaces they were built for, so every category ships with a recommended scope that applies until overridden.
+
+Each category takes:
+
+- **Message types** — the scan surfaces to evaluate
+- **An include expression** — a CEL expression that must match for a message to be evaluated
+- **An exempt expression** — a CEL expression that takes matching messages out of the policy entirely
+
+Tool calls can be matched with real granularity — by MCP server, by the function invoked, by the harness-recognized tool name, or by drilling into the call's arguments with a path expression:
+
+```text
+tool_calls.exists(t, t.server.matchExact("github"))
+tool_calls.exists(t, t.function.matchGlob("*delete*"))
+tool_calls.exists(t, t.function.matchText("bash") && t.args.get("command").matchRegex("rm -rf"))
+```
+
+The CEL editor provides syntax highlighting, an inline reference, and worked examples. A traffic preview verifies a scope against recent organization activity in real time, so a carve-out can be confirmed against what agents actually did before the policy is saved.
+
+### Exclusions
+
+Exclusions suppress findings that a policy correctly matched but that aren't real risk: a shared test account, a documentation sample, a rule that misfires on an internal identifier format. Manage them on the **Exclusions** tab.
+
+Because exclusions filter on the matched value, they apply to the deterministic detectors. Prompt-based policies produce a judged verdict rather than a reproducible match, so tune those through the guardrail and its detection scope instead.
+
+An exclusion applies both retroactively and going forward. Saving one suppresses matching findings that already exist, and deleting one restores them. Exclusions never re-run analysis — they filter findings rather than change detection — and the retroactive sweep runs asynchronously, so counts across the dashboard settle a moment after saving.
+
+Each exclusion is scoped either globally, across every policy in the project, or to a single policy.
+
+#### Exclusion criteria
+
+Criteria are written as an expression. A single primary clause selects what to suppress:
+
+| Clause | Suppresses |
+| ------ | ---------- |
+| `match == "value"` | An exact literal value |
+| `match ~= "regex"` | Values matching an RE2 pattern, up to 512 characters |
+| `rule_id == "pii.email_address"` | Every finding from one rule |
+| `source == "prompt_injection"` | Every finding from one detection source |
+| `entity_type == "EMAIL_ADDRESS"` | Every finding of one entity type |
+
+A `rule_id` or `source` clause can be joined to the primary clause with `&&` to narrow it, so a value is suppressed only where a specific rule or source raised it:
+
+```text
+match == "jane.doe@acme.com" && rule_id == "pii.email_address"
+```
+
+**Suggest with AI** drafts the expression from a plain-language description of what to stop flagging, leaving it editable before saving. Each scope allows up to 50 enabled regex exclusions; disabled drafts don't count against the limit.
+
+Exclusion values are redacted in [audit logs](/docs/ai-control-plane/org-admin/audit-logs) and outbound webhook payloads, since an exact match value is often the sensitive string being suppressed.
+
+#### Built-in exclusion library
+
+Speakeasy ships a curated preset library that suppresses common false positives — published test credentials, documentation examples, and other known-safe values — before they reach a project's own exclusions. **View library** lists every preset with its reasoning and sample values. The library is read-only and needs no configuration.
+
+#### Creating exclusions from past sessions
+
+The fastest way to write an exclusion is from a finding that shouldn't have fired. Opening a finding from [Risk Events](/docs/ai-control-plane/secure/risk-events) or an [agent session](/docs/ai-control-plane/observe/agent-sessions) transcript offers an exclusion action that prefills the criteria from that finding — the matched span where there is one, otherwise the rule or the source — and preselects the policy that raised it as the scope. Reviewing findings and suppressing the noise in place is usually a better way to tune a policy than writing criteria from scratch.
+
+## Bypass requests
+
+Enforcing policies feed an approval queue where blocked attempts are reviewed. A request moves through requested, approved, denied, and revoked, and can target a single shadow MCP server or the policy as a whole. Approving a request grants the exception without weakening the policy for anyone else, and revoking it withdraws the exception later.
+
+## Designing a policy set
+
+Because a policy binds detection rules, scope, action, and audience together, those four dimensions determine how many policies an organization should have. One policy covering everything cannot enforce against one group while auditing another, and a separate policy per rule quickly becomes unmanageable.
+
+Split policies where the bindings genuinely differ:
+
+- **Enforcement** — auditing policies and enforcing policies belong apart, so enforcement can be introduced without disturbing broad detection coverage
+- **Audience** — a policy applied to contractors and a policy applied to everyone are separate bindings, not one policy with a filter
+- **Severity** — grouping detections of similar severity keeps the badge meaningful for triage
+
+Detection categories that share an enforcement posture, an audience, and a severity belong in the same policy.
