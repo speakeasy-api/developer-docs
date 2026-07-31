@@ -26,7 +26,6 @@ FROM node:22-slim
 
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
-COPY package.json ./
 COPY --from=build /index /index
 
 EXPOSE 20310
