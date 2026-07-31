@@ -1,6 +1,6 @@
 ---
 title: "Custom domain"
-description: "Connect a custom domain to serve MCP servers from a branded URL, with DNS verification and an optional IP allowlist."
+description: "Connect a custom domain to serve MCP servers from a branded URL, with DNS verification, an optional IP allowlist, a default MCP server at the domain root, and ChatGPT app verification."
 ---
 
 import { Callout } from "@/mdx/components";
@@ -35,9 +35,10 @@ The IP allowlist restricts which networks can reach the branded domain. Enforcem
 
 The restriction covers everything the custom domain serves, uniformly:
 
-- The MCP endpoints themselves
+- The MCP endpoints themselves, including a [default MCP server](#default-mcp-server) mapped to the domain root
 - The OAuth authorization and token endpoints
 - The OAuth discovery documents under `.well-known`
+- The [ChatGPT app verification URL](#chatgpt-app-verification)
 
 Entries are IPv4 addresses (`1.2.3.4`) or CIDR ranges (`10.0.0.0/24`); IPv6 isn't supported. There's no limit on the number of entries, and an empty allowlist allows all traffic. Saving the allowlist completes only after the network configuration updates, so changes enforce near-immediately.
 
@@ -50,6 +51,30 @@ Entries are IPv4 addresses (`1.2.3.4`) or CIDR ranges (`10.0.0.0/24`); IPv6 isn'
 Click **Edit allowlist** to open the **Edit IP allowlist** side sheet. Each entry accepts an IPv4 address or CIDR range and is validated individually. Click **+ Add IP address** to add entries; leave the list empty to allow all traffic.
 
 ![The Edit IP allowlist side sheet with an entry field accepting an IP address or CIDR range](/assets/docs/ai-control-plane/org-admin/custom-domain-ip-allowlist.webp)
+
+## Default MCP server
+
+By default, MCP servers on a custom domain are served under `/mcp/<slug>`. The **Default MCP server** control routes the domain root itself to one of those servers, so clients can connect at `https://your-domain.com/` with no path.
+
+Pick any MCP endpoint attached to the domain from the dropdown; endpoints are grouped by project. Once set, the root behaves like the chosen server's own URL: MCP clients connect and get the server directly, while browsers see the server's installation page. Renaming the chosen server's slug updates the routing automatically, and selecting **No root mapping** stops serving the root again.
+
+The same mapping can also be set from an MCP server's own settings page under [Distribute](/docs/ai-control-plane/distribute/mcp-servers). Changing the mapping requires the `org:admin` scope.
+
+## ChatGPT app verification
+
+Submitting an app built on one of the domain's MCP servers to OpenAI's ChatGPT app directory requires proving ownership of the domain. OpenAI's app-submission flow issues a verification token and then fetches it from a well-known URL on the domain:
+
+```
+https://your-domain.com/.well-known/openai-apps-challenge
+```
+
+Paste the token into the **ChatGPT app verification** field and click **Save**; the domain serves it at that URL immediately, and OpenAI's verifier can complete the check. The card shows the exact verification URL with a copy button. Click **Clear** to stop serving the token once verification is done; it can stay in place harmlessly, since the token is public by design.
+
+Tokens are a single line of up to 256 characters. Saving or clearing the token requires the `org:admin` scope.
+
+<Callout title="IP allowlists can block verification" type="warning">
+  The IP allowlist applies to the verification URL too. If the allowlist is enabled, OpenAI's verifier is likely to be blocked and verification will fail. Temporarily clear the allowlist while verifying, then restore it.
+</Callout>
 
 ## Deleting a domain
 
