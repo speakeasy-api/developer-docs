@@ -93,3 +93,65 @@ For example:
 - Check existing issues and pull requests for similar questions
 
 Thank you for contributing to our documentation! Your help makes our documentation better for everyone.
+
+## Docs MCP server
+
+This repository doubles as the corpus for a local [Speakeasy Docs MCP](https://github.com/speakeasy-api/docs-mcp) search server running in full-text-search mode, so it requires no API keys. The build copies the five content hubs into `dist/corpus/`, renaming `.mdx` to `.md`, then indexes them.
+
+Build the search index:
+
+```bash
+npm install
+npm run docs:build
+```
+
+Run it over MCP stdio:
+
+```bash
+npm run mcp:start
+```
+
+Or run the Streamable HTTP transport on port 20310:
+
+```bash
+npm run mcp:start:http
+```
+
+The HTTP MCP endpoint is `http://localhost:20310/mcp`, and the health check is `http://localhost:20310/healthz`.
+
+The server identifies itself as `speakeasy-docs` and exposes `speakeasy_search_docs` and `speakeasy_get_doc`. Search results can be filtered by `source` (`docs`, `guides`, `api-design`, `mcp`, or `openapi`).
+
+For an MCP client that launches local stdio servers, use this repository as the working directory and configure:
+
+```json
+{
+  "mcpServers": {
+    "speakeasy-docs": {
+      "command": "npm",
+      "args": ["run", "--silent", "mcp:start"]
+    }
+  }
+}
+```
+
+The generated index lives under `dist/index/` and is ignored by Git. Re-run `npm run docs:build` after content changes.
+
+### Docker
+
+Build and run the self-contained HTTP server:
+
+```bash
+docker build -t speakeasy-developer-docs-mcp .
+docker run --rm -p 20310:20310 speakeasy-developer-docs-mcp
+```
+
+To expose the server through the Speakeasy Gram tunnel, copy the environment template, set the issued tunnel key, and start both containers:
+
+```bash
+cp .env.example .env
+# Edit .env and replace gram_tunnel_replace_me with the issued key.
+docker compose up --build -d
+docker compose logs -f gram-tunnel
+```
+
+The Compose network routes the tunnel agent to the MCP endpoint at `http://docs-mcp:20310/mcp`; the docs server is not published on a host port. Stop and remove both containers with `docker compose down`.
