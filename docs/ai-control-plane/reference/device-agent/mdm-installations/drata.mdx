@@ -9,51 +9,64 @@ Drata is an evidence destination, not an MDM: once an MDM inventory source (Jamf
 
 ## 1. Create a scope-limited API key
 
-In Drata, go to **Settings → API Keys** and create a key for this integration. Grant it only the **Custom Connections** capability (read and write) — it needs nothing else. The key is shown once; store it in your password manager.
+In Drata, go to **Settings → API Keys** and create a key for this integration. Grant it only these Custom Connections scopes — it needs nothing else:
 
-## 2. Create a dedicated Custom Connection
+- **List Custom Connections** and **Create Custom Connection** — Gram finds or creates the dedicated connection for you on connect.
+- **Create Custom Connection Data** and **Create and Update Custom Connection Data** — the record uploads themselves.
+- **Delete Custom Connection Data** — pruning departed devices and clearing an empty fleet.
 
-Create a Custom Connection that only this integration writes to. Pushes replace the connection's records wholesale, and the integration refuses connections carrying more than one resource — reusing an existing connection risks its data.
+The key is shown once; store it in your password manager.
 
-Via the API (or equivalently in the Drata console), create it with exactly this record schema:
-
-```bash
-curl -s -X POST https://public-api.drata.com/public/v2/custom-connections \
-  -H "Authorization: Bearer <YOUR_API_KEY>" -H "Content-Type: application/json" \
-  -d '{
-    "name": "Speakeasy Device Agent Coverage",
-    "providerTypes": ["CUSTOM"],
-    "workspaceIds": [<WORKSPACE_ID>],
-    "displayNameKey": "hostname",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "serialNumber": { "type": "string" },
-        "hostname": { "type": "string" },
-        "assignedUserEmail": { "type": "string" },
-        "assignedUserAgentActive": { "type": "boolean" },
-        "assignedUserAgentLastSeenAt": { "type": "string" }
-      }
-    }
-  }'
-```
-
-The response's `id` is the **connection id** — the one value you paste into the dashboard. (The record resource is created automatically with the connection; the integration discovers it itself.)
-
-## 3. Connect in the dashboard
+## 2. Connect in the dashboard
 
 1. Open **Device Agent → MDM Integrations**, then **Connect** on the Drata row.
-2. Select your Drata **region** (`us`, `eu`, or `apac`), and enter the **connection id** and **API key**. Credentials are stored encrypted and are never shown again after saving.
-3. **Save**, then **Test connection** — the test fetches the connection and discovers its record resource, so it validates the key, the region, and the connection id together.
-4. Enable the connection. New connections start paused: the flow is save, test, then enable.
+2. Select your Drata **region** (`us`, `eu`, or `apac`), enter your **Workspace ID** (usually `1` — find it under **Settings → Workspaces**), and paste your **API key**. Leave **Custom Connection ID** blank. Credentials are stored encrypted and are never shown again after saving.
+3. **Save.** Gram creates a dedicated Custom Connection named "Speakeasy Device Agent Coverage" with the correct record schema and discovers its resource — no manual API setup, and no way to get the schema wrong. Re-saving reuses the same connection rather than creating a duplicate.
+4. **Test connection**, then enable it. New connections start paused: the flow is save, test, then enable.
 
 Once enabled, evidence pushes hourly (skipping cycles where nothing changed). Each push is a complete snapshot: departed devices drop out of the record set automatically, and retries can never duplicate records.
 
-## 4. Wire it to a control
+<Callout type="info">
+  **Bringing your own connection?** If you'd rather create the connection yourself — or already have one — paste its **connection id** into the field in step 2 and Gram uses it instead of provisioning one. Create it with exactly this record schema (the record resource is created automatically with the connection; the integration discovers it):
 
-In Drata, map the connection to a test on the relevant control (for example, your SOC 2 monitoring control). Phrase the test over `assignedUserAgentActive` — one device whose assigned user has no live agent fails the test and routes to an owner.
+  ```bash
+  curl -s -X POST https://public-api.drata.com/public/v2/custom-connections \
+    -H "Authorization: Bearer <YOUR_API_KEY>" -H "Content-Type: application/json" \
+    -d '{
+      "name": "Speakeasy Device Agent Coverage",
+      "providerTypes": ["CUSTOM"],
+      "workspaceIds": [<WORKSPACE_ID>],
+      "displayNameKey": "hostname",
+      "schema": {
+        "type": "object",
+        "required": ["id", "serialNumber", "hostname", "assignedUserEmail", "agentActive", "agentAttestation"],
+        "properties": {
+          "id": { "type": "string" },
+          "serialNumber": { "type": "string" },
+          "hostname": { "type": "string" },
+          "assignedUserEmail": { "type": "string" },
+          "agentActive": { "type": "boolean" },
+          "agentAttestation": { "type": "string" },
+          "agentLastSeenAt": { "type": "string" }
+        }
+      }
+    }'
+  ```
+
+  The `required` list must stay exactly as shown — in particular it must **not** include `agentLastSeenAt`. If `required` is omitted, Drata marks every property required, and records for devices whose agent has never reported (which omit `agentLastSeenAt` rather than fabricating a timestamp) fail schema validation on upload. Gram's automatic provisioning gets this right for you.
+</Callout>
+
+## 3. Wire it to a control
+
+In Drata, map the connection to a test on the relevant control (for example, your SOC 2 monitoring control). Phrase the test over `agentActive` — one device with no live agent fails the test and routes to an owner.
 
 <Callout type="info">
-  Agent presence is attested **per assigned user, not per device**: `assignedUserAgentActive` means the device's MDM-assigned user has a recent agent heartbeat from some device, and `assignedUserAgentLastSeenAt` is omitted entirely for a user who has never reported one. Phrase tests over these properties — the integration deliberately never claims "device monitored".
+  Each record states its own attestation strength in `agentAttestation`, and both values can appear in one push:
+
+  - `"device"` — that machine's own agent reported in, matched on hardware serial. `agentActive` means **this device** is running the agent.
+  - `"user"` — matched on the MDM-assigned user's email. `agentActive` means only that **the assigned user** runs the agent on some machine, which is strictly weaker.
+
+  A machine whose agent cannot read a hardware serial stays `"user"` even once your organization is on device-level matching, so the strength genuinely varies row by row. `agentLastSeenAt` is omitted entirely when no agent has ever reported, rather than sent as null or a zero timestamp.
+
+  If your auditor requires per-device attestation, phrase the test to require both `agentActive` = true **and** `agentAttestation` = `"device"`. Testing `agentActive` alone accepts the weaker claim.
 </Callout>
