@@ -1,0 +1,30 @@
+name: speakeasy-docs-mcp
+
+services:
+  docs-mcp:
+    build:
+      context: .
+    image: speakeasy-developer-docs-mcp:local
+    container_name: speakeasy-docs-mcp
+    restart: unless-stopped
+    networks:
+      - gram-tunnel
+
+  gram-tunnel:
+    image: ghcr.io/speakeasy-api/gram-tunnel-agent:latest
+    container_name: gram-tunnel-speakeasy-docs
+    restart: unless-stopped
+    depends_on:
+      docs-mcp:
+        condition: service_healthy
+    environment:
+      TUNNEL_KEY: ${TUNNEL_KEY:?Set TUNNEL_KEY in .env}
+      TUNNEL_LOCAL_MCP_URL: http://docs-mcp:20310/mcp
+      TUNNEL_GATEWAY_URL: wss://tunnel.speakeasy.com/connect
+      TUNNEL_SERVICE_VERSION: 2026.06.1
+    networks:
+      - gram-tunnel
+
+networks:
+  gram-tunnel:
+    name: gram-tunnel-speakeasy-docs
