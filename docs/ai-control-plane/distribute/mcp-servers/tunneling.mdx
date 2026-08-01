@@ -1,0 +1,76 @@
+---
+title: Tunneled MCP servers
+description: "Give an MCP server running inside a private network a hosted URL, without opening any inbound connectivity."
+---
+
+import { Callout } from "@/mdx/components";
+
+A tunneled MCP server is an MCP server that runs inside a private network — on a laptop, in a VPC, behind a corporate firewall — and is reached through the Control Plane without any inbound connectivity.
+
+A lightweight tunnel agent runs next to the private server and opens a single outbound WebSocket connection to the platform's tunnel gateway. The gateway multiplexes per-request streams back down that connection. Nothing in the private network is exposed directly, and no inbound firewall rule is needed.
+
+Once connected, a tunneled server behaves like any other MCP server. It gets a hosted URL, goes through the same proxy stack as remote servers, and picks up authentication, usage metering, team access, and [tool logs](/docs/ai-control-plane/observe/tool-logs), where calls appear with the Tunneled MCP target type.
+
+## Plan limits
+
+| Plan | Tunneled MCP servers |
+| --- | --- |
+| Free | 0 |
+| Pro | 10 |
+| Enterprise | 25 |
+
+Creating a server past the limit fails with "tunneled mcp server limit reached". Limits are counted per organization across all projects, and an override can be configured for a specific organization.
+
+## Setting up a tunnel
+
+Add a tunneled server from **Connect > Sources** with **Add Source > Tunneled MCP Server**. Creating one issues a tunnel key and generates ready-to-copy setup commands for Docker, Kubernetes, or the CLI. Under **Tunnel endpoint**, choose **Existing server** to template the snippet against an MCP server already running in the private network, or **New server** to deploy a sample hello-world MCP server alongside the agent. **New server** is the fastest way to see the flow end to end.
+
+Creating a tunneled source also links an MCP server with a default endpoint, so agents connect to it like any other hosted server.
+
+<Callout type="warning">
+  The tunnel key is shown once, at creation, and once more when it is rotated. Only a hash of it is stored, so it cannot be retrieved later. Losing it means rotating the key and reconfiguring the agent.
+</Callout>
+
+## Configuring the agent
+
+The agent reads its configuration from environment variables. There is no config file and there are no command-line flags.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `TUNNEL_GATEWAY_URL` | Yes | The gateway to dial |
+| `TUNNEL_KEY` | Yes | The tunnel key issued at creation |
+| `TUNNEL_LOCAL_MCP_URL` | Yes | The private MCP endpoint to proxy to |
+| `TUNNEL_SERVICE_VERSION` | Yes | A version string recorded with the session |
+| `TUNNEL_METADATA` | No | A JSON object of string values, up to 1024 bytes serialized |
+
+Two constraints are worth knowing before deploying:
+
+- The gateway URL must use `wss://` or `https://`. Plain `ws://` is accepted only for localhost, `host.docker.internal`, or a loopback address, so an unencrypted tunnel to a real gateway is not possible.
+- The local MCP URL is pinned when the agent starts. The gateway cannot redirect agent traffic to a different local address.
+
+The agent reconnects on its own if the connection drops, backing off from half a second up to 30 seconds with jitter, and resetting the backoff once a session has been stable for 30 seconds.
+
+## Monitoring a tunnel
+
+The source's detail view shows connection status as **Connected**, **Never connected**, or **Inactive**, along with live tunnel sessions, their heartbeats and agent versions, and any active request streams.
+
+A newly created server stays in a created state until an agent connects for the first time. That first connection flips it to active and records the agent version.
+
+## Rotating and deleting
+
+Rotating the tunnel key issues a new key and invalidates the old one. Running agents disconnect and need the new key to reconnect. Rotation also clears the tunnel's runtime state and purges any anonymous sessions.
+
+Deleting the source removes its linked MCP servers and endpoints along with it.
+
+## Public visibility
+
+Public visibility is the one thing tunneled servers can do that other backends cannot, and it takes two separate opt-ins:
+
+- The tunnel source owner allows public access on the source.
+- The MCP server's visibility is set to public.
+
+Until the source owner consents, the public option on the server stays disabled. Both conditions are checked before a request is dispatched, so a caller is never sent through an OAuth challenge for a server that would refuse to serve them anyway.
+
+<Callout type="warning">
+  A public tunneled server accepts anonymous callers and skips the authentication gate entirely. Every tool the private server exposes becomes reachable by anyone with the URL, and any credential attached to the server is spent on their behalf. Turning the source's consent back off immediately purges existing anonymous sessions.
+</Callout>

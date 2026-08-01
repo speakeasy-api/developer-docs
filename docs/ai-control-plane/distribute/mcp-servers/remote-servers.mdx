@@ -1,0 +1,97 @@
+---
+title: Remote MCP servers
+description: "Register an MCP server someone else runs, by URL or from the catalog, and put it behind the Control Plane's auth, RBAC, and logging."
+---
+
+import { Callout } from "@/mdx/components";
+
+A remote MCP server is an MCP server that a third party already runs. The Control Plane registers its URL and proxies whole MCP sessions to it, so nothing is copied, rebuilt, or re-hosted. The upstream keeps serving its own tools, and the Control Plane adds authentication, per-tool access control, usage metering, and tool logs in front.
+
+The only supported transport is streamable HTTP. The create form shows the transport as fixed, and catalog installs skip endpoints that use anything else.
+
+There are two ways to register one: by URL, or from the catalog.
+
+## Adding a server by URL
+
+Open **Connect > Sources** and choose **Add a custom remote MCP server**. The form takes a display name, the server URL, and nothing else. Adding a server requires the `mcp:write` scope.
+
+**Verify** probes the URL before the server is created.
+
+<Callout type="warning">
+  **Verify** checks reachability, not credentials. An upstream that answers with 401 or 403 still counts as verified, reported as "Reachable: received authorization required response". A verified URL means the endpoint exists and responds, not that the server is configured to call it successfully.
+</Callout>
+
+Adding the server does four things in sequence: it registers the remote server record, links an MCP server config to it, tries to configure authentication automatically, and pre-stages a default MCP endpoint. A failure partway through rolls the record back, so a half-created server does not linger.
+
+### Automatic authentication setup
+
+When the upstream advertises OAuth protected-resource metadata and its authorization server supports dynamic client registration, the Control Plane registers a client with that authorization server and attaches it to the new server. The success toast reads "Remote MCP server added and authentication configured", and the server's visibility moves from disabled to private, so it is immediately usable by authenticated callers.
+
+When any step does not apply, the server is still created and a warning names the reason. The common ones:
+
+- The upstream publishes no OAuth protected-resource metadata, so there is nothing to configure.
+- The upstream publishes metadata but its authorization server has no registration endpoint, so dynamic client registration is unavailable. Servers in this state need manual credentials.
+- A matching identity provider already exists but is missing its authorization or token endpoint.
+
+Anything not configured automatically can be set up from the server's **Authentication** tab. See [Upstream credentials](/docs/ai-control-plane/distribute/mcp-servers/authentication/upstream-credentials).
+
+## Adding a server from the catalog
+
+The **MCP Catalog** page lists third-party MCP servers from a public registry, crawled and cached by the Control Plane. Browse or search, open a server for its description, tool list, usage estimates, and version history, then click **Add**.
+
+Reaching the catalog requires the `project:read` and `mcp:write` scopes.
+
+A few properties of the catalog are worth knowing before relying on it:
+
+- The catalog holds roughly 100 servers, not the whole public registry. Search, sort, and filter all run over that cached list in the browser.
+- A **Manual Setup** badge means the server's authorization server exposes no registration endpoint. Connecting to it needs static OAuth client credentials or an API key, set up by hand. The badge is derived from the authorization server's own metadata rather than from what the registry claims.
+- Only the first five remote endpoints of a catalog entry are inspected.
+
+### One entry can create several servers
+
+A catalog entry can publish more than one remote endpoint. The install dialog lists them and creates one MCP server per selected endpoint, after discarding non-streamable-HTTP endpoints and deduplicating by normalized URL. A vendor that publishes separate endpoints per product line produces separate servers, each with its own URL, auth, and access rules.
+
+Installing an entry that is already in the project is allowed. It creates another server rather than editing the existing one; the "already in this project" marker is informational.
+
+### Upstream headers
+
+The **configure** step of the install dialog collects upstream headers, with the help text "Values are stored on the server and sent with every upstream request." Header values are encrypted at rest. This step can be skipped, and headers can be added later from the server's **Settings** tab.
+
+Authorization is never collected here. On servers that support dynamic client registration, automatic auth setup owns it; everywhere else it belongs in the server's authentication settings.
+
+## How the two paths differ
+
+| | By URL | From the catalog |
+| --- | --- | --- |
+| Entry point | **Connect > Sources** | **MCP Catalog** |
+| URL | Typed by hand | Taken from the registry entry, deduplicated |
+| Servers created | One | One per selected endpoint |
+| Upstream headers | Added afterwards in **Settings** | Collected during install |
+| Initial visibility | Disabled | Private |
+
+The visibility difference is deliberate. A catalog install promises a server that works right away, so its pre-staged endpoint has to serve. A by-URL server starts disabled and turns on once automatic auth setup succeeds or credentials are added by hand.
+
+## What happens on a request
+
+Every request to a remote-backed server passes through the proxy, which does more than forward bytes:
+
+- The caller's `Authorization` header is always dropped and replaced with the credential the Control Plane resolved for that caller. A client's own token is never forwarded upstream.
+- `Origin`, `Referer`, and `Cookie` are dropped. Upstream servers with DNS-rebinding protection reject a forwarded browser origin, and forwarding cookies would leak session state upstream.
+- `Accept-Encoding` is dropped so responses arrive decodable and can be inspected.
+- Configured upstream headers are applied last and win on conflict. A header configured with an empty value removes that header instead of sending it blank.
+- On an upstream 401 or 403, the `WWW-Authenticate` challenge is replaced with one naming this server's own resource metadata. Relaying the upstream challenge would point the client at the wrong authorization server.
+
+Private servers additionally run per-tool access checks. Tool lists are filtered to the tools the caller may connect to, and tool calls are checked before they are forwarded. Public servers bypass server-level access control by design, so per-tool checks are skipped for them too.
+
+The proxy does not retry. A failed upstream request is relayed as it came back, including a synthesized JSON-RPC error when an upstream returns a 2xx body that is not valid JSON-RPC.
+
+## Editing a server afterwards
+
+The server detail page carries everything that can change after creation:
+
+- **Settings** — display name, upstream URL, upstream headers, visibility, custom slug and domain, publishing, and deletion
+- **Authentication** — the identity provider callers authenticate against, and the remote identity providers used to reach the upstream
+- **Tools** — annotations and per-tool access, described in [How tools appear on a server](/docs/ai-control-plane/distribute/mcp-servers/tool-discovery)
+- **Team Access** — which members and roles can read, write, or connect
+
+Deleting a remote server removes its stored headers, linked server configs, and endpoints. Deleting only the linked MCP server config leaves the remote record in place, and it can be re-linked to a new server config afterwards.

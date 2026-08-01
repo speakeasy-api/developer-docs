@@ -1,0 +1,58 @@
+---
+title: How tools appear on a server
+description: "Built servers capture their tool list once per deployment. Remote and tunneled servers proxy tools/list live. The difference decides how changes propagate and which features apply."
+---
+
+import { Callout } from "@/mdx/components";
+
+Where a server's tool list comes from depends entirely on its backend, and the two answers are opposites.
+
+## Built servers capture tools at deployment
+
+On a built server, tool definitions are extracted when a deployment is processed and stored. The name, description, input schema, annotations, and tags of every tool are fixed at that moment.
+
+There is no background refresh, no time-to-live, and no webhook. A change to an OpenAPI document or a functions manifest only reaches the server through a new deployment. Once that deployment completes and becomes active, servers backed by its toolsets serve the new tools.
+
+The upside is that the tool list is stable and inspectable. Tools can be curated, renamed, filtered, and annotated before any client ever sees them.
+
+## Remote and tunneled servers proxy tools live
+
+On a remote or tunneled server, nothing is stored. Each `tools/list` request is proxied to the upstream and answered from whatever the upstream returns at that moment.
+
+A tool added upstream appears on the next `tools/list`. A tool removed upstream disappears just as fast. There is nothing to re-sync, no deployment to trigger, and no cache to clear.
+
+Two response-side transformations happen on private servers: the tool list is filtered to the tools the caller is allowed to connect to, and tool calls are checked against the same rules before being forwarded. Public servers bypass server-level access control by design, so those checks are skipped for them.
+
+## Staleness
+
+The live path is not quite instant from a client's point of view, for two reasons that have nothing to do with the Control Plane storing tools:
+
+- MCP clients cache tool schemas for the life of a session. A client already connected keeps the tool list it saw at connect time until it reconnects.
+- Per-tool access decisions are cached for up to 15 minutes. Writes evict that cache immediately, so 15 minutes is a ceiling rather than the normal latency, but a permission change can take that long to take effect if the eager eviction fails.
+
+On the built path the staleness window is simply "until the next deployment", which is under direct control.
+
+## Which tool features apply to which backend
+
+This table is the one place the two paths diverge in a way that is easy to get backwards.
+
+| Feature | Built | Remote and tunneled |
+| --- | --- | --- |
+| Toolset curation, choosing exactly which tools are exposed | Yes | No |
+| [Tool variations](/docs/ai-control-plane/reference/concepts/tool-variations): rename, re-describe, retag, confirmation, annotation overrides | Yes | No |
+| [Tag-based tool filtering](/docs/ai-control-plane/distribute/mcp-servers/tool-filtering) with `?tags=` | Yes | No |
+| Tool metadata: annotations and access disposition stored per tool name | No | Yes |
+| Per-tool connect permissions | Yes | Yes |
+| [Tool logs](/docs/ai-control-plane/observe/tool-logs) | Yes | Yes |
+
+<Callout type="warning">
+  Tool variations do not apply to remote or tunneled MCP servers. Variations belong to the toolset backend, and a remote-backed server never runs that path. The equivalent on a remote server is tool metadata, which layers annotations and access rules over the live tool list, set from the server's **Tools** tab.
+</Callout>
+
+Tool metadata is rejected on built servers, on reads as well as writes. Built servers already carry annotation data on their tool definitions, and answering an empty list would invite a write that would itself be refused.
+
+Because tool metadata is keyed by tool name and the remote tool list is live, renaming a tool upstream separates it from the metadata recorded under its old name.
+
+## Tag-based filtering needs an explicit group
+
+Filtering counts as enabled only when an explicit tool variations group is set on the MCP server or its toolset. A project-default variations group does not turn filtering on. Tools with no tags at all are excluded whenever any filter is active, which includes proxied tools and prompts.

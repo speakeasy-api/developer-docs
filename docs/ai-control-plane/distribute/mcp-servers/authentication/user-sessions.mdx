@@ -1,0 +1,79 @@
+---
+title: User sessions
+description: "Make MCP clients authenticate before they reach a server. The Control Plane acts as the authorization server, registers clients, and issues tokens tied to a real person."
+---
+
+import { Callout } from "@/mdx/components";
+
+User sessions answer the question of who is calling an MCP server. The Control Plane acts as the OAuth authorization server for the server's endpoint: MCP clients discover it, register with it, send their user through a login and a consent screen, and receive a token scoped to that server.
+
+The result is that every tool call carries a subject, the person behind the agent, and a client ID, the agent itself. "Claude Code acting for a specific user" is distinguishable from "Cursor acting for the same user" in [tool logs](/docs/ai-control-plane/observe/tool-logs) and in access decisions.
+
+## What turns it on
+
+An identity provider attached to the server under **Authentication**. Every remote and tunneled server has one, and an unconfigured server shows "No authentication configured" until a provider is set.
+
+A public tunneled server is the exception. It skips the gate entirely and serves anonymous callers, even though a provider is attached to the row.
+
+## What an MCP client experiences
+
+Adding a private server's URL to Claude, Cursor, or any other MCP client kicks off a sequence the user mostly sees as one login:
+
+- The client makes an unauthenticated request and gets a 401 carrying a challenge that names the server's protected-resource metadata.
+- The client fetches that metadata, learns the authorization server is the same host, and fetches the authorization server metadata.
+- The client registers itself and receives a client ID, plus a client secret when it is a confidential client.
+- The client opens the authorize URL with a PKCE challenge. Because the server is private, the browser is sent to Speakeasy login first.
+- After login, the consent screen appears.
+- Approving redirects back to the client with an authorization code.
+- The client exchanges the code and receives an access token good for one hour, plus a refresh token.
+- The client refreshes silently from then on.
+
+## Dynamic client registration
+
+Registration is open. Any MCP client can register against a server's endpoint without credentials, which is what makes "paste the URL into the client" work at all.
+
+What the endpoint supports:
+
+- Grant types `authorization_code` and `refresh_token`, response type `code`, and PKCE with `S256` only.
+- Client authentication with `client_secret_basic`, `client_secret_post`, or `none`. The `none` method covers public PKCE-only clients such as CLI tools and mobile apps, which are common among real MCP clients.
+- Client secrets returned exactly once, at registration, and stored hashed. A secret that is lost has to be replaced by registering again.
+
+Redirect URIs are validated on registration. HTTPS URIs need a host, plain HTTP is accepted only for `127.0.0.1`, `::1`, and `localhost`, custom schemes must contain a dot, and script-bearing schemes are rejected outright. At authorization time a registered redirect URI must match byte for byte.
+
+Some clients identify themselves with a hosted client metadata document instead of registering, passing its URL as the client ID. Support for that is rolling out per organization. Those clients get one narrow exception to redirect matching: when both sides are loopback addresses, the port is ignored, because clients like Claude Code bind an ephemeral port. Registered clients get no such exception.
+
+<Callout type="info">
+  There are no OAuth scopes here. The authorization server advertises no `scopes_supported`, the registration request has no `scope` field, and tokens carry none. Access is decided by roles and per-tool permissions rather than by scopes. Remote identity providers do use real upstream scopes, which is a separate mechanism.
+</Callout>
+
+## The consent screen
+
+Consent is always shown. It is never skipped, even for a client that has connected before, because the prompt is what guards against one client being confused for another.
+
+The screen names the client asking for access and the server it wants, shown as "**Client** is requesting access to the MCP server **slug**". Three rows give the user what they need to judge the request: "Signing in as" with the resolved identity, "Client verified from" for clients identified by a hosted metadata document, and "Will redirect to" with the destination.
+
+A client receiving its authorization at a local address triggers an extra warning, telling the user to approve only if they started the request from an app running on that computer.
+
+When the server has remote identity providers attached, a **Connect required services** list appears below, with one card per upstream. **Give Access** stays disabled until at least one service is connected. An expired card does not count as connected.
+
+The screen ends with **Give Access** and **Cancel**.
+
+## Session duration and token lifetime
+
+<Callout type="warning">
+  **Session Duration** on the server's authentication settings controls the refresh window, not the access token. Access tokens always last one hour and that value is not configurable. Setting Session Duration to two weeks means a client that stops calling for two weeks has to log in again, not that its access token lives for two weeks.
+</Callout>
+
+There is no maximum session lifetime. Every refresh mints a new session with a fresh refresh window, so a client that keeps refreshing inside the window stays connected indefinitely. A leaked refresh token still dies after one Session Duration of inactivity.
+
+A refresh token can be used once. Presenting one immediately invalidates it, whether or not the rest of the exchange succeeds, so a client that replays a refresh token loses the session rather than quietly reusing it.
+
+## Revoking access
+
+Revocation exists at three levels:
+
+- One session, ending a single client's connection.
+- One client, rejecting every future token minted for that client ID. Sessions already live keep working until they expire.
+- One person's upstream credentials, covered in [Upstream credentials](/docs/ai-control-plane/distribute/mcp-servers/authentication/upstream-credentials).
+
+Organization admins can see and revoke live connections from [MCP connections](/docs/ai-control-plane/org-admin/mcp-connections).

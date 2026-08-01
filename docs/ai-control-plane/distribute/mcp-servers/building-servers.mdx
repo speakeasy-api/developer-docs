@@ -1,0 +1,89 @@
+---
+title: Building MCP servers
+description: "Generate an MCP server from an OpenAPI document or a TypeScript codebase, and understand what changes once the Control Plane owns the protocol."
+---
+
+import { Callout } from "@/mdx/components";
+
+A built MCP server is one the Control Plane generates and serves itself. Instead of proxying to somebody else's MCP server, it implements the MCP protocol, executes each tool call, and talks to the underlying API or code directly.
+
+Two first-party sources can be built into tools:
+
+- An **OpenAPI document**, where every operation becomes a tool.
+- A **TypeScript functions project**, where tools are declared in code.
+
+A single server can mix both. Tools from several sources land in the same toolset and look identical to the MCP client.
+
+## What building adds
+
+Because the Control Plane owns the protocol implementation on this path, it can act on individual tool calls rather than relaying a session:
+
+- Tool arguments are validated against a generated JSON schema before anything is called.
+- Credentials are assembled server-side from an [environment](/docs/ai-control-plane/distribute/environments), so the MCP client never holds the upstream API key.
+- Tools can be renamed, re-described, retagged, or marked as requiring confirmation with [tool variations](/docs/ai-control-plane/reference/concepts/tool-variations), and filtered with [tag-based filtering](/docs/ai-control-plane/distribute/mcp-servers/tool-filtering).
+- Responses can be trimmed with a filter before they reach the model.
+- Failed calls are retried where retrying is safe, and every call is logged with a stable tool identity.
+
+## Sources, deployments, and toolsets
+
+Building runs through a chain worth knowing before troubleshooting anything:
+
+- A **source** is an OpenAPI document or a functions project.
+- A **deployment** is an immutable snapshot of every source in the project. Tools exist only inside a deployment.
+- A **toolset** is a curated selection of tools drawn from the active deployment.
+- An **MCP server** points at one toolset and serves it.
+
+Deployments cannot be edited. Every change produces a new deployment, even a one-character description edit. When a deployment completes it becomes the project's active deployment, and servers backed by its toolsets start serving the new tools.
+
+## Building from OpenAPI
+
+Upload a document in the dashboard or push it with the CLI. Processing walks the document and generates one tool per operation.
+
+The parts that surprise people:
+
+- GET, POST, PUT, DELETE, HEAD, and PATCH operations are walked. OPTIONS and TRACE are not, so they never become tools.
+- Deprecated operations are skipped, and the deployment log records why.
+- Tool names are built as the document slug plus the snake-cased operation ID, then truncated to 60 characters with an 8-character hash suffix to stay inside common MCP client limits. Names set explicitly with `x-gram` or `x-speakeasy-mcp` are not truncated.
+- Operations that declare their own `servers` array are rejected. The server URL has to be defined at the document level.
+- Annotations are inferred from the HTTP method. GET and HEAD are read-only, DELETE is destructive, and every operation is treated as open-world.
+- Operation tags carry through verbatim and are what tag-based filtering matches on.
+- Security schemes and the default server URL become environment variable names, which is what an environment fills in.
+
+Full walkthrough: [Add tools from an OpenAPI spec](/docs/ai-control-plane/connect/sources/openapi).
+
+## Building from TypeScript functions
+
+Functions are compact TypeScript units that declare tools in code, bundled with a manifest and run on a Control Plane-operated runner. They fit cases an OpenAPI document cannot express: calls that need to combine several endpoints, reshape a response, or run logic that has no HTTP equivalent.
+
+Tool names come verbatim from the manifest. There is no source prefix and no truncation, which is the largest divergence from OpenAPI naming.
+
+<Callout type="warning">
+  Annotation defaults for function tools are the inverse of OpenAPI defaults. A function tool that declares no annotations is treated as destructive and not read-only. Declare annotations explicitly on any tool that only reads.
+</Callout>
+
+Start here: [TypeScript functions](/docs/ai-control-plane/connect/sources/gram-functions), then [Using the Functions Framework](/docs/ai-control-plane/connect/sources/gram-functions/functions-framework), [Build and deploy](/docs/ai-control-plane/connect/sources/gram-functions/build-deploy), [Tool annotations](/docs/ai-control-plane/connect/sources/gram-functions/tool-annotations), and [Tool tags](/docs/ai-control-plane/connect/sources/gram-functions/tool-tags).
+
+## Choosing between them
+
+| | OpenAPI | TypeScript functions |
+| --- | --- | --- |
+| Best when | An HTTP API already has a spec | Logic spans endpoints or has no HTTP equivalent |
+| Tool set | One tool per operation, generated | Whatever the code declares |
+| Naming | Prefixed and truncated | Verbatim from the manifest |
+| Annotation defaults | Inferred from the HTTP method | Destructive and not read-only |
+| Credentials | Environment variables mapped from security schemes | Environment variables declared in the schema |
+| Iteration | Re-upload or push the document | Rebuild and push the bundle |
+
+## How a change propagates
+
+Pushing a changed source clones the latest deployment, re-extracts every tool, and activates the result. Extraction is a clean rebuild rather than a merge, so removing an operation removes its tool.
+
+<Callout type="warning">
+  Tool identity is a URN built from the source slug and the tool name. Renaming an operation ID, or changing a name enough that it truncates differently, produces a different URN. Tool variations keyed to the old URN stop applying, and toolset membership referring to the old tool goes stale.
+</Callout>
+
+## Built servers can still contain proxied tools
+
+Adding a catalog source to a project attaches its tools inside a toolset, where each one is proxied to the upstream at call time. A built server can therefore serve a mix of generated tools and proxied tools.
+
+"Built" and "remote" describe the server's backend, not every tool it carries. A server whose backend is a remote MCP server proxies the entire session; a built server executes its own tools and may proxy a few individually.

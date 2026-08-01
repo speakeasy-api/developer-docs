@@ -1,0 +1,57 @@
+---
+title: Authentication
+description: "MCP server authentication answers two separate questions: who is calling the server, and which credential the server uses upstream."
+---
+
+import { Callout } from "@/mdx/components";
+
+Authentication on an MCP server answers two questions that are configured independently and are easy to confuse:
+
+- **Who is calling this MCP server?** Answered by user sessions, where the Control Plane acts as the authorization server and issues tokens to MCP clients.
+- **What credential does the server use to call the upstream API?** Answered either per end user, with remote identity providers, or with one shared credential for every caller.
+
+A server can use one, both, or neither. A server with no answer to the first question and no answer to the second is an anonymous server proxying an unauthenticated upstream.
+
+## Picking a model
+
+| Goal | Use | Per end user? |
+| --- | --- | --- |
+| Only organization members can connect, using their Speakeasy login | [User sessions](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions) on a private server | Identity only |
+| Anyone can connect anonymously, with no login | Public visibility, which requires a [tunneled backend](/docs/ai-control-plane/distribute/mcp-servers/tunneling) and the tunnel source owner's consent | No |
+| Each end user acts against their own account on an upstream service | [Remote identity providers](/docs/ai-control-plane/distribute/mcp-servers/authentication/upstream-credentials), layered on user sessions | Yes |
+| One shared credential for the whole server | [Environment system variables or upstream headers](/docs/ai-control-plane/distribute/mcp-servers/authentication/upstream-credentials) | No |
+| Each connecting user supplies their own API key | Environment variables marked as user-provided | Yes |
+
+Two composition rules follow from how these are stored:
+
+- Per-user upstream credentials require user sessions. An upstream token is stored against the calling user, so the server has to know who that is first.
+- Shared credentials compose with anything, including a fully anonymous public server.
+
+<Callout type="warning">
+  Two similarly named concepts run in opposite directions. User sessions are inbound: tokens the Control Plane issues to an MCP client so it can reach the server. Remote sessions are outbound: upstream tokens the Control Plane holds on an end user's behalf so the server can reach a third-party API. Session Duration governs the first. Reconnect prompts belong to the second.
+</Callout>
+
+## Where it is configured
+
+The server detail page's **Authentication** tab carries both halves, described in the product as configuring user sessions and, when required, upstream identity providers for clients connecting to this server.
+
+Changing authentication settings requires the `mcp:write` scope. Creating and managing remote identity providers is an organization-level action and requires `org:admin`.
+
+Authentication changes apply to new client connections. Clients already holding a valid token keep working until that token expires.
+
+## Anonymous access
+
+Public visibility skips authentication entirely: any caller reaches the server with no login and every tool is exposed to the public internet. It is available only on tunneled servers whose source owner has opted in, and it is a deliberate double opt-in rather than a general visibility option.
+
+<Callout type="warning">
+  A public server still uses its own credentials. Attached system environment variables and configured upstream headers are sent on every call, including calls from anonymous users. Public means anonymous callers get to spend those credentials, not that the credentials are withheld.
+</Callout>
+
+## Legacy models
+
+Two older authentication models remain live for toolset-backed servers created before user sessions shipped:
+
+- [Secure an MCP server with OAuth](/docs/ai-control-plane/distribute/mcp-servers/secure-with-oauth) covers the hosted OAuth proxy, where the platform fronts an upstream provider.
+- [Build MCP with external OAuth](/docs/ai-control-plane/distribute/mcp-servers/oauth-external-server) covers pointing clients at a third-party authorization server directly.
+
+New servers should use user sessions. The legacy models advertise OAuth scopes and behave differently around token storage and revocation, so their pages are the reference for servers already on them.

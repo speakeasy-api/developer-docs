@@ -1,11 +1,29 @@
 ---
 title: MCP Servers
-description: "Host sources as MCP servers, control visibility and publishing, and manage per-server team access."
+description: "Every MCP server has one backend — remote, tunneled, or built. Pick a backend, then configure auth, visibility, publishing, and team access the same way."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The **MCP** page hosts the project's sources as MCP servers that agents connect to. Open it from **Distribute > MCP** in the dashboard.
+An MCP server is an addressable endpoint that agents connect to. Each server has exactly one backend, and the backend decides where its tools come from:
+
+- **Remote** — the server points at an MCP server someone else runs. The Control Plane registers the URL and proxies whole MCP sessions to it.
+- **Tunneled** — the server points at an MCP server running inside a private network. A tunnel agent dials out to the Control Plane, so the private server gets a hosted URL without any inbound connectivity.
+- **Built** — the Control Plane generates the server itself from a first-party source: an OpenAPI document or a TypeScript functions project.
+
+The three are mutually exclusive, and the database enforces it. A server cannot proxy a remote URL and serve built tools at the same time, and the backend is fixed when the server is created.
+
+Everything layered above the backend works the same either way. Authentication, upstream credentials, visibility, custom domains, publishing to collections, team access, and tool logs are all properties of the MCP server, not of the thing behind it.
+
+## Choosing a backend
+
+| Situation | Backend | Start here |
+| --- | --- | --- |
+| A vendor already runs an MCP server and it needs governance, auth, and logging | Remote | [Remote MCP servers](/docs/ai-control-plane/distribute/mcp-servers/remote-servers) |
+| An MCP server already exists but runs behind a firewall or inside a VPC | Tunneled | [Tunneled MCP servers](/docs/ai-control-plane/distribute/mcp-servers/tunneling) |
+| No MCP server exists yet, but an OpenAPI document or a TypeScript codebase does | Built | [Building MCP servers](/docs/ai-control-plane/distribute/mcp-servers/building-servers) |
+
+Two follow-on questions apply to every server regardless of backend. [How tools appear on a server](/docs/ai-control-plane/distribute/mcp-servers/tool-discovery) covers where the tool list comes from and which tool-shaping features apply to which backend. [Authentication](/docs/ai-control-plane/distribute/mcp-servers/authentication) covers who may call a server and which credential the server uses upstream.
 
 ## Access requirements
 
@@ -14,6 +32,8 @@ The **MCP** page hosts the project's sources as MCP servers that agents connect 
 </Callout>
 
 ## Server list
+
+The **MCP** page lists every server in the project. Open it from **Distribute > MCP** in the dashboard.
 
 The **Hosted MCP Servers** section lists every source exposed as an MCP server — OpenAPI-backed, functions, catalog servers, and custom remote MCP alike. View as cards or a table (columns: name, visibility, URL, tools), search, filter (including servers included in plugins), and create servers with **New MCP Server**.
 
@@ -26,22 +46,26 @@ Each server's detail page carries the connection surface and full configuration,
 - **Overview** — tool calls, failed calls, error rate, and average latency versus the previous period, tool call trends, top tools by calls and by failure rate, and top users
 - **Tools** — curate exactly which tools the server exposes, with tag-based filtering
 - **Resources** and **Prompts** — additional MCP capabilities the server serves
-- **Authentication** — configure OAuth so clients authenticate before reaching the server
+- **Authentication** — configure who may call the server and which credential it uses upstream
 - **Team Access** — see below
 - **Settings** — see below
 
-The sidebar shows the server's MCP URL with a copy button and a link to its hosted installation page, which lists per-client setup instructions.
+The sidebar shows the server's MCP URL with a copy button and a link to its hosted installation page, which lists per-client setup instructions. For client-specific walkthroughs, see the [setup guides](/docs/ai-control-plane/guides).
 
 ## Settings: visibility, publishing, and domains
 
 The **Settings** tab controls how the server is distributed:
 
-- **Visibility** — disabled, private, or public; making a server public warns when system environment variables are attached
+- **Visibility** — disabled, private, or public. A private server requires an authenticated caller. A public server accepts anonymous callers and is only available on a tunneled backend, and only after the tunnel source owner opts in.
 - **Custom Slug** and **Custom Domain** — control the server's URL
 - **Server Instructions** — the instructions returned to LLMs when they connect
 - **Publishing** — organization admins publish servers to collections so others in the organization can discover and install them
 - **Export JSON** — export the MCP configuration
 - A danger zone for disabling or deleting the server
+
+<Callout type="warning">
+  Making a server public does not strip its credentials. A public server still serves its attached system environment variables and upstream headers on every call, which means anonymous callers spend the same API keys an authenticated caller would. See [Upstream credentials](/docs/ai-control-plane/distribute/mcp-servers/authentication/upstream-credentials).
+</Callout>
 
 ## Team Access
 
@@ -49,16 +73,6 @@ The **Team Access** tab shows who can use the server: every member with their ro
 
 ## Tunneled MCP servers
 
-Tunneled MCP servers expose an MCP server that runs inside a private network — with no inbound connectivity — through the platform. A lightweight tunnel agent runs next to the private server and opens a single outbound connection to the platform's tunnel gateway; MCP traffic is relayed back over that connection, so nothing in the private network is ever exposed directly.
+Tunneled MCP servers expose an MCP server that runs inside a private network, with no inbound connectivity, through the platform. A lightweight tunnel agent runs next to the private server and opens a single outbound connection to the platform's tunnel gateway. MCP traffic is relayed back over that connection, so nothing in the private network is exposed directly.
 
-### Setting up a tunnel
-
-Add a tunneled server from **Connect > Sources** with **Add Source > Tunneled MCP Server**. Creating one issues a tunnel key — shown once, with rotation available later — and generates ready-to-copy setup commands for Docker, Kubernetes, or the CLI. The agent needs four settings: the gateway URL, the tunnel key, the internal MCP endpoint to proxy to, and a service version. A sample server variant deploys a hello-world MCP server alongside the agent to try the flow end to end.
-
-### Key capabilities
-
-- **A hosted URL for a private server** — creating a tunneled source automatically links an MCP server with a default endpoint, so agents connect to it like any other hosted server
-- **Full governance** — tunneled servers go through the same proxy stack as every other server: authentication, usage metering, toolsets, and team access all apply, and calls appear in [Tool Logs](/docs/ai-control-plane/observe/tool-logs) as the Tunneled MCP target type
-- **Never public** — tunneled servers front private networks, so public visibility is refused outright; every connection is authenticated
-- **Live connection visibility** — the source's detail view shows connection status (**Connected**, **Never connected**, or **Inactive**), live tunnel sessions with heartbeats and agent versions, and active request streams
-- **Key lifecycle** — rotate the tunnel key at any time (running agents disconnect and restart with the new key); deleting the source also removes its linked servers and endpoints
+See [Tunneled MCP servers](/docs/ai-control-plane/distribute/mcp-servers/tunneling) for setup, per-plan limits, key rotation, and public visibility.
