@@ -1,0 +1,121 @@
+---
+title: "Shadow MCP allow and block lists"
+description: "How the two shadow MCP policy postures work, when to pick each, and how allow rules layer on top of them."
+guideCategory: "Governance"
+---
+
+import { Callout } from "@/mdx/components";
+
+A blocking shadow MCP policy decides what happens when an agent calls an MCP server the platform doesn't host. Two postures are available, and the choice is made once when the policy is created.
+
+- Block by default, then allow named servers. This is the default and the stricter posture.
+- Allow by default, then block named servers.
+
+Both postures work from the same list of server URLs. The posture decides whether that list means "allowed" or "blocked". Getting this backwards inverts the policy, so it's worth being precise about which is in play.
+
+## Prerequisites
+
+A shadow MCP policy needs traffic to act on. Servers only become policy targets after they appear in the [Shadow MCP inventory](/docs/ai-control-plane/secure/shadow-mcp), which is populated from instrumented agent sessions.
+
+Creating and editing risk policies requires the `org:admin` scope.
+
+## The two postures
+
+The posture is stored on the policy as its disposition, and the API field is `shadow_mcp_disposition`.
+
+### Block all
+
+Every non-hosted MCP server is denied. The policy URL list is an allow list: only the servers on it get through.
+
+This is the default. A policy created without a disposition behaves as `block_all`.
+
+Block all is the right posture when the goal is a sanctioned catalog. Anything not explicitly approved fails closed, and members are pushed toward hosted servers or an access request. The operational cost is the review queue: every new server a member tries produces a blocked call.
+
+### Allow all
+
+Every non-hosted MCP server is permitted. The policy URL list becomes a block list: only the servers on it are denied.
+
+Allow all suits an organization that wants to stop a specific set of servers, such as a vendor that failed review or a server that leaked credentials, without gating everything else. It also keeps the inventory and findings flowing, so the traffic stays visible even though it isn't being stopped.
+
+<Callout type="warning">
+  Allow all fails open. A server that has never been seen before is permitted,
+  and it only gets blocked after someone notices it in the inventory and adds it
+  to the list. Reach for it when the risk being managed is a known-bad list, not
+  an unknown-server problem.
+</Callout>
+
+## The posture is immutable
+
+The disposition is fixed at creation. Sending a different value on an update is rejected. Switching from block all to allow all, or back, means deleting the policy and creating a replacement.
+
+This is deliberate. The URL list means the opposite thing under each posture, so a silent flip would turn an allow list into a block list and grant exactly the access it was meant to deny. Deleting and recreating forces the list to be rebuilt for its new meaning.
+
+Two consequences follow. Postures are worth deciding before a policy accumulates a long list, and the delete-and-recreate window leaves the project unprotected, so schedule it accordingly.
+
+Updates that omit `shadow_mcp_disposition` preserve the stored value, and sending the current value unchanged is also accepted. Only a changed value is an error.
+
+## Only observed URLs can be listed
+
+A URL added to a policy list has to already exist in the shadow MCP inventory for that project. Adding one that has never been observed is rejected.
+
+The constraint keeps policies honest. It rules out typo'd hostnames that silently protect nothing, and it means every entry on a list is traceable to real traffic. To sanction a server that hasn't been used yet, let one call through under a flagging policy first so the server registers in the inventory.
+
+URLs are canonicalized before they are stored, so paths and query strings on the same server collapse to one entry.
+
+## Allow rules layer on top
+
+The policy URL list is the bulk instrument, edited in the policy editor. Allow rules are the per-server instrument, edited from the [Shadow MCP page](/docs/ai-control-plane/secure/shadow-mcp) with **Add Allow Rule**, and they write into the same underlying grant set.
+
+Use the policy editor when defining the baseline for a new policy, and allow rules when responding to a single server or an access request. Both paths reconcile against the same list, so a server allowed from the inventory shows up in the policy editor selection too.
+
+Allow rules attach to a policy rather than to a person. Each rule inherits the audience of the policy it attaches to, so a rule added to a policy scoped to one role allows that server for that role only. Allowing a server for one team while blocking it for everyone else means running two policies with different audiences and attaching the rule to only one.
+
+## Rolling out a blocking policy
+
+Blocking on day one turns every unsanctioned server into a support ticket at once. A safer sequence:
+
+- Create a shadow MCP policy with the flag action. Nothing is interrupted, and the inventory fills with real usage.
+- Let it run long enough to cover a normal working period, then read the inventory. Sort by usage to separate the servers a team depends on from one-off experiments.
+- Decide the posture. A short known-bad list points to allow all. A long tail of unvetted servers points to block all.
+- Create the blocking policy with the chosen disposition and seed its URL list from the inventory. Scope the audience to one team first if a staged rollout is preferred.
+- Watch the pending requests queue during the first week. Requests are the signal for what the initial list missed.
+
+## What a blocked member sees
+
+A blocked call returns the block reason from the policy plus a request access link. The link expires after seven days. Opening it signs the member in and files a request against the policy that blocked the call.
+
+Requests appear on the Shadow MCP page with a **Pending** status. Approving one adds an allow rule for the selected policies and resolves the request. Denying resolves it without granting access.
+
+The request path only exists under a blocking policy. Under allow all, calls to a listed server are denied without a route to ask for an exception, so the block list should hold servers that are genuinely not up for negotiation.
+
+## Configuring through the API
+
+Policies are managed through the risk policy endpoints. Create a blocking policy with an explicit posture:
+
+```bash
+curl -X POST "https://app.getgram.ai/rpc/risk.createPolicy" \
+  -H "Content-Type: application/json" \
+  -H "Gram-Key: <your-api-key>" \
+  -H "Gram-Project: <your-project-slug>" \
+  -d '{
+    "sources": ["shadow_mcp"],
+    "action": "block",
+    "enabled": true,
+    "shadow_mcp_disposition": "block_all",
+    "shadow_mcp_allowed_urls": [
+      "https://mcp.example-vendor.com/mcp"
+    ]
+  }'
+```
+
+The `shadow_mcp_allowed_urls` field is the complete desired list, not a delta. Every update replaces the stored set, so an update that sends one URL removes every other entry. Omit the field to preserve the current list, and send an empty array to clear it.
+
+Both `shadow_mcp_disposition` and `shadow_mcp_allowed_urls` require a policy that uses the `shadow_mcp` source with the `block` action. Sending either on a flagging policy or on a policy with other sources is rejected.
+
+Policies with only the shadow MCP source and the block action are named automatically, so a created policy appears as "Shadow MCP Server Policy" rather than an AI-generated name.
+
+## Related
+
+- [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp) — the inventory, statuses, and allow rule actions
+- [Risk Policies](/docs/ai-control-plane/secure/risk-policies) — the policy editor and its detect, scope, and action steps
+- [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) — the scopes behind policy administration
