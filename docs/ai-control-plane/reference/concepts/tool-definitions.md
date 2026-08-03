@@ -3,7 +3,7 @@ title: Tool definitions
 description: How APIs, functions, and external MCP servers become tools that agents can use
 ---
 
-When a [source](/docs/ai-control-plane/reference/concepts/tool-sources) is uploaded to the platform — an OpenAPI document, a Gram Function, or an external MCP server — a [deployment](/docs/ai-control-plane/reference/concepts/deployments) is created and processed. During processing, every operation defined in the source is converted into a corresponding tool definition. For an OpenAPI document, that's every operation in the document. For a Gram Function, it's every tool declared in the function manifest.
+When a [source](/docs/ai-control-plane/reference/concepts/tool-sources) is uploaded to the platform — an OpenAPI document, a Function, or an external MCP server — a [deployment](/docs/ai-control-plane/reference/concepts/deployments) is created and processed. During processing, every operation defined in the source is converted into a corresponding tool definition. For an OpenAPI document, that's every operation in the document. For a Function, it's every tool declared in the function manifest.
 
 ![Generating tools](/assets/docs/gram/img/concepts/tool-definitions/tools-generation.png)
 
@@ -16,7 +16,7 @@ When creating [toolsets](/docs/ai-control-plane/reference/concepts/toolsets), se
 Every tool definition is identified by a URN in the format `tools:<kind>:<source>:<name>`. The kind reflects how the tool executes:
 
 - `http` — generated from an OpenAPI operation and executed as an HTTP request to the API
-- `function` — backed by a Gram Function
+- `function` — backed by a Function
 - `externalmcp` — proxied to a third-party MCP server added from the catalog or registered by URL
 - `tunneledmcp` — proxied to a private MCP server connected through a tunnel
 - `prompt` — a prompt template exposed as a tool
