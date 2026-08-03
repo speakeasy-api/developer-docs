@@ -37,11 +37,45 @@ The agent has a small, well-defined network surface. Policy polling doubles as t
 - **Session telemetry.** The AI agents themselves emit telemetry to the platform's OTEL ingest; the agent's job is wiring that configuration up and keeping it in place.
 - **MDM.** The MDM deploys the agent and its managed configuration to devices, and separately syncs device inventory into the platform so coverage can be measured fleet-wide. See [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations).
 
+### Network allowlist
+
+Every connection the agent makes is **outbound HTTPS on port 443**. It opens no inbound ports; the enrollment sign-in callback binds to loopback (`127.0.0.1`) only. On a locked-down network, allow these destinations:
+
+| Destination | Purpose |
+| --- | --- |
+| `app.getgram.ai`, the Speakeasy control plane | Plugin-policy fetch, device check-in and heartbeat, enrollment, and the OpenTelemetry ingest that Claude Code's telemetry is pointed at. |
+| `storage.googleapis.com` | Signed release manifests and agent update binaries (see [Automatic updates](#automatic-updates)). |
+| The plugin marketplace hosts, which are the control-plane host by default plus any external Git host the policy references (for example, `github.com`) | Cloning and updating the plugin and marketplace repositories the policy assigns. |
+
+<Callout type="info">
+  The marketplace hosts depend on the plugins the policy assigns, so review the assigned policy to enumerate them for a given environment. The agent refuses plaintext HTTP and non-public marketplace URLs.
+</Callout>
+
+## Automatic updates
+
+The agent keeps itself current so a fleet doesn't quietly drift onto old builds, while leaving teams that prefer to drive versions through MDM in full control. Behavior is set by the `auto_update` field in the agent's managed configuration, either `managed.json` or a macOS configuration profile (see [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations)).
+
+### Update modes
+
+| Mode | Behavior |
+| --- | --- |
+| `disabled` | **Default.** The agent never checks for updates; IT ships new versions on its own cadence via MDM. |
+| `notify` | The agent checks and reports that an update is available but does not install it. |
+| `automatic` | The agent checks, downloads, verifies, and installs without user interaction. Recommended. |
+
+### How updates are delivered
+
+- The agent checks at startup and every 24 hours, and on demand via `speakeasy update --check`.
+- Each binary is verified by SHA-256 against a signed release manifest before it is installed. macOS binaries are Developer ID-signed and notarized.
+- The new binary is swapped into place atomically. If an updated daemon fails to start, the agent automatically reverts to the previous version, so a failed update never leaves a device worse off than before.
+- Self-update applies on **macOS and Linux**. Windows updates are delivered through MDM for now.
+- `speakeasy update --apply` runs the same download-verify-swap on demand, for scripted or headless use.
+
 ## Enrollment
 
 Two enrollment paths cover evaluation and fleet rollout:
 
-- **Self-service** - `speakeasy enroll` opens the dashboard in a browser. After sign-in, the agent redeems a short-lived, single-use code (PKCE-bound, so the code is useless without the device that requested it) for a long-lived per-user key scoped to agent use only. Any org member can enroll their own device.
+- **Self-service** - The developer opens the menu bar app and clicks **"Enroll"**, which opens the dashboard in a browser. After sign-in, the agent redeems a short-lived, single-use code (PKCE-bound, so the code is useless without the device that requested it) for a long-lived per-user key scoped to agent use only. Any org member can enroll their own device.
 - **MDM zero-touch** - IT deploys a managed configuration file or macOS configuration profile carrying the org's agent key and settings alongside the installer package. Devices come up enrolled with no user interaction.
 
 ## Device status in the dashboard
