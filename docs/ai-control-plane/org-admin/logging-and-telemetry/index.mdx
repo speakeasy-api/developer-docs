@@ -5,33 +5,51 @@ description: "Control which tool-call logs, telemetry, and agent session data th
 
 import { Callout } from "@/mdx/components";
 
-The **Logging & Telemetry** page controls the logging and telemetry that power the [Observe pages](/docs/ai-control-plane/observe), from tool-call traces to agent session capture. Open it from **Settings > Logging & Telemetry** in the dashboard.
+The **Logs** page controls what the platform captures from instrumented agents, from tool-call traces to agent session transcripts. Everything on the [Observe pages](/docs/ai-control-plane/observe) is powered by these switches. Open it from **Settings > Logging & Telemetry** in the dashboard.
 
 ## Access requirements
 
 <Callout type="info">
-  Viewing this page requires the `org:read` scope, so both default Admin and Member roles can see current settings. Changing any toggle or configuration requires the `org:admin` scope, which only the [default Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) holds.
+  Viewing this page requires the `org:read` scope, so both default Admin and
+  Member roles can see current settings. Changing any toggle requires the
+  `org:admin` scope, which only the [default Admin
+  role](/docs/ai-control-plane/org-admin/roles-and-permissions) holds. Members
+  without that scope see the switches rendered but disabled.
 </Callout>
+
+## Data retention
+
+Tool logs and agent sessions are retained for 90 days, then age out automatically. See [platform security](/docs/ai-control-plane/reference/platform-security) for how that data is stored and isolated.
 
 ## Logging toggles
 
-The page presents a set of toggle rows that control what the platform records.
+The page presents a set of toggle rows that control what the platform records. Every setting except **Upload Skill Content** is off until an admin turns it on.
 
-- **Enable Logs** records tool-call traces and telemetry. Turning this off also turns off dependent settings.
-- **Upload Skill Content** uploads each skill's SKILL.md content at activation so captured skills can be inspected. When disabled, the platform receives only skill names, source details, hashes, users, and hostnames at activation. The same toggle also appears on the [Skills settings page](/docs/ai-control-plane/org-admin/skills).
-- **Record Tool I/O** stores the inputs and outputs of tool calls. Stored payloads may expose sensitive data, so enable it deliberately. This setting requires **Enable Logs** to be on; turning logs off cascades this setting off as well.
-- **Agent Session Capture** captures prompts and responses from Cursor, Claude Code, Codex, and other assistants. Captured sessions appear in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions). This setting also requires **Enable Logs** to be on.
-- **Fail Open During Outages** lets tool calls proceed when the platform is unreachable instead of blocking them (blocking is the default). Blocking policies go unenforced during the outage; events are still recorded and scanned after recovery, and invalid credentials always block.
+- **Enable Logs** records tool-call traces and telemetry. This is the master switch for the settings below it.
+- **Upload Skill Content** uploads each skill's SKILL.md content at activation so captured skills can be inspected. When disabled, the platform receives only skill names, source details, hashes, users, and hostnames at activation. This row appears only when skills are enabled for the organization, and it is on by default. The same toggle also appears on the [Skills settings page](/docs/ai-control-plane/org-admin/skills), and the two stay in sync.
+- **Record Tool I/O** stores the inputs and outputs of tool calls. Stored payloads may expose sensitive data, so enable it deliberately.
+- **Agent Session Capture** captures user prompts and assistant responses from supported coding agents. Captured sessions appear in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions).
+- **Fail Open During Outages** lets tool calls proceed when the platform is unreachable instead of blocking them (blocking is the default). Blocking policies go unenforced during the outage; events are still recorded and scanned after recovery, and invalid credentials always block. Flipping this setting is recorded in [Audit Logs](/docs/ai-control-plane/org-admin/audit-logs).
 - **Hook Browser Sign-In** lets hook plugins sign users in through the browser so events record under their own identity. When off, plugins use the organization key or explicitly configured credentials.
 
 ![The Logs settings card with toggles for logging, skill content, tool I/O, session capture, fail-open, and browser sign-in](/assets/docs/ai-control-plane/org-admin/logging-telemetry-toggles.webp)
 
-## AI integrations
+### How Enable Logs cascades
 
-Provider compliance and admin APIs (Cursor, Anthropic, OpenAI) connect on their own settings page — see [AI Integrations](/docs/ai-control-plane/org-admin/ai-integrations). They're optional; the platform works with basic instrumentation alone.
+**Record Tool I/O** and **Agent Session Capture** both depend on **Enable Logs**:
 
-## OTEL forwarding
+- Turning **Enable Logs** off also turns **Record Tool I/O** off.
+- While **Enable Logs** is off, both switches are frozen at their stored value and cannot be changed. Turn logs back on to edit them.
 
-The **OTEL Forwarding** section forwards a copy of every OTEL payload received on the hooks endpoint to an external collector. **Enable forwarding** turns delivery on, the **Endpoint URL** field sets the destination, and the **Headers** list attaches custom headers to forwarded requests (**Add header** to add rows). Header values are encrypted at rest and never returned by the API; saved values are preserved on subsequent edits.
+**Upload Skill Content**, **Fail Open During Outages**, and **Hook Browser Sign-In** are independent of **Enable Logs**.
 
-![The OTEL Forwarding section with the enable toggle, endpoint URL, and custom header rows](/assets/docs/ai-control-plane/org-admin/logging-telemetry-otel-forwarding.webp)
+<Callout type="info">
+  Settings save immediately, one switch at a time, and the rest of the page is
+  locked while a change is in flight. If a save fails, the switch reverts to its
+  stored value and an error appears.
+</Callout>
+
+## Related settings
+
+- [OTEL forwarding](/docs/ai-control-plane/org-admin/logging-and-telemetry/otel-forwarding) sends a copy of every inbound OTEL payload to an external collector.
+- [AI Integrations](/docs/ai-control-plane/org-admin/ai-integrations) connects provider compliance and admin APIs for Cursor, Anthropic, and OpenAI on its own settings page. Those integrations are optional; the platform works with basic instrumentation alone.

@@ -1,0 +1,51 @@
+---
+title: "OTEL forwarding"
+description: "Forward a copy of every OTEL payload received on the hooks endpoint to an external collector."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **OTEL Forwarding** section sends a copy of every OTEL payload received on the hooks endpoint to an external collector, so the same agent telemetry that powers the [Observe pages](/docs/ai-control-plane/observe) also lands in an existing observability stack. Forwarding is a copy, not a redirect: the platform keeps ingesting and processing the original payload either way. Find it at the bottom of **Settings > Logging & Telemetry** in the dashboard.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing the configuration requires the `org:read` scope, so both default Admin
+  and Member roles can see the endpoint and header names. Saving or deleting it
+  requires the `org:admin` scope, which only the [default Admin
+  role](/docs/ai-control-plane/org-admin/roles-and-permissions) holds. Members
+  without that scope can type in the fields, but **Save** stays disabled.
+</Callout>
+
+## Configure a destination
+
+The section holds three controls, saved together with **Save**.
+
+- **Enable forwarding** turns delivery on. Unlike the toggles on the [Logs page](/docs/ai-control-plane/org-admin/logging-and-telemetry), this switch is not applied until **Save** is pressed.
+- **Endpoint URL** sets the collector that receives the forwarded payloads. The URL must use `http` or `https` and include a host. Outbound requests pass through the platform's egress guard.
+- **Headers** attaches custom headers to each forwarded request, one key/value row at a time. **Add header** appends a row and the trash icon removes one. Use these for whatever the destination collector requires, such as an `Authorization` header. Header names cannot contain whitespace or repeat.
+
+![The OTEL Forwarding section with the enable toggle, endpoint URL, and custom header rows](/assets/docs/ai-control-plane/org-admin/logging-telemetry-otel-forwarding.webp)
+
+<Callout title="Re-enter header values on every save" type="warning">
+  Header values are encrypted at rest and never returned by the API, so a stored
+  value renders as a masked placeholder rather than the real secret. Saving
+  replaces the entire header set with exactly what the form holds, so a row left
+  blank is saved as an empty value and the stored secret is lost. Retype every
+  header value before pressing **Save**.
+</Callout>
+
+**Delete** removes the forwarding configuration entirely, including the stored header values. Both saving and deleting are recorded in [Audit Logs](/docs/ai-control-plane/org-admin/audit-logs), capturing the endpoint URL, the enable flag, and header names only.
+
+## What gets forwarded
+
+Forwarding covers the OTEL logs and metrics payloads posted to the hooks endpoint. A few limits are worth knowing before pointing a collector at it.
+
+- Payloads larger than 4 MiB are not forwarded. The platform still ingests and processes them as normal.
+- Delivery is asynchronous and is not retried. If the collector is down or returns an error, that payload is dropped and the failure is logged rather than replayed.
+- Forwarding failures never affect the agent sending the telemetry, and never affect what the platform records.
+- Requests are only forwarded when the inbound payload carries a recognized hooks API key, since the key identifies which organization's configuration applies.
+
+## Sending telemetry to the platform
+
+OTEL forwarding covers the outbound direction. Pointing agents at the platform's hooks endpoint in the first place is a separate setup step. See [distributing plugins to Anthropic](/docs/ai-control-plane/distribute/plugins/anthropic) for Claude Code and Claude Cowork, or the [device agent](/docs/ai-control-plane/org-admin/device-agent) for fleet-wide configuration.

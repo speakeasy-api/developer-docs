@@ -1,25 +1,59 @@
 ---
 title: "Anthropic"
-description: "Connect the org's plugin marketplace to a Claude org and distribute plugins to Claude Code and Claude Cowork."
+description: "Connect the org's plugin marketplace and telemetry to a Claude org so plugins reach Claude Code and Claude Cowork and sessions are attributed to users."
 ---
 
 import { Callout } from "@/mdx/components";
 
-Plugins reach Anthropic surfaces through the org's GitHub-backed plugin marketplace. This page covers connecting that marketplace to a Claude org and distributing plugins to Claude Code and Claude Cowork. For wiring up the observability plugin's telemetry (OTEL export and user attribution), see [Logging & Telemetry > Anthropic](/docs/ai-control-plane/org-admin/logging-and-telemetry/anthropic).
+Plugins reach Anthropic surfaces through the org's GitHub-backed plugin marketplace. This page covers connecting that marketplace to a Claude org, distributing plugins to Claude Code and Claude Cowork, and wiring up the observability plugin's telemetry so sessions are attributed to users.
+
+The observability plugin and Claude's OTEL exporter together are the prerequisite for most governance features on Anthropic surfaces: observability of AI usage across the company (tokens, cost, clients, MCP, skills), security flagging and blocking, [shadow MCP detection](/docs/ai-control-plane/secure/shadow-mcp), and more. Claude Code and Claude Cowork are configured separately.
 
 <Callout type="info">
-  In Claude and Cursor, a plugin marketplace is a shareable, configurable collection of plugins backed by a GitHub repo. The platform hosts a marketplace on the org's behalf containing the observability plugin and any custom plugins. Once the marketplace is connected to the Claude org, each plugin can be enabled, disabled, or required from Claude admin settings.
+  In Claude and Cursor, a plugin marketplace is a shareable, configurable
+  collection of plugins backed by a GitHub repo. The platform hosts a
+  marketplace on the org's behalf containing the observability plugin and any
+  custom plugins. Once the marketplace is connected to the Claude org, each
+  plugin can be enabled, disabled, or required from Claude admin settings.
 </Callout>
 
 ## Access requirements
 
 <Callout type="info">
-  Publishing the marketplace requires the `project:write` scope, held by the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions). The Claude-side steps require admin access to the Claude organization.
+  Publishing the marketplace requires the `project:write` scope and creating the
+  API key requires the `org:admin` scope, both held by the default [Admin
+  role](/docs/ai-control-plane/org-admin/roles-and-permissions). The Claude-side
+  steps require admin access to the Claude organization.
 </Callout>
+
+<Callout title="Why OTEL is required" type="info">
+  The platform uses Claude's OTEL exporter to associate Claude sessions with
+  users. Without it there is no way of knowing who performed which action, so
+  most features will not work. The same telemetry powers cost and token metrics
+  when that setting is enabled, and it can be copied on to an external collector
+  with [OTEL
+  forwarding](/docs/ai-control-plane/org-admin/logging-and-telemetry/otel-forwarding).
+</Callout>
+
+## Create an API key
+
+In the dashboard, open **Organization settings > API Keys** (see [API keys](/docs/ai-control-plane/org-admin/api-keys)) and create a new key with the **Hooks** scope. Copy the key — it replaces the `<MY_KEY>` placeholder below, producing a header string like `"Gram-Project=default,Gram-Key=gram_live_abc..."`. The same key works for both Claude Code and Cowork.
 
 ## Claude Code
 
-In the Claude org settings, open the **Claude Code** tab (claude.ai/admin-settings/claude-code), scroll to **Managed settings**, and click **Manage**. Merge the following JSON into the dialog, replacing the marketplace values with the ones shown on the dashboard's **Distribute > Plugins** page. If the dialog already carries the telemetry `env` block from [Logging & Telemetry > Anthropic](/docs/ai-control-plane/org-admin/logging-and-telemetry/anthropic), merge into the same JSON document.
+<Callout title="Alternative paths" type="info">
+  The [device agent](/docs/ai-control-plane/org-admin/device-agent) applies the
+  same marketplace, plugin, and OTEL settings to Claude Code on its own and
+  reapplies them every minute, so organizations running it can skip this
+  section. It writes the user-level settings file rather than the admin-owned
+  managed settings, and the telemetry block only lands once Claude Code has
+  cloned the marketplace on its next launch. These settings can also be
+  distributed via MDM, which gives more control over the rollout at the cost of
+  a more involved setup. Claude Cowork is not covered by either alternative, so
+  the [Claude Cowork](#claude-cowork) steps below always apply.
+</Callout>
+
+In the Claude org settings, open the **Claude Code** tab (claude.ai/admin-settings/claude-code), scroll to **Managed settings**, and click **Manage**. Merge the following JSON into the dialog, replacing the marketplace values with the ones shown on the dashboard's **Distribute > Plugins** page and the API key placeholder with the key created above.
 
 ```json
 {
@@ -34,13 +68,33 @@ In the Claude org settings, open the **Claude Code** tab (claude.ai/admin-settin
   },
   "enabledPlugins": {
     "<org>-observability@<org>-speakeasy": true
+  },
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "https://app.getgram.ai/rpc/hooks.otel",
+    "OTEL_EXPORTER_OTLP_HEADERS": "Gram-Project=default,Gram-Key=<MY_KEY>",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_METRICS_EXPORTER": "otlp"
   }
 }
 ```
 
+<Callout title="Trust prompt" type="warning">
+  Claude treats the OTEL exporter settings as sensitive. After this step,
+  everyone in the Claude org is asked whether they trust the settings the next
+  time they start Claude Code, and must mark them as trusted to continue (this
+  just requires hitting Enter).
+</Callout>
+
 ### Confirm the plugin is installed
 
 Restart Claude Code and confirm the plugin appears under `/plugins` → **Installed** (it may require scrolling).
+
+### Confirm telemetry is flowing
+
+- Execute any tool call — use an MCP server, or ask Claude to run `echo hi there`.
+- Open [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the dashboard. The tool call should appear immediately (for a local tool call, set the **Type** filter to include local tools).
 
 ## Claude Cowork
 
@@ -55,6 +109,20 @@ In the **Plugins** tab of the Claude organization settings, click **Add Plugins*
 ### Update plugin availability
 
 Scroll down to the newly added marketplace. It may say "Syncing plugins from repository..." for a short while. Once the plugins load, a plugin named after the org (for example, `<org> observability`) appears — it contains the agent hooks that power most control plane features, so mark it **Required** for a real rollout (**Available to install** works for a proof of concept). Set any other plugins, such as default MCPs, to **Available to install** so users can opt in.
+
+### Enable OTEL export
+
+In the **Cowork** tab of the Claude org settings, scroll to **Monitoring** and set:
+
+- OTLP endpoint: `https://app.getgram.ai/rpc/hooks.otel`
+- OTLP protocol: `http/json`
+- OTLP headers: `Gram-Project=default,Gram-Key=<MY_KEY>`
+
+Save the settings.
+
+### Verify
+
+Restart Claude Desktop, use a connector or MCP server from the Cowork tab, and confirm the call appears immediately in [Tool Logs](/docs/ai-control-plane/observe/tool-logs).
 
 ### Manually enable a non-required plugin
 
