@@ -1,27 +1,112 @@
 ---
 title: Concepts
-description: "The core concepts behind the platform: tool sources, deployments, tool definitions, and tool variations."
+description: "A map of the core concepts behind the platform, from the sources tools come from through the servers that serve them and the controls that govern them."
 asIndexPage: true
 ---
 
-These pages describe the core concepts of the platform and how they fit together. Sources are deployed to generate tool definitions, selected tool definitions are served to agents as MCP servers, and tool variations refine how tools appear to LLMs along the way.
+These pages describe the core concepts of the platform and how they fit together. Sources are deployed to generate tool definitions, selected tool definitions are served to agents as MCP servers, and a layer of identity, observability, and policy controls governs what those agents can do.
 
-## [Tool sources](/docs/ai-control-plane/reference/concepts/tool-sources)
+Concepts with a dedicated page under this section are listed first. The rest link to the page that covers them in depth.
+
+## Building tools
+
+### [Tool sources](/docs/ai-control-plane/reference/concepts/tool-sources)
 
 The inputs that describe available functionality: OpenAPI documents, Functions, and external MCP servers. Uploading a source is the starting point for creating tools.
 
-## [Deployments](/docs/ai-control-plane/reference/concepts/deployments)
+- [Functions](/docs/ai-control-plane/reference/concepts/tool-sources#functions)
+- [OpenAPI documents](/docs/ai-control-plane/reference/concepts/tool-sources#openapi-documents)
+- [External MCP servers](/docs/ai-control-plane/reference/concepts/tool-sources#external-mcp-servers)
+
+### [Deployments](/docs/ai-control-plane/reference/concepts/deployments)
 
 Immutable snapshots of a project's sources and the tools generated from them. Every source change produces a new deployment, and the most recent successful deployment serves the project's tools.
 
-## [Tool definitions](/docs/ai-control-plane/reference/concepts/tool-definitions)
+- [Creating deployments](/docs/ai-control-plane/reference/concepts/deployments#creating-deployments)
+- [Deployment lifecycle](/docs/ai-control-plane/reference/concepts/deployments#deployment-lifecycle)
+- [Troubleshooting](/docs/ai-control-plane/reference/concepts/deployments#troubleshooting)
+
+### [Tool definitions](/docs/ai-control-plane/reference/concepts/tool-definitions)
 
 The output of processing a source: one definition per API operation, function tool, or external MCP tool, containing the metadata an LLM needs and the configuration the platform uses to execute the tool.
 
-## [Tool variations](/docs/ai-control-plane/reference/concepts/tool-variations)
+- [Choosing which tools a server exposes](/docs/ai-control-plane/reference/concepts/tool-definitions#choosing-which-tools-a-server-exposes)
+- [Tool kinds and URNs](/docs/ai-control-plane/reference/concepts/tool-definitions#tool-kinds-and-urns)
+
+### [Tool variations](/docs/ai-control-plane/reference/concepts/tool-variations)
 
 Overrides for a tool's name, description, tags, annotations, and confirmation prompts, a prompt-engineering layer that improves how LLMs select and use tools without changing the underlying source.
 
-## [MCP servers](/docs/ai-control-plane/distribute/mcp-servers)
+- [Editing a tool](/docs/ai-control-plane/reference/concepts/tool-variations#editing-a-tool)
+- [Tags](/docs/ai-control-plane/reference/concepts/tool-variations#tags)
+
+## Serving tools
+
+### [MCP servers](/docs/ai-control-plane/distribute/mcp-servers)
 
 How tools reach agents. Each server exposes a selected set of tool definitions over streamable HTTP, with its own authentication, visibility, and team access.
+
+- [Choosing a backend](/docs/ai-control-plane/distribute/mcp-servers#choosing-a-backend)
+- [Tools on a server](/docs/ai-control-plane/distribute/mcp-servers#tools-on-a-server)
+- [Authentication](/docs/ai-control-plane/distribute/mcp-servers#authentication)
+- [Distribution](/docs/ai-control-plane/distribute/mcp-servers#distribution)
+
+### [Remote MCP servers](/docs/ai-control-plane/distribute/mcp-servers/remote-servers)
+
+An MCP server a third party already runs, registered by URL or from the catalog. Nothing is copied or re-hosted. The platform proxies whole sessions to the upstream and adds authentication, per-tool access control, metering, and logging in front.
+
+- [Adding a server by URL](/docs/ai-control-plane/distribute/mcp-servers/remote-servers#adding-a-server-by-url)
+- [Adding a server from the catalog](/docs/ai-control-plane/distribute/mcp-servers/remote-servers#adding-a-server-from-the-catalog)
+- [What happens on a request](/docs/ai-control-plane/distribute/mcp-servers/remote-servers#what-happens-on-a-request)
+
+### [Environments](/docs/ai-control-plane/distribute/environments)
+
+Named sets of variables that hold the secrets and configuration sources need to reach upstream systems. Binding an environment to a server keeps credentials centralized instead of scattered across individual client configurations.
+
+- [Environment list](/docs/ai-control-plane/distribute/environments#environment-list)
+- [Managing variables](/docs/ai-control-plane/distribute/environments#managing-variables)
+
+### [Plugins](/docs/ai-control-plane/distribute/plugins)
+
+Distributable bundles that package MCP servers and skills together, assign them to roles, and publish to the Claude Code, Cursor, and Codex marketplaces through GitHub.
+
+- [Marketplace](/docs/ai-control-plane/distribute/plugins#marketplace)
+- [Managing plugins](/docs/ai-control-plane/distribute/plugins#managing-plugins)
+
+## Identity and access
+
+### [User sessions](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions)
+
+Who is calling a server. The platform acts as the OAuth authorization server for a server's endpoint, so every tool call carries both a subject, the person behind the agent, and a client ID, the agent itself.
+
+- [What an MCP client experiences](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions#what-an-mcp-client-experiences)
+- [Dynamic client registration](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions#dynamic-client-registration)
+- [Session duration and token lifetime](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions#session-duration-and-token-lifetime)
+- [Revoking access](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions#revoking-access)
+
+## Observing and securing
+
+### [Agent sessions](/docs/ai-control-plane/observe/agent-sessions)
+
+Captured agent conversations, each holding a full transcript of messages and tool calls with cost and token attribution. Sessions are the record investigations start from, and risk findings attach to specific messages within them.
+
+- [Narrow to a session](/docs/ai-control-plane/observe/agent-sessions#narrow-to-a-session)
+- [Move through the transcript](/docs/ai-control-plane/observe/agent-sessions#move-through-the-transcript)
+- [Go from a finding to the exact message](/docs/ai-control-plane/observe/agent-sessions#go-from-a-finding-to-the-exact-message)
+
+### [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp)
+
+MCP servers discovered in agent traffic that the platform does not manage, meaning servers members connected on their own. Every routed tool call records which server it resolved to, and calls resolving anywhere other than a platform-hosted host are flagged.
+
+- [How servers are discovered](/docs/ai-control-plane/secure/shadow-mcp#how-servers-are-discovered)
+- [Policy status](/docs/ai-control-plane/secure/shadow-mcp#policy-status)
+- [Allow rules](/docs/ai-control-plane/secure/shadow-mcp#allow-rules)
+
+### [Risk policies](/docs/ai-control-plane/secure/risk-policies)
+
+The rules that scan agent sessions for secrets, sensitive data, and prompt-defined risks. A policy binds detection rules, the scope of content they examine, the action taken on a match, and the audience it applies to.
+
+- [Policy types](/docs/ai-control-plane/secure/risk-policies#policy-types)
+- [Detectors](/docs/ai-control-plane/secure/risk-policies#detectors)
+- [Action and severity](/docs/ai-control-plane/secure/risk-policies#action-and-severity)
+- [Audiences](/docs/ai-control-plane/secure/risk-policies#audiences)
