@@ -1,83 +1,92 @@
 ---
 title: Catalog overview
-description: "Discover curated third-party MCP servers and publish internal catalogs to share across organizations."
+description: "Browse third-party MCP servers from the MCP Registry and add them to a project as remote MCP sources."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The Speakeasy **Catalog** is a central hub for discovering, importing, and distributing MCP servers. It serves two purposes:
+The **Catalog** is a directory of third-party MCP servers, powered by the official [MCP Registry](https://registry.modelcontextprotocol.io/). Browse it to find a server, then add it to a project as a remote MCP source. Open it from **Catalog** in the dashboard sidebar.
 
-- **Discover and import** curated third-party MCP servers from external registries
-- **Publish and share** internal catalogs of toolsets with partner organizations
+## Access requirements
 
-## Discovering third-party MCP servers
+<Callout type="info">
+  Browsing the catalog requires the `project:read` or `mcp:write` scope. Adding
+  a server to a project requires the `mcp:write` scope. Both are included in the
+  default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions).
+  The Member role can browse the catalog, but the install flow enforces
+  `mcp:write` before a server is added.
+</Callout>
 
-The Catalog page in the Speakeasy dashboard provides access to a curated directory of official and community MCP servers, powered by the [MCP Registry](https://registry.modelcontextprotocol.io/). From the catalog:
+## Browsing
 
-- **Browse** available servers with search, filtering, and sorting
-- **Filter** by authentication type, tool behavior (read-only, destructive, idempotent), usage volume, and update recency
-- **View details** for any server including its description, available tools with annotations, usage statistics, version info, and transport endpoints
-- **Add servers** to a project with a single click — the external MCP attachment is created automatically and wired into the deployment
+The full catalog loads in one response, so search, filtering, and sorting are instant. The toolbar controls the view:
 
-To access the catalog, navigate to **Catalog** in the Speakeasy dashboard sidebar.
+- **Search** matches on server name
+- **Sort by** offers **Most Popular**, **Recently Released**, **Last Updated**, **A → Z**, and **Z → A**
+- **View as** switches between a card grid and a table
+- The count shows how many servers match the current filters
 
-### Adding a server from the catalog
+Servers already added to the project are marked with an added state. Select several entries to add them in one action.
 
-- Browse or search for the desired server
-- Click the server card to view details, including available tools and usage stats
-- Click **Add** to import the server into the project
-- Speakeasy creates an external MCP attachment and includes the server tools in the deployment
+### Filters
 
-Multiple servers can also be selected from the catalog grid and added in a batch.
+Six filter dimensions narrow the list:
+
+| Filter            | Options                            |
+| ----------------- | ---------------------------------- |
+| **Auth type**     | No Auth, API Key, OAuth 2.1, Other |
+| **Setup**         | Automatic (DCR), Manual setup      |
+| **Tool behavior** | Read-only only, Can modify data    |
+| **Popularity**    | 100+ users, 1k+ users, 10k+ users  |
+| **Last updated**  | This week, This month, This year   |
+| **Tool count**    | 5+ tools, 10+ tools                |
+
+Filter state lives in the URL, so a filtered view can be bookmarked or shared.
+
+## Server details
+
+Selecting a server opens its detail page, which covers:
+
+- The server name, its website or registry specifier, and badges for **Official**, **Latest**, and **Manual Setup**
+- **About**, the server description as published to the registry
+- **Available Tools**, listing every tool with its behavior annotations
+- **Usage** estimates for this week, the last four weeks, and all time
+- **Version & Release** details covering version, status, publish date, last update, and source
+- **Registry** details covering the registry name and the server specifier
+
+A **Manual Setup** badge means the server does not support dynamic client registration. Connecting to it requires static OAuth client credentials or an API key.
+
+## Adding a server
+
+Click **Add** on a server card or detail page, or select several servers and add them together. The install dialog then walks through configuration.
+
+When a server publishes more than one endpoint, a **Configure** step appears first. Set the **Server name** and use **Select endpoints to include** to pick which endpoints to install.
+
+The configure step collects any remaining setup:
+
+- **Server name** for each server being added
+- **Upstream headers** for servers that authenticate with an API key. Values are stored on the server and sent with every upstream request.
+
+Header values are optional at this point. Skip the step and set them later on the **Settings** tab of the created server.
+
+On confirmation, the platform creates a remote MCP server pointing at the selected endpoint, creates an MCP server with private visibility, and stages a default MCP endpoint so the server can serve straight away. Servers that support dynamic client registration have their OAuth configuration applied automatically.
 
 <Callout title="Good to know" type="info">
-  Servers added from the catalog appear as external MCP tool sources in the project. Include their tools in any [toolset](/docs/ai-control-plane/reference/concepts/toolsets) alongside API tools and Functions.
+  Private visibility keeps the endpoint gated behind a user session. This
+  matters when upstream API-key headers are stored on the server, since a public
+  endpoint would expose them to anyone holding the URL.
 </Callout>
 
-### Removing a catalog server
+After the install completes, the dialog links to the next actions: **Add more sources**, **Connect via coding agents**, and **Configure MCP settings**.
 
-To remove a previously added catalog server, navigate to the server detail page in the catalog and click **Remove**. This removes the external MCP attachment and any toolsets that exclusively reference it.
+Tools from a catalog server behave like any other tool source. Expose them on an [MCP server](/docs/ai-control-plane/distribute/mcp-servers) alongside API tools and functions.
 
-## Publishing internal catalogs
+## Removing a server
 
-In addition to consuming third-party servers, internal **catalogs** can be published — named collections of [toolsets](/docs/ai-control-plane/reference/concepts/toolsets) served as private MCP registries. Internal catalogs enable:
-
-- **Bundling toolsets** into logical groups (for example, "Customer Success Tools" or "Engineering Platform")
-- **Controlling visibility** by making catalogs public or private
-- **Sharing with partners** by granting specific organizations access through [sub catalogs](/docs/ai-control-plane/connect/sources/catalog/sub-catalogs)
-
-### How internal catalogs work
-
-Each internal catalog is identified by a **slug** (a URL-friendly identifier) and contains one or more toolsets from the project. When a catalog is published, Speakeasy creates an internal registry that serves the tools from the included toolsets as MCP servers.
-
-```txt
-Organization
-├── Toolset: CRM Tools
-├── Toolset: Email Tools
-├── Toolset: Analytics Tools
-│
-├── Catalog: "customer-success"  (CRM Tools + Email Tools)
-└── Catalog: "data-platform"     (Analytics Tools)
-```
-
-### Creating an internal catalog
-
-In the Speakeasy dashboard, navigate to **Catalogs** in the sidebar and click **New Catalog**. Provide the following:
-
-- **Name**: A human-readable display name for the catalog
-- **Slug**: A URL-friendly identifier (auto-generated from the name, but editable)
-- **Toolsets**: Select one or more toolsets to include in the catalog
-
-<Callout title="Visibility" type="info">
-  Catalogs are created as **private** by default. Private catalogs are only accessible to the owning organization and any organizations explicitly granted access.
-</Callout>
-
-### Serving catalog contents
-
-Once published, the catalog MCP servers are accessible through the serve endpoint using the catalog slug. Each toolset in the catalog is exposed as an individual MCP server with its own streamable HTTP endpoint. Partner organizations that have been granted access can browse and connect to these servers.
+Open the server detail page and click **Remove**. Removal drops the server from the deployment and deletes every MCP server built from its tools, not only those built exclusively from them. Adding the same server again is always allowed, and **Add another** installs a second copy for cases such as separate credentials per environment.
 
 ## Next steps
 
-- Learn how to share internal catalogs with partner organizations using [sub catalogs](/docs/ai-control-plane/connect/sources/catalog/sub-catalogs)
-- Read about [toolsets](/docs/ai-control-plane/reference/concepts/toolsets) to understand how to organize tools before publishing them as catalogs
+- Read about [choosing which tools a server exposes](/docs/ai-control-plane/reference/concepts/tool-definitions#choosing-which-tools-a-server-exposes) to group catalog tools with the rest of a project
+- Read about [remote MCP servers](/docs/ai-control-plane/distribute/mcp-servers/remote-servers) to understand what a catalog install creates
 - Learn how to [publish a server to the public MCP Registry](/docs/ai-control-plane/distribute/mcp-servers) for broader discoverability
