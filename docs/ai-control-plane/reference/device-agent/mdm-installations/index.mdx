@@ -20,6 +20,12 @@ This page covers the shared concepts. The provider guides cover the console-spec
 - [Drata](/docs/ai-control-plane/reference/device-agent/mdm-installations/drata) — per-device records into a dedicated Custom Connection, mapped to a control test
 - [Vanta](/docs/ai-control-plane/reference/device-agent/mdm-installations/vanta) — per-device Custom Resources with a Custom Test over real coverage
 
+## Install the agent
+
+The agent ships as a single Developer ID signed, notarized, universal `.pkg` that installs the daemon, CLI, menu-bar UI, and privileged helper together and registers its own LaunchAgents — no script, no separate service-install step. Download it from a stable link that always resolves to the current release: `https://app.getgram.ai/v1/install/device-agent-macos.pkg`.
+
+Upload that file to your MDM as a Package (Jamf), Custom App (Iru), or line-of-business `.pkg` app (Intune) — see the provider guides below for the exact steps — and push it once. With `auto_update: "automatic"` set in the managed configuration below, the agent keeps the daemon, CLI, and app current on its own; re-push the pkg only for a change to the install layout itself, not routine releases.
+
 ## The managed configuration
 
 The agent recognizes a user through a managed configuration delivered by IT — no browser flow and no manual enrollment on the device. It's a schema-versioned document (`v: 1`) carrying the user's work email, an organization token, and optional settings:
@@ -47,7 +53,7 @@ It can be delivered through two channels:
 Two constraints catch most first deployments, regardless of MDM:
 
 - **The configuration must be readable by the logged-in user**, not just root — the agent runs as that user. For the JSON file use `0644 root:wheel` (or `0640` with the user's group); `0600` silently breaks enrollment. Profiles have no permission trap — the OS owns the plist.
-- **The agent reads its configuration at daemon startup.** Any policy that writes the file must restart the daemon afterwards (`speakeasyd -service restart`), on every run — a rotated token sits inert on disk until the next restart. The same restart rule applies to profile updates.
+- **The agent reads its configuration at daemon startup.** Any policy that writes the file must restart the daemon afterwards, on every run — a rotated token sits inert on disk until the next restart. The same restart rule applies to profile updates. On a pkg-installed macOS device, restart the console user's LaunchAgent — `launchctl kickstart -k "gui/$(id -u)/com.speakeasy.daemon"` — substituting the console user's uid when run from a root MDM policy. Linux and Windows service installs still use `speakeasyd -service restart`.
 
 <Callout type="warning">
   The `org_token` is a credential, but the device cannot keep it secret from its own user: the agent runs as the logged-in user, who can therefore read the configuration. Treat the token as a revocable, organization-scoped credential — scope its permissions on that assumption and rotate it rather than trying to hide it. Pass it into your MDM as a script parameter or templated variable, never as a literal in a script body.
