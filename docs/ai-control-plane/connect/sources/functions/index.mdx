@@ -1,10 +1,18 @@
 ---
-title: "Speakeasy Functions"
-description: "Build custom tools with TypeScript functions for complete control over logic and dependencies."
+title: "Add tools with TypeScript"
+description: "Write custom tools with the TypeScript functions framework, test them locally, and deploy them as a source."
 asIndexPage: true
 ---
 
-Speakeasy Functions are compact code units that represent LLM tools. They allow you to create tools from TypeScript code, deploy them to Speakeasy, and expose them to language models via MCP servers. Once deployed, Functions can be used just like any other tool on the platform, allowing you to create and host MCP servers, combine them with other tools into toolsets, build multi-tool workflows, and more.
+import { Callout } from "@/mdx/components";
+
+Speakeasy Functions are compact code units that represent LLM tools. Write them in TypeScript, deploy them to Speakeasy, and expose them to language models through MCP servers. Once deployed, Functions behave like any other tool on the platform, so they can be hosted as MCP servers, combined with tools from other sources into toolsets, or used to build multi-tool workflows.
+
+Unlike OpenAPI-sourced tools, which wrap existing API endpoints, functions run custom code in isolated environments. Function-sourced tools suit:
+
+- **Custom business logic:** Calculations, data processing, or decision-making beyond simple API calls, such as aggregating data from multiple sources
+- **Data transformations:** Filtering, enriching, or summarizing data before returning it to the LLM
+- **Multi-step workflows:** Orchestrating several API calls or operations in a single tool
 
 ```typescript filename="gram.ts"
 import { Gram } from "@gram-ai/functions";
@@ -15,35 +23,58 @@ const gram = new Gram().tool({
   description: "Greet someone special",
   inputSchema: { name: z.string() },
   async execute(ctx, input) {
-    return ctx.text(`Hello, ${input.name}!`);
+    return ctx.json({ message: `Hello, ${input.name}!` });
   },
 });
 
 export default gram;
 ```
 
-## Getting started
+The steps below also appear in the dashboard under **Connect > Sources > Add Source > Write custom code**.
 
-To get started with Functions, scaffold a new project using the `gram` template:
+## Before you start
+
+This guide assumes:
+
+- An account and project exist (see [Getting started](/docs/ai-control-plane/getting-started))
+- Node.js version 22.18.0 or later is installed
+
+## Step 1: Create a project
+
+Scaffold a new project:
 
 ```bash
-pnpm create @gram-ai/function@latest --template gram
+npm create @gram-ai/function@latest
 ```
 
-Install the required package:
+The scaffolder prompts for:
+
+- **Framework:** **Gram Functions** (the simplest path, batteries included) or the official **Model Context Protocol SDK** for advanced use cases
+- Project name, directory, and git initialization
+- Dependency installation
+- **CLI installation:** The `gram` CLI is required to deploy. The scaffolder offers to install it and run `gram auth` to authenticate
+
+To skip the framework prompt and scaffold directly onto the Functions Framework, pass a template:
 
 ```bash
-pnpm add @gram-ai/functions
+npm create @gram-ai/function@latest --template gram
 ```
 
-For a complete walkthrough, follow the [Getting Started](/docs/ai-control-plane/connect/sources/typescript) guide.
+The project contains `src/gram.ts` (the tools) and `src/server.ts` (a local MCP server for testing):
 
-## Writing tools
+```bash
+└── src
+   ├── gram.ts   # Edit me!
+   └── server.ts
+└── package.json
+└── README.md
+```
 
-You can write Functions using the [Functions Framework](/docs/ai-control-plane/connect/sources/functions/functions-framework) or the official [MCP SDK](/docs/ai-control-plane/connect/sources/functions/mcp-sdk).
-The Functions Framework is a more lightweight way to write tools, while MCP SDK support is available if you prefer to use the official SDK.
+## Step 2: Write tools
 
-```typescript filename="gram-framework.ts"
+Open `src/gram.ts` and define tools, as many as needed:
+
+```typescript filename="gram.ts"
 import { Gram } from "@gram-ai/functions";
 import * as z from "zod/mini";
 
@@ -52,45 +83,51 @@ const gram = new Gram().tool({
   description: "Greet someone special",
   inputSchema: { name: z.string() },
   async execute(ctx, input) {
-    return ctx.text(`Hello, ${input.name}!`);
+    return ctx.json({ message: `Hello, ${input.name}!` });
   },
 });
 
 export default gram;
 ```
 
-## Deploying to Speakeasy
+Tools can be written with the [Functions Framework](/docs/ai-control-plane/connect/sources/functions/functions-framework) or the official [MCP SDK](/docs/ai-control-plane/connect/sources/functions/mcp-sdk). The Functions Framework is the more lightweight way to write tools, and MCP SDK support is available for teams that prefer the official SDK.
 
-Speakeasy allows you to easily deploy and host your tools. Beyond hosting and running code for you, 
-the platform offers a comprehensive set of features to help you build on top of your tools and deliver a powerful AI-native experience to your users. 
-Follow the [Build and deploy](/docs/ai-control-plane/connect/sources/functions/build-deploy) guide to learn more.
+<Callout title="Tools, not servers" type="info">
+  These are tools, not a finished MCP server. After deploying, tools can be
+  sliced into multiple MCP servers or combined with tools from other sources.
+</Callout>
+
+Test locally before deploying. Running `npm run dev` starts the project under the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector), so tools can be called interactively from the browser.
+
+## Step 3: Build and deploy
 
 ```bash
 npm run build
 npm run push
 ```
 
+Build bundles the functions. Push stages the bundle and creates a deployment, running the `gram` CLI commands `gram stage function` and `gram push` under the hood. Once the deployment completes, the functions source and its tools appear under **Connect > Sources** in the dashboard. Deployment history and retries live under [Deployments](/docs/ai-control-plane/connect/deployments), and the [Build and deploy](/docs/ai-control-plane/connect/sources/functions/build-deploy) guide covers the process in full.
+
+## Step 4: Create an MCP server
+
+Go to **Distribute > MCP** and click **New MCP Server**, then add the deployed tools on the server's **Tools** tab. The server's detail page links to a hosted installation page with per-client setup instructions. See [MCP Servers](/docs/ai-control-plane/distribute/mcp-servers) for visibility, publishing, and team access.
+
 ## Functions vs MCP servers
 
-Functions provide a way to create individual tools for use in MCP servers. However, creating tools is not the same as creating MCP servers.
+Functions provide a way to create individual tools for use in MCP servers. Creating tools is not the same as creating MCP servers.
 
 The key distinction:
 
 - **Functions:** Individual tools that represent specific capabilities or operations
-- **MCP Servers:** Collections of tools combined into a single server that can be accessed by LLM clients
+- **MCP servers:** Collections of tools combined into a single server that LLM clients can access
 
-Once you have created a tool (via Functions or OpenAPI), combine it with other tools into one or many MCP servers. This means you can:
+Once a tool exists, whether it came from Functions or OpenAPI, combine it with other tools into one or many MCP servers. Functions can therefore be split across multiple projects, kept in a single file, or organized however a workflow requires.
 
-- Split your Functions into multiple projects for convenience
-- Keep every tool in one file
-- Organize tools however makes sense for your workflow
+MCP servers are created from [toolsets](/docs/ai-control-plane/reference/concepts/toolsets) later in the Speakeasy dashboard.
 
-MCP servers are created from [toolsets](/docs/ai-control-plane/reference/concepts/toolsets) later in the Speakeasy dashboard. Tools can also be created directly from OpenAPI documents.
+## What's next?
 
-### Local development
-
-That said, you can run Functions as a local MCP server with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) for testing and development purposes. Use the following command:
-
-```bash
-pnpm run dev
-```
+- [Use the Functions Framework](/docs/ai-control-plane/connect/sources/functions/functions-framework)
+- [Tag tools so clients can filter by tag](/docs/ai-control-plane/connect/sources/functions/tool-tags)
+- [Learn about best practices for curating toolsets](/docs/ai-control-plane/reference/concepts/toolsets)
+- [Add OpenAPI-sourced tools](/docs/ai-control-plane/connect/sources/openapi)

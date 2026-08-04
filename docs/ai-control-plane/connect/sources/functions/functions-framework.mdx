@@ -3,6 +3,8 @@ title: "Using the Functions Framework"
 description: "Learn how to use the Speakeasy Functions Framework with TypeScript, including context objects and best practices."
 ---
 
+import { Callout } from "@/mdx/components";
+
 ## Overview
 
 The Speakeasy Functions Framework provides a streamlined way to build MCP tools using TypeScript. It handles MCP implementation while letting you focus on your tool logic.
@@ -22,7 +24,7 @@ const gram = new Gram().tool({
   description: "Add two numbers together",
   inputSchema: { a: z.number(), b: z.number() },
   async execute(ctx, input) {
-    return ctx.json({sum: input.a + input.b});
+    return ctx.json({ sum: input.a + input.b });
   },
 });
 
@@ -88,6 +90,41 @@ const gram = new Gram().tool({
   },
 });
 ```
+
+### Caller identity
+
+Tool calls that arrive over MCP carry attribution about the caller:
+
+- **`ctx.clientInfo`:** The name and version of the calling MCP client, when the client reports them
+- **`ctx.oauthClientId`:** The OAuth client ID attributed to the caller, when one accompanied the call
+- **`ctx.meta`:** The raw `_meta` block sent with the call, for keys the framework does not model yet
+
+Every field is optional. Calls that do not arrive over MCP, such as direct instance invocations and resource reads, leave all three undefined.
+
+```typescript
+const gram = new Gram().tool({
+  name: "record_action",
+  inputSchema: { action: z.string() },
+  async execute(ctx, input) {
+    console.log("tool call", {
+      action: input.action,
+      client: ctx.clientInfo?.name,
+      clientVersion: ctx.clientInfo?.version,
+      oauthClient: ctx.oauthClientId,
+    });
+    return ctx.json({ recorded: true });
+  },
+});
+```
+
+<Callout title="Attribution only" type="warning">
+  Caller identity is metadata attached to the request, and a tool cannot
+  distinguish a value the host attached from one the caller supplied. Use these
+  fields for logging, metrics, and telling one integration's traffic from
+  another's. Never gate access on them. Authorization belongs to whatever
+  verifies credentials in front of the tool, such as
+  [OAuth](/docs/ai-control-plane/connect/sources/functions/add-oauth).
+</Callout>
 
 ## Input validation
 
@@ -237,9 +274,7 @@ import { Gram } from "@gram-ai/functions";
 import { trainGram } from "./train";
 import { flightGram } from "./flight";
 
-const gram = new Gram()
-  .extend(trainGram)
-  .extend(flightGram);
+const gram = new Gram().extend(trainGram).extend(flightGram);
 
 export default gram;
 ```
@@ -279,9 +314,7 @@ const newsGram = new Gram({
 });
 
 // Composed instance requires both environment variables
-const gram = new Gram()
-  .extend(weatherGram)
-  .extend(newsGram);
+const gram = new Gram().extend(weatherGram).extend(newsGram);
 // Both WEATHER_API_KEY and NEWS_API_KEY must be provided
 ```
 
