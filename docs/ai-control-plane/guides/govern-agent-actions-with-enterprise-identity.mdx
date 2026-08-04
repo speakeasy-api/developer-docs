@@ -56,7 +56,14 @@ If no grant satisfies the check, the session never attaches. The agent doesn't s
 
 Connecting to a server is not the same as being allowed to use everything on it. Each individual `tools/call` passes through a second check (same `mcp:connect` scope, same server) that carries two more dimensions: the tool name and the tool's disposition.
 
-Disposition is derived from the tool's MCP annotations at call time. Tools declaring `readOnlyHint` evaluate as `read_only`; `destructiveHint` maps to `destructive`; the rest of the vocabulary is `idempotent` and `open_world`. Because the disposition comes from the tool's own metadata, policy can target classes of behavior instead of a per-tool list that goes stale every deploy.
+Disposition comes from a tool's MCP annotations. Tools declaring `readOnlyHint` evaluate as `read_only`; `destructiveHint` maps to `destructive`; the rest of the vocabulary is `idempotent` and `open_world`. Because the disposition describes what a tool does, policy can target classes of behavior instead of a per-tool list that goes stale every deploy.
+
+Where those annotations are read from depends on the backend, and the difference matters for who controls policy:
+
+- On a built server, annotations are captured on the tool definition when a deployment is processed.
+- On a remote or tunneled server, annotations are the ones an administrator recorded on the server's **Inspect** tab, stored by the Control Plane and read from there on every call. The upstream response is not consulted on the hot path, so a third party cannot change the disposition its tools evaluate under by editing its own annotations. See [Recording tool metadata](/docs/ai-control-plane/distribute/mcp-servers/remote-servers#recording-tool-metadata).
+
+A remote server with no recorded metadata resolves to the empty disposition. Grants naming a disposition still match it, because selector matching skips keys the check does not carry, so recording metadata is what makes disposition-based policy bite on a remote server.
 
 A support role that can connect to the billing server but only invoke tools that declare themselves read-only looks like this:
 

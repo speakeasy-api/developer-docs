@@ -33,7 +33,7 @@ When any step does not apply, the server is still created and a warning names th
 - The upstream publishes metadata but its authorization server has no registration endpoint, so dynamic client registration is unavailable. Servers in this state need manual credentials.
 - A matching identity provider already exists but is missing its authorization or token endpoint.
 
-Anything not configured automatically can be set up from the server's **Authentication** tab. See [Upstream credentials](/docs/ai-control-plane/distribute/mcp-servers/authentication/upstream-credentials).
+Anything not configured automatically can be set up from the **Authentication** section of the server's **Settings** tab. See [Upstream credentials](/docs/ai-control-plane/distribute/mcp-servers/authentication/upstream-credentials).
 
 ## Adding a server from the catalog
 
@@ -85,13 +85,36 @@ Private servers additionally run per-tool access checks. Tool lists are filtered
 
 The proxy does not retry. A failed upstream request is relayed as it came back, including a synthesized JSON-RPC error when an upstream returns a 2xx body that is not valid JSON-RPC.
 
+## Recording tool metadata
+
+A remote server proxies `tools/list` live, so the tool list itself is never stored. Tool metadata is different: the display title and the four MCP annotation hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`) are recorded per tool name and held by the Control Plane.
+
+Recording matters because access control reads it. The disposition that per-tool `mcp:connect` checks evaluate resolves from this stored metadata, not from the upstream response, so no `tools/call` waits on an upstream `tools/list`. A server with no recorded metadata resolves to the empty disposition, which leaves enforcement on it unchanged.
+
+The **Inspect** tab is where this happens. Clicking **Connect** opens a session against the live server and lists the tools it advertises alongside what is stored for each one. Tools advertised for the first time are recorded automatically. Stored values win over advertised ones when the two disagree, and a stored value left unset falls back to what the server advertises.
+
+### Reconciling stored metadata against the live server
+
+When stored metadata and the live session disagree, a panel above the tool list reports how many tools differ and offers **Sync annotations**. It covers two cases:
+
+- **Changed** — the tool is still advertised, but at least one stored field no longer matches
+- **Removed** — metadata is stored under a tool name the session no longer advertises
+
+Syncing rewrites stored metadata to match the live session, which also drops the entries for removed tools. The panel header states how many removals a sync will make before it runs.
+
+<Callout type="warning">
+  Tool metadata is keyed by tool name. Renaming a tool upstream separates it from the metadata recorded under its old name, so the rename reads as one removed tool and one new tool rather than as a change.
+</Callout>
+
+Reading tool metadata requires the `mcp:read` scope, and recording or syncing it requires `mcp:write`. Both paths apply only to remote and tunneled servers. A built server stores its tool definitions when a deployment is processed, annotations included, so there is nothing to record and the request is refused. See [How tools appear on a server](/docs/ai-control-plane/distribute/mcp-servers/tool-discovery) for how the two backends diverge.
+
 ## Editing a server afterwards
 
 The server detail page carries everything that can change after creation:
 
-- **Settings** — display name, upstream URL, upstream headers, visibility, custom slug and domain, publishing, and deletion
-- **Authentication** — the identity provider callers authenticate against, and the remote identity providers used to reach the upstream
-- **Tools** — annotations and per-tool access, described in [How tools appear on a server](/docs/ai-control-plane/distribute/mcp-servers/tool-discovery)
+- **Overview** — tool calls, failed calls, error rate, and average latency, with tool call trends and top tools
+- **Inspect** — the live tool list and the stored tool metadata reconciled against it, described in [Recording tool metadata](#recording-tool-metadata)
 - **Team Access** — which members and roles can read, write, or connect
+- **Settings** — display name, upstream URL, upstream headers, visibility, custom slug and domain, publishing, and deletion, plus the **Authentication** section covering the identity provider callers authenticate against and the remote identity providers used to reach the upstream
 
 Deleting a remote server removes its stored headers, linked server configs, and endpoints. Deleting only the linked MCP server config leaves the remote record in place, and it can be re-linked to a new server config afterwards.
