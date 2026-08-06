@@ -4,6 +4,7 @@ description: "Deploy the device agent through your MDM, verify the rollout with 
 ---
 
 import { Callout, StatusBadge } from "@/mdx/components";
+import { CodeWithTabs } from "@/components/code-tabs";
 
 Rolling the device agent out through an MDM has two halves. First, **deploy**: your MDM installs the agent and delivers its managed configuration so every device enrolls without any interactive login. Second, **verify**: connect the same MDM to the dashboard so the platform can pull your managed-device inventory and show exactly which devices are covered by a running agent, and which aren't. Optionally, a third: **export** that coverage into your compliance platform so it becomes continuously-tested evidence.
 
@@ -28,18 +29,36 @@ Upload that file to your MDM as a Package (Jamf), Custom App (Iru), or line-of-b
 
 ## The managed configuration
 
-The agent recognizes a user through a managed configuration delivered by IT. No browser flow and no manual enrollment on the device. It's a schema-versioned document (`v: 1`) carrying the user's work email, an organization token, and optional settings:
+The agent recognizes a user through a managed configuration delivered by IT. No browser flow and no manual enrollment on the device. It's a schema-versioned document (`v: 1`) carrying the user's work email, an organization token, and optional settings. It can be delivered through two channels, each with its own on-disk form:
 
-```json
-{
+<CodeWithTabs client:visible
+  tabs={[
+    {
+      label: "Configuration Profile (plist)",
+      language: "xml",
+      code: `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>v</key><integer>1</integer>
+  <key>email</key><string>jane.doe@example.com</string>
+  <key>org_token</key><string>spk_org_…</string>
+  <key>org_slug</key><string>example-corp</string>
+</dict>
+</plist>`,
+    },
+    {
+      label: "Managed JSON",
+      language: "json",
+      code: `{
   "v": 1,
   "email": "jane.doe@example.com",
   "org_token": "spk_org_…",
   "org_slug": "example-corp"
-}
-```
-
-It can be delivered through two channels:
+}`,
+    },
+  ]}
+/>
 
 - **Configuration Profile (macOS, preferred)**: a Custom Settings payload (`com.apple.ManagedClient.preferences`) targeting the preferences domain **`com.speakeasy.agent`**, materialized by the OS at `/Library/Managed Preferences/com.speakeasy.agent.plist`. Declarative, MDM-native, no standing script, and users cannot edit it without removing the profile. When a device has both a profile and the JSON file, the profile wins per field.
 - **Script-dropped `managed.json` (works everywhere)**: a script or package payload writes the JSON file to a fixed system path:
@@ -50,10 +69,7 @@ It can be delivered through two channels:
   | Linux | `/etc/speakeasy/managed.json` |
   | Windows | `%ProgramData%\Speakeasy\managed.json` |
 
-Two constraints catch most first deployments, regardless of MDM:
-
-- **The configuration must be readable by the logged-in user**, not just root. The agent runs as that user. For the JSON file use `0644 root:wheel` (or `0640` with the user's group); `0600` silently breaks enrollment. Profiles have no permission trap. The OS owns the plist.
-- **The agent reads its configuration at daemon startup.** Any policy that writes the file must restart the daemon afterwards, on every run. A rotated token sits inert on disk until the next restart. The same restart rule applies to profile updates. On a pkg-installed macOS device, restart the console user's LaunchAgent (`launchctl kickstart -k "gui/$(id -u)/com.speakeasy.daemon"`), substituting the console user's uid when run from a root MDM policy. Linux and Windows service installs still use `speakeasyd -service restart`.
+The configuration must be readable by the logged-in user, not just root: the agent runs as that user. For the JSON file use `0644 root:wheel` (or `0640` with the user's group); `0600` silently breaks enrollment. Profiles have no permission trap. The OS owns the plist.
 
 <Callout type="warning">
   The `org_token` is a credential, but the device cannot keep it secret from its own user: the agent runs as the logged-in user, who can therefore read the configuration. Treat the token as a revocable, organization-scoped credential: scope its permissions on that assumption and rotate it rather than trying to hide it. Pass it into your MDM as a script parameter or templated variable, never as a literal in a script body.
@@ -61,7 +77,11 @@ Two constraints catch most first deployments, regardless of MDM:
 
 ### Verify on the device
 
-After the policy has run and the daemon restarted, `speakeasy status` on a target device should report the enrolled email with `source: managed` (surfaced in the menu bar UI as "Provisioned by IT"). If it reports `source: local` or `source: none`, the usual causes are, in order: the daemon hasn't restarted since the configuration changed, the file permissions are too tight, or the file is at the wrong path.
+`speakeasy status` on a target device should report the enrolled email with `source: managed` (surfaced in the menu bar UI as "Provisioned by IT"). If it reports `source: local` or `source: none`, the usual causes are the file permissions being too tight, the file sitting at the wrong path, or the daemon not having restarted since the configuration was written (see [Updating the managed configuration](#updating-the-managed-configuration) below).
+
+### Updating the managed configuration
+
+The agent reads its configuration at daemon startup, not continuously, so a change to the file or profile doesn't take effect until the daemon restarts. Any policy that writes the file must restart the daemon afterwards, on every run: a rotated token sits inert on disk until the next restart. The same restart rule applies to profile updates. On a pkg-installed macOS device, restart the console user's LaunchAgent (`launchctl kickstart -k "gui/$(id -u)/com.speakeasy.daemon"`), substituting the console user's uid when run from a root MDM policy. Linux and Windows service installs still use `speakeasyd -service restart`.
 
 ## Verify the rollout with agent coverage
 
