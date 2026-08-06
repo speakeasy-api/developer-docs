@@ -5,16 +5,16 @@ description: "Deploy the device agent with Iru (formerly Kandji) and connect the
 
 import { Callout } from "@/mdx/components";
 
-Iru — Kandji until its late-2025 rebrand — supports both halves of an MDM rollout: **deploying** the agent's managed configuration to your Apple fleet, and **verifying** the rollout by connecting the tenant to the dashboard so agent coverage is computed from the real inventory. Shared concepts — the configuration schema, delivery channels, and coverage states — are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+Iru (Kandji until its late-2025 rebrand) supports both halves of an MDM rollout: **deploying** the agent's managed configuration to your Apple fleet, and **verifying** the rollout by connecting the tenant to the dashboard so agent coverage is computed from the real inventory. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
 
 ## Install the agent package
 
-Download `speakeasy-agent_<version>.pkg` from `https://app.getgram.ai/v1/install/device-agent-macos.pkg` — a stable link that always resolves to the current release. It's a single Developer ID signed, notarized, universal pkg that installs the daemon, CLI, menu-bar UI, and privileged helper together, and registers its own LaunchAgents — no script needed.
+Download `speakeasy-agent_<version>.pkg` from `https://app.getgram.ai/v1/install/device-agent-macos.pkg`, a stable link that always resolves to the current release. It's a single Developer ID signed, notarized, universal pkg that installs the daemon, CLI, menu-bar UI, and privileged helper together, and registers its own LaunchAgents. No script needed.
 
 Add it in the Iru library as **Library → Add New → Custom App**.
 
 <Callout type="warning">
-  **Set the install enforcement to "Install once" — not "Continuously Enforce."** Iru's default enforcement audits whether the app is present by looking for a bundle in `/Applications`. This agent deliberately installs to per-user paths (`~/Applications`, `~/Library/Application Support/Speakeasy`), not `/Applications`, so the default audit never finds it, decides the install "didn't take," and loops the item in *installing* forever even though it's already running. "Install once" installs the pkg and stops policing its location — the agent's own auto-update keeps it current. If you must use Continuously Enforce, give it a custom audit script that checks what the pkg actually creates instead — for example, exit 0 when `pkgutil --pkg-info com.speakeasy.agent.pkg` succeeds.
+  **Set the install enforcement to "Install once," not "Continuously Enforce."** Iru's default enforcement audits whether the app is present by looking for a bundle in `/Applications`. This agent deliberately installs to per-user paths (`~/Applications`, `~/Library/Application Support/Speakeasy`), not `/Applications`, so the default audit never finds it, decides the install "didn't take," and loops the item in *installing* forever even though it's already running. "Install once" installs the pkg and stops policing its location. The agent's own auto-update keeps it current. If you must use Continuously Enforce, give it a custom audit script that checks what the pkg actually creates instead: exit 0 when `pkgutil --pkg-info com.speakeasy.agent.pkg` succeeds.
 </Callout>
 
 ## Deploy with a Custom Profile (preferred)
@@ -27,20 +27,20 @@ Add it in the Iru library as **Library → Add New → Custom App**.
 
 For the `managed.json` file path:
 
-1. **Library → Add New → Custom Script** (not a Custom Profile — profiles deliver plists, not arbitrary JSON files).
+1. **Library → Add New → Custom Script** (not a Custom Profile: profiles deliver plists, not arbitrary JSON files).
 2. Have the script write `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644`, then restart the daemon.
-3. Set the execution frequency to a recurring schedule (for example every 15 minutes), not "run once" — otherwise a rotated token never reaches devices.
+3. Set the execution frequency to a recurring schedule (for example every 15 minutes), not "run once." Otherwise a rotated token never reaches devices.
 
 ## Connect Iru to the dashboard
 
 1. In the Iru console, go to **Settings → Access → API Token** and create a token with only the **Device list** permission enabled. Copy the token and the tenant's **API URL** shown on the same page (`https://yourtenant.api.iru.com`; the legacy `https://yourtenant.api.kandji.io` form also works).
 2. In the dashboard, open **Device Agent → MDM Integrations**, then **Connect** on the Iru row.
 3. Enter the API URL and the token. Credentials are stored encrypted and are never shown again after saving.
-4. **Save**, then **Test connection** — the test runs a real request against your tenant using the saved credentials.
+4. **Save**, then **Test connection**. The test runs a real request against your tenant using the saved credentials.
 5. Enable the connection. New connections start paused so that invalid credentials never generate failed sync attempts: the flow is save, test, then enable.
 
 <Callout type="info">
-  The integration reads each device record's **assigned user email** to attribute devices to people — coverage can only be attested for devices whose records carry one. If your fleet shows a large "No email in MDM" count, assign users to devices in Iru (directory-integrated enrollment usually does this automatically).
+  The integration reads each device record's **assigned user email** to attribute devices to people. Coverage can only be attested for devices whose records carry one. If your fleet shows a large "No email in MDM" count, assign users to devices in Iru (directory-integrated enrollment usually does this automatically).
 </Callout>
 
 Once enabled, the inventory syncs hourly. Each schedule can be paused, resumed, or run immediately with **Sync now** from the integration's detail page, which also shows the coverage breakdown and the searchable device inventory.

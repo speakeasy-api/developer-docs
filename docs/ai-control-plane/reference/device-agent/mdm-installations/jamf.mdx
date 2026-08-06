@@ -5,16 +5,16 @@ description: "Deploy the device agent with Jamf Pro and connect the tenant to th
 
 import { Callout } from "@/mdx/components";
 
-Jamf Pro supports both halves of an MDM rollout: **deploying** the agent's managed configuration to the fleet, and **verifying** the rollout by connecting the tenant to the dashboard so agent coverage is computed from the real inventory. Shared concepts — the configuration schema, delivery channels, and coverage states — are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+Jamf Pro supports both halves of an MDM rollout: **deploying** the agent's managed configuration to the fleet, and **verifying** the rollout by connecting the tenant to the dashboard so agent coverage is computed from the real inventory. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
 
 ## Install the agent package
 
-Download `speakeasy-agent_<version>.pkg` from `https://app.getgram.ai/v1/install/device-agent-macos.pkg` — a stable link that always resolves to the current release. It's a single Developer ID signed, notarized, universal pkg that installs the daemon, CLI, menu-bar UI, and privileged helper together, and registers its own LaunchAgents — no script needed.
+Download `speakeasy-agent_<version>.pkg` from `https://app.getgram.ai/v1/install/device-agent-macos.pkg`, a stable link that always resolves to the current release. It's a single Developer ID signed, notarized, universal pkg that installs the daemon, CLI, menu-bar UI, and privileged helper together, and registers its own LaunchAgents. No script needed.
 
 Upload it to Jamf Pro as a **Package** and scope it to your fleet.
 
 <Callout type="warning">
-  Install it **once**. Don't configure the policy to continuously verify a `/Applications` bundle or re-push new versions — the pkg installs into each user's home directory, and the agent's own `auto_update: "automatic"` keeps the daemon, CLI, and app current on its own. Re-pushing is only for a change to the install layout itself, which is rare.
+  Install it **once**. Don't configure the policy to continuously verify a `/Applications` bundle or re-push new versions. The pkg installs into each user's home directory, and the agent's own `auto_update: "automatic"` keeps the daemon, CLI, and app current on its own. Re-pushing is only for a change to the install layout itself, which is rare.
 </Callout>
 
 ## Deploy with a Configuration Profile (preferred)
@@ -37,29 +37,29 @@ Upload it to Jamf Pro as a **Package** and scope it to your fleet.
 
 3. Use Jamf's payload variables (like `$EMAIL`) so one profile serves the whole fleet, and scope it to the target devices.
 
-No script, no execution-frequency setting, and no file-permission management — the OS owns the resulting plist. The daemon still reads configuration at startup, so pair profile updates with a daemon restart policy.
+No script, no execution-frequency setting, and no file-permission management: the OS owns the resulting plist. macOS writes it to `/Library/Managed Preferences/com.speakeasy.agent.plist`, which is where you can inspect the delivered configuration on a managed device (for example, with `defaults read /Library/Managed\ Preferences/com.speakeasy.agent`). The daemon still reads configuration at startup, so pair profile updates with a daemon restart policy.
 
 ## Deploy with a Scripts policy (fallback)
 
-If you need the `managed.json` file path instead (for example, an existing Scripts policy already manages it), use a **Scripts policy** — not a Configuration Profile, which cannot deliver arbitrary JSON files. The script writes `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644`, then restarts the daemon. Two Jamf-specific traps:
+If you need the `managed.json` file path instead (for example, an existing Scripts policy already manages it), use a **Scripts policy** (not a Configuration Profile, which cannot deliver arbitrary JSON files). The script writes `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644`, then restarts the daemon. Two Jamf-specific traps:
 
-- **Pass the `org_token` as a script parameter**, not a literal in the script body — script bodies are readable by anyone with console access and tend to end up in version control.
+- **Pass the `org_token` as a script parameter**, not a literal in the script body. Script bodies are readable by anyone with console access and tend to end up in version control.
 - **Jamf policies run as root, but the daemon runs as the logged-in user.** Restart the daemon in the user's context (via `launchctl` targeting the console user's session), or the restart silently does nothing.
 
 Set the policy to run on a recurring frequency rather than once, so rotated tokens actually reach devices.
 
 ## Connect Jamf to the dashboard
 
-Jamf Cloud tenants only — outbound requests are restricted to public address space, so on-premises Jamf instances are not supported.
+Jamf Cloud tenants only. Outbound requests are restricted to public address space, so on-premises Jamf instances are not supported.
 
 1. In Jamf Pro, go to **Settings → System → API roles and clients**. Create an **API role** with only the **Read Computers** privilege, then an **API client** bound to that role. Enable the client and copy the client ID and the one-time client secret.
 2. In the dashboard, open **Device Agent → MDM Integrations**, then **Connect** on the Jamf Pro row.
 3. Enter your tenant root URL (`https://yourtenant.jamfcloud.com`) and the client credentials. Credentials are stored encrypted and are never shown again after saving.
-4. **Save**, then **Test connection** — the test runs a real request against your tenant using the saved credentials.
+4. **Save**, then **Test connection**. The test runs a real request against your tenant using the saved credentials.
 5. Enable the connection. New connections start paused so that invalid credentials never generate failed sync attempts: the flow is save, test, then enable.
 
 <Callout type="info">
-  The integration reads each computer's **User and Location** email to attribute devices to people — coverage can only be attested for devices whose records carry an assigned-user email. If your fleet shows a large "No email in MDM" count, populate the email field on device records (directory-bound enrollment usually does this automatically).
+  The integration reads each computer's **User and Location** email to attribute devices to people. Coverage can only be attested for devices whose records carry an assigned-user email. If your fleet shows a large "No email in MDM" count, populate the email field on device records (directory-bound enrollment usually does this automatically).
 </Callout>
 
 Once enabled, the inventory syncs hourly. Each schedule can be paused, resumed, or run immediately with **Sync now** from the integration's detail page, which also shows the coverage breakdown and the searchable device inventory.
