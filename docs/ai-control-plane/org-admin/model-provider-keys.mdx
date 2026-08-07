@@ -1,0 +1,72 @@
+---
+title: "Model provider keys"
+description: "Bring an OpenRouter API key so model completions run on the organization's own OpenRouter account instead of the platform-provisioned key."
+---
+
+import { Callout } from "@/mdx/components";
+
+By default, the platform runs model completions for the playground, assistants, and its risk-scanning judges on [OpenRouter](https://openrouter.ai) keys it provisions and manages per organization. The **Model Provider Keys** section replaces that with a customer-supplied OpenRouter key, so model spend flows through the organization's own OpenRouter account. Set one project default key that covers every surface, or override individual surfaces with dedicated keys. Open the section from the project's **Settings** page in the dashboard.
+
+OpenRouter is the only supported provider: completion egress stays on OpenRouter whether the key is platform-provisioned or customer-supplied, so customer keys are OpenRouter keys.
+
+## Surfaces and key slots
+
+Each key is bound to the project and one slot. A slot is either the project-wide default or one completion surface:
+
+| Surface | Slot | Covers |
+| --- | --- | --- |
+| Project default | `default` | Every surface below without a dedicated key |
+| Playground | `playground` | Completions from the dashboard [playground](/docs/ai-control-plane/connect/playground) |
+| Assistants | `assistants` | Completions from assistant runs and triggers |
+| Risk policy judge | `risk-policy` | Prompt-based [risk policy](/docs/ai-control-plane/secure/risk-policies) evaluations of observed agent traffic |
+| Prompt injection judge | `prompt-injection` | Prompt injection scanning of observed agent traffic |
+
+Every completion resolves its key in the same order: an enabled key on the surface's own slot wins, then an enabled project default key, then the platform-provisioned key. The **Key** column in the table shows the outcome of that resolution for each surface as a badge: **Custom key**, **Project default**, or **Platform issued**.
+
+Platform-internal completions outside these slots, such as chat title generation and other internal helpers, always run on the platform's own key. A project default key never captures them; the two judge slots above are the only platform-initiated completions a customer key can cover.
+
+## Create an OpenRouter key
+
+In the OpenRouter dashboard, open the [**Keys**](https://openrouter.ai/settings/keys) page and create an API key. The account needs [credits](https://openrouter.ai/settings/credits) for completions to succeed. Setting a per-key credit limit in OpenRouter is a good practice: it caps what the platform can spend through the key. Copy the key value for the next step.
+
+## Add a key to the project
+
+In the dashboard, open the project's **Settings** page and find the **Model Provider Keys** table. Paste the key into the **Value** field on the target surface's row and save. To cover everything with one key, use the **Project default** row.
+
+The key is validated with OpenRouter before it is stored: a mistyped or revoked key is rejected with "the model provider rejected the API key" and nothing is saved. A valid key is encrypted and stored, and the row's **Updated** column records the change.
+
+Keys are write-only. After saving, the field shows only a placeholder, and no API or dashboard view ever returns the key material. To rotate a key, paste a new value over the old one and save; the replacement takes effect immediately.
+
+## Disable, enable, or delete a key
+
+The row menu on a configured surface offers two actions:
+
+- **Disable** takes the key out of resolution without deleting its material. The surface falls back to the project default key, or the platform key. **Enable** restores it.
+- **Delete** removes the key entirely, with the same fallback.
+
+<Callout title="Feature gating covers configuration only" type="info">
+  The Custom Model Keys product feature gates saving and re-enabling keys. If the feature is later disabled for the organization, stored keys keep resolving; taking a key out of use requires disabling or deleting it.
+</Callout>
+
+## Billing and spend
+
+Completions on a customer key bill to the OpenRouter account that issued it, and appear in that account's [OpenRouter activity view](https://openrouter.ai/activity). Outbound completions carry session and user metadata, so OpenRouter's dashboard can group requests per conversation.
+
+Budgets live on the OpenRouter side: the platform's managed credit caps and warning emails apply only to platform-provisioned keys. If the OpenRouter account behind a customer key runs out of credits, completions on the affected surfaces fail until credits are added, surfacing as HTTP 402 responses to chat callers.
+
+## Security and auditing
+
+Key material is encrypted at rest and never returned by any read path. Every change is recorded in the [audit log](/docs/ai-control-plane/org-admin/audit-logs): saves and enable or disable actions appear as `model_provider_key:upsert` events and deletions as `model_provider_key:delete`, each with the actor and a snapshot of the slot's state before and after.
+
+## API access
+
+The same operations are available programmatically for automation:
+
+| Operation | Route |
+| --- | --- |
+| List configured keys | `GET /rpc/modelKeys.listKeys` |
+| Create or replace a key | `POST /rpc/modelKeys.upsertKey` |
+| Enable or disable a key | `POST /rpc/modelKeys.setKeyEnabled` |
+| Delete a key | `DELETE /rpc/modelKeys.deleteKey` |
+
+Requests authenticate with a dashboard session or an [API key](/docs/ai-control-plane/org-admin/api-keys) with the **Producer** scope, plus a `Gram-Project` header naming the project. List responses return key metadata (slot, provider, enabled state, timestamps) but never key material. See the [API reference](/docs/ai-control-plane/reference/api-reference) for request and response schemas.
