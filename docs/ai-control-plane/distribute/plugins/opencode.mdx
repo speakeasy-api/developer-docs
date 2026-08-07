@@ -1,0 +1,144 @@
+---
+title: "OpenCode"
+description: "Instrument OpenCode with the observability plugin so sessions and tool calls reach Observe and risk policies are enforced on OpenCode traffic."
+---
+
+import { Callout } from "@/mdx/components";
+
+OpenCode has no plugin marketplace, so the observability plugin ships as a self-contained package that is copied into an OpenCode configuration directory. OpenCode discovers it on the next start. This page covers installing that package, choosing where it lands, and verifying that events arrive.
+
+Once installed, the plugin captures OpenCode sessions and tool calls for [Observe](/docs/ai-control-plane/observe) and enforces [risk policies](/docs/ai-control-plane/secure/risk-policies) on prompts, tool calls, MCP calls, and permission requests.
+
+<Callout title="OpenCode has no OTEL exporter" type="info">
+  Claude Code and Codex export OpenTelemetry alongside their hooks. OpenCode has
+  no equivalent, so every OpenCode signal arrives through the observability
+  plugin. Sessions, tool calls, token counts, cost, and policy enforcement all
+  work; the OTEL-derived detail described in [What the plugin
+  captures](#what-the-plugin-captures) does not apply. No Claude-side OTEL
+  configuration is needed for OpenCode.
+</Callout>
+
+## Access requirements
+
+<Callout type="info">
+  Downloading the observability plugin requires the `org:admin` scope, and so
+  does creating the API key the CLI path uses. Both are held by the default
+  [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions).
+</Callout>
+
+## Download the plugin package
+
+On the dashboard's **Distribute > Plugins** page, open the **Platform Plugins** section, select **opencode**, and click **Download Plugin**. The download is a ZIP with a hooks-scoped API key already embedded, so no key needs to be created or exported separately.
+
+Extract it into the target directory:
+
+```bash
+unzip observability-opencode.zip -d .opencode
+```
+
+The package contains `plugin/agenthooks.ts`, which maps OpenCode's events to the platform, `speakeasy.json`, which carries the deployment identity and the embedded key, and the bootstrap scripts that fetch the hooks runtime on first run.
+
+## Install with the CLI
+
+Use this path when the package needs to be rendered from a script or checked into a repository template. Install the `speakeasy-hooks` binary:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/speakeasy-api/gram/main/hooks/install.sh | sh
+```
+
+Create an API key with the **Hooks** scope on the [API keys](/docs/ai-control-plane/org-admin/api-keys) page, then run the install from the target directory:
+
+```bash
+GRAM_HOOKS_ORG_KEY="<hooks-scoped-api-key>" \
+speakeasy-hooks install --provider=opencode --dir=. --project=<project-slug>
+```
+
+Useful flags:
+
+- `--provider` — the agent to render for, `opencode` here
+- `--dir` — where the package is written
+- `--project` — the project slug events are attributed to, defaulting to `default`
+- `--browser-login` — let each developer sign in through the browser so events record under their own identity rather than the organization key
+
+## Choose an install location
+
+OpenCode loads plugins from both a global and a per-repository configuration directory:
+
+- `~/.config/opencode/` instruments every repository on the machine
+- A repository's `.opencode/` instruments that repository only
+
+Install globally for real rollouts. Per-repository installs suit evaluation, or a single repository that needs a different project attribution.
+
+<Callout type="warning">
+  The plugin never edits `opencode.json`. Removing the copied files is the
+  complete uninstall.
+</Callout>
+
+## Roll out across a fleet
+
+The [device agent](/docs/ai-control-plane/org-admin/device-agent) installs and maintains the OpenCode package on every enrolled machine and reapplies it every minute, so organizations running it can skip the manual steps above. It writes into `~/.config/opencode/`, tracks the files it owns, and leaves entries a developer added alone.
+
+OpenCode is managed by default wherever it is installed. To exclude it on a given fleet, set the `platforms` key in the agent's managed configuration:
+
+```json
+{
+  "platforms": {
+    "opencode": false
+  }
+}
+```
+
+See the [device agent reference](/docs/ai-control-plane/reference/device-agent) for the full managed configuration.
+
+## Verify the installation
+
+Restart OpenCode, then run any tool call — an MCP tool, or a prompt such as `echo hi there`. Confirm both surfaces:
+
+- The call appears in [Tool Logs](/docs/ai-control-plane/observe/tool-logs). For a local tool call, set the **Type** filter to include local tools.
+- The conversation appears in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) with **Agent type** filtered to opencode. Transcripts require **Agent Session Capture** on the [Logging & Telemetry](/docs/ai-control-plane/org-admin/logging-and-telemetry) page.
+
+## Connect MCP servers
+
+MCP servers reach OpenCode through its own `mcp` configuration block rather than through a plugin bundle. Take the name and URL from the server's hosted install page:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "<server-name>": {
+      "type": "remote",
+      "enabled": true,
+      "url": "<mcp-server-url>",
+      "headers": {
+        "Authorization": "Bearer {env:MCP_SERVER_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+The observability plugin reads this block at startup and reports the configured servers as the session's MCP inventory.
+
+## What the plugin captures
+
+The plugin translates OpenCode's native events into the platform's canonical hook events:
+
+| OpenCode event                                | Recorded as                                              |
+| --------------------------------------------- | -------------------------------------------------------- |
+| `session.created`, `server.instance.disposed` | Session start and end                                    |
+| `chat.message`                                | User prompt                                              |
+| `tool.execute.before`, `tool.execute.after`   | Tool call and result                                     |
+| `permission.asked`                            | Permission request                                       |
+| `session.idle`                                | Assistant response, with the turn's token and cost usage |
+
+Prompt submission, tool calls, permission requests, and stop events are blocking, so a risk policy set to block denies the action in OpenCode rather than only recording it. Tool results, errors, and notifications are recorded without blocking.
+
+Because there is no OTEL stream, a few details available for Claude Code are not available for OpenCode:
+
+- No stable per-turn identifier, so message and turn counts in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) are approximate and the per-turn cost badge does not appear
+- No model attribution on individual requests
+- No skill source resolution or prompt attachment capture
+- MCP inventory reflects OpenCode's configuration rather than a live probe of the running servers
+- [OTEL forwarding](/docs/ai-control-plane/org-admin/logging-and-telemetry/otel-forwarding) copies OTEL payloads only, so OpenCode events are not forwarded to an external collector
+
+Token and cost totals are unaffected: OpenCode reports them at the end of each turn and the plugin forwards them, so [Costs](/docs/ai-control-plane/observe/costs) attributes OpenCode spend normally.
