@@ -94,10 +94,6 @@ guardrails:
         Gram-Project: os.environ/GRAM_PROJECT_SLUG
       extra_headers:
         - x-gram-session-id
-        - x-claude-code-session-id
-        - session-id
-        - thread-id
-        - x-session-id
       default_on: true
       streaming_end_of_stream_only: true
       fail_on_error: true
@@ -105,7 +101,7 @@ guardrails:
 ```
 
 <Callout title="Required settings" type="warning">
-  `streaming_end_of_stream_only: true` is required — without it LiteLLM's default streaming mode sends repeated cumulative callbacks that the platform does not accept. `extra_headers` is required to forward session identifiers from applications and supported agent clients; without it LiteLLM sends placeholders instead of the header values.
+  `streaming_end_of_stream_only: true` is required — without it LiteLLM's default streaming mode sends repeated cumulative callbacks that the platform does not accept. `extra_headers` is required to forward the `x-gram-session-id` value; without it LiteLLM sends a placeholder instead of the session identifier.
 </Callout>
 
 The proxy needs outbound HTTPS to the platform host for both the guardrail and OTel endpoints. Endpoints must use HTTPS; plain HTTP is accepted only for loopback hosts during local development. A deployment that serves multiple projects configures one guardrail destination and one key per project.
@@ -143,16 +139,12 @@ With the LiteLLM Helm chart, place the guardrail fragment under `proxy_config` a
 Authentication and attribution are separate. The integration key identifies the deployment and fixes the organization and project. People are resolved from LiteLLM's virtual keys: LiteLLM injects the authenticated virtual key's user email into each guardrail callback, and the platform matches that email against active members of the organization.
 
 - A virtual key bound to a LiteLLM user with an email attributes enforcement, captured messages, findings, and telemetry to the matching member.
-- A shared master key, or a virtual key without a bound email, produces organization- and project-level attribution only. Organization-wide policies still apply; user-targeted policies do not, and the traffic appears as **Unknown** or **Anonymous**.
+- A shared master key, or a virtual key without a bound email, produces organization- and project-level attribution only. Organization-wide policies still apply; user-targeted policies do not, and the traffic shows as unattributed.
 - Caller-supplied end-user identifiers are stored as an external dimension only. They are never trusted for membership resolution or policy targeting, and unattributed traffic is never assigned to the administrator who created the key.
 
 Employee attribution therefore requires issuing LiteLLM virtual keys per user with email addresses that match [enrolled members](/docs/ai-control-plane/observe/employee-enrollment). The pre-call resolution is cached per LiteLLM call, so the response capture and telemetry rows attribute to the same person and session as the enforced request.
 
-<Callout title="Agent session attribution" type="info">
-  Sessions created without an email-backed virtual key are captured without member attribution and appear as **Unknown** or **Anonymous**. An email-backed virtual key whose address matches an enrolled member attributes sessions to that member.
-</Callout>
-
-Session grouping uses the first available forwarded header in this order: `x-gram-session-id`, `x-claude-code-session-id` for Claude Code, `session-id` or `thread-id` for Codex, and `x-session-id` for OpenCode. If none is available, the platform falls back to LiteLLM's trace ID and then its call ID. Applications can set `x-gram-session-id` explicitly; the supported agent clients send their native headers automatically.
+Session grouping uses the forwarded `x-gram-session-id` header when the application sets one, then LiteLLM's trace ID, then the call ID.
 
 ## Verify the connection
 
@@ -237,7 +229,7 @@ Prompt and response content reaches the platform through exactly one channel: th
 - **Invalid payload** — malformed export, usually an unqualified LiteLLM version or a non-LiteLLM sender using the key.
 - **Payload limit exceeded** — an OTel export over 4 MiB. Reduce the exporter batch size or interval.
 - **Version shows "Not reported"** — set `OTEL_SERVICE_NAME=litellm` so trace resources carry the proxy version; guardrail callbacks alone do not report it.
-- **Low virtual-key email rate** — callers use the master key or email-less virtual keys, so their traffic appears as unknown or anonymous. Issue per-user virtual keys with emails to restore employee attribution.
+- **Low virtual-key email rate** — callers use the master key or email-less virtual keys. Issue per-user virtual keys with emails to restore employee attribution.
 - **Emails present but low user attribution** — virtual-key emails do not match enrolled members; check [employee enrollment](/docs/ai-control-plane/observe/employee-enrollment) and email aliases.
 
 Health updates are written shortly after traffic arrives and the table refreshes every few seconds while expanded, so allow a brief lag after the first request before the badge flips.
