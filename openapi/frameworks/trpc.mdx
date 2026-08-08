@@ -1,173 +1,333 @@
 ---
-title: How To Generate an OpenAPI Spec With tRPC
-description: "How to use tRPC to create an OpenAPI spec and create an SDK for it with Speakeasy."
+title: How to generate OpenAPI with tRPC
+description: "Generate an OpenAPI document for a tRPC API and use it to create an SDK using Speakeasy."
 ---
 
 import { Callout } from "@/mdx/components";
 
-# How to generate an OpenAPI/Swagger spec with tRPC
+# How to generate OpenAPI with tRPC
 
-In this tutorial, we'll explore how to generate an OpenAPI document for our [tRPC](https://trpc.io/) API, and then we'll use this document to create an SDK using Speakeasy.
+This tutorial explores how to add REST endpoints to [tRPC](https://trpc.io/)
+procedures, then generate an OpenAPI document for that API, and finally uses
+this document to create an SDK using Speakeasy.
 
-Here's what we'll cover:
+The guide covers:
 
-1.  Adding `trpc-openapi` to a tRPC project.
-2.  Generating an OpenAPI specification using `trpc-openapi`.
-3.  Improving the generated OpenAPI specification for better downstream SDK generation.
-4.  Using the Speakeasy CLI to create an SDK based on the generated OpenAPI specification.
-5.  Using the Speakeasy OpenAPI extensions to improve created SDKs.
-6.  Automating this process as part of a CI/CD pipeline.
+- Adding REST-like HTTP endpoints to a tRPC project and making OpenAPI v3.1 for
+  it, all using [`trpc-to-openapi`](](https://github.com/mcampa/trpc-to-openapi)).
+- Improving the generated OpenAPI for better use across the API lifecycle and
+  specifically SDK generation.
+- Using the Speakeasy CLI to create an SDK based on the generated OpenAPI.
 
-<Callout title="Tip">
-  If you want to follow along, you can use the [**tRPC Speakeasy Bar example
-  repository**](https://github.com/speakeasy-api/speakeasy-trpc-example).
+<Callout title="Sample code" type="info">
+  Follow along with this guide using the sample code in the [Speakeasy examples 
+  repository](https://github.com/speakeasy-api/examples/), with this code living 
+  under <code>frameworks-trpc</code>. This sample code is based on the common OpenAPI 
+  example: the [Train Travel API](https://github.com/bump-sh-examples/train-travel-api).
 </Callout>
 
-## The SDK Creation Pipeline
+## Introduction
 
-tRPC does not natively export OpenAPI documents, but the [`trpc-openapi`](https://github.com/jlalmes/trpc-openapi/) package adds this functionality. We'll start this tutorial by adding `trpc-openapi` to a project, and then we'll add a script to generate an OpenAPI schema and save it as a file.
+tRPC does not natively export OpenAPI documents, but the
+[`trpc-to-openapi`](https://github.com/mcampa/trpc-to-openapi) package adds this
+functionality. The tutorial starts by adding `trpc-to-openapi` to a project, and
+then adds a script to generate an OpenAPI schema and save it as a file.
 
-The quality of your OpenAPI specification will ultimately determine the quality of created SDKs and documentation, so we'll dive into ways you can improve the generated specification.
+The quality of the OpenAPI description will ultimately determine the quality of
+created SDKs and documentation, so this guide covers ways to improve the
+generated OpenAPI document.
 
-With our new and improved OpenAPI specification in hand, we'll take a look at how to create SDKs using Speakeasy.
+With the new and improved OpenAPI document in hand, the next step is to create
+SDKs using Speakeasy.
 
-Finally, we'll add this process to a CI/CD pipeline so that Speakeasy automatically creates fresh SDKs whenever your tRPC API changes in the future.
+Finally, this process is added to a CI/CD pipeline so that Speakeasy
+automatically creates fresh SDKs whenever the tRPC API changes in the future.
 
 ## Requirements
 
-To follow along with this tutorial, you will need:
+To follow along with this tutorial, the following are needed:
 
-- An existing tRPC app, or you can clone our example application.
+- An existing tRPC app, or the example application can be cloned.
 - Some familiarity with tRPC.
-- [Node.js](https://nodejs.org/en/download) installed (we used Node v20.5.1).
-- The [Speakeasy CLI](/docs/speakeasy-cli/) installed. You'll use the CLI to create the SDK once you have generated your OpenAPI spec.
+- [Node.js](https://nodejs.org/en/download) (Node 26.3.0 was used here).
+- The [Speakeasy CLI](/docs/speakeasy-cli/). The CLI creates the SDK once the
+  OpenAPI document has been generated.
 
-## Supported OpenAPI Versions
+The specific versions will change over time, but these are the versions used in
+this guide and the accompanying sample code:
 
-Speakeasy supports OpenAPI v3 and v3.1. As of October 2023, `trpc-openapi` can generate schemas that adhere to the [OpenAPI v3.0.3 specification](https://spec.openapis.org/oas/v3.0.3).
+```json filename="package.json"
+{
+  "dependencies": {
+    "@trpc/client": "^11.18.0",
+    "@trpc/server": "^11.18.0",
+    "express": "^5.2.1",
+    "trpc-to-openapi": "^3.3.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "tsx": "^4.23.1",
+    "typescript": "^5.2.2"
+  }
+}
+```
 
-This OpenAPI version is not a limitation, but it is important to keep the versions used in mind when debugging code generation. Refer to the OpenAPI Initiative for an overview of the [differences between OpenAPI 3.0 and 3.1.0](https://www.openapis.org/blog/2021/02/16/migrating-from-openapi-3-0-to-3-1-0).
+## Supported OpenAPI versions
 
-## Generate an OpenAPI/Swagger spec with tRPC
+Speakeasy supports all modern versions of OpenAPI from v3.0 to v3.2.
+`trpc-to-openapi` supports [OpenAPI v3.1
+](https://spec.openapis.org/oas/v3.1.0), so the tutorial examples use that.
 
-We'll use [`trpc-openapi`](https://github.com/jlalmes/trpc-openapi/) to create REST endpoints for our tRPC procedures and then create the OpenAPI spec that describes these endpoints.
+Hopefully `trpc-to-openapi` will support v3.2 in the future, but it does not
+make a huge difference as lots of tools work just fine with either version.
 
-To generate an OpenAPI spec for tRPC, we'll use [trpc-openapi](https://github.com/jlalmes/trpc-openapi/) to create REST endpoints for our tRPC procedures, then create an OpenAPI document that describes these endpoints.
+## Adding easy REST-like endpoints to tRPC procedures
 
-### Add trpc-openapi to a Project
+The `trpc-to-openapi` library has two main features: adding REST-like endpoints
+to tRPC procedures, and generating an OpenAPI document for these endpoints. 
 
-Install `trpc-openapi`:
+Why would you want to add REST-like endpoints to tRPC procedures? For the same
+reason gRPC has the gRPC Gateway to turn services into REST-like endpoints: at
+first some teams pick something expecting it only to be used by them, but later
+they want to expose it to other teams or external developers. Adding REST-like
+endpoints to tRPC procedures allows APIs to be opened up to a wide variety of
+users who don't all want to learn tRPC.
+
+First step, install `trpc-to-openapi`:
 
 ```bash
-npm install trpc-openapi
+npm install trpc-to-openapi
 ```
 
 Use `initTRPC.meta<OpenApiMeta>()` to create a new tRPC instance with OpenAPI support:
 
-```typescript filename="router.ts"
+```typescript filename="server/router.ts"
 import { initTRPC } from "@trpc/server";
-import { OpenApiMeta } from "trpc-openapi";
+import { OpenApiMeta } from "trpc-to-openapi";
 
 const t = initTRPC.meta<OpenApiMeta>().create();
 ```
 
-Add OpenAPI meta to a procedure by passing an `openapi` object to the `meta` function. This object contains the HTTP method and path for the generated REST endpoint.
+Add OpenAPI meta to a procedure by passing an `openapi` object to the `meta`
+function. This object contains the HTTP method and path for the generated REST
+endpoint.
 
-```typescript filename="router.ts"
+```typescript filename="server/router.ts"
 import { initTRPC } from "@trpc/server";
-import { OpenApiMeta } from "trpc-openapi";
+import { OpenApiMeta } from "trpc-to-openapi";
 import { z } from "zod";
 
 const t = initTRPC.meta<OpenApiMeta>().create();
 
 export const appRouter = t.router({
-  findByProductCode: t.procedure
-    .meta({ openapi: { method: "GET", path: "/find" } })
-    .input(z.object({ code: z.string() }))
-    .output(z.object({ drink: z.object({ name: z.string() }) }))
+  getStations: t.procedure
+    .meta({ openapi: { method: "GET", path: "/stations" } })
+    .input(z.object({ search: z.string().optional() }))
+    .output(z.object({ data: z.array(z.object({ name: z.string() })) }))
     .query(async ({ input }) => {
-      const drink = {
-        name: "Old Fashioned",
-      };
-      return { drink: drink };
+      const stations = [
+        { name: "Berlin Hauptbahnhof" },
+      ];
+      return { data: stations };
     }),
 });
 ```
 
-Add a new script to generate an OpenAPI document based on the tRPC router:
+Mount both the tRPC middleware and the OpenAPI middleware in the server:
 
-```typescript filename="openapi.ts"
-import { generateOpenApiDocument } from "trpc-openapi";
+```typescript filename="server/index.ts"
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import express from "express";
+import { createOpenApiExpressMiddleware } from "trpc-to-openapi";
+
+import { appRouter } from "./router";
+
+const app = express();
+
+app.use("/api/trpc", createExpressMiddleware({ router: appRouter }));
+app.use("/api", createOpenApiExpressMiddleware({ router: appRouter }));
+
+app.listen(3123);
+```
+
+Add a start script so the server can be run locally:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "start": "tsx server/index.ts"
+  }
+}
+```
+
+Then start the server:
+
+```bash
+npm run start
+```
+
+Once the local server is running and the OpenAPI middleware is mounted at
+`/api`, the `getStations` procedure is also available as a REST-like endpoint.
+For example, this request hits the generated `GET /api/stations` route on the
+local server:
+
+```bash filename="Terminal"
+curl "http://localhost:3123/api/stations?search=Berlin"
+```
+
+The output should look something like this. Real output, from the code.
+
+```json
+{
+  "data": [
+    {
+      "id": "efdbb9d1-02c2-4bc3-afb7-6788d8782b1e",
+      "name": "Berlin Hauptbahnhof",
+      "address": "Invalidenstrasse 10557 Berlin, Germany",
+      "country_code": "DE",
+      "timezone": "Europe/Berlin"
+    }
+  ]
+}
+```
+
+So far this is nothing to do with OpenAPI really. It's more about adding HTTP
+bindings to tRPC so that a wider variety of clients can interact with it
+directly, and getting it ready for OpenAPI to pick that up and add more context.
+
+## Configure OpenAPI from source code
+
+With this handy new REST-like API setup with minimal HTTP mapping, we can now
+generate an OpenAPI document, and export it to something like `openapi.json` so
+it can be used by an entire [ecosystem of API tooling](https://openapi.tools/)
+for everything from mock servers and contract testing to API gateways and SDK
+generation.
+
+OpenAPI requires a little bit more than just a list of HTTP methods and paths,
+so the next step is to add some basic information about the API to the OpenAPI
+document in `server/openapi.ts`:
+
+```typescript filename="server/openapi.ts"
+import { generateOpenApiDocument } from "trpc-to-openapi";
 import { appRouter } from "./router";
 
 export const openApiDocument = generateOpenApiDocument(appRouter, {
-  title: "tRPC OpenAPI",
+  title: "Speakeasy tRPC Example",
   version: "1.0.0",
-  baseUrl: "http://localhost:3000",
+  baseUrl: "http://localhost:3123",
 });
 ```
 
-Add a script to save the generated OpenAPI document to a file:
+This `server/openapi.ts` file can then be imported into a script to generate an OpenAPI
+document and save it to a file:
 
-```typescript filename="generateOpenApi.ts"
+```typescript filename="server/generateOpenApi.ts"
 import { openApiDocument } from "./openapi";
 
 console.log(JSON.stringify(openApiDocument, null, 2));
 ```
 
-Run the script to generate an OpenAPI document:
+Run the script to generate the OpenAPI document:
 
 ```bash
-ts-node generateOpenApi.ts > openapi-spec.json
+tsx server/generateOpenApi.ts
 ```
 
-Add this document to the `package.json` file as a script:
+This should output a whole load of JSON to the screen, starting with something
+like:
+
+```json
+{
+  "openapi": "3.1.0",
+  ...
+}
+```
+
+Staring into this void of JSON is not very useful, so let's make another handy
+script to save it to a file so other tools can work with it.
 
 ```json filename="package.json"
 {
   "scripts": {
-    "generate-openapi": "ts-node generateOpenApi.ts > openapi-spec.json"
+    "generate-openapi": "tsx server/generateOpenApi.ts > openapi-spec.json"
   }
 }
 ```
 
-From now on, we can generate an OpenAPI document by running `npm run generate-openapi`.
+From now on, an OpenAPI document can be generated by running `npm run generate-openapi`. 
 
-When we inspect the generated OpenAPI document, we can see that it contains a single endpoint for the `findByProductCode` procedure, but it's missing a lot of information.
+## Previewing the OpenAPI document
 
-Let's see how we can improve this document.
+The team over at [Scalar](https://scalar.com/) have built a fantastic CLI and
+documentation tool which can serve an OpenAPI document as a web app, using the
+Stripe-like "three column" API documentation format.
 
-## How To Improve the OpenAPI Info Section
+```json
+{
+  "scripts": {
+    "generate-openapi": "tsx server/generateOpenApi.ts > openapi-spec.json",
+    "preview-openapi": "npm run generate-openapi && npx @scalar/cli document serve openapi-spec.json"
+  }
+}
+```
 
-The OpenAPI info section contains information about the API, such as the title, description, and version. If you use Speakeasy later, it will use this information to create documentation and SDKs.
+Now run the following to generate and preview the latest OpenAPI:
 
-The `GenerateOpenApiDocumentOptions` type from `trpc-openapi` allows us to add this information to our OpenAPI document:
+```bash filename="Terminal"
+npm run preview-openapi
+```
 
-```typescript filename="node_modules/trpc-openapi/dist/generator/index.d.ts"
-export type GenerateOpenApiDocumentOptions = {
+![Scalar UI](/assets/openapi/trpc/scalar.png)
+
+The API routes are listed in the navigation pane on the left. Click
+**`/bookings` POST** to navigate to one of the Train Travel resource endpoints:
+
+![POST request API endpoint](/assets/openapi/trpc/scalar-post.png)
+
+Each section shows information about an API endpoint, such as its path
+parameters, request body, and responses.
+
+It's even possible to test the API directly from the Scalar UI by clicking the **Try it out** button.
+
+![](/assets/openapi/trpc/scalar-trpc-real-response.png)
+
+## How to improve the OpenAPI info section
+
+The OpenAPI info section contains information about the API, such as the title, description, and version. If Speakeasy is used later, it will use this information to create documentation and SDKs.
+
+The `GenerateOpenApiDocumentOptions` type from `trpc-to-openapi` allows this information to be added to the OpenAPI document:
+
+```typescript filename="node_modules/trpc-to-openapi/dist/generator/index.d.ts"
+export interface GenerateOpenApiDocumentOptions<TMeta = Record<string, unknown>> {
   title: string;
   description?: string;
   version: string;
+  contact?: OpenApiContactObject;
+  license?: OpenApiLicenseObject;
+  openApiVersion?: string;
   baseUrl: string;
   docsUrl?: string;
   tags?: string[];
-  securitySchemes?: OpenAPIV3.ComponentsObject["securitySchemes"];
-};
+  securitySchemes?: Record<string, SecuritySchemeObject>;
+  filter?: (ctx: { metadata: { openapi: NonNullable<OpenApiMeta["openapi"]> } & TMeta }) => boolean;
+  defs?: Record<string, ZodSchema>;
+}
 ```
 
-We can add this information to our `generateOpenApiDocument` call:
+This information can be added to the `generateOpenApiDocument` call:
 
 ```typescript filename="openapi.ts"
-import { generateOpenApiDocument } from "trpc-openapi";
+import { generateOpenApiDocument } from "trpc-to-openapi";
 import { appRouter } from "./router";
 
 export const openApiDocument = generateOpenApiDocument(appRouter, {
-  title: "Speakeasy Bar API",
-  description: "An API to order drinks from the Speakeasy Bar",
-  version: "1.0.0",
-  baseUrl: "http://localhost:3000",
+  title: "Train Travel API",
+  description: "API for finding and booking train trips across Europe.",
+  version: "1.2.1",
+  baseUrl: "http://localhost:3123/api",
   docsUrl: "http://example.com/docs",
-  tags: ["drinks"],
+  tags: ["Stations", "Trips", "Bookings", "Payments"],
 });
 ```
 
@@ -175,20 +335,29 @@ Run `npm run generate-openapi` and see how this information is added to the Open
 
 ```json filename="openapi-spec.json"
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
-    "title": "Speakeasy Bar API",
-    "description": "An API to order drinks from the Speakeasy Bar",
-    "version": "1.0.0"
+    "title": "Train Travel API",
+    "description": "API for finding and booking train trips across Europe.",
+    "version": "1.2.1"
   },
   "servers": [
     {
-      "url": "http://localhost:3000"
+      "url": "http://localhost:3123/api"
     }
   ],
   "tags": [
     {
-      "name": "drinks"
+      "name": "Stations"
+    },
+    {
+      "name": "Trips"
+    },
+    {
+      "name": "Bookings"
+    },
+    {
+      "name": "Payments"
     }
   ],
   "externalDocs": {
@@ -198,83 +367,107 @@ Run `npm run generate-openapi` and see how this information is added to the Open
 }
 ```
 
-## Improving the OpenAPI Paths
+## Improving the OpenAPI paths
 
-We can improve our OpenAPI document by adding fields to the procedure's input and output schemas, and by adding examples, documentation, and metadata.
+The OpenAPI document can be improved by adding fields to the procedure's input and output schemas, and by adding examples, documentation, and metadata.
 
-### Expanding the Procedure's Input and Output Schemas
+### Expanding the procedure's input and output schemas
 
-Let's create a `Drink` model and add a few field types to see how these are represented in the OpenAPI document.
+Let's create a `Station` model and add a few field types to see how these are represented in the OpenAPI document.
 
-Create a new file called `models.ts` and specify a `Drink` model using Zod:
+Create a new file called `shared/models.ts` and specify a `Station` model using Zod:
 
-```typescript filename="models.ts"
+```typescript filename="shared/models.ts"
 import { z } from "zod";
 
-const DrinkType = z
-  .enum(["NON_ALCOHOLIC", "BEER", "WINE", "SPIRIT", "OTHER"])
-  .describe("The type of drink");
-type DrinkType = z.infer<typeof DrinkType>;
-
-export const ProductCode = z.string().describe("The product code of the drink");
-export type ProductCode = z.infer<typeof ProductCode>;
-
-export const DrinkSchema = z.object({
-  name: z.string().describe("The name of the drink"),
-  type: DrinkType,
-  price: z.number().describe("The price of the drink"),
-  stock: z.number().describe("The number of drinks in stock"),
-  productCode: ProductCode,
-  description: z.string().nullable().describe("A description of the drink"),
+export const StationSchema = z.object({
+  id: z.string().uuid().meta({
+    description: "Unique station ID",
+    example: "efdbb9d1-02c2-4bc3-afb7-6788d8782b1e",
+  }),
+  name: z.string().meta({
+    description: "Name of the station",
+    example: "Berlin Hauptbahnhof",
+  }),
+  address: z.string().meta({
+    description: "Street address of the station",
+    example: "Invalidenstrasse 10557 Berlin, Germany",
+  }),
+  country_code: z.string().meta({
+    description: "ISO 3166-1 alpha-2 country code",
+    example: "DE",
+  }),
+  timezone: z
+    .string()
+    .meta({
+      description: "IANA timezone of the station",
+      example: "Europe/Berlin",
+    })
+    .optional(),
 });
 
-export type Drink = z.infer<typeof DrinkSchema>;
+export type Station = z.infer<typeof StationSchema>;
 ```
 
-Back in the `router.ts` file, import these models and update the procedure's input and output schemas. In the example app, we also added a mock database.
+Back in `server/router.ts`, import these models and update the procedure's input and output schemas. In the example app, a mock database is also added.
 
-```typescript filename="router.ts"
+```typescript filename="server/router.ts"
 import { initTRPC } from "@trpc/server";
-import { OpenApiMeta } from "trpc-openapi";
+import { OpenApiMeta } from "trpc-to-openapi";
 import { z } from "zod";
 import { db } from "./db"; // Mock database
-import { DrinkSchema, ProductCode } from "./models";
+import { StationSchema } from "../shared/models";
 
 const t = initTRPC.meta<OpenApiMeta>().create();
 
 export const appRouter = t.router({
-  findByProductCode: t.procedure
-    .meta({ openapi: { method: "GET", path: "/find" } })
-    .input(z.object({ code: ProductCode }))
-    .output(z.object({ drink: DrinkSchema.optional() }))
+  getStations: t.procedure
+    .meta({ openapi: { method: "GET", path: "/stations" } })
+    .input(
+      z.object({
+        page: z.number().meta({
+          description: "Page number to return",
+          example: 1,
+        }).optional(),
+        search: z.string().meta({
+          description: "Filter stations by name or address",
+          example: "Berlin",
+        }).optional(),
+        country: z.string().meta({
+          description: "Filter stations by ISO 3166-1 alpha-2 country code",
+          example: "DE",
+        }).optional(),
+      })
+    )
+    .output(z.object({ data: z.array(StationSchema) }))
     .query(async ({ input }) => {
-      const drink = await db.drink.findByProductCode(input.code);
-      return { drink: drink };
+      const stations = await db.station.findAll(input);
+      return { data: stations };
     }),
 });
 ```
 
-If we regenerate the OpenAPI document, we can see that the `Drink` model is now included in the document with all of its fields:
+After the OpenAPI document is regenerated, the `Station` model is included in the document with all of its fields:
 
 ```json filename="openapi-spec.json"
 {
   "paths": {
-    "/find": {
+    "/stations": {
       "get": {
-        "operationId": "findByProductCode",
-        "summary": "Find a drink by product code",
-        "description": "Pass the product code of the drink to search for",
-        "tags": ["drinks"],
+        "operationId": "getStations",
+        "summary": "Get a list of train stations",
+        "description": "Returns a paginated and searchable list of all train stations",
+        "tags": ["Stations"],
         "parameters": [
           {
-            "name": "code",
+            "name": "search",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "The product code of the drink",
-            "example": "1234"
+            "description": "Filter stations by name or address",
+            "example": "Berlin"
           }
         ],
         "responses": {
@@ -285,71 +478,60 @@ If we regenerate the OpenAPI document, we can see that the `Drink` model is now 
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "drink": {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "description": "The name of the drink"
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique station ID"
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Name of the station"
+                          },
+                          "address": {
+                            "type": "string",
+                            "description": "Street address of the station"
+                          },
+                          "country_code": {
+                            "type": "string",
+                            "description": "ISO 3166-1 alpha-2 country code"
+                          },
+                          "timezone": {
+                            "type": "string",
+                            "description": "IANA timezone of the station"
+                          }
                         },
-                        "type": {
-                          "type": "string",
-                          "enum": [
-                            "NON_ALCOHOLIC",
-                            "BEER",
-                            "WINE",
-                            "SPIRIT",
-                            "OTHER"
-                          ],
-                          "description": "The type of drink"
-                        },
-                        "price": {
-                          "type": "number",
-                          "description": "The price of the drink"
-                        },
-                        "stock": {
-                          "type": "number",
-                          "description": "The number of drinks in stock"
-                        },
-                        "productCode": {
-                          "type": "string",
-                          "description": "The product code of the drink"
-                        },
-                        "description": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "A description of the drink"
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "type",
-                        "price",
-                        "stock",
-                        "productCode",
-                        "description"
-                      ],
-                      "additionalProperties": false
+                        "required": [
+                          "id",
+                          "name",
+                          "address",
+                          "country_code"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "additionalProperties": false
                 },
                 "example": {
-                  "drink": {
-                    "name": "Beer",
-                    "type": "BEER",
-                    "price": 5,
-                    "stock": 10,
-                    "productCode": "1234",
-                    "description": "A nice cold beer"
-                  }
+                  "data": [
+                    {
+                      "id": "efdbb9d1-02c2-4bc3-afb7-6788d8782b1e",
+                      "name": "Berlin Hauptbahnhof",
+                      "address": "Invalidenstrasse 10557 Berlin, Germany",
+                      "country_code": "DE",
+                      "timezone": "Europe/Berlin"
+                    }
+                  ]
                 }
               }
             }
           },
-          "default": {
-            "$ref": "#/components/responses/error"
-          }
+          // 400, 401, 403, 404, and 500 error responses omitted for brevity
         }
       }
     }
@@ -360,209 +542,218 @@ If we regenerate the OpenAPI document, we can see that the `Drink` model is now 
 
 Speakeasy will use the descriptions in these fields to create documentation for the SDK.
 
-### OpenAPI Model Schemas in tRPC
+### OpenAPI model schemas in tRPC
 
-At Speakeasy, we recommend using OpenAPI model schemas so that schemas are reusable across multiple procedures. This simplifies SDK code creation, makes it easier to maintain your OpenAPI document, and provides a better developer experience for your users.
+At Speakeasy, OpenAPI model schemas are recommended so that schemas are reusable
+across multiple procedures. This simplifies SDK code creation, makes it easier
+to maintain the OpenAPI document, and provides a better developer experience for
+users.
 
-At the time of writing, there is an [open issue on the tRPC repository](https://github.com/trpc/trpc-openapi/issues/157) to add support for OpenAPI model schemas. Until this is implemented, we'll need to be content with the duplication of schemas across procedures.
+`trpc-to-openapi` supports this through the `defs` option passed to
+`generateOpenApiDocument`, which accepts a map of Zod schemas to include in the
+document's `components/schemas` section so they can be referenced with `$ref`
+instead of being duplicated inline.
 
-Under the hood, `trpc-openapi` uses the [Zod to Json Schema](https://www.npmjs.com/package/zod-to-json-schema) package, which supports custom strategies for generating references to schemas, but this functionality is not yet exposed in `trpc-openapi`.
+Under the hood, `trpc-to-openapi` uses the
+[`zod-openapi`](https://github.com/samchungy/zod-openapi) package to convert Zod
+schemas into OpenAPI schemas.
 
-### Adding a Summary, Description, Examples, and Tags to a Procedure
+### Adding a summary, description, examples, and tags to a procedure
 
-We can enrich our OpenAPI document by adding a summary, description, examples, and tags to our procedure's metaobject.
+The OpenAPI document can be enriched by adding a summary, description, and tags
+to the procedure's metaobject.
 
-The `trpc-openapi` package uses these fields to generate the `summary`, `description`, `example`, and `tags` fields in the OpenAPI document.
+The `trpc-to-openapi` package uses these fields to generate the `summary`,
+`description`, and `tags` fields in the OpenAPI document.
 
-The `example` field is also used to add examples to the input schema.
+Unlike its predecessor, `trpc-to-openapi`'s `meta.openapi` object doesn't have
+an `example` field. Examples are added directly on the Zod schemas instead,
+using Zod v4's `.meta()` method (see the [Zod v4 guide](/openapi/frameworks/zod)
+for more on this), which `zod-openapi` reads when building the document.
 
-```typescript filename="router.ts"
+```typescript filename="server/router.ts"
 import { initTRPC } from "@trpc/server";
-import { OpenApiMeta } from "trpc-openapi";
+import { OpenApiMeta } from "trpc-to-openapi";
 import { z } from "zod";
 import { db } from "./db";
-import { DrinkSchema, ProductCode } from "./models";
+import { StationSchema } from "../shared/models";
 
 const t = initTRPC.meta<OpenApiMeta>().create();
 
 export const appRouter = t.router({
-  findByProductCode: t.procedure
+  getStations: t.procedure
     .meta({
       openapi: {
         method: "GET",
-        path: "/find",
-        summary: "Find a drink by product code",
-        description: "Pass the product code of the drink to search for",
-        tags: ["drinks"],
-        example: {
-          request: {
-            code: "1234",
-          },
-          response: {
-            drink: {
-              name: "Beer",
-              type: "BEER",
-              price: 5.0,
-              stock: 10,
-              productCode: "1234",
-              description: "A nice cold beer",
-            },
-          },
-        },
+        path: "/stations",
+        summary: "Get a list of train stations",
+        description: "Returns a paginated and searchable list of all train stations",
+        tags: ["Stations"],
       },
     })
-    .input(z.object({ code: ProductCode }))
-    .output(z.object({ drink: DrinkSchema.optional() }))
+    .input(
+      z.object({
+        search: z
+          .string()
+          .meta({
+            description: "Filter stations by name or address",
+            example: "Berlin",
+          })
+          .optional(),
+      })
+    )
+    .output(z.object({ data: z.array(StationSchema) }))
     .query(async ({ input }) => {
-      const drink = await db.drink.findByProductCode(input.code);
-      return { drink: drink };
+      const stations = await db.station.findAll(input);
+      return { data: stations };
     }),
 });
 ```
 
-If we regenerate the OpenAPI document now, we can see that the `summary`, `description`, and `example` fields have been added to it.
+<Callout title="Ordering matters" type="warning">
+  Call `.meta()` before `.optional()`. `zod-openapi` reads metadata from the
+  underlying schema, so metadata attached after `.optional()` is dropped when
+  building the document.
+</Callout>
 
-### Add Metadata to Tags
+After the OpenAPI document is regenerated, the `summary`, `description`, and
+`example` fields are added to it.
 
-The `trpc-openapi` package defines tags as a list of strings, but OpenAPI allows you to add metadata to tags. For example, you can add a description or a link to documentation to a tag.
+### Add metadata to tags
 
-Since `trpc-openapi` uses the [`openapi-types` package](https://www.npmjs.com/package/openapi-types) `OpenAPIV3.Document` type, which allows tags defined as a list of strings or a list of objects, we can extend our document to include tag objects with metadata even though `trpc-openapi` uses a list of strings.
+The `trpc-to-openapi` package defines tags as a list of strings, but OpenAPI
+allows metadata to be added to tags. For example, a description or a link to
+documentation can be added to a tag.
 
-Let's add a description to the `drinks` tag:
+Since `trpc-to-openapi` re-exports the
+[`openapi3-ts`](https://www.npmjs.com/package/openapi3-ts) package's
+`OpenAPIObject` type, which allows tags defined as a list of strings or a list
+of objects, the document can be extended to include tag objects with metadata
+even though `trpc-to-openapi` uses a list of strings.
 
-```typescript filename="openapi.ts"
-import { generateOpenApiDocument } from "trpc-openapi";
+Let's add a description to the `Stations` tag:
+
+```typescript filename="server/openapi.ts"
+import { generateOpenApiDocument } from "trpc-to-openapi";
 import { appRouter } from "./router";
 
 const openApiDocument = generateOpenApiDocument(appRouter, {
-  title: "Speakeasy Bar API",
-  description: "An API to order drinks from the Speakeasy Bar",
-  version: "1.0.0",
-  baseUrl: "http://localhost:3000",
+  title: "Train Travel API",
+  description: "API for finding and booking train trips across Europe.",
+  version: "1.2.1",
+  baseUrl: "http://localhost:3123",
   docsUrl: "http://example.com/docs",
-  tags: ["drinks"],
+  tags: ["Stations", "Trips", "Bookings", "Payments"],
 });
 
 // add metadata to tags
 openApiDocument.tags = [
   {
-    name: "drinks",
-    description: "Operations related to drinks",
+    name: "Stations",
+    description:
+      "Find and filter train stations across Europe, including location and local timezone.",
   },
 ];
 
 export { openApiDocument };
 ```
 
-Now we can see that the `description` field has been added to the `drinks` tag in the generated OpenAPI document:
+Now the `description` field is added to the `Stations` tag in the generated OpenAPI document:
 
 ```json filename="openapi-spec.json"
 {
   "tags": [
     {
-      "name": "drinks",
-      "description": "Operations related to drinks"
+      "name": "Stations",
+      "description": "Find and filter train stations across Europe, including location and local timezone."
     }
   ]
 }
 ```
 
-### Add Speakeasy Extensions to Methods
+### Add Speakeasy extensions to methods
 
-The OpenAPI vocabulary can sometimes be insufficient for your code creation needs. For these situations, Speakeasy provides a set of OpenAPI extensions. For example, you may want to give an SDK method a different name from the `OperationId`. You can use the Speakeasy `x-speakeasy-name-override` extension to do so.
+The OpenAPI vocabulary can sometimes be insufficient for code creation needs.
+For these situations, Speakeasy provides a set of OpenAPI extensions. For
+example, an SDK method might need a different name from the `OperationId`. The
+Speakeasy `x-speakeasy-name-override` extension can be used to do so.
 
-This time, unfortunately, the [`openapi-types` package](https://www.npmjs.com/package/openapi-types) `OperationObject` type does not allow for custom extensions, so we need to add the extension to the generated OpenAPI document manually.
+Since `trpc-to-openapi`'s `OpenAPIObject` and `OperationObject` types (from
+`openapi3-ts`) already extend an `ISpecificationExtension` interface that allows
+any `x-`-prefixed key, extensions can be assigned directly without any extra
+casting.
 
-Ideally, we would create a new type that extends `OpenAPIV3.Document` and adds the `x-speakeasy-name-override` extension to the `OperationObject` type, but for this tutorial, we'll keep it simple and add the extension by casting the path item to `any`.
+Let's add an `x-speakeasy-name-override` extension to the `getStations`
+procedure:
 
-Let's add an `x-speakeasy-name-override` extension to the `findByProductCode` procedure.
-
-First, we extend the `OpenAPIV3.OperationObject` and `OpenAPIV3.Document` types to add the `x-speakeasy-name-override` and other extensions:
-
-```typescript filename="extended-types.ts"  
-import { OpenAPIV3 } from "openapi-types";
-
-export type IExtensionName = `x-${string}`;
-export type IExtensionType = any;
-export type ISpecificationExtension = {
-  [extensionName: IExtensionName]: IExtensionType;
-};
-
-export type ExtendedDocument = OpenAPIV3.Document & ISpecificationExtension;
-export type ExtendedOperationObject =
-  OpenAPIV3.OperationObject<ISpecificationExtension>;
-```
-
-Then we import our extended operation type and add the `x-speakeasy-name-override` extension to the `findByProductCode` procedure:
-
-```typescript filename="openapi.ts"
-import { generateOpenApiDocument } from "trpc-openapi";
-import { ExtendedOperationObject } from "./extended-types";
+```typescript filename="server/openapi.ts"
+import { generateOpenApiDocument } from "trpc-to-openapi";
 import { appRouter } from "./router";
 
 const openApiDocument = generateOpenApiDocument(appRouter, {
-  title: "Speakeasy Bar API",
-  description: "An API to order drinks from the Speakeasy Bar",
-  version: "1.0.0",
-  baseUrl: "http://localhost:3000",
+  title: "Train Travel API",
+  description: "API for finding and booking train trips across Europe.",
+  version: "1.2.1",
+  baseUrl: "http://localhost:3123",
   docsUrl: "http://example.com/docs",
-  tags: ["drinks"],
+  tags: ["Stations", "Trips", "Bookings", "Payments"],
 });
 
 // add metadata to tags
 openApiDocument.tags = [
   {
-    name: "drinks",
-    description: "Operations related to drinks",
+    name: "Stations",
+    description:
+      "Find and filter train stations across Europe, including location and local timezone.",
   },
 ];
 
-if (
-  openApiDocument.paths &&
-  openApiDocument.paths["/find"] &&
-  openApiDocument.paths["/find"].get
-) {
-  (openApiDocument.paths["/find"].get as ExtendedOperationObject)[
-    "x-speakeasy-name-override"
-  ] = "searchDrink";
+const stationsOp = openApiDocument.paths?.["/stations"]?.get;
+if (stationsOp) {
+  stationsOp["x-speakeasy-name-override"] = "searchStations";
 }
 
 export { openApiDocument };
 ```
 
-## Add Retries to an SDK With `x-speakeasy-retries`
+## Add retries to an SDK with x-speakeasy-retries
 
-Speakeasy can create SDKs that follow custom rules for retrying failed requests. For instance, if your server fails to return a response within a specified time, you may want your users to retry their request without clobbering your server.
+Speakeasy can create SDKs that follow custom rules for retrying failed requests.
+For instance, if the server fails to return a response within a specified time,
+users may want to retry the request without clobbering the server.
 
-Add retries to Speakeasy-created SDKs by adding a top-level `x-speakeasy-retries` schema to your OpenAPI spec. You can also override the retry strategy per operation by adding `x-speakeasy-retries`.
+Add retries to Speakeasy-created SDKs by adding a top-level
+`x-speakeasy-retries` schema to the OpenAPI spec. The retry strategy can also be
+overridden per operation by adding `x-speakeasy-retries`.
 
-### Adding Global Retries and Retries per Endpoint
+### Adding global retries and retries per endpoint
 
-Let's add a global retry strategy to our OpenAPI document and override it for our `findByProductCode` procedure.
+Add a global retry strategy to the OpenAPI document and override it for the
+`getStations` procedure.
 
-```typescript filename="openapi.ts"
-import { generateOpenApiDocument } from "trpc-openapi";
-import { ExtendedDocument, ExtendedOperationObject } from "./extended-types";
+```typescript filename="server/openapi.ts"
+import { generateOpenApiDocument } from "trpc-to-openapi";
 import { appRouter } from "./router";
 
 const openApiDocument = generateOpenApiDocument(appRouter, {
-  title: "Speakeasy Bar API",
-  description: "An API to order drinks from the Speakeasy Bar",
-  version: "1.0.0",
-  baseUrl: "http://localhost:3000",
+  title: "Train Travel API",
+  description: "API for finding and booking train trips across Europe.",
+  version: "1.2.1",
+  baseUrl: "http://localhost:3123",
   docsUrl: "http://example.com/docs",
-  tags: ["drinks"],
+  tags: ["Stations", "Trips", "Bookings", "Payments"],
 });
 
 // add metadata to tags
 openApiDocument.tags = [
   {
-    name: "drinks",
-    description: "Operations related to drinks",
+    name: "Stations",
+    description:
+      "Find and filter train stations across Europe, including location and local timezone.",
   },
 ];
 
-(openApiDocument as ExtendedDocument)["x-speakeasy-retries"] = {
+openApiDocument["x-speakeasy-retries"] = {
   strategy: "backoff",
   backoff: {
     initialInterval: 500,
@@ -574,17 +765,10 @@ openApiDocument.tags = [
   retryConnectionErrors: true,
 };
 
-if (
-  openApiDocument.paths &&
-  openApiDocument.paths["/find"] &&
-  openApiDocument.paths["/find"].get
-) {
-  (openApiDocument.paths["/find"].get as ExtendedOperationObject)[
-    "x-speakeasy-name-override"
-  ] = "searchDrink";
-  (openApiDocument.paths["/find"].get as ExtendedOperationObject)[
-    "x-speakeasy-retries"
-  ] = {
+const stationsOp = openApiDocument.paths?.["/stations"]?.get;
+if (stationsOp) {
+  stationsOp["x-speakeasy-name-override"] = "searchStations";
+  stationsOp["x-speakeasy-retries"] = {
     strategy: "backoff",
     backoff: {
       initialInterval: 500,
@@ -600,7 +784,8 @@ if (
 export { openApiDocument };
 ```
 
-Regenerate the OpenAPI document and you can see that the `x-speakeasy-retries` field has been added to the document.
+Regenerating the OpenAPI document shows that the `x-speakeasy-retries` field has
+been added to the document.
 
 ```json filename="openapi-spec.json"
 {
@@ -621,28 +806,54 @@ Regenerate the OpenAPI document and you can see that the `x-speakeasy-retries` f
 
 ## Why Speakeasy and tRPC?
 
-tRPC's focus on type safety and developer experience sets it apart from other TypeScript API frameworks. By using TypeScript's type system along with a schema library like Zod, tRPC allows your server and client code to share types.
+tRPC's focus on type safety and developer experience sets it apart from other
+TypeScript API frameworks. By using TypeScript's type system along with a schema
+library like Zod, tRPC allows server and client code to share types.
 
-One of tRPC's stated goals is to cut down on the need for codegen, but we believe there is still a place for code generation in the tRPC ecosystem. While tRPC's [default client](https://trpc.io/docs/client/vanilla/setup) is useful for writing internal clients in a monorepo where a client can import the server's `AppRouter`, it does not make it easy to publish production-ready SDKs for use by internal and external developers. Nor does tRPC's type-safety extend to SDKs in languages other than TypeScript.
+One of tRPC's stated goals is to cut down on the need for codegen, but there is
+still a place for code generation in the tRPC ecosystem. While tRPC's [default
+client](https://trpc.io/docs/client/vanilla/setup) is useful for writing
+internal clients in a monorepo where a client can import the server's
+`AppRouter`, it does not make it easy to publish production-ready SDKs for use
+by internal and external developers. Nor does tRPC's type-safety extend to SDKs
+in languages other than TypeScript.
 
-Speakeasy can help you create type-safe, production-ready SDKs for your tRPC API in various languages so that you can focus on building your API, confident that your users will have a great developer experience.
+Speakeasy can help create type-safe, production-ready SDKs for a tRPC API in
+various languages so that the API can be built with confidence that users will
+have a great developer experience.
 
-## How To Create an SDK Based on the OpenAPI Spec
+## How to create an SDK based on the OpenAPI spec
 
-After following the steps above, we have an OpenAPI spec that is ready to use as the basis for a new SDK. Now we'll use Speakeasy to create an SDK.
+After following the steps above, an OpenAPI spec is ready to use as the basis
+for a new SDK. Next, Speakeasy is used to create an SDK.
 
-In the root directory of your project, run the following:
+In the root directory of the project, run the following:
 
 ```bash
 speakeasy quickstart
 ```
 
-Follow the onscreen prompts to provide the necessary configuration details for your new SDK such as the name, schema location and output path. Enter `openapi-spec.json` when prompted for the OpenAPI document location and select TypeScript when prompted for which language you would like to generate.
+Follow the onscreen prompts to provide the necessary configuration details for
+the new SDK such as the name, schema location, and output path. Enter
+`openapi-spec.json` when prompted for the OpenAPI document location and select
+TypeScript when prompted for which language should be generated.
 
-## Add SDK Creation to GitHub Actions
+## Add SDK creation to GitHub Actions
 
-The Speakeasy [`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action) repository provides workflows to integrate the Speakeasy CLI in your CI/CD pipeline so that your client SDKs are recreated when your OpenAPI spec changes.
+The Speakeasy
+[`sdk-generation-action`](https://github.com/speakeasy-api/sdk-generation-action)
+repository provides workflows to integrate the Speakeasy CLI in a CI/CD pipeline
+so that client SDKs are recreated when the OpenAPI spec changes.
 
-You can set up Speakeasy to automatically push a new branch to your SDK repositories so that your engineers can review and merge the SDK changes.
+Speakeasy can be set up to automatically push a new branch to SDK repositories
+so that engineers can review and merge the SDK changes.
 
-For an overview of how to set up automation for your SDKs, see the Speakeasy [SDK Generation Action and Workflows](/docs/workflow-reference) documentation.
+For an overview of how to set up automation for SDKs, see the Speakeasy [SDK
+Generation Action and Workflows](/docs/workflow-reference) documentation.
+
+## Alternative OpenAPI support in tRPC
+
+The tRPC docs now include an OpenAPI page at
+[https://trpc.io/docs/openapi](https://trpc.io/docs/openapi). This guide does
+not use that approach yet because it is currently in alpha, so the examples here
+use `trpc-to-openapi` for a more established workflow.
