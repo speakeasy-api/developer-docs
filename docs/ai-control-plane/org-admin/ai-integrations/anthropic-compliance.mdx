@@ -1,0 +1,49 @@
+---
+title: "Anthropic Compliance"
+description: "Connect Anthropic's Compliance API to import Claude chat activity, usage, and cost for security review."
+---
+
+import { Callout } from "@/mdx/components";
+
+The Anthropic Compliance integration connects Anthropic's Compliance API to import Claude chats from claude.ai web and desktop, alongside Claude usage and cost metrics. Chat activity feeds security review; usage and cost feed the platform's [Observe](/docs/ai-control-plane/observe) and [Costs](/docs/ai-control-plane/observe/costs) views.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing connection status on the AI Integrations page requires the `org:read` scope. Connecting, configuring, or deleting the integration requires the `org:admin` scope, held by the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions).
+</Callout>
+
+## Create the credential
+
+Anthropic's Compliance API needs two values: an API key scoped to compliance access, and your organization ID.
+
+1. In Claude's [API access settings](https://claude.ai/admin-settings/api-access), create a **Compliance Access API Key**. Grant it these scopes:
+
+   `read:compliance_activities`, `read:compliance_org_data`, `read:compliance_org_settings`, `read:compliance_user_data`, `read:analytics`, and `read:spend_limits`.
+
+   Leave `delete:compliance_user_data` and `write:spend_limits` unchecked, since the integration only reads data. Copy the key; Claude shows it once.
+
+2. Copy your organization ID from Claude's [organization settings](https://claude.ai/admin-settings/organization).
+
+See Anthropic's own [compliance API access guide](https://platform.claude.com/docs/en/manage-claude/compliance-api-access) for the authoritative walkthrough of generating this credential.
+
+## Connect it in the dashboard
+
+Open **Organization settings > AI Integrations**, find the **Anthropic Compliance** provider, and click **Configure**. Enter:
+
+- **Compliance Access API Key**: the key from step 1 above.
+- **Anthropic Organization ID**: the `org_...` value from step 2 above. Required.
+
+Save the configuration.
+
+## Verify the connection
+
+The integration doesn't test the credential synchronously on save; the first scheduled poll does. If the key or organization ID is wrong, Anthropic rejects the request and the affected stream shows a rejected-credential status with a **Retry now** action once you've corrected the credential. A stream that keeps failing auto-pauses after three consecutive rejections rather than retrying indefinitely against a bad credential.
+
+Once polling succeeds, three streams populate independently:
+
+- **Compliance activity feed**: Claude chat message events, for security review. Polls roughly every 5 minutes.
+- **Claude Chat usage metrics**: token usage. Polls roughly every 4 hours, matching how often Anthropic refreshes its own analytics export.
+- **Claude Chat cost metrics**: cost in USD. Same cadence as usage metrics.
+
+Each stream can be paused or resumed on its own from the connection's detail row.
