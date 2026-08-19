@@ -5,11 +5,11 @@ title: "format"
 `speakeasy openapi transform format`  
 
 
-Format an OpenAPI document to be more human-readable  
+Format an OpenAPI document using a selected output style  
 
 ## Details
 
-Format an OpenAPI document to be more human-readable by sorting the keys in a specific order best suited for each level in the OpenAPI specification
+Format an OpenAPI document using either the readable style or the sorted style. The sorted style accepts JSON or YAML, emits deterministic JSON, and reorders arrays under required, parameters, oneOf, anyOf, and allOf; those array orders can affect generated method signatures, union ordering, or order-sensitive tooling.
 
 ## Usage
 
@@ -23,6 +23,7 @@ speakeasy openapi transform format [flags]
   -h, --help            help for format
   -o, --out string      write directly to a file instead of stdout
   -s, --schema string   the schema to transform
+      --style string    formatting style to apply (readable or sorted) (default "readable")
 ```
 
 ### Options inherited from parent commands
