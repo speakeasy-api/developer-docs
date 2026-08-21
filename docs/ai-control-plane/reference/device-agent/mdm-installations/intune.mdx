@@ -1,9 +1,11 @@
 ---
 title: "Microsoft Intune"
-description: "Deploy the device agent with Microsoft Intune on macOS and Windows."
+description: "Deploy the device agent with Microsoft Intune on macOS, Windows, and Linux, and connect the tenant to the dashboard for agent coverage."
 ---
 
-Intune deploys the device agent's managed configuration on both macOS and Windows. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+import { Callout } from "@/mdx/components";
+
+Intune deploys the device agent and its managed configuration on macOS, Windows, and Linux. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
 
 ## macOS
 
@@ -15,7 +17,65 @@ Intune deploys the device agent's managed configuration on both macOS and Window
 
 ## Windows
 
-Use **Devices → Scripts** (PowerShell) or a packaged Win32 app that drops `managed.json` under `%ProgramData%\Speakeasy\`, with an ACL granting the logged-in user read access (the agent runs as that user and only reads the file).
+The agent ships a per-machine `.msi` that installs the daemon, CLI, and UI under `C:\Program Files\Speakeasy\` and registers the daemon as a LocalSystem service. The MSI and every executable inside it are Authenticode-signed. Prefer it over the raw binaries: it handles service registration and upgrades, and it sidesteps the SmartScreen warnings that unsigned `.zip` downloads attract.
+
+<Callout type="info">
+  The Windows service model differs from macOS in a way worth planning around. The daemon runs machine-wide as **LocalSystem**, not per-user, so standard users cannot stop it (better tamper resistance than the macOS Login Items toggle) while local admins can. Tool syncing still targets the **active console user's** home (`~/.claude`, `~/.cursor`, `~/.codex`); with nobody signed in, the daemon idles rather than writing into the SYSTEM profile.
+</Callout>
+
+**Install the agent.** Download `speakeasy-agent_<version>.msi` from the release bucket (`https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v<version>/speakeasy-agent_<version>.msi`) and add it as a **Win32 app** or line-of-business MSI under **Devices → Apps**.
+
+- Install command: `msiexec /i speakeasy-agent_<version>.msi /qn /norestart`
+- Detection: the product UpgradeCode `368ec0a6-8862-4906-af34-8c3adb92c6e0`, or the presence of `C:\Program Files\Speakeasy\speakeasyd.exe`
+
+**Deploy the managed configuration separately.** Use **Devices → Scripts** (PowerShell) or a second Win32 payload to write `%ProgramData%\Speakeasy\managed.json`. The MSI creates that directory with a Users-read ACL already in place. The file must stay readable by the logged-in user, because the daemon resolves the console user's identity from it:
+
+```powershell
+$dir = "$env:ProgramData\Speakeasy"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+Set-Content -Path "$dir\managed.json" -Encoding UTF8 -Value @"
+{
+  "v": 1,
+  "email": "jane.doe@example.com",
+  "org_token": "$OrgToken",
+  "org_slug": "example-corp",
+  "auto_update": "notify"
+}
+"@
+icacls $dir /grant "BUILTIN\Users:(OI)(CI)R"
+
+& "$env:ProgramFiles\Speakeasy\speakeasyd.exe" -service restart
+```
+
+Restarting the service on **every** script run is not optional: the daemon reads its configuration at startup, so a rotated token sits inert on disk until the service restarts. Leave "run script only once" off, and pass the `org_token` as a script parameter rather than a literal in the script body. `sc stop com.speakeasy.daemon && sc start com.speakeasy.daemon` works as an alternative to `-service restart`.
+
+<Callout type="warning">
+  Do not tighten the `%ProgramData%\Speakeasy` ACL to SYSTEM-only. That is the Windows form of the `0600` trap and it silently breaks enrollment.
+</Callout>
+
+**Version moves are an MSI re-push.** Windows locks running executables, so `speakeasy update --apply` is not supported there and `auto_update` must not be set to `"automatic"` on an MSI fleet: the updater cannot replace a running LocalSystem executable under Program Files. Keep it on `"notify"` so devices still learn about the per-version kill switch, and push the newer MSI to move versions. Its MajorUpgrade stops the service, replaces the files, and starts it again, leaving no orphaned service entry.
+
+**The menu bar UI is installed but not started.** The MSI lays down `speakeasy-ui.exe` without auto-starting it, matching the posture on every other OS. Deploy a Startup shortcut to `C:\Program Files\Speakeasy\speakeasy-ui.exe` if the fleet wants the tray icon. The daemon is fully functional without it.
+
+**Managed-layer enforcement needs nothing extra.** Because the Windows daemon already runs as LocalSystem, it performs privileged writes in-process rather than through a separate root helper as macOS and Linux do. Setting a tool to `"managed"` lands its system configuration on the first reconcile, with no `EnforcementPending` window waiting on a package: `%ProgramData%\OpenAI\Codex\requirements.toml` (Codex), `%ProgramData%\Cursor\hooks.json` (Cursor), and `%ProgramData%\ClaudeCode\managed-settings.json` (Claude Code). Each is written SYSTEM-owned with a protected ACL (SYSTEM and Administrators full, Users read-only), the Windows equivalent of a root-owned `0644`.
+
+<Callout type="info">
+  Daemon logs land in the SYSTEM profile when the agent runs as a service: `C:\Windows\System32\config\systemprofile\AppData\Local\Speakeasy\Logs\`. Run interactively, they go to `%LOCALAPPDATA%\Speakeasy\Logs\` instead. Worth telling the support desk before they go hunting.
+</Callout>
+
+### Scripted install without the MSI
+
+Still valid for an air-gapped mirror or a custom install layout: resolve the version, URL, and SHA-256 from the release manifest (never hardcode them), place the binaries under `C:\Program Files\Speakeasy\`, then run `speakeasyd -service install` followed by `-service start`. Write `managed.json` with the same ACL grant as above, restart the service on every run, and move versions by stopping the service, replacing the binaries, and starting it again. Note that the raw `.zip` binaries are not signed, so browser downloads of them may draw a SmartScreen warning; Intune line-of-business installs are unaffected.
+
+## Linux
+
+Intune's Linux support covers a narrow set of distributions and its script mechanism runs as root, which does not match how the agent registers itself. The daemon installs a **per-user** systemd unit, so the `-service install` step has to run in each user's own session rather than from a root policy.
+
+An Intune-driven rollout can still place the binaries and write `/etc/speakeasy/managed.json` as `root:root` `0644`. Registering and starting the unit is the part that needs a per-user mechanism, and most Linux fleets are better served by the configuration management already running on them. See the [Linux guide](/docs/ai-control-plane/reference/device-agent/mdm-installations/linux) for the full sequence, including the lingering requirement on headless machines and the root helper package that unlocks managed-layer enforcement.
+
+<Callout type="info">
+  Intune has no supported inventory source for Linux devices in the dashboard, so Linux coverage is attested through [Employee Enrollment](/docs/ai-control-plane/observe/employee-enrollment) rather than the fleet-wide managed-device view. The Intune inventory sync below covers macOS and Windows devices.
+</Callout>
 
 ## Connect Intune to the dashboard
 

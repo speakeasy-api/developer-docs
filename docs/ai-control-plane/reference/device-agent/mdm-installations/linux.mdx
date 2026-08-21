@@ -1,0 +1,130 @@
+---
+title: "Linux"
+description: "Deploy the device agent on Linux with Ansible, Puppet, or any config-management tool, including the per-user systemd unit and the root helper package."
+---
+
+import { Callout } from "@/mdx/components";
+
+Linux has no MDM console recipe. Linux fleets are driven by whatever configuration management already runs on them (Ansible, Puppet, Chef, Salt, or a plain provisioning script), so this guide covers the pieces to automate rather than a click-through. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+
+<Callout type="warning">
+  Linux is the least-exercised rollout path. The daemon and CLI ship for amd64 and arm64 and the UI ships for amd64 only. Pilot on a representative device before committing to a fleet-wide push, and expect to verify the fleet-wide systemd variant described below on real hardware.
+</Callout>
+
+## What ships
+
+| Component | Architectures | Form |
+| --- | --- | --- |
+| `speakeasyd` daemon and `speakeasy` CLI | amd64, arm64 | Raw binaries in the release bucket |
+| `speakeasy-ui` menu bar app (optional) | amd64 only | Raw binary |
+| `speakeasy-helper` root helper | amd64, arm64 | `.deb` and `.rpm` packages |
+
+There is no signed installer for the daemon itself. Install it by downloading the binaries and registering the systemd unit.
+
+## Install the daemon and CLI
+
+Resolve the current version from the release manifest rather than hardcoding it:
+
+```bash
+VERSION=$(curl -s https://storage.googleapis.com/speakeasy-device-agent-releases-prod/releases.json | jq -r '.latest.speakeasyd.version')
+BASE=https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v$VERSION
+ARCH=amd64  # or arm64
+
+sudo curl -fSL -o /usr/local/bin/speakeasyd "$BASE/speakeasyd_${VERSION}_linux_${ARCH}"
+sudo curl -fSL -o /usr/local/bin/speakeasy  "$BASE/speakeasy_${VERSION}_linux_${ARCH}"
+sudo chmod 0755 /usr/local/bin/speakeasyd /usr/local/bin/speakeasy
+```
+
+The manifest carries a SHA-256 for every artifact. Verify the downloads against it in any automated rollout instead of trusting the transfer.
+
+Installing to a root-owned path like `/usr/local/bin` is the recommended posture: it makes the binaries tamper-resistant, and IT drives version moves. The tradeoff is that the agent cannot update itself, because `speakeasy update --apply` needs the install directory to be writable by the user running the daemon. Pair a root-owned install with `auto_update: "notify"` so devices still learn about the per-version kill switch even though they don't self-apply. Install into a user-writable path only if self-update matters more than tamper resistance.
+
+## Register the systemd service
+
+The daemon registers a **per-user** systemd unit at `~/.config/systemd/user/com.speakeasy.daemon.service`, so `-service install` must run **as each user**, not as root:
+
+```bash
+speakeasyd -service install
+speakeasyd -service start
+speakeasy status
+```
+
+<Callout type="warning">
+  Running `sudo speakeasyd -service install` installs the unit for root, not for the person using the machine, and the agent then has no user to attribute sessions to. Run it in each user's own session.
+</Callout>
+
+Two properties matter for a fleet:
+
+- **Keep `Restart=always`**, which is what the agent writes by default. It is not only crash recovery: it is what relaunches the daemon after a self-update.
+- **Enable lingering on headless machines.** A user unit does not start until that user logs in graphically, so a build box or a device the user only reaches over SSH never starts the daemon. Run `sudo loginctl enable-linger <user>` to start the unit at boot instead.
+
+A fleet-wide alternative is dropping the unit into `/etc/systemd/user/`, which applies it to all users on the machine without a per-user install step. This path is untested. Verify it on target hardware before relying on it.
+
+## Deliver the managed configuration
+
+Write the JSON form of [the managed configuration](/docs/ai-control-plane/reference/device-agent/mdm-installations#the-managed-configuration) to `/etc/speakeasy/managed.json` as `root:root` with mode `0644`. Configuration profiles are macOS-only; Linux reads `managed.json` only.
+
+```bash
+sudo install -d -m 0755 /etc/speakeasy
+sudo install -m 0644 /dev/stdin /etc/speakeasy/managed.json <<'JSON'
+{
+  "v": 1,
+  "email": "jane.doe@example.com",
+  "org_token": "spk_org_…",
+  "org_slug": "example-corp",
+  "auto_update": "notify"
+}
+JSON
+
+speakeasyd -service restart
+```
+
+Mode `0644` is deliberate. The daemon runs as the logged-in user and only reads the file, so `0600` silently breaks enrollment. Templating the email per user (Ansible's `{{ ansible_user }}` or the equivalent) lets one task serve the whole fleet, and the `org_token` belongs in the tool's secret store, never in a committed playbook.
+
+The daemon reads its configuration at startup, not continuously, so **every run that writes the file must restart the daemon afterwards**. A rotated token sits inert on disk until the next restart. Make the config task notify a restart handler rather than treating the write as sufficient.
+
+## Enable managed-layer enforcement
+
+Setting a tool to `"managed"` (rather than `"user"` or `false`) enforces its policy at a root-owned path that the unprivileged per-user daemon cannot write:
+
+| Tool | Managed path |
+| --- | --- |
+| Codex | `/etc/codex/requirements.toml` |
+| Cursor | `/etc/cursor/hooks.json` |
+| Claude Code | `/etc/claude-code/managed-settings.json` |
+
+Install the `speakeasy-helper` package to unlock those writes:
+
+```bash
+# Debian/Ubuntu
+sudo apt install ./speakeasy-helper_${VERSION}_linux_${ARCH}.deb
+
+# RHEL/Fedora
+sudo rpm -i speakeasy-helper_${VERSION}_linux_${ARCH}.rpm
+```
+
+The package drops a root-owned binary at `/usr/lib/speakeasy/speakeasy-helper` and enables `com.speakeasy.helper.service`, a systemd **system** service that runs as root at boot independently of the per-user daemon. The daemon dials the helper's socket on each reconcile tick, and a tool reports as enforcing only once its managed write lands.
+
+Without the helper, nothing breaks: `"managed"` tools truthfully report `EnforcementPending` and keep enforcing at the user layer.
+
+<Callout type="warning">
+  The helper sits outside the agent's auto-update channel by design, because a root binary must never be user-updatable. Its version moves only through a package push, so include it in the same rollout wave as daemon upgrades.
+</Callout>
+
+## The optional menu bar UI
+
+The UI ships for amd64 only and does not auto-start on any platform. Untar it preserving the exec bit, and add an XDG autostart entry under `~/.config/autostart/` if the fleet wants it. Enforcement does not depend on the UI: the daemon is fully functional without it.
+
+## Verify on the device
+
+`speakeasy status` should report the enrolled email with `source: managed`. If it reports `source: local` or `source: none`, the usual causes are the file permissions being too tight, the file sitting at the wrong path, or the daemon not having restarted since the configuration was written.
+
+Useful locations when a device needs triage:
+
+| Item | Path |
+| --- | --- |
+| IPC socket | `~/.speakeasy/agent.sock` |
+| Daemon logs | `~/.local/state/speakeasy/logs/` |
+| Helper logs | journald (`systemctl status com.speakeasy.helper`) |
+
+Because Linux has no supported MDM inventory source, coverage for these devices appears in [Employee Enrollment](/docs/ai-control-plane/observe/employee-enrollment) as a per-member device agent status rather than in the fleet-wide managed-device view.

@@ -1,6 +1,6 @@
 ---
 title: MDM installations
-description: "Deploy the device agent through your MDM, verify the rollout with agent coverage, and export it as compliance evidence, with guides for Jamf Pro, Iru (formerly Kandji), Intune, Drata, and Vanta."
+description: "Deploy the device agent through your MDM, verify the rollout with agent coverage, and export it as compliance evidence, with guides for Jamf Pro, Iru (formerly Kandji), Intune, Linux, Drata, and Vanta."
 ---
 
 import { Callout, StatusBadge } from "@/mdx/components";
@@ -12,9 +12,13 @@ This page covers the shared concepts. The provider guides cover the console-spec
 
 **Inventory sources** (your MDM: deploy the agent, pull the fleet):
 
-- [Jamf Pro](/docs/ai-control-plane/reference/device-agent/mdm-installations/jamf): deploy and verify (inventory integration supported)
-- [Iru (formerly Kandji)](/docs/ai-control-plane/reference/device-agent/mdm-installations/iru): deploy and verify (inventory integration supported)
-- [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune): deploy and verify (inventory integration supported)
+- [Jamf Pro](/docs/ai-control-plane/reference/device-agent/mdm-installations/jamf): deploy and verify on macOS (inventory integration supported)
+- [Iru (formerly Kandji)](/docs/ai-control-plane/reference/device-agent/mdm-installations/iru): deploy and verify on macOS (inventory integration supported)
+- [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune): deploy and verify on macOS and Windows (inventory integration supported)
+
+Jamf Pro and Iru manage Apple devices only. For the platforms they don't cover:
+
+- [Linux](/docs/ai-control-plane/reference/device-agent/mdm-installations/linux): deploy through Ansible, Puppet, or any configuration management (no inventory integration)
 
 **Evidence destinations** (your compliance platform: push coverage as evidence):
 
@@ -29,44 +33,38 @@ The agent ships as a single Developer ID signed, notarized, universal `.pkg` tha
 
 Upload that file to your MDM as a Package (Jamf), Custom App (Iru), or line-of-business `.pkg` app (Intune) (see the provider guides below for the exact steps) and push it once. With `auto_update: "automatic"` set in the managed configuration below, the agent keeps the daemon, CLI, and app current on its own; re-push the pkg only for a change to the install layout itself, not routine releases.
 
-### Windows and Linux
+### Windows
 
-There's no signed installer package for Windows or Linux yet. Install by downloading the `speakeasyd` daemon and `speakeasy` CLI directly from the public release bucket, then registering the daemon as a background service. This is the same download-and-register flow the **Device Agent** page in the dashboard walks through interactively for a chosen platform, so it doubles as the script to wrap in an MDM policy.
+The agent ships a per-machine, Authenticode-signed `.msi` (`speakeasy-agent_<version>.msi`) that installs the daemon, CLI, and UI under `C:\Program Files\Speakeasy\` and registers the daemon as a LocalSystem service. Download it from the release bucket at `https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v<version>/speakeasy-agent_<version>.msi` and push it as a Win32 app or line-of-business MSI. Raw `.zip` binaries remain available for scripted or air-gapped installs, but they are unsigned. Prefer the MSI.
 
-**Linux:**
+Windows cannot self-update, because the OS locks running executables, so version moves are an MSI re-push and `auto_update` must stay on `"notify"` rather than `"automatic"` on an MSI fleet. See [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune#windows) for the full recipe, including the detection rule, the `%ProgramData%` ACL grant, and the service-restart requirement.
+
+### Linux
+
+There is no installer package for the Linux daemon. Install by downloading the `speakeasyd` daemon and `speakeasy` CLI from the release bucket, then registering the systemd unit:
 
 ```bash
 VERSION=$(curl -s https://storage.googleapis.com/speakeasy-device-agent-releases-prod/releases.json | jq -r '.latest.speakeasyd.version')
 BASE=https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v$VERSION
-curl -fSL -o speakeasyd "$BASE/speakeasyd_${VERSION}_linux_amd64"
-curl -fSL -o speakeasy  "$BASE/speakeasy_${VERSION}_linux_amd64"
-chmod +x speakeasyd speakeasy
-sudo mv speakeasyd speakeasy /usr/local/bin/
+ARCH=amd64  # or arm64
 
-speakeasyd -service install
+sudo curl -fSL -o /usr/local/bin/speakeasyd "$BASE/speakeasyd_${VERSION}_linux_${ARCH}"
+sudo curl -fSL -o /usr/local/bin/speakeasy  "$BASE/speakeasy_${VERSION}_linux_${ARCH}"
+sudo chmod 0755 /usr/local/bin/speakeasyd /usr/local/bin/speakeasy
+
+speakeasyd -service install   # as the user, not root
 speakeasyd -service start
-speakeasyd status
+speakeasy status
 ```
 
-Swap `linux_amd64` for `linux_arm64` on ARM. `-service install` registers `speakeasyd` as a systemd service so it survives reboots and re-logins.
+<Callout type="warning">
+  The Linux daemon registers a **per-user** systemd unit (`~/.config/systemd/user/com.speakeasy.daemon.service`), so `-service install` must run in each user's own session. Running it under `sudo` installs the unit for root, which has no user identity to attribute sessions to. On headless machines, `sudo loginctl enable-linger <user>` is also required, or the user unit never starts.
+</Callout>
 
-**Windows (PowerShell):**
-
-```powershell
-$VERSION = (Invoke-RestMethod https://storage.googleapis.com/speakeasy-device-agent-releases-prod/releases.json).latest.speakeasyd.version
-$BASE = "https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v$VERSION"
-Invoke-WebRequest "$BASE/speakeasyd_${VERSION}_windows_amd64.exe" -OutFile speakeasyd.exe
-Invoke-WebRequest "$BASE/speakeasy_${VERSION}_windows_amd64.exe"  -OutFile speakeasy.exe
-
-.\speakeasyd.exe -service install
-.\speakeasyd.exe -service start
-.\speakeasy.exe status
-```
-
-There's no chmod or move step on Windows: run the `.exe` files in place, or copy them onto `PATH` yourself. `-service install` registers `speakeasyd` as a Windows service.
+The [Linux guide](/docs/ai-control-plane/reference/device-agent/mdm-installations/linux) covers the full config-management rollout, including the root helper package that unlocks managed-layer enforcement.
 
 <Callout type="info">
-  For a fleet, wrap these downloads and the `-service install` / `-service start` commands in your MDM's script or Win32-app mechanism instead of running them by hand on every machine (see the Windows section of [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune#windows)). For a single device, the same commands work from an interactive shell, or use the guided walkthrough on the **Device Agent** page in the dashboard, which fills in the current version and lets you download the binaries directly instead of scripting it.
+  For a fleet, wrap these steps in the mechanism your configuration management or MDM provides rather than running them by hand on every machine. For a single device, the same commands work from an interactive shell, or use the guided walkthrough on the **Device Agent** page in the dashboard, which fills in the current version and lets you download the binaries directly instead of scripting it.
 </Callout>
 
 Once the daemon is running, set the device's identity the same way as macOS: deploy [the managed configuration](#the-managed-configuration) below for a fleet, or run `speakeasy enroll` for a one-off or personal install.
@@ -125,7 +123,7 @@ The configuration must be readable by the logged-in user, not just root: the age
 
 ### Updating the managed configuration
 
-The agent reads its configuration at daemon startup, not continuously, so a change to the file or profile doesn't take effect until the daemon restarts. Any policy that writes the file must restart the daemon afterwards, on every run: a rotated token sits inert on disk until the next restart. The same restart rule applies to profile updates. On a pkg-installed macOS device, restart the console user's LaunchAgent (`launchctl kickstart -k "gui/$(id -u)/com.speakeasy.daemon"`), substituting the console user's uid when run from a root MDM policy. Linux and Windows service installs still use `speakeasyd -service restart`.
+The agent reads its configuration at daemon startup, not continuously, so a change to the file or profile doesn't take effect until the daemon restarts. Any policy that writes the file must restart the daemon afterwards, on every run: a rotated token sits inert on disk until the next restart. The same restart rule applies to profile updates. On a pkg-installed macOS device, restart the console user's LaunchAgent (`launchctl kickstart -k "gui/$(id -u)/com.speakeasy.daemon"`), substituting the console user's uid when run from a root MDM policy. Windows service installs use `speakeasyd -service restart` (or `sc stop`/`sc start`). Linux uses the same command, but it must run in the user's own session, since the unit is per-user.
 
 ## Verify the rollout with agent coverage
 
