@@ -1,0 +1,54 @@
+---
+title: Exclusion Rules
+description: "Suppress false-positive findings with exclusion rules: expression criteria, the built-in library, and one-click creation from Watchdog."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Exclusion Rules** tab manages the rules that suppress false-positive findings. Open it from **Secure > Guardrails** in the dashboard and select the **Exclusion Rules** tab.
+
+Exclusions suppress findings that a [guardrail policy](/docs/ai-control-plane/secure/guardrails) correctly matched but that aren't real risk: a shared test account, a documentation sample, a rule that misfires on an internal identifier format. They are a post-filter, so the policy keeps its detection coverage while the known-safe noise disappears. When whole classes of message are irrelevant to a policy, narrow its [detection scope](/docs/ai-control-plane/secure/guardrails#detection-scope) instead, which removes the scanning work along with the noise.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this tab and creating, editing, or deleting exclusions require the `org:admin` scope. Access is included in the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) but not the Member role.
+</Callout>
+
+## How exclusions behave
+
+Because exclusions filter on the matched value, they apply to the deterministic detectors. Prompt-based policies produce a judged verdict rather than a reproducible match, so tune those through the guardrail and its detection scope instead.
+
+An exclusion applies both retroactively and going forward. Saving one suppresses matching findings that already exist, and deleting one restores them. Exclusions never re-run analysis — they filter findings rather than change detection — and the retroactive sweep runs asynchronously, so counts across the dashboard settle a moment after saving.
+
+Each exclusion is scoped either globally, across every policy in the project, or to a single policy.
+
+## Exclusion criteria
+
+Criteria are written as an expression. A single primary clause selects what to suppress:
+
+| Clause | Suppresses |
+| ------ | ---------- |
+| `match == "value"` | An exact literal value |
+| `match ~= "regex"` | Values matching an RE2 pattern, up to 512 characters |
+| `rule_id == "pii.email_address"` | Every finding from one rule |
+| `source == "prompt_injection"` | Every finding from one detection source |
+| `entity_type == "EMAIL_ADDRESS"` | Every finding of one entity type |
+
+A `rule_id` or `source` clause can be joined to the primary clause with `&&` to narrow it, so a value is suppressed only where a specific rule or source raised it:
+
+```text
+match == "jane.doe@acme.com" && rule_id == "pii.email_address"
+```
+
+**Suggest with AI** drafts the expression from a plain-language description of what to stop flagging, leaving it editable before saving. Each scope allows up to 50 enabled regex exclusions; disabled drafts don't count against the limit.
+
+Exclusion values are redacted in [audit logs](/docs/ai-control-plane/org-admin/audit-logs) and outbound webhook payloads, since an exact match value is often the sensitive string being suppressed.
+
+## Built-in exclusion library
+
+Speakeasy ships a curated preset library that suppresses common false positives — published test credentials, documentation examples, and other known-safe values — before they reach a project's own exclusions. **View library** lists every preset with its reasoning and sample values. The library is read-only and needs no configuration.
+
+## Creating exclusions from past sessions
+
+The fastest way to write an exclusion is from a finding that shouldn't have fired. Opening a finding from a [Watchdog](/docs/ai-control-plane/secure/watchdog) signal or an [agent session](/docs/ai-control-plane/observe/agent-sessions) transcript offers an exclusion action that prefills the criteria from that finding — the matched span where there is one, otherwise the rule or the source — and preselects the policy that raised it as the scope. Reviewing findings and suppressing the noise in place is usually a better way to tune a policy than writing criteria from scratch.

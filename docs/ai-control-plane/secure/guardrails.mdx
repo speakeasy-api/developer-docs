@@ -1,13 +1,13 @@
 ---
-title: Risk Policies
-description: "Create and manage the policies that scan agent sessions for secrets, sensitive data, and prompt-defined risks."
+title: Guardrails
+description: "Create and manage the guardrail policies, detection rules, and exclusion rules that scan agent sessions for risk."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The **Risk Policies** page configures the policies that scan agent session interactions for secrets, sensitive information, and prompt-defined risks. Open it from **Secure > Risk Policies** in the dashboard.
+The **Guardrails** page configures the policies that scan agent session interactions for secrets, sensitive information, and prompt-defined risks. Open it from **Secure > Guardrails** in the dashboard.
 
-A policy binds four things: the detection rules that decide what counts as a finding, the scope that decides which content those rules examine, the action taken when they match, and the audience of users the policy applies to. Findings feed [Risk Events](/docs/ai-control-plane/secure/risk-events) and [Risk Overview](/docs/ai-control-plane/secure/risk-overview).
+A policy binds four things: the detection rules that decide what counts as a finding, the scope that decides which content those rules examine, the action taken when they match, and the audience of users the policy applies to. Findings surface as ranked signals in [Watchdog](/docs/ai-control-plane/secure/watchdog).
 
 Every detection setting trades recall against accuracy. Widening what a policy examines catches more real risk and also produces more false positives. The controls on this page exist to place that tradeoff deliberately, per policy, rather than accepting one global compromise.
 
@@ -19,7 +19,7 @@ Every detection setting trades recall against accuracy. Widening what a policy e
 
 ## Policy list
 
-The page has two tabs: **Policies** and **Exclusions**.
+The page has three tabs: **Policies**, **Detection Rules**, and **Exclusion Rules**. The [Detection Rules](/docs/ai-control-plane/secure/detection-rules) tab catalogs the built-in detectors and custom rules that policies compose, and the [Exclusion Rules](/docs/ai-control-plane/secure/exclusions) tab manages the rules that suppress false-positive findings.
 
 The policy table shows each policy's name, action, severity, categories or prompt, scope, audience, and created and updated dates. Each policy has an enabled toggle and row actions to edit or delete — deleting shows the impact and affected rule groups before confirming. Create a policy with **New Policy**.
 
@@ -107,7 +107,7 @@ Where an outright rejection is too blunt, a blocked user can request a just-in-t
 
 ### Severity
 
-**Severity** is a 0.1 to 10 score that findings surface as a Low, Medium, High, or Critical badge. Severity does not change what a policy detects — it groups and filters findings for triage across Risk Events and Risk Overview.
+**Severity** is a 0.1 to 10 score that findings surface as a Low, Medium, High, or Critical badge. Severity does not change what a policy detects — it groups and filters findings for triage in [Watchdog](/docs/ai-control-plane/secure/watchdog).
 
 ### Custom messages
 
@@ -151,45 +151,11 @@ tool_calls.exists(t, t.function.matchText("bash") && t.args.get("command").match
 
 The CEL editor provides syntax highlighting, an inline reference, and worked examples. A traffic preview verifies a scope against recent organization activity in real time, so a carve-out can be confirmed against what agents actually did before the policy is saved.
 
-### Exclusions
+### Exclusion rules
 
-Exclusions suppress findings that a policy correctly matched but that aren't real risk: a shared test account, a documentation sample, a rule that misfires on an internal identifier format. Manage them on the **Exclusions** tab.
+Exclusions suppress findings that a policy correctly matched but that aren't real risk: a shared test account, a documentation sample, a rule that misfires on an internal identifier format. An exclusion applies retroactively and going forward, and is scoped either globally or to a single policy.
 
-Because exclusions filter on the matched value, they apply to the deterministic detectors. Prompt-based policies produce a judged verdict rather than a reproducible match, so tune those through the guardrail and its detection scope instead.
-
-An exclusion applies both retroactively and going forward. Saving one suppresses matching findings that already exist, and deleting one restores them. Exclusions never re-run analysis — they filter findings rather than change detection — and the retroactive sweep runs asynchronously, so counts across the dashboard settle a moment after saving.
-
-Each exclusion is scoped either globally, across every policy in the project, or to a single policy.
-
-#### Exclusion criteria
-
-Criteria are written as an expression. A single primary clause selects what to suppress:
-
-| Clause | Suppresses |
-| ------ | ---------- |
-| `match == "value"` | An exact literal value |
-| `match ~= "regex"` | Values matching an RE2 pattern, up to 512 characters |
-| `rule_id == "pii.email_address"` | Every finding from one rule |
-| `source == "prompt_injection"` | Every finding from one detection source |
-| `entity_type == "EMAIL_ADDRESS"` | Every finding of one entity type |
-
-A `rule_id` or `source` clause can be joined to the primary clause with `&&` to narrow it, so a value is suppressed only where a specific rule or source raised it:
-
-```text
-match == "jane.doe@acme.com" && rule_id == "pii.email_address"
-```
-
-**Suggest with AI** drafts the expression from a plain-language description of what to stop flagging, leaving it editable before saving. Each scope allows up to 50 enabled regex exclusions; disabled drafts don't count against the limit.
-
-Exclusion values are redacted in [audit logs](/docs/ai-control-plane/org-admin/audit-logs) and outbound webhook payloads, since an exact match value is often the sensitive string being suppressed.
-
-#### Built-in exclusion library
-
-Speakeasy ships a curated preset library that suppresses common false positives — published test credentials, documentation examples, and other known-safe values — before they reach a project's own exclusions. **View library** lists every preset with its reasoning and sample values. The library is read-only and needs no configuration.
-
-#### Creating exclusions from past sessions
-
-The fastest way to write an exclusion is from a finding that shouldn't have fired. Opening a finding from [Risk Events](/docs/ai-control-plane/secure/risk-events) or an [agent session](/docs/ai-control-plane/observe/agent-sessions) transcript offers an exclusion action that prefills the criteria from that finding — the matched span where there is one, otherwise the rule or the source — and preselects the policy that raised it as the scope. Reviewing findings and suppressing the noise in place is usually a better way to tune a policy than writing criteria from scratch.
+Manage them on the **Exclusion Rules** tab — see [Exclusion Rules](/docs/ai-control-plane/secure/exclusions) for the criteria expression syntax, the built-in exclusion library, and creating exclusions from past sessions.
 
 ## Bypass requests
 
