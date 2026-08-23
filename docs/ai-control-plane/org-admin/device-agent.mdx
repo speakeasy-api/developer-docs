@@ -1,12 +1,12 @@
 ---
 title: "Device agent"
-description: "Enforce required AI-tool plugins and MCP configuration on developer machines and report compliance back to the platform."
+description: "Enforce required AI-tool plugins and MCP configuration on developer machines and Anthropic-hosted Claude Code on the web environments, and report compliance back to the platform."
 ---
 
 import { Callout } from "@/mdx/components";
 import { BADGE_DEFINITIONS } from "@/lib/data/docs/badges";
 
-The device agent runs on-device, enforces the organization's required AI-tool plugins and MCP configuration across every coding assistant, and reports compliance back to the platform. Open the **Device Agent** page from **Organization settings > Secure > Device Agent** in the dashboard.
+The device agent runs on developer machines and in Anthropic-hosted Claude Code on the web environments. It enforces the organization's required AI-tool plugins and MCP configuration across every coding assistant, and reports compliance back to the platform. Open the **Device Agent** page from **Organization settings > Secure > Device Agent** in the dashboard.
 
 <Callout type="info">{BADGE_DEFINITIONS.Beta}</Callout>
 
@@ -24,9 +24,58 @@ The agent also carries signals back the other way. When a policy blocks a call a
 
 ## Setup and enrollment
 
-Setup lives in the **Instrument agent platforms** step of the setup wizard (see [getting started](/docs/ai-control-plane/getting-started)), with walkthroughs for macOS, Windows, and Linux.
+Setup lives in the **Instrument agent platforms** step of the setup wizard (see [getting started](/docs/ai-control-plane/getting-started)), with walkthroughs for macOS, Windows, and Linux, plus a **Remote sessions** walkthrough for [Claude Code on the web](#claude-code-on-the-web).
 
 Enrollment tokens come from an API key with the **Agent** scope, created on the [API keys](/docs/ai-control-plane/org-admin/api-keys) page.
+
+## Claude Code on the web
+
+Claude Code on the web runs each session in an Anthropic-hosted VM, not on the developer's laptop. The device agent runs inside that VM, pulls org policy from the control plane, and writes Claude configuration, following the same policy-sync loop as any other machine. Do not paste observability hook JSON into Claude settings; the agent writes those hooks itself.
+
+In the dashboard this flow is called **Remote sessions**: pick the **Remote sessions** tile, next to macOS, Windows, and Linux, on the Device Agent page or in the setup wizard. It opens a three-step walkthrough that the sections below mirror.
+
+This walkthrough covers Anthropic-hosted environments only, not Anthropic [self-hosted environments](https://code.claude.com/docs/en/self-hosted-environments).
+
+### Configure the shared environment
+
+Create a **shared** environment (Team or Enterprise) from [Cloud environments](https://claude.ai/admin-settings/cloud-environments) in Claude admin settings. Personal environments do not reach the rest of the org.
+
+Trusted network access does not include the Speakeasy control plane. Set **Network access** to **Custom**, check **Also include default list of common package managers** (keeps the agent release bucket and the usual registries reachable), and add `app.getgram.ai` on its own line. Without that host the agent cannot fetch policy or send hook events. The full destination list is in the [device agent network allowlist](/docs/ai-control-plane/reference/device-agent#network-allowlist).
+
+### Install and configure the agent
+
+A headless shared VM cannot enroll through a browser sign-in, so remote sessions use managed enrollment: in the walkthrough, enter a shared session identity email and generate an `org_token`. Every session in the environment receives that identity's policy and attribution, so use a dedicated org member or service account (for example `claude-code-web@example.com`), not a personal address. The dashboard embeds the email, the token, and a pinned, checksum-verified agent version into a single bash **Setup script**. Copy it from the dashboard rather than writing it by hand.
+
+Paste the script into the environment's **Setup script** field. It runs once as root before Anthropic snapshots the environment's filesystem, and does exactly three things:
+
+- **Installs the daemon.** Downloads the pinned linux_amd64 `speakeasyd` binary from the release bucket, verifies its SHA-256 checksum, and installs it to `/usr/local/bin/speakeasyd`.
+- **Writes managed enrollment.** Creates `/etc/speakeasy/managed.json` with the identity email, the `org_token`, `auto_update: "disabled"`, and `hide_ui: true`, readable by root only. Everything in the VM runs as root, so no root helper or per-user enrollment is involved.
+- **Registers a SessionStart hook.** Writes `/root/.claude/settings.json` with an async SessionStart hook (matching `startup|resume`) that starts the daemon under `flock`, so a startup/resume double-fire can never start it twice.
+
+Anthropic snapshots files, not processes, so nothing the setup script starts survives into a session. The SessionStart hook revives the daemon at every session start and resume; from there the agent's normal policy sync installs plugins, writes tool configuration, and keeps enforcement reconciled. There is no cloud-specific sync logic.
+
+The script pins the agent version and disables auto-update because the VM lives minutes: auto-update is wasted work, and a bad build is fixed by regenerating and re-pasting the script, which rebuilds the cached filesystem Anthropic snapshots.
+
+<Callout type="warning">
+  Anyone who can use the environment can read the setup script and `/etc/speakeasy/managed.json`, including the `org_token`. Rotating the token in the dashboard splices a new token into the script. Save the updated script in the shared environment, or subsequent sessions stop syncing policy.
+</Callout>
+
+### Make it the organization default
+
+Anthropic has no switch that locks members to one environment.
+
+- **Web, Desktop, and mobile.** After creating the shared environment at [Cloud environments](https://claude.ai/admin-settings/cloud-environments), set it as the organization default at [claude.ai/admin-settings/claude-code](https://claude.ai/admin-settings/claude-code). That preselects it when a member has not chosen another environment.
+- **CLI (`claude --cloud`).** Merge the following into Managed Settings, replacing `env_…` with the shared environment's ID, copied from Claude after the environment exists. The managed value overrides a user's `/remote-env` default.
+
+```json
+{
+  "remote": {
+    "defaultEnvironmentId": "env_…"
+  }
+}
+```
+
+The first session in a fresh VM may briefly show `pending`: Claude must clone the org's observability plugin marketplace before the agent can enforce its managed hooks. Server-managed `enabledPlugins` triggers that clone, and the agent reconciles again once the bundle appears.
 
 ## Fleet deployment through MDM
 
