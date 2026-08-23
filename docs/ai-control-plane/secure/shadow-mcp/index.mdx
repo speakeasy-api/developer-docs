@@ -1,0 +1,80 @@
+---
+title: Shadow MCP
+description: "Inventory, evidence-backed review, and access decisions for unsanctioned MCP servers discovered in agent traffic."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Shadow MCP** page inventories MCP servers discovered in agent traffic that aren't managed by the platform, meaning servers members connected on their own. Each server carries an [access review](/docs/ai-control-plane/secure/shadow-mcp/access-review): gathered evidence, who is asking, and a recorded approve/deny decision enforced across the project's blocking policies. Open it from **Secure > Shadow MCP** in the dashboard.
+
+Shadow MCP detection depends on an active shadow MCP policy. A status indicator on the page shows whether one is scanning and links to [Guardrails](/docs/ai-control-plane/secure/guardrails) if not.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this page and deciding access require the `org:admin` scope. Access
+  is included in the [default Admin
+  role](/docs/ai-control-plane/org-admin/roles-and-permissions) but not the
+  Member role.
+</Callout>
+
+Decisions take effect through the project's blocking shadow MCP policies. Without one nothing is enforced, and the page says so. Decisions still count, though: a blocking policy created later honors those already on record.
+
+## How servers are discovered
+
+Every MCP-routed tool call in an instrumented agent session records which server it resolved to. The shadow MCP scanner replays that provenance for each call and classifies it:
+
+- Calls that resolve to a platform-hosted MCP host are clean, including hosts on a [custom domain](/docs/ai-control-plane/org-admin/custom-domain) registered to the organization.
+- Calls that resolve to anything else are flagged as shadow MCP. That covers third-party remote server URLs and local stdio servers launched by a command on the machine of the member.
+
+Codex's built-in MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, and `read_mcp_resource`) name their target server in the call input rather than in the tool name. The scanner resolves that name against the MCP server inventory the session reports, so these calls face the same policy, and a target that cannot be resolved to a platform-hosted server is treated as shadow.
+
+Classified calls carry a **Shadow MCP** source badge in [Tool Logs](/docs/ai-control-plane/observe/tool-logs), which is the per-call view behind the inventory. Filtering the log by that source shows exactly which calls the inventory was built from.
+
+![Tool Logs filtered to the Shadow MCP source, with a Shadow MCP badge, tool name, user, and agent on each row](/assets/docs/ai-control-plane/secure/shadow-mcp-tool-logs.webp)
+
+When provenance can't be resolved, because the hook event hasn't landed yet or the sender never resolved a server, the scanner falls back to checking the toolset identifier injected into hosted tool schemas. A call missing that identifier is treated as shadow.
+
+Discovery therefore depends on agent sessions reaching the platform. Sessions from an uninstrumented client produce no traffic to scan. See [Device Agent](/docs/ai-control-plane/org-admin/device-agent) for how sessions are instrumented.
+
+Servers are identified by canonical URL. Two members hitting the same server at different paths or with different query strings collapse to one inventory row.
+
+## Policy status
+
+The indicator at the top of the page reports what the active policy set does with a server that has no approval:
+
+- **Blocking** — a blocking shadow MCP policy is enabled, and servers without approvals are not allowed
+- **Flagging** — only a flagging policy is enabled, so servers without approvals are recorded but calls still succeed
+- **No Policy** — no shadow MCP policy is enabled, and every discovered server is allowed
+
+Flagging is the safe starting posture. It builds the inventory without interrupting anyone, which makes the approved set something to curate from real usage rather than guess at. See [Shadow MCP allow and block lists](/docs/ai-control-plane/guides/shadow-mcp-allow-and-block-lists) for the rollout sequence.
+
+The status is driven by the shadow MCP policies in the project, which are created from [Guardrails](/docs/ai-control-plane/secure/guardrails). A policy that pairs the shadow MCP detector with the warn action produces the Flagging status:
+
+![The review step of a risk policy showing the Shadow MCP detector, recommended scopes, a Warn action, medium severity, and an audience of Everyone](/assets/docs/ai-control-plane/secure/shadow-mcp-policy-review.webp)
+
+## Inventory
+
+The inventory table lists each discovered server with columns for the server name and URL, status, last called, last seen, and usage. Sorting and search operate across the full inventory, not only the loaded page.
+
+![The Shadow MCP inventory listing discovered servers with their URLs, status, last called, last seen, and call and user counts](/assets/docs/ai-control-plane/secure/shadow-mcp-inventory.webp)
+
+Each row carries one of six statuses:
+
+- **Allowed** — an approval or allow rule covers this server
+- **Blocked** — a blocking policy or a denial applies to everyone in the project
+- **Restricted** — blocked for some users only, by a policy scoped to a targeted audience
+- **Observed** — seen in traffic, with no blocking policy applying to it
+- **Pending** — at least one member has an unresolved access request for this server
+- **Unknown** — the policy status could not be loaded
+
+Pending takes precedence over the other statuses, so a server with an open request surfaces for review even when it is already allowed.
+
+Servers referenced by URL open a detail page. Local command servers (stdio targets, such as an `npx` invocation) have no server page; their review opens in a sheet from the inventory row.
+
+## Related
+
+- [Access review](/docs/ai-control-plane/secure/shadow-mcp/access-review) — evidence, requests, decisions, web research, and re-review for a discovered server
+- [Shadow MCP allow and block lists](/docs/ai-control-plane/guides/shadow-mcp-allow-and-block-lists) — choosing between an allow-list and a block-list posture
+- [Guardrails](/docs/ai-control-plane/secure/guardrails) — create the shadow MCP policy that drives detection and blocking
+- [Watchdog](/docs/ai-control-plane/secure/watchdog) — findings clustered into ranked signals, including every shadow MCP finding

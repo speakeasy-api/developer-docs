@@ -1,0 +1,86 @@
+---
+title: Access Review
+description: "Evidence-backed review and access decisions for a discovered shadow MCP server."
+---
+
+import { Callout } from "@/mdx/components";
+
+Every server in the [Shadow MCP inventory](/docs/ai-control-plane/secure/shadow-mcp) carries one access review. It holds the gathered evidence, everyone who has asked for the server, and the decision history. Deciding requires the `org:admin` scope.
+
+## Server detail
+
+Opening a server shows a summary strip — status, calls, people, last called — beside the review's state: unreviewed, awaiting a decision, approved, or denied.
+
+![A shadow MCP server's access review: the summary strip, review state, and the evidence dossier organized by question](/assets/docs/ai-control-plane/secure/shadow-mcp-access-review.webp)
+
+Servers are named from their URL host by default. Rename a server inline from its detail page to give it something recognizable in the inventory. The rename sets a display label and does not change how the server is matched.
+
+### Evidence
+
+A dossier is gathered the first time the server is opened or requested, organized by the questions a reviewer is asking:
+
+- **Who am I trusting?** — resolved identity: artifact, host, owning domain, registration age, registrar
+- **What is it asking me to hand over?** — auth mode, requested OAuth scopes, demanded secrets
+- **What does it say it can do?** — declared tools, annotated for destructive behavior and schemas that accept commands, paths, URLs, or credentials
+- **Who is currently using it?** — observed traffic in this project, per user and source agent
+- **Is it real and maintained?** — registry provenance, publishing history, the declared repository's track record
+- **Does anything published say it's vulnerable?** — advisories naming the package
+
+Everything shown is declared by the server or its registry, or seen in the organization's traffic — nothing is verified behavior. A source that could not be consulted renders as unknown, never as clean.
+
+**Refresh Data** re-runs every evidence source. Decisions freeze their own evidence snapshot, so refreshing never rewrites what a prior reviewer saw.
+
+### Deciding access
+
+**Decide Access** records the decision with its rationale:
+
+- **Approve** allows the server — for everyone in the project, or scoped to selected people and roles
+- **Deny** blocks the server for everyone in the project
+
+![The Decide access sheet with approve and deny options, an audience selector, and a rationale field](/assets/docs/ai-control-plane/secure/shadow-mcp-decide-access.webp)
+
+The rationale is shared with anyone who asks for the server. Decisions apply across every blocking shadow MCP policy, resolve open access requests, and are kept as history — each with the evidence snapshot it was made against.
+
+<Callout type="info">
+  Allowing a server is a stopgap, not a destination. A server worth approving
+  is usually worth bringing under management as a proper [tool
+  source](/docs/ai-control-plane/reference/concepts/tool-sources), which puts
+  its tools behind the same authentication, filtering, and logging as the rest
+  of the platform.
+</Callout>
+
+## Access requests
+
+When a blocking policy stops a call, the member sees the block reason and a request access link. Opening it signs them in and attaches them, with their justification, to the server's review. Links expire after seven days.
+
+Requests surface as **Pending** in the inventory, and the row action becomes **Review Request**. The review shows everyone who asked and why, beside the evidence. Deciding resolves the requests: approving grants the chosen audience, denying grants nothing.
+
+### Requesting access from the device agent
+
+On machines running the [device agent](/docs/ai-control-plane/org-admin/device-agent), a blocked call also raises a desktop notification and adds the server to a **Blocked servers** card in the agent, so the request does not depend on the member noticing the link in the AI tool output. Confirming **Request access** files the same request against the blocking policy, and it lands in the inventory as **Pending** for review.
+
+Only blocks that an approval can resolve prompt this way. A call stopped for PII or secrets raises no notification, because allowing the server would not unblock it.
+
+Repeat blocks of the same server collapse into one entry rather than notifying again, and **Dismiss** suppresses that server on the device without sending anything to the platform. A denied request offers no retry, since running the blocked call again files a fresh one. On a device with no signed-in user, the agent opens the request page in a browser instead, which is the same flow as following the link in the AI tool output.
+
+## Research agent
+
+When the gathered evidence isn't enough, an admin can run a **web research** pass from the review. An agent searches the web and reads pages about the server's vendor, then files a report of cited claims — each labeled independently-reported or vendor-claim, with a judgment of its sources. The agent gathers and cites; it never decides. Each run records the full trace of what the agent did.
+
+<Callout type="warning">
+  A research run spends real AI credits — dozens of model calls, web searches,
+  and page reads per run. Runs are additive: re-running adds a report rather
+  than replacing one, and a decision can cite the report that informed it.
+</Callout>
+
+Web research is available on plans that include it; the page shows how to enable it otherwise.
+
+## Re-review
+
+Approved servers are rechecked daily. When permission-relevant evidence drifts from what the approval rested on — new scopes, new tools, changed authentication — the review flags it for reconsideration. The notice clears only with a new decision. Where the server's reference doesn't pin a version, the review says so: what runs may differ from what was reviewed.
+
+## Related
+
+- [Shadow MCP inventory](/docs/ai-control-plane/secure/shadow-mcp) — discovery, policy status, and statuses
+- [Shadow MCP allow and block lists](/docs/ai-control-plane/guides/shadow-mcp-allow-and-block-lists) — how decisions and policy URL lists interact
+- [Device agent](/docs/ai-control-plane/org-admin/device-agent) — on-device delivery of the block notification and access request
