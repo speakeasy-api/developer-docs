@@ -8,37 +8,35 @@ import { Callout } from "@/mdx/components";
 # How to generate OpenAPI with tRPC
 
 This tutorial explores how to add REST endpoints to [tRPC](https://trpc.io/)
-procedures, then generate an OpenAPI document for that API, and finally uses
-this document to create an SDK using Speakeasy.
+procedures, then turn all those convenient types into generated OpenAPI which
+can be used for all sorts of handy things like creating an SDK with Speakeasy.
 
 The guide covers:
 
-- Adding REST-like HTTP endpoints to a tRPC project and making OpenAPI v3.1 for
-  it, all using [`trpc-to-openapi`](](https://github.com/mcampa/trpc-to-openapi)).
+- Adding REST-like HTTP endpoints to a tRPC project and making OpenAPI v3.1
+  using [`trpc-to-openapi`](](https://github.com/mcampa/trpc-to-openapi)).
 - Improving the generated OpenAPI for better use across the API lifecycle and
   specifically SDK generation.
 - Using the Speakeasy CLI to create an SDK based on the generated OpenAPI.
 
-<Callout title="Sample code" type="info">
-  Follow along with this guide using the sample code in the [Speakeasy examples 
-  repository](https://github.com/speakeasy-api/examples/), with this code living 
-  under <code>frameworks-trpc</code>. This sample code is based on the common OpenAPI 
-  example: the [Train Travel API](https://github.com/bump-sh-examples/train-travel-api).
-</Callout>
-
 ## Introduction
 
-tRPC does not natively export OpenAPI documents, but the
-[`trpc-to-openapi`](https://github.com/mcampa/trpc-to-openapi) package adds this
-functionality. The tutorial starts by adding `trpc-to-openapi` to a project, and
-then adds a script to generate an OpenAPI schema and save it as a file.
+tRPC does not natively export OpenAPI documents, but seeing as both tRPC and
+OpenAPI are focused on declaring types and operations it's not a huge task to
+turn one into the other. 
 
-The quality of the OpenAPI description will ultimately determine the quality of
-created SDKs and documentation, so this guide covers ways to improve the
-generated OpenAPI document.
+The [`trpc-to-openapi`](https://github.com/mcampa/trpc-to-openapi) package does
+exactly this, adding full OpenAPI support to tRPC. Hang on though, isn't OpenAPI
+meant to describe REST/RESTish APIs, not tRPC specifically? Well absolutely, the
+`trpc-to-openapi` creates a REST bridge for the tRPC procedures, making them
+accessible to the wider public allowing for more potential integrations on the
+same API, then describe it nicely to allow for documentation making that
+integration even easier.
 
-With the new and improved OpenAPI document in hand, the next step is to create
-SDKs using Speakeasy.
+The quality of the generated OpenAPI will ultimately determine the quality of
+created SDKs and documentation, so this guide covers ways to improve the that
+OpenAPI by leveraging all sorts of handy features in tRPC, OpenAPI, and the
+integrations between the two.
 
 Finally, this process is added to a CI/CD pipeline so that Speakeasy
 automatically creates fresh SDKs whenever the tRPC API changes in the future.
@@ -47,10 +45,17 @@ automatically creates fresh SDKs whenever the tRPC API changes in the future.
 
 To follow along with this tutorial, the following are needed:
 
-- An existing tRPC app, or the example application can be cloned.
 - Some familiarity with tRPC.
 - [Node.js](https://nodejs.org/en/download) (Node 26.3.0 was used here).
 - [Speakeasy CLI](/docs/speakeasy-reference/cli/getting-started) (to create the SDK)
+- An existing tRPC app, or the [example application](https://github.com/speakeasy-api/examples) can be cloned.
+
+<Callout title="Sample code" type="info">
+  Follow along with this guide using the sample code in the [Speakeasy examples 
+  repository](https://github.com/speakeasy-api/examples/), with this code living 
+  under <code>frameworks-trpc</code>. This sample code is based on a common OpenAPI 
+  example: the [Train Travel API](https://github.com/bump-sh-examples/train-travel-api).
+</Callout>
 
 The specific versions will change over time, but these are the versions used in
 this guide and the accompanying sample code:
@@ -83,15 +88,15 @@ make a huge difference as lots of tools work just fine with either version.
 
 ## Adding easy REST-like endpoints to tRPC procedures
 
-The `trpc-to-openapi` library has two main features: adding REST-like endpoints
+The `trpc-to-openapi` library has two main features: adding REST/RESTish endpoints
 to tRPC procedures, and generating an OpenAPI document for these endpoints. 
 
-Why would you want to add REST-like endpoints to tRPC procedures? For the same
-reason gRPC has the gRPC Gateway to turn services into REST-like endpoints: at
-first some teams pick something expecting it only to be used by them, but later
-they want to expose it to other teams or external developers. Adding REST-like
-endpoints to tRPC procedures allows APIs to be opened up to a wide variety of
-users who don't all want to learn tRPC.
+Why would you want to add REST endpoints to tRPC procedures? For the same
+reason gRPC has the [gRPC Gateway](/openapi/frameworks/grpc-gateway) to turn
+services into REST endpoints: at first some teams pick something expecting
+it only to be used by them, but later they want to expose it to other teams or
+external developers. Adding REST endpoints to tRPC procedures allows APIs
+to be opened up to a wide variety of users who don't all want to learn tRPC.
 
 First step, install `trpc-to-openapi`:
 
@@ -198,10 +203,10 @@ directly, and getting it ready for OpenAPI to pick that up and add more context.
 ## Configure OpenAPI from source code
 
 With this handy new REST-like API setup with minimal HTTP mapping, we can now
-generate an OpenAPI document, and export it to something like `openapi.json` so
-it can be used by an entire [ecosystem of API tooling](https://openapi.tools/)
-for everything from mock servers and contract testing to API gateways and SDK
-generation.
+generate an OpenAPI document and export it to something like `openapi-spec.json`.
+Once this files exists, it can be used by a [massive ecosystem of API
+tooling](https://openapi.tools/) for everything from mock servers and contract
+testing to API gateways and SDK generation.
 
 OpenAPI requires a little bit more than just a list of HTTP methods and paths,
 so the next step is to add some basic information about the API to the OpenAPI
@@ -243,7 +248,7 @@ like:
 }
 ```
 
-Staring into this void of JSON is not very useful, so let's make another handy
+Staring directly into the void of JSON is not very useful, so let's make another handy
 script to save it to a file so other tools can work with it.
 
 ```json filename="package.json"
@@ -260,7 +265,7 @@ From now on, an OpenAPI document can be generated by running `npm run generate-o
 
 The team over at [Scalar](https://scalar.com/) have built a fantastic CLI and
 documentation tool which can serve an OpenAPI document as a web app, using the
-Stripe-like "three column" API documentation format.
+popular Stripe-like "three column" API documentation format.
 
 ```json
 {
@@ -368,11 +373,15 @@ Run `npm run generate-openapi` and see how this information is added to the Open
 
 ## Improving the OpenAPI paths
 
-The OpenAPI document can be improved by adding fields to the procedure's input and output schemas, and by adding examples, documentation, and metadata.
+With the generic information covered in the `intro` section, it's time to focus
+on documenting the procedures (or in OpenAPI: operations), which is achieved by
+adding more fields to the procedure's input and output schemas. The fields being
+added cover examples, documentation, and metadata.
 
 ### Expanding the procedure's input and output schemas
 
-Let's create a `Station` model and add a few field types to see how these are represented in the OpenAPI document.
+Let's create a `Station` model and add a few field types to see how these are
+represented in the OpenAPI document.
 
 Create a new file called `shared/models.ts` and specify a `Station` model using Zod:
 
@@ -408,7 +417,8 @@ export const StationSchema = z.object({
 export type Station = z.infer<typeof StationSchema>;
 ```
 
-Back in `server/router.ts`, import these models and update the procedure's input and output schemas. In the example app, a mock database is also added.
+Back in `server/router.ts`, import these models and update the procedure's input
+and output schemas. In the example app, a mock database is also added.
 
 ```typescript filename="server/router.ts"
 import { initTRPC } from "@trpc/server";
@@ -446,7 +456,8 @@ export const appRouter = t.router({
 });
 ```
 
-After the OpenAPI document is regenerated, the `Station` model is included in the document with all of its fields:
+After the OpenAPI document is regenerated, the `Station` model is included in
+the document with all of its fields:
 
 ```json filename="openapi-spec.json"
 {
@@ -555,7 +566,7 @@ instead of being duplicated inline.
 
 Under the hood, `trpc-to-openapi` uses the
 [`zod-openapi`](https://github.com/samchungy/zod-openapi) package to convert Zod
-schemas into OpenAPI schemas.
+schemas into OpenAPI documents.
 
 ### Adding a summary, description, examples, and tags to a procedure
 
@@ -805,10 +816,6 @@ been added to the document.
 
 ## Why Speakeasy and tRPC?
 
-tRPC's focus on type safety and developer experience sets it apart from other
-TypeScript API frameworks. By using TypeScript's type system along with a schema
-library like Zod, tRPC allows server and client code to share types.
-
 One of tRPC's stated goals is to cut down on the need for codegen, but there is
 still a place for code generation in the tRPC ecosystem. While tRPC's [default
 client](https://trpc.io/docs/client/vanilla/setup) is useful for writing
@@ -817,14 +824,13 @@ internal clients in a monorepo where a client can import the server's
 by internal and external developers. Nor does tRPC's type-safety extend to SDKs
 in languages other than TypeScript.
 
-Speakeasy can help create type-safe, production-ready SDKs for a tRPC API in
-various languages so that the API can be built with confidence that users will
-have a great developer experience.
+Speakeasy can help create type-safe, production-ready SDKs for a tRPC-base HTTP API in
+various languages, ensuring the released APIs will give users a great developer experience.
 
-## How to create an SDK based on the OpenAPI spec
+## Create an SDK based on OpenAPI
 
-After following the steps above, an OpenAPI spec is ready to use as the basis
-for a new SDK. Next, Speakeasy is used to create an SDK.
+After following the steps above, the OpenAPI document is ready to use as the basis
+for a new SDK. 
 
 In the root directory of the project, run the following:
 
@@ -852,7 +858,10 @@ Generation Action and Workflows](/docs/workflow-reference) documentation.
 
 ## Alternative OpenAPI support in tRPC
 
-The tRPC docs now include an OpenAPI page at
-[https://trpc.io/docs/openapi](https://trpc.io/docs/openapi). This guide does
-not use that approach yet because it is currently in alpha, so the examples here
-use `trpc-to-openapi` for a more established workflow.
+tRPC also has an official OpenAPI package, documented at
+[https://trpc.io/docs/openapi](https://trpc.io/docs/openapi) and implemented via
+`@trpc/openapi`. This is a valid option for teams that want to stay close to the
+official tRPC ecosystem, but it is still in alpha and the package API may still
+change as it matures. For that reason, the examples in this guide use
+`trpc-to-openapi`, which is a more established workflow today while still
+producing OpenAPI that works well with Speakeasy.
