@@ -1,0 +1,60 @@
+---
+title: Session Portability
+description: "Continue a local coding-agent session in a different harness, or mint a short-lived link that hands it to another machine or cloud agent."
+---
+
+Session portability continues a coding-agent session somewhere other than where it started: in a different harness on the same machine, or on another machine or cloud agent through a short-lived link. It ships with the [device agent](/docs/ai-control-plane/org-admin/device-agent)'s menu-bar app. Every move and share is recorded as session lineage in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions).
+
+There are two delivery modes:
+
+- **Move** continues the session locally in another harness.
+- **Share** mints a single-use link that any agent or machine can redeem, with no login required.
+
+## Enable session portability
+
+Session portability is enabled per organization. Platform admins flip the **Session Portability** toggle on the **Features** page, under **Platform Admin** in the dashboard. Turning the toggle off stops new share links from being minted.
+
+Until the feature is enabled, the menu-bar app does not show the session picker. The picker is also absent when the installed agent predates the feature, so keep the [device agent](/docs/ai-control-plane/org-admin/device-agent) current.
+
+## Move a session to another harness
+
+From the menu bar, choose **Continue session…** to open the session picker.
+
+![The device agent menu-bar menu with the Continue session item](/assets/docs/ai-control-plane/observe/session-portability-menu.webp)
+
+The picker lists the coding-agent sessions discovered on the machine, newest first, with each session's source, age, and project directory. The search box filters the list.
+
+![The Continue a session picker listing discovered sessions with their source, age, and project directory](/assets/docs/ai-control-plane/observe/session-portability-picker.webp)
+
+Selecting a session shows the move targets installed on that machine, plus **Copy link — continue anywhere** for [sharing](#share-a-session-with-a-link).
+
+![A selected session in the picker with its move targets and the Copy link option](/assets/docs/ai-control-plane/observe/session-portability-targets.webp)
+
+- **Claude Code** resumes the session natively.
+- **Codex** and the **Cursor terminal** continue the session through a context handoff.
+- **Cursor app** opens Cursor with the session as a prefilled chat. Cursor cannot receive native session history, so the chat arrives prefilled and sends on Enter. This target is macOS only.
+
+A move carries the session's full context rather than a byte-for-byte copy, and the confirmation notification lists anything that could not come along.
+
+## Share a session with a link
+
+Sharing hands a session to something that cannot read this machine's files: another laptop, a cloud agent, or a teammate's environment. In the session picker, choose **Copy link — continue anywhere**. A capability URL served from `app.getgram.ai` lands on the clipboard; paste it into the target agent or machine and it continues the session from there. Share links have deliberately narrow properties:
+
+- **Single use.** The handoff document is deleted the first time the link is fetched.
+- **Short lived.** The link expires within one hour of minting.
+- **The token is the credential.** No login is needed to redeem a link, so treat it like a secret and paste it only where the session should go.
+- **Indistinguishable failures.** An expired or already-redeemed link returns a plain 404, the same response as a link that never existed.
+
+## Read lineage in Agent Sessions
+
+Portability actions show up in the [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) list as per-row lineage icons:
+
+- **Continued in another harness** marks a session that was moved out and picked up on the other side.
+- **Derived from an earlier session** marks a session that a move produced.
+- **Moved to another harness, continuation not yet captured** marks a dangling move, where the continuation is not knowable. A Cursor prefilled chat is the common case.
+
+Opening a session adds a **Linked sessions** section to the detail panel, listing each move that touches the session with its direction, target, and timestamp. Linked sessions the viewer can read are clickable and open in place. Sessions outside the viewer's access appear masked, following the same access rules as the rest of [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions#access-requirements).
+
+## Managed installs
+
+On managed (MDM-provisioned) installs, sharing requires a per-user sign-in: the organization's install credential enrolls the machine but cannot mint share links on its own. Sign in from the **Account** card in the menu-bar app. After signing in, share links mint normally. Moving a session between harnesses on the same machine never requires the sign-in.
