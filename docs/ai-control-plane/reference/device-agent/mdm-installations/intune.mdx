@@ -1,92 +1,272 @@
 ---
 title: "Microsoft Intune"
-description: "Deploy the device agent with Microsoft Intune on macOS, Windows, and Linux, and connect the tenant to the dashboard for agent coverage."
+description: "Deploy the device agent with Microsoft Intune: create the app, add the installer for each platform, deliver the identity file as a dependency, and connect the tenant to the dashboard for agent coverage."
 ---
 
 import { Callout } from "@/mdx/components";
 
-Intune deploys the device agent and its managed configuration on macOS, Windows, and Linux. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+This guide walks an Intune rollout of the device agent from start to finish: create the app, add the installer for each platform, deliver the identity file that enrolls each device without an interactive login, and connect the tenant to the dashboard so the platform can show which managed devices are covered. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
 
-## macOS
+## Step 1: Set up the line-of-business app
 
-**Install the agent.** Download [`speakeasy-agent_<version>.pkg`](https://app.getgram.ai/v1/install/device-agent-macos.pkg), a stable link that always resolves to the current release. It's a single Developer ID signed, notarized, universal pkg that installs the daemon, CLI, menu-bar UI, and privileged helper together, and registers its own LaunchAgents. No script needed. Add it as a **macOS line-of-business app / `.pkg`** and scope it. Install it once: Intune's app model checks the pkg's own receipt (`com.speakeasy.agent.pkg`), so detection works without a custom rule, and the agent's `auto_update: "automatic"` keeps it current afterward.
+The agent is deployed as one Intune app per platform. In **Apps → All apps → Add**, choose the app type for each platform in the fleet:
 
-**Preferred: a Configuration Profile.** Upload a `.mobileconfig` (or use Intune's preference-file settings) carrying a Custom Settings payload targeting the preferences domain **`com.speakeasy.agent`**, with the standard plist form of the configuration (see the [shared schema](/docs/ai-control-plane/reference/device-agent/mdm-installations#the-managed-configuration)).
-
-**Fallback: a shell script.** **Devices → Scripts → Add → macOS**: upload a script that writes `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644` and restarts the daemon. Run it as root, and leave "run script only once" **off** so rotated tokens reach devices.
-
-## Windows
-
-The agent ships a per-machine `.msi` that installs the daemon, CLI, and UI under `C:\Program Files\Speakeasy\` and registers the daemon as a LocalSystem service. The MSI and every executable inside it are Authenticode-signed. Prefer it over the raw binaries: it handles service registration and upgrades, and it sidesteps the SmartScreen warnings that unsigned `.zip` downloads attract.
+| Platform | App type | Installer (Step 2) |
+| --- | --- | --- |
+| macOS | **Line-of-business app** | `speakeasy-agent_<version>.pkg` |
+| Windows | **Windows app (Win32)** | `speakeasy-agent_<version>.msi`, wrapped as `.intunewin` |
 
 <Callout type="info">
-  The Windows service model differs from macOS in a way worth planning around. The daemon runs machine-wide as **LocalSystem**, not per-user, so standard users cannot stop it (better tamper resistance than the macOS Login Items toggle) while local admins can. Tool syncing still targets the **active console user's** home (`~/.claude`, `~/.cursor`, `~/.codex`); with nobody signed in, the daemon idles rather than writing into the SYSTEM profile.
+  On Windows, use **Windows app (Win32)** rather than a line-of-business MSI. The identity file in Step 3 is attached as an app dependency, and Intune only supports dependencies between Win32 apps.
 </Callout>
 
-**Install the agent.** Download `speakeasy-agent_<version>.msi` from the release bucket (`https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v<version>/speakeasy-agent_<version>.msi`) and add it as a **Win32 app** or line-of-business MSI under **Devices → Apps**.
+Settings that are the same regardless of platform:
 
-- Install command: `msiexec /i speakeasy-agent_<version>.msi /qn /norestart`
-- Detection: the product UpgradeCode `368ec0a6-8862-4906-af34-8c3adb92c6e0`, or the presence of `C:\Program Files\Speakeasy\speakeasyd.exe`
+- **Name** and **Publisher**: use the same name on both apps (for example **Speakeasy Device Agent** / **Speakeasy**) so the dependency picker in Step 3 and the Company Portal both show one obvious entry per platform.
+- **Assignments**: assign the app as **Required** to the device group that should run the agent. Don't assign the identity-file app from Step 3; as a dependency it installs wherever the agent app does.
 
-**Deploy the managed configuration separately.** Use **Devices → Scripts** (PowerShell) or a second Win32 payload to write `%ProgramData%\Speakeasy\managed.json`. The MSI creates that directory with a Users-read ACL already in place. The file must stay readable by the logged-in user, because the daemon resolves the console user's identity from it:
+Intune asks for the installer file on the first page of the wizard, so have the platform's installer from Step 2 ready when creating each app.
 
-```powershell
-$dir = "$env:ProgramData\Speakeasy"
-New-Item -ItemType Directory -Force -Path $dir | Out-Null
-Set-Content -Path "$dir\managed.json" -Encoding UTF8 -Value @"
+## Step 2: Add the installer for each platform
+
+### Windows
+
+1. In the dashboard, open **Organization Settings → Secure → Device Agent**, choose **Windows** under **Install the agent**, and download `speakeasy-agent_<version>.msi`.
+2. Stage the MSI alone in an empty folder and package it with the Win32 Content Prep Tool (`IntuneWinAppUtil.exe`):
+
+   ```bash
+   IntuneWinAppUtil.exe -c <stage-folder> -s speakeasy-agent_<version>.msi -o out
+   ```
+
+3. Upload the resulting `.intunewin` as the app package file for the Windows app created in Step 1, then set the **Program** page:
+   - **Install command**: `msiexec /i speakeasy-agent_<version>.msi /qn /norestart`
+   - **Uninstall command**: `msiexec /x speakeasy-agent_<version>.msi /qn /norestart`
+   - **Install behavior**: **System**
+   - **Device restart behavior**: **No specific action**
+4. On the **Detection rules** page, add an **MSI** rule (Intune reads the product code from the MSI when it is the setup file) or a **File** rule checking that `speakeasyd.exe` exists in `C:\Program Files\Speakeasy`.
+
+<Callout type="warning">
+  Keep `auto_update` on `"notify"` in the Windows identity file (Step 3); the agent can't self-update on Windows. Version moves are a new `.intunewin` that supersedes the previous one (see [Windows reference](#windows-reference)).
+</Callout>
+
+### macOS
+
+1. In the dashboard, open **Organization Settings → Secure → Device Agent**, choose **macOS** under **Install the agent**, and download `speakeasy-agent_<version>.pkg`.
+2. Upload it as the app package file for the macOS line-of-business app created in Step 1.
+
+Detection needs no custom rule: Intune's app model checks the pkg's own receipt (`com.speakeasy.agent.pkg`).
+
+<Callout type="warning">
+  Install it **once**. With `auto_update: "automatic"` in the identity file (Step 3), the agent keeps the daemon, CLI, and app current on its own. Re-push the pkg only for a change to the install layout itself, not for routine releases.
+</Callout>
+
+### Linux
+
+Intune can't register the agent's per-user systemd unit from a root script, so install on Linux through configuration management: follow the [Linux guide](/docs/ai-control-plane/reference/device-agent/mdm-installations/linux), which covers the binaries, the unit, and the root helper package. An Intune Linux script can still place the `speakeasyd` and `speakeasy` binaries under `/usr/local/bin` if that helps.
+
+## Step 3: Set up the identity file
+
+Every platform receives the same document; only the delivery mechanism differs:
+
+```json
 {
   "v": 1,
   "email": "jane.doe@example.com",
-  "org_token": "$OrgToken",
+  "org_token": "spk_org_…",
   "org_slug": "example-corp",
   "auto_update": "notify"
 }
-"@
-icacls $dir /grant "BUILTIN\Users:(OI)(CI)R"
-
-& "$env:ProgramFiles\Speakeasy\speakeasyd.exe" -service restart
 ```
 
-Restarting the service on **every** script run is not optional: the daemon reads its configuration at startup, so a rotated token sits inert on disk until the service restarts. Leave "run script only once" off, and pass the `org_token` as a script parameter rather than a literal in the script body. `sc stop com.speakeasy.daemon && sc start com.speakeasy.daemon` works as an alternative to `-service restart`.
+The file must be readable by the logged-in user, and the daemon only reads it at startup, so restart the daemon after any change.
+
+### Windows
+
+Package the script below as its own Win32 app and attach it to the agent app as a dependency.
+
+**1. Set the org token and configuration revision.** Save the following as `Deploy-SpeakeasyManagedJson.ps1`, replace `REPLACE_WITH_ORG_TOKEN` with the organization token from **Organization Settings → Secure → Device Agent**, and set `CONFIG_REVISION` to a unique value. Change the revision whenever the token or configuration changes. Leave `{{mail}}` in place; the script substitutes it at install time.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$configRevision = 'CONFIG_REVISION'
+
+# {{mail}} is substituted below by this script — Intune does not expand
+# tokens inside scripts, only inside configuration profiles / app config.
+$template = @'
+{
+  "v": 1,
+  "email": "{{mail}}",
+  "org_token": "REPLACE_WITH_ORG_TOKEN",
+  "org_slug": "example-corp",
+  "org_name": "Example Corp",
+  "auto_update": "notify"
+}
+'@
+
+function Get-EnrolledUserEmail {
+    # Primary: the UPN recorded at Intune enrollment (available in SYSTEM context,
+    # even before any user has logged in)
+    foreach ($e in Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Enrollments' -ErrorAction SilentlyContinue) {
+        $upn = (Get-ItemProperty $e.PSPath -ErrorAction SilentlyContinue).UPN
+        if ($upn) { return $upn }
+    }
+    # Fallback: the signed-in user's cached Entra identity
+    $user = (Get-CimInstance Win32_ComputerSystem).UserName
+    if ($user) {
+        $sid = (New-Object System.Security.Principal.NTAccount($user)).
+            Translate([System.Security.Principal.SecurityIdentifier]).Value
+        $name = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\IdentityStore\Cache\$sid\IdentityCache\$sid" `
+            -ErrorAction SilentlyContinue).UserName
+        if ($name -like '*@*') { return $name }
+    }
+    throw 'Could not determine the enrolled user''s email.'
+}
+
+$email = Get-EnrolledUserEmail
+$json  = $template.Replace('{{mail}}', $email)
+
+$dir  = Join-Path $env:ProgramData 'Speakeasy'
+$file = Join-Path $dir 'managed.json'
+
+New-Item -ItemType Directory -Path $dir -Force | Out-Null
+# UTF-8 without BOM — a BOM can break strict JSON parsers
+[System.IO.File]::WriteAllText($file, $json, [System.Text.UTF8Encoding]::new($false))
+
+# ACLs equivalent to dir 0755 / file 0640, using SIDs so it works on any OS language:
+# SYSTEM (S-1-5-18) + Administrators (S-1-5-32-544) full control, Users (S-1-5-32-545) read-only.
+# Inheritance is cut so ProgramData's default "users can create files" ACL does not apply.
+icacls $dir  /inheritance:r /grant '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
+icacls $file /inheritance:r /grant '*S-1-5-18:F' '*S-1-5-32-544:F' '*S-1-5-32-545:R' | Out-Null
+
+# Reload a service that is already installed. On first deployment, the agent app starts it later.
+$daemon = Join-Path $env:ProgramFiles 'Speakeasy\speakeasyd.exe'
+if (Test-Path $daemon) { & $daemon -service restart }
+
+# Write the revision marker last, after the configuration, ACL, and restart steps succeed.
+New-Item -ItemType File -Path (Join-Path $dir "managed-$configRevision.installed") -Force | Out-Null
+```
+
+**2. Package and upload the script as a Win32 app.** Stage the script alone in an empty folder (the packer bundles the whole folder), then package it:
+
+```bash
+IntuneWinAppUtil.exe -c <stage-folder> -s Deploy-SpeakeasyManagedJson.ps1 -o out
+```
+
+In **Apps → Windows → Add → Windows app (Win32)**, upload the `.intunewin` and set:
+
+- **Install command**: `%windir%\sysnative\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Deploy-SpeakeasyManagedJson.ps1`
+- **Uninstall command**: `cmd.exe /c rmdir /s /q "%ProgramData%\Speakeasy"`
+- **Install behavior**: **System**
+- **Detection rule**: a **File** rule checking that `managed-CONFIG_REVISION.installed` exists in `%ProgramData%\Speakeasy`. Use the same revision as the script. Intune uses [detection rules](https://learn.microsoft.com/en-us/intune/app-management/deployment/add-win32#step-4-detection-rules) to decide whether the app is already present, so checking only for `managed.json` would skip later configuration revisions.
+- **Assignments**: none. As a dependency it installs wherever the agent app does.
+
+**3. Add it as a dependency of the agent app.** Open **Apps → Windows → Speakeasy Device Agent → Properties → Dependencies → Add**, select the config app, set **Automatically install** to **Yes**, and save.
 
 <Callout type="warning">
-  Do not tighten the `%ProgramData%\Speakeasy` ACL to SYSTEM-only. That is the Windows form of the `0600` trap and it silently breaks enrollment.
+  **Token rotation.** Change `CONFIG_REVISION`, re-package the script as a new config app, and replace the old config app in the agent app's dependency list. Do not rely on supersedence alone: [Intune does not interchange a superseding Win32 app with an app dependency](https://learn.microsoft.com/en-us/intune/app-management/deployment/configure-win32-supersedence). The revision-specific detection rule causes Intune to run the new script, which restarts an existing service after writing the updated configuration.
 </Callout>
 
-**Version moves are an MSI re-push.** Windows locks running executables, so `speakeasy update --apply` is not supported there and `auto_update` must not be set to `"automatic"` on an MSI fleet: the updater cannot replace a running LocalSystem executable under Program Files. Keep it on `"notify"` so devices still learn about the per-version kill switch, and push the newer MSI to move versions. Its MajorUpgrade stops the service, replaces the files, and starts it again, leaving no orphaned service entry.
+Leave the `icacls` grants in the script as they are. The file must stay readable by Users, or enrollment silently fails.
+
+### macOS
+
+Deliver the identity file as a custom configuration profile. One profile serves the whole fleet: Intune fills in `{{mail}}` per device.
+
+1. Save the following as `speakeasy-agent.mobileconfig`, replacing the `org_token` and `org_slug` values and generating fresh UUIDs (`uuidgen`) for both `PayloadUUID` keys:
+
+   ```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+   <plist version="1.0">
+   <dict>
+     <key>PayloadContent</key>
+     <array>
+       <dict>
+         <key>PayloadType</key><string>com.apple.ManagedClient.preferences</string>
+         <key>PayloadIdentifier</key><string>com.speakeasy.agent.preferences</string>
+         <key>PayloadUUID</key><string>REPLACE-WITH-UUID-1</string>
+         <key>PayloadVersion</key><integer>1</integer>
+         <key>PayloadContent</key>
+         <dict>
+           <key>com.speakeasy.agent</key>
+           <dict>
+             <key>Forced</key>
+             <array>
+               <dict>
+                 <key>mcx_preference_settings</key>
+                 <dict>
+                   <key>v</key><integer>1</integer>
+                   <key>email</key><string>{{mail}}</string>
+                   <key>org_token</key><string>spk_org_…</string>
+                   <key>org_slug</key><string>example-corp</string>
+                   <key>auto_update</key><string>automatic</string>
+                 </dict>
+               </dict>
+             </array>
+           </dict>
+         </dict>
+       </dict>
+     </array>
+     <key>PayloadDisplayName</key><string>Speakeasy device agent</string>
+     <key>PayloadIdentifier</key><string>com.speakeasy.agent.profile</string>
+     <key>PayloadScope</key><string>System</string>
+     <key>PayloadType</key><string>Configuration</string>
+     <key>PayloadUUID</key><string>REPLACE-WITH-UUID-2</string>
+     <key>PayloadVersion</key><integer>1</integer>
+   </dict>
+   </plist>
+   ```
+
+2. In **Devices → Configuration → Create → New policy**, choose **macOS** and the **Templates → Custom** profile type, upload the file, and set **Deployment channel** to **Device channel**.
+3. Assign it to the same group as the macOS app from Step 1.
+4. Assign an idempotent macOS shell script to the same group and set **Run script as signed-in user** to **No**. Have it exit nonzero until both the managed preference and the agent are present, compare the preference file's hash with a local last-loaded marker, and restart the console user's daemon only when the hash changes: `launchctl kickstart -k "gui/$(id -u "$(stat -f%Su /dev/console)")/com.speakeasy.daemon"`. Record the marker only after a successful restart. The app and profile assignments have no documented delivery order. Configure a recurring **Script frequency** and retries so the script eventually reconciles initial delivery and later profile updates. Microsoft documents the available frequency and retry controls in [Use shell scripts on macOS devices in Intune](https://learn.microsoft.com/en-us/intune/device-management/tools/run-shell-scripts-macos#create-and-assign-a-shell-script-policy).
+
+Keep `{{mail}}` lowercase: Intune doesn't validate tokens, and `{{Mail}}` ships as a literal string. On a device, inspect the delivered profile with `defaults read /Library/Managed\ Preferences/com.speakeasy.agent`.
+
+**Fallback: a platform script.** If the `managed.json` file path is required instead, use **Devices → Scripts and remediations → Platform scripts → Add → macOS** with a script that writes `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644`, then restarts the console user's daemon. Three Intune-specific traps:
+
+- Intune macOS scripts have no parameters and don't expand `{{mail}}`: the script has to resolve the email itself, and the `org_token` lives in the script body.
+- Restart the daemon in the console user's context, not as root: `launchctl kickstart -k "gui/$(id -u "$(stat -f%Su /dev/console)")/com.speakeasy.daemon"`.
+- Set **Script frequency** to a recurring interval rather than once, so rotated tokens reach devices.
+
+### Linux
+
+Use an Intune Linux script to write `/etc/speakeasy/managed.json` as `root:root` / `0644`, then follow the [Linux guide](/docs/ai-control-plane/reference/device-agent/mdm-installations/linux) to register and restart the per-user unit.
+
+### Verify on a device
+
+`speakeasy status` on a target device should report the enrolled email with `source: managed` (surfaced in the menu bar UI as "Provisioned by IT"). If it reports `source: local` or `source: none`, the usual causes are file permissions that are too tight, the file at the wrong path, or the daemon not having restarted since the identity file was written. On Windows, the config app should also show as **Installed** in the agent app's dependency status in Intune.
+
+## Step 4: Connect Intune to the dashboard
+
+The inventory pull runs through Microsoft Graph with a scope-limited app registration:
+
+1. In **Entra ID → App registrations**, create an app registration for the integration.
+2. Under **API permissions**, add the Microsoft Graph **application** permission **`DeviceManagementManagedDevices.Read.All`** (reading the managed-device inventory is all the integration needs), and grant admin consent.
+3. Under **Certificates & secrets**, create a client secret and copy its value.
+4. In the dashboard, open **Organization Settings → Secure → Device Agent**, switch to the **MDM Integrations** tab, and select **Connect** on the Microsoft Intune row.
+5. Enter the **directory (tenant) ID**, the **application (client) ID**, and the **client secret**. Credentials are stored encrypted and are never shown again after saving.
+6. **Save**, then **Test connection**. The test performs a real managed-devices read, validating the tenant ID, the credentials, and the admin-consented permission together.
+7. Enable the connection. New connections start paused: the flow is save, test, then enable.
+
+Once enabled, the inventory syncs hourly. The integration reads each device's Intune-recorded email address (falling back to the user principal name) to attribute devices to people. Coverage can only be attested for devices with an assigned user. The two lists to work during a rollout are **No agent** (deploy the agent to these users' devices) and **Agent stale** (the agent was running and stopped; investigate whether it was disabled). The full set of coverage states is on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations#verify-the-rollout-with-agent-coverage) page.
+
+<Callout type="info">
+  Intune has no supported inventory source for Linux devices in the dashboard, so Linux coverage is attested through [Employee Enrollment](/docs/ai-control-plane/observe/employee-enrollment) rather than the fleet-wide managed-device view. The Intune inventory sync covers macOS and Windows devices.
+</Callout>
+
+## Windows reference
+
+Details of the Windows install that are worth knowing but don't change the steps above.
+
+**The service model differs from macOS.** The daemon runs machine-wide as **LocalSystem**, not per-user, so standard users cannot stop it (better tamper resistance than the macOS Login Items toggle) while local admins can. Tool syncing still targets the **active console user's** home (`~/.claude`, `~/.cursor`, `~/.codex`); with nobody signed in, the daemon idles rather than writing into the SYSTEM profile.
+
+**Version moves are an MSI re-push.** `speakeasy update --apply` is not supported on Windows: the updater cannot replace a running LocalSystem executable under Program Files. Keep `auto_update` on `"notify"` so devices still learn about the per-version kill switch, then package the newer MSI as a new `.intunewin`, add it as a new app version or use **Supersedence** on the new app with **Uninstall previous version** set to **No** (the MSI's MajorUpgrade stops the service, replaces the files, and starts it again, leaving no orphaned service entry). The MSI's UpgradeCode is `368ec0a6-8862-4906-af34-8c3adb92c6e0`, if inventory or supersedence tooling needs it.
 
 **The menu bar UI is installed but not started.** The MSI lays down `speakeasy-ui.exe` without auto-starting it, matching the posture on every other OS. Deploy a Startup shortcut to `C:\Program Files\Speakeasy\speakeasy-ui.exe` if the fleet wants the tray icon. The daemon is fully functional without it.
 
 **Managed-layer enforcement needs nothing extra.** Because the Windows daemon already runs as LocalSystem, it performs privileged writes in-process rather than through a separate root helper as macOS and Linux do. Setting a tool to `"managed"` lands its system configuration on the first reconcile, with no `EnforcementPending` window waiting on a package: `%ProgramData%\OpenAI\Codex\requirements.toml` (Codex), `%ProgramData%\Cursor\hooks.json` (Cursor), and `%ProgramData%\ClaudeCode\managed-settings.json` (Claude Code). Each is written SYSTEM-owned with a protected ACL (SYSTEM and Administrators full, Users read-only), the Windows equivalent of a root-owned `0644`.
 
-<Callout type="info">
-  Daemon logs land in the SYSTEM profile when the agent runs as a service: `C:\Windows\System32\config\systemprofile\AppData\Local\Speakeasy\Logs\`. Run interactively, they go to `%LOCALAPPDATA%\Speakeasy\Logs\` instead. Worth telling the support desk before they go hunting.
-</Callout>
+**Daemon logs land in the SYSTEM profile** when the agent runs as a service: `C:\Windows\System32\config\systemprofile\AppData\Local\Speakeasy\Logs\`. Run interactively, they go to `%LOCALAPPDATA%\Speakeasy\Logs\` instead. Worth telling the support desk before they go hunting.
 
-### Scripted install without the MSI
-
-Still valid for an air-gapped mirror or a custom install layout: resolve the version, URL, and SHA-256 from the release manifest (never hardcode them), place the binaries under `C:\Program Files\Speakeasy\`, then run `speakeasyd -service install` followed by `-service start`. Write `managed.json` with the same ACL grant as above, restart the service on every run, and move versions by stopping the service, replacing the binaries, and starting it again. Note that the raw `.zip` binaries are not signed, so browser downloads of them may draw a SmartScreen warning; Intune line-of-business installs are unaffected.
-
-## Linux
-
-Intune's Linux support covers a narrow set of distributions and its script mechanism runs as root, which does not match how the agent registers itself. The daemon installs a **per-user** systemd unit, so the `-service install` step has to run in each user's own session rather than from a root policy.
-
-An Intune-driven rollout can still place the binaries and write `/etc/speakeasy/managed.json` as `root:root` `0644`. Registering and starting the unit is the part that needs a per-user mechanism, and most Linux fleets are better served by the configuration management already running on them. See the [Linux guide](/docs/ai-control-plane/reference/device-agent/mdm-installations/linux) for the full sequence, including the lingering requirement on headless machines and the root helper package that unlocks managed-layer enforcement.
-
-<Callout type="info">
-  Intune has no supported inventory source for Linux devices in the dashboard, so Linux coverage is attested through [Employee Enrollment](/docs/ai-control-plane/observe/employee-enrollment) rather than the fleet-wide managed-device view. The Intune inventory sync below covers macOS and Windows devices.
-</Callout>
-
-## Connect Intune to the dashboard
-
-The inventory pull runs through Microsoft Graph with a scope-limited app registration:
-
-1. In **Entra ID → App registrations**, create an app registration for the integration.
-2. Under **API permissions**, add the Microsoft Graph **application** permission **`DeviceManagementManagedDevices.Read.All`** (reading the managed-device inventory is all the integration needs), and grant admin consent. The tenant needs an active Intune license.
-3. Under **Certificates & secrets**, create a client secret and copy its value.
-4. In the dashboard, open **Device Agent → MDM Integrations**, then **Connect** on the Microsoft Intune row.
-5. Enter the **directory (tenant) ID**, the **application (client) ID**, and the **client secret**. Credentials are stored encrypted and are never shown again after saving.
-6. **Save**, then **Test connection**. The test performs a real managed-devices read, validating the tenant id, the credentials, and the admin-consented permission together.
-7. Enable the connection. New connections start paused: the flow is save, test, then enable.
-
-Once enabled, the inventory syncs hourly. The integration reads each device's Intune-recorded email address (falling back to the user principal name) to attribute devices to people. Coverage can only be attested for devices with an assigned user.
+**Scripted install without the MSI.** Still valid for an air-gapped mirror or a custom install layout: resolve the version, URL, and SHA-256 from the release manifest (never hardcode them), place the binaries under `C:\Program Files\Speakeasy\`, then run `speakeasyd -service install` followed by `-service start`. Write `managed.json` with the same ACL grant as the script above, restart the service on every run, and move versions by stopping the service, replacing the binaries, and starting it again. The raw `.zip` binaries are not signed, so browser downloads of them may draw a SmartScreen warning; Intune line-of-business installs are unaffected.
