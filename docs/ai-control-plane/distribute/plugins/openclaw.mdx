@@ -1,0 +1,153 @@
+---
+title: "OpenClaw"
+description: "Instrument OpenClaw with the observability plugin so Gateway sessions and tool calls reach Observe and risk policies are enforced on OpenClaw traffic."
+---
+
+import { Callout } from "@/mdx/components";
+
+OpenClaw loads plugins in-process when its Gateway starts, so the observability plugin ships as a native OpenClaw plugin package rather than a marketplace entry. The package is installed with `openclaw plugins install`, granted conversation access in the OpenClaw config, and picked up on the next Gateway restart. This page covers rendering that package, the two configuration steps it depends on, and verifying that events arrive.
+
+Once installed, the plugin captures OpenClaw sessions and tool calls for [Observe](/docs/ai-control-plane/observe) and enforces [risk policies](/docs/ai-control-plane/secure/guardrails) on prompts and tool calls.
+
+<Callout title="Hooks require OpenClaw's embedded runtime" type="warning">
+  When a model is configured with Claude CLI OAuth authentication, OpenClaw
+  delegates the model and tool loop out of process to the Claude Code CLI, and
+  none of the plugin's hooks fire — no prompts, tool calls, replies, or usage
+  are recorded for that model. This is the login default whenever a
+  `claude-cli` profile exists. Coverage requires a model whose agent runtime is
+  OpenClaw's embedded runtime. Instrument Claude Code itself through the
+  [Anthropic plugin](/docs/ai-control-plane/distribute/plugins/anthropic) to
+  cover the delegated path.
+</Callout>
+
+<Callout title="OpenClaw has no OTEL exporter" type="info">
+  Claude Code and Codex export OpenTelemetry alongside their hooks. OpenClaw has
+  no equivalent, so every OpenClaw signal arrives through the observability
+  plugin. Sessions, tool calls, token counts, cost, and policy enforcement all
+  work; the OTEL-derived detail described in [What the plugin
+  captures](#what-the-plugin-captures) does not apply. No Claude-side OTEL
+  configuration is needed for OpenClaw.
+</Callout>
+
+## Access requirements
+
+<Callout type="info">
+  Downloading the observability plugin requires the `org:admin` scope, and so
+  does creating the API key the CLI path uses. Both are held by the default
+  [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions).
+</Callout>
+
+## Download the plugin package
+
+On the dashboard's **Distribute > Plugins** page, open the **Platform Plugins** section, select **openclaw**, and click **Download Plugin**. The download is a ZIP with a hooks-scoped API key already embedded, so no key needs to be created or exported separately.
+
+Extract it into a directory of its own:
+
+```bash
+unzip observability-openclaw.zip -d speakeasy-observability
+```
+
+The package contains `openclaw.plugin.json`, which declares the plugin id `speakeasy-observability` and activates it on startup, `index.js`, which proxies OpenClaw's typed hooks to the hooks runtime, `package.json`, which registers `index.js` as the extension entry point, `speakeasy.json`, which carries the deployment identity and the embedded key, and the bootstrap scripts that fetch the hooks runtime on first run.
+
+## Render the package with the CLI
+
+Use this path when the package needs to be rendered from a script or checked into a repository template. Install the `speakeasy-hooks` binary:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/speakeasy-api/gram/main/hooks/install.sh | sh
+```
+
+Create an API key with the **Hooks** scope on the [API keys](/docs/ai-control-plane/org-admin/api-keys) page, then render the package:
+
+```bash
+GRAM_HOOKS_ORG_KEY="<hooks-scoped-api-key>" \
+speakeasy-hooks install --provider=openclaw --dir=./speakeasy-observability --project=<project-slug>
+```
+
+Useful flags:
+
+- `--provider` — the agent to render for, `openclaw` here
+- `--dir` — where the package is written
+- `--project` — the project slug events are attributed to, defaulting to `default`
+- `--browser-login` — let each developer sign in through the browser so events record under their own identity rather than the organization key
+
+## Install the package into OpenClaw
+
+Register the rendered directory with the Gateway:
+
+```bash
+openclaw plugins install ./speakeasy-observability
+```
+
+Conversation-scope hooks — prompt submission, model replies, and turn end — are gated behind a per-plugin flag. Until it is set, those hooks never fire and no error is reported. Grant it:
+
+```bash
+openclaw config set plugins.entries.speakeasy-observability.hooks.allowConversationAccess true
+```
+
+OpenClaw loads plugins at startup only, so restart the Gateway to activate the hooks:
+
+```bash
+openclaw gateway restart
+```
+
+<Callout type="warning">
+  A live session that records tool calls but no prompts, replies, or token
+  usage is the signature of a missing `allowConversationAccess`. Set the flag
+  and restart the Gateway.
+</Callout>
+
+## Roll out across a fleet
+
+The [device agent](/docs/ai-control-plane/org-admin/device-agent) installs and maintains the OpenClaw package on every enrolled machine and reapplies it every minute, so organizations running it can skip the manual steps above. It installs each assigned package under `~/.openclaw/extensions/<plugin-id>/` and forces two leaves in `~/.openclaw/openclaw.json` — `plugins.entries.<plugin-id>.enabled` and `plugins.entries.<plugin-id>.hooks.allowConversationAccess` — leaving every other value in the file intact. A developer who switches the plugin off has it re-enabled on the next tick.
+
+Two behaviors are worth setting expectations on:
+
+- The agent never restarts the Gateway. A newly installed extension stays dormant until the developer's next Gateway restart.
+- An extension directory the agent does not own — one a developer installed manually before management began — is never overwritten, though its config entry is still enforced. Removing the manual copy hands it to the agent on the next tick.
+
+The agent skips OpenClaw silently on machines where `~/.openclaw` does not exist. OpenClaw is managed by default wherever it is installed. To exclude it on a given fleet, set the `platforms` key in the agent's managed configuration:
+
+```json
+{
+  "platforms": {
+    "openclaw": false
+  }
+}
+```
+
+Unlike Claude Code, Codex, Cursor, and GitHub Copilot, OpenClaw has no admin-layer enforcement mode today, so `"managed"` behaves as user-layer management. See the [device agent reference](/docs/ai-control-plane/reference/device-agent) for the full managed configuration.
+
+## Verify the installation
+
+Restart the Gateway, then run any tool call — an MCP tool, or a prompt such as `echo hi there`. Confirm both surfaces:
+
+- The call appears in [Tool Logs](/docs/ai-control-plane/observe/tool-logs). For a local tool call, set the **Type** filter to include local tools.
+- The conversation appears in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) with **Agent type** filtered to openclaw. Transcripts require **Agent Session Capture** on the [Logging & Telemetry](/docs/ai-control-plane/org-admin/logging-and-telemetry) page.
+
+If tool calls arrive but prompts do not, check `allowConversationAccess`. If nothing arrives at all, check whether the model in use runs on OpenClaw's embedded runtime rather than the delegated Claude CLI path.
+
+## What the plugin captures
+
+The plugin translates OpenClaw's typed plugin hooks into the platform's canonical hook events:
+
+| OpenClaw hook                       | Recorded as                                             |
+| ----------------------------------- | ------------------------------------------------------- |
+| `session_start`, `session_end`      | Session start and end                                   |
+| `before_agent_run`                  | User prompt                                             |
+| `before_tool_call`, `after_tool_call` | Tool call and result                                   |
+| `agent_end`                         | Assistant response, with the turn's token and cost usage |
+| `subagent_spawned`, `subagent_ended` | Subagent start and end                                 |
+| `llm_input`, `llm_output`           | Model request and response                              |
+| `before_compaction`, `after_compaction` | Context compaction                                  |
+
+Prompt submission and tool calls are blocking, so a risk policy set to block denies the action in OpenClaw rather than only recording it, and [spend rules](/docs/ai-control-plane/observe/costs/budgets) deny prompts and tool calls once an actor is over budget. Tool results, errors, subagent lifecycle, model traffic, and compaction are recorded without blocking. A blocked tool call is recorded as an error rather than a success, even though OpenClaw reports the block through the same hook it uses for completed calls.
+
+Because there is no OTEL stream, a few details available for Claude Code are not available for OpenClaw:
+
+- No permission-request surface, so permission prompts are neither recorded nor gated — OpenClaw exposes approval only as a response to a tool-call gate
+- No skill source resolution or prompt attachment capture
+- No MCP inventory, so configured MCP servers are not reported as part of the session
+- [OTEL forwarding](/docs/ai-control-plane/org-admin/logging-and-telemetry/otel-forwarding) copies OTEL payloads only, so OpenClaw events are not forwarded to an external collector
+
+Token and cost totals are unaffected: OpenClaw reports usage at the end of each turn and the plugin forwards it, so [Costs](/docs/ai-control-plane/observe/costs) attributes OpenClaw spend normally.
