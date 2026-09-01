@@ -1,20 +1,24 @@
 ---
 title: MDM installations
-description: "Deploy the device agent through your MDM, verify the rollout with agent coverage, and export it as compliance evidence, with guides for Jamf Pro, Iru (formerly Kandji), Intune, Linux, Drata, and Vanta."
+description: "Deploy the device agent through your MDM, verify the rollout with agent coverage, and export it as compliance evidence, with guides for Jamf Pro, Iru (formerly Kandji), Intune, ManageEngine Endpoint Central, Linux, Drata, and Vanta."
 ---
 
 import { Callout, StatusBadge } from "@/mdx/components";
 import { CodeWithTabs } from "@/components/code-tabs";
 
-Rolling the device agent out through an MDM has two halves. First, **deploy**: your MDM installs the agent and delivers its managed configuration so every device enrolls without any interactive login. Second, **verify**: connect the same MDM to the dashboard so the platform can pull your managed-device inventory and show exactly which devices are covered by a running agent, and which aren't. Optionally, a third: **export** that coverage into your compliance platform so it becomes continuously-tested evidence.
+Rolling the device agent out through an MDM starts with **deployment**: your MDM installs the agent and delivers its managed configuration so every device enrolls without an interactive login. Supported inventory integrations add **verification** by pulling the managed-device inventory into the dashboard and showing which devices are covered by a running agent. Deployment-only providers require device-level validation with `speakeasy status` or a separate supported inventory source. You can optionally **export** coverage from a supported inventory integration into your compliance platform as continuously tested evidence.
 
-This page covers the shared concepts. The provider guides cover the console-specific recipes, including how to mint scope-limited credentials for each:
+This page covers the shared concepts. The provider guides cover the console-specific deployment recipes. Guides for supported inventory integrations also explain how to create scope-limited credentials:
 
 **Inventory sources** (your MDM: deploy the agent, pull the fleet):
 
 - [Jamf Pro](/docs/ai-control-plane/reference/device-agent/mdm-installations/jamf): deploy and verify on macOS (inventory integration supported)
 - [Iru (formerly Kandji)](/docs/ai-control-plane/reference/device-agent/mdm-installations/iru): deploy and verify on macOS (inventory integration supported)
 - [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune): deploy and verify on macOS and Windows (inventory integration supported)
+
+**Deployment-only providers** (deploy the agent without an inventory integration):
+
+- [ManageEngine Endpoint Central](/docs/ai-control-plane/reference/device-agent/mdm-installations/manageengine-endpoint-central): deploy on macOS and Windows
 
 Jamf Pro and Iru manage Apple devices only. For the platforms they don't cover:
 
@@ -37,7 +41,7 @@ Upload that file to your MDM as a Package (Jamf), Custom App (Iru), or line-of-b
 
 The agent ships a per-machine, Authenticode-signed `.msi` (`speakeasy-agent_<version>.msi`) that installs the daemon, CLI, and UI under `C:\Program Files\Speakeasy\` and registers the daemon as a LocalSystem service. Download it from the release bucket at `https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v<version>/speakeasy-agent_<version>.msi` and push it as a Win32 app or line-of-business MSI. Raw `.zip` binaries remain available for scripted or air-gapped installs, but they are unsigned. Prefer the MSI.
 
-Windows cannot self-update, because the OS locks running executables, so version moves are an MSI re-push and `auto_update` must stay on `"notify"` rather than `"automatic"` on an MSI fleet. See [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune) for the full recipe, including the detection rule, the identity-file dependency, and the service-restart requirement on token rotation.
+Windows fleets can use MDM-controlled or agent-controlled updates. Use `auto_update: "notify"` when the MDM owns version rollouts, or `auto_update: "automatic"` when the agent should verify and install signed MSI updates. Do not schedule both update paths at the same time. See [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune) for a full MDM-controlled recipe, including the detection rule, the identity-file dependency, and the service-restart requirement on token rotation.
 
 ### Linux
 

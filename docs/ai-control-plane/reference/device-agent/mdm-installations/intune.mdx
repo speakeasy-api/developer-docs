@@ -43,10 +43,12 @@ Intune asks for the installer file on the first page of the wizard, so have the 
    - **Uninstall command**: `msiexec /x speakeasy-agent_<version>.msi /qn /norestart`
    - **Install behavior**: **System**
    - **Device restart behavior**: **No specific action**
-4. On the **Detection rules** page, add an **MSI** rule (Intune reads the product code from the MSI when it is the setup file) or a **File** rule checking that `speakeasyd.exe` exists in `C:\Program Files\Speakeasy`.
+4. On the **Detection rules** page, match the rule to the selected update owner:
+   - For Intune-controlled updates, use an **MSI** or other version-aware rule for each release so the superseding app installs the newer version.
+   - For agent-controlled updates, use a version-independent **File** rule that checks for `C:\Program Files\Speakeasy\speakeasyd.exe`. An MSI ProductCode rule can become false after an automatic MajorUpgrade and make Intune offer the older package again.
 
 <Callout type="warning">
-  Keep `auto_update` on `"notify"` in the Windows identity file (Step 3); the agent can't self-update on Windows. Version moves are a new `.intunewin` that supersedes the previous one (see [Windows reference](#windows-reference)).
+  Choose one owner for Windows updates. Keep `auto_update` on `"notify"` when Intune controls version moves through a new `.intunewin` that supersedes the previous one. Use `"automatic"` when the agent should verify and install signed MSI updates. Do not schedule both update paths at the same time. See [Windows reference](#windows-reference).
 </Callout>
 
 ### macOS
@@ -66,7 +68,7 @@ Intune can't register the agent's per-user systemd unit from a root script, so i
 
 ## Step 3: Set up the identity file
 
-Every platform receives the same document; only the delivery mechanism differs:
+Every platform uses the same schema, but the update mode depends on the platform and update owner. Use `automatic` on macOS. On Windows, use `notify` for Intune-controlled updates or `automatic` for agent-controlled updates:
 
 ```json
 {
@@ -74,7 +76,7 @@ Every platform receives the same document; only the delivery mechanism differs:
   "email": "jane.doe@example.com",
   "org_token": "spk_org_…",
   "org_slug": "example-corp",
-  "auto_update": "notify"
+  "auto_update": "AUTO_UPDATE_MODE"
 }
 ```
 
@@ -84,7 +86,7 @@ The file must be readable by the logged-in user, and the daemon only reads it at
 
 Package the script below as its own Win32 app and attach it to the agent app as a dependency.
 
-**1. Set the org token and configuration revision.** Save the following as `Deploy-SpeakeasyManagedJson.ps1`, replace `REPLACE_WITH_ORG_TOKEN` with the organization token from **Organization Settings → Secure → Device Agent**, and set `CONFIG_REVISION` to a unique value. Change the revision whenever the token or configuration changes. Leave `{{mail}}` in place; the script substitutes it at install time.
+**1. Set the org token, update owner, and configuration revision.** Save the following as `Deploy-SpeakeasyManagedJson.ps1`, replace `REPLACE_WITH_ORG_TOKEN` with the organization token from **Organization Settings → Secure → Device Agent**, and replace `AUTO_UPDATE_MODE` with `notify` for Intune-controlled updates or `automatic` for agent-controlled updates. Set `CONFIG_REVISION` to a unique value and change it whenever the token or configuration changes. Leave `{{mail}}` in place; the script substitutes it at install time.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
@@ -99,7 +101,7 @@ $template = @'
   "org_token": "REPLACE_WITH_ORG_TOKEN",
   "org_slug": "example-corp",
   "org_name": "Example Corp",
-  "auto_update": "notify"
+  "auto_update": "AUTO_UPDATE_MODE"
 }
 '@
 
@@ -261,9 +263,9 @@ Details of the Windows install that are worth knowing but don't change the steps
 
 **The service model differs from macOS.** The daemon runs machine-wide as **LocalSystem**, not per-user, so standard users cannot stop it (better tamper resistance than the macOS Login Items toggle) while local admins can. Tool syncing still targets the **active console user's** home (`~/.claude`, `~/.cursor`, `~/.codex`); with nobody signed in, the daemon idles rather than writing into the SYSTEM profile.
 
-**Version moves are an MSI re-push.** `speakeasy update --apply` is not supported on Windows: the updater cannot replace a running LocalSystem executable under Program Files. Keep `auto_update` on `"notify"` so devices still learn about the per-version kill switch, then package the newer MSI as a new `.intunewin`, add it as a new app version or use **Supersedence** on the new app with **Uninstall previous version** set to **No** (the MSI's MajorUpgrade stops the service, replaces the files, and starts it again, leaving no orphaned service entry). The MSI's UpgradeCode is `368ec0a6-8862-4906-af34-8c3adb92c6e0`, if inventory or supersedence tooling needs it.
+**Version moves can be Intune-controlled or agent-controlled.** For Intune-controlled updates, keep `auto_update` on `"notify"`, package the newer MSI as a new `.intunewin`, add it as a new app version, or use **Supersedence** on the new app with **Uninstall previous version** set to **No**. For agent-controlled updates, use `"automatic"`; the daemon verifies the newer signed MSI and launches it through a detached Windows Installer process. The MSI's MajorUpgrade stops the service, replaces the files, and starts it again without leaving an orphaned service entry. Do not schedule an Intune rollout at the same time as an automatic agent update. The MSI's UpgradeCode is `368ec0a6-8862-4906-af34-8c3adb92c6e0`, if inventory or supersedence tooling needs it.
 
-**The menu bar UI is installed but not started.** The MSI lays down `speakeasy-ui.exe` without auto-starting it, matching the posture on every other OS. Deploy a Startup shortcut to `C:\Program Files\Speakeasy\speakeasy-ui.exe` if the fleet wants the tray icon. The daemon is fully functional without it.
+**The tray UI is installed but not started.** The MSI lays down `speakeasy-ui.exe` without auto-starting it, matching the posture on every other OS. Deploy a Startup shortcut to `C:\Program Files\Speakeasy\speakeasy-ui.exe` if the fleet wants the tray icon. The daemon is fully functional without it.
 
 **Managed-layer enforcement needs nothing extra.** Because the Windows daemon already runs as LocalSystem, it performs privileged writes in-process rather than through a separate root helper as macOS and Linux do. Setting a tool to `"managed"` lands its system configuration on the first reconcile, with no `EnforcementPending` window waiting on a package: `%ProgramData%\OpenAI\Codex\requirements.toml` (Codex), `%ProgramData%\Cursor\hooks.json` (Cursor), and `%ProgramData%\ClaudeCode\managed-settings.json` (Claude Code). Each is written SYSTEM-owned with a protected ACL (SYSTEM and Administrators full, Users read-only), the Windows equivalent of a root-owned `0644`.
 

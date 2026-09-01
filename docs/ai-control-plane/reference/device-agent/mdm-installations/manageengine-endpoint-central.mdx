@@ -1,0 +1,168 @@
+---
+title: ManageEngine Endpoint Central
+description: "Deploy the Speakeasy device agent and managed configuration to Windows and macOS devices with ManageEngine Endpoint Central."
+---
+
+import { Callout } from "@/mdx/components";
+
+Use ManageEngine Endpoint Central to deploy the Speakeasy device agent as a computer-scoped package. Deploy the installer first, then deliver `managed.json` and restart the daemon. Endpoint Central is a deployment option only. It cannot be connected as an inventory source for agent coverage.
+
+## Prerequisites
+
+Before creating packages:
+
+- Enroll each target in Endpoint Central and confirm that its agent is online.
+- Download the current installer from **Organization Settings → Secure → Device Agent** in the Speakeasy dashboard. Windows uses `speakeasy-agent_<version>.msi`. macOS uses `speakeasy-agent_<version>.pkg`.
+- Create separate pilot groups for x64 Windows, Intel macOS, and Apple silicon macOS. Endpoint Central supports [custom groups](https://www.manageengine.com/products/desktop-central/help/configuring_desktop_central/creating_custom_groups.html) and [include and exclude targeting](https://www.manageengine.com/products/desktop-central/help/defining_targets.html).
+- Test on clean devices, upgraded devices, devices in each Remote Office, and devices with no interactive user signed in.
+- Prepare a tested mapping from each device to its user's work email. Include shared devices and devices with multiple users in the acceptance test.
+- Record the expected installer signer, version, and SHA-256 hash before uploading either package.
+
+<Callout type="warning">
+  Endpoint Central's [dynamic variable list](https://www.manageengine.com/products/desktop-central/help/misc/dynamic_variables.html) does not document an email or UPN variable. Its [file operation documentation](https://www.manageengine.com/products/desktop-central/help/computer_configuration/managing_windows_computer_files_folders.html) does not document file-content templating. Do not insert an assumed variable into `managed.json`. Supply a tested per-device email mapping through a customer-owned script, inventory source, or separately targeted file.
+</Callout>
+
+## Verify the installers
+
+The Windows MSI is Authenticode-signed. The macOS PKG is Developer ID signed, notarized, and universal. Verify the exact downloaded files before uploading them. A successful Endpoint Central upload is not a signature check. ManageEngine's public package documentation does not state that Endpoint Central validates Authenticode signatures, Developer ID signatures, or notarization tickets.
+
+On Windows, confirm that the signature is valid and the signer is Speakeasy:
+
+```powershell
+Get-AuthenticodeSignature .\speakeasy-agent_<version>.msi |
+  Format-List Status, StatusMessage, SignerCertificate
+```
+
+On macOS, check the package signature, Gatekeeper assessment, and stapled notarization ticket:
+
+```bash
+pkgutil --check-signature ./speakeasy-agent_<version>.pkg
+spctl --assess --type install --verbose=2 ./speakeasy-agent_<version>.pkg
+xcrun stapler validate ./speakeasy-agent_<version>.pkg
+```
+
+Keep the verification output and SHA-256 hash with the package record. Apple documents the [notarization workflow](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [Gatekeeper checks](https://support.apple.com/guide/security/gatekeeper-and-runtime-protection-sec5599b66df/web). Do not weaken Gatekeeper to deploy an unverified package.
+
+## Deploy the Windows MSI
+
+The current Windows installer is a per-machine x64 MSI. It installs the daemon, CLI, and UI under `C:\Program Files\Speakeasy\` and registers the daemon as a LocalSystem service. Do not assign it to Windows on ARM devices. Endpoint Central's [Windows package workflow](https://www.manageengine.com/products/desktop-central/help/software-deployment/create-software-packages-windows.html) supports MSI packages, architecture metadata, dependencies, install and uninstall commands, and HTTP or network-share repositories.
+
+1. Go to **Software Deployment → Package Creation → Packages → Add Package → Windows**.
+2. Select **MSI/MSP**, then upload `speakeasy-agent_<version>.msi` from the local computer to the HTTP repository. The HTTP repository is the safer choice for roaming devices.
+3. Set the package architecture to x64. Target the x64 Windows pilot group and exclude unsupported devices. Architecture metadata controls targeting. It does not translate a binary for another architecture.
+4. Install the package as **System User** with user interaction disabled. If you use an **MSIEXEC** package instead, use:
+
+   ```text
+   msiexec /i speakeasy-agent_<version>.msi /qn /norestart
+   ```
+
+5. Add a version-aware installed-software condition. Do not use only `C:\Program Files\Speakeasy\speakeasyd.exe` as an upgrade check, because the file remains across versions. Endpoint Central supports [pre-deployment checks](https://www.manageengine.com/products/desktop-central/help/software_installation/software-deployment-pre-post-deployment-activities.html).
+6. Create a computer configuration, select the package, choose a bounded **Deployment Policy**, and assign the pilot group. The [MSI installation workflow](https://www.manageengine.com/products/desktop-central/help/computer_configuration/installing_msi_software.html) documents computer scope and **System User** execution.
+
+Use **System User** for the machine-wide install and configuration task. This account has no normal interactive-user profile, so scripts must use absolute machine paths and must not depend on a user's home directory, mapped drive, shell profile, or desktop session.
+
+## Deploy the macOS PKG
+
+The current macOS installer is a universal PKG for Intel and Apple silicon. It installs the daemon, CLI, menu-bar UI, and privileged helper, and registers its LaunchAgents. No separate service-install script is required. Endpoint Central's [Mac package workflow](https://www.manageengine.com/products/desktop-central/help/software_installation/creating_software_packages_for_mac_computers.html) supports PKG packages in the HTTP repository.
+
+1. Go to **Software Deployment → Package Creation → Packages → Add Package → Mac**.
+2. Upload `speakeasy-agent_<version>.pkg` to the HTTP repository and create the package.
+3. Target both Intel and Apple silicon pilot groups. Endpoint Central inventory exposes processor data, but its package documentation does not promise automatic architecture selection or universal-binary validation. Confirm the PKG and its nested executables on both architectures.
+4. Create a computer software configuration, select the package, apply a bounded **Deployment Policy**, and assign the pilot groups. The [Mac deployment workflow](https://www.manageengine.com/products/desktop-central/help/software-deployment/software-deployment-mac.html) documents package deployment, scheduling, notifications, and status.
+5. During the pilot, use a preflight script to record `id -u`, architecture, OS version, free disk space, current package receipt, and working directory. Endpoint Central's public Mac package and script documentation does not explicitly promise UID 0 execution. Confirm that the package runs with the required privileges before expanding the deployment.
+
+Install the PKG once. With `auto_update` set to `"automatic"` in the macOS configuration, the agent updates itself. Re-push the PKG only when Speakeasy changes the install layout.
+
+### macOS remote offices
+
+Mac packages use the HTTP repository. A Remote Office can receive packages through a Distribution Server. Confirm that the package has replicated before starting the deployment, especially when replication is scheduled or bandwidth-limited. Check the device's Remote Office assignment, repository reachability, Distribution Server health, and replication status. See [Mac software deployment](https://www.manageengine.com/products/desktop-central/help/software-deployment/software-deployment-mac.html) and [Distribution Server replication](https://www.manageengine.com/products/desktop-central/distribution-server-data-replication.html).
+
+## Deliver the managed configuration
+
+Wait until the installer configuration reports success, then deploy `managed.json` as a separate computer configuration. A collection does not guarantee that package install, file delivery, and restart run in order. Use status-gated waves.
+
+Use this schema for Windows:
+
+```json
+{
+  "v": 1,
+  "email": "jane.doe@example.com",
+  "org_token": "spk_org_…",
+  "org_slug": "example-corp",
+  "auto_update": "notify"
+}
+```
+
+Use the same document on macOS, but set `auto_update` to `"automatic"`. On Windows, use `"notify"` when Endpoint Central owns version rollouts, or `"automatic"` when the agent owns them. Do not schedule an Endpoint Central MSI upgrade at the same time as an automatic agent update.
+
+The configuration paths are:
+
+| Platform | Path | Required access |
+| --- | --- | --- |
+| Windows | `%ProgramData%\Speakeasy\managed.json` | LocalSystem can write it and standard users can read it |
+| macOS | `/Library/Application Support/Speakeasy/managed.json` | `root:wheel` with mode `0644` |
+
+The daemon, CLI, and UI must be able to read the identity. A Windows ACL limited to SYSTEM or a macOS mode of `0600` prevents enrollment. The `org_token` is readable by the device user, so treat it as a revocable organization-scoped credential. Before uploading it, review the Endpoint Central tenant's repository and dependency-file access, RBAC, audit logging, retention, and token-rotation procedure. If those controls do not meet the organization's requirements, retrieve the configuration at runtime from an authenticated, customer-controlled source instead.
+
+### Windows delivery
+
+Use **Configurations → Add Configurations → Configurations → Windows → File Folder operation → Computer Configuration** to copy a per-device `managed.json` to `%ProgramData%\Speakeasy\managed.json`. Enable overwrite and preserve inherited read access for standard users. Alternatively, use a PowerShell **Custom Script** as **System User** to retrieve the correct record from your tested mapping, write the file atomically, and grant user read access. After those customer-specific steps succeed, finish the script with this restart:
+
+```powershell
+& "$env:ProgramFiles\Speakeasy\speakeasyd.exe" -service restart
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+```
+
+Endpoint Central documents [Windows Custom Scripts, dependency files, success codes, and execution status](https://www.manageengine.com/products/desktop-central/help/computer_configuration/executing_custom_scripts.html). Do not report success until the mapped email is present, the file is readable by a standard user, and the restart succeeds.
+
+### macOS delivery
+
+Use a Mac **Custom Script** with device-specific JSON as a dependency and target it separately, or have the script retrieve the correct record from your tested mapping. Write the file atomically, then set ownership, permissions, and restart the console user's daemon:
+
+```bash
+chown root:wheel "/Library/Application Support/Speakeasy/managed.json"
+chmod 0644 "/Library/Application Support/Speakeasy/managed.json"
+
+console_user=$(/usr/bin/stat -f '%Su' /dev/console)
+if console_uid=$(/usr/bin/id -u "$console_user" 2>/dev/null) && \
+  [ "$console_uid" -ge 501 ] && \
+  /bin/launchctl print "gui/$console_uid" >/dev/null 2>&1; then
+  /bin/launchctl kickstart -k "gui/$console_uid/com.speakeasy.daemon"
+fi
+```
+
+The script must first create `/Library/Application Support/Speakeasy` and place the correct JSON at the shown path. Endpoint Central documents [Mac Custom Scripts, dependencies, schedules, retries, success codes, and troubleshooting logs](https://www.manageengine.com/products/desktop-central/help/configuration-management/executing_custom_scripts_for_computer-mac.html). If no user is signed in, finish after writing and securing the file. The LaunchAgent reads it when a user next signs in.
+
+## Set deployment windows, retries, and exit codes
+
+Use a **Deployment Policy** with a start and expiry window, user notification where appropriate, explicit postponement limits, and an approved reboot policy. Endpoint Central documents these controls in [Deployment Policies](https://www.manageengine.com/products/desktop-central/help/configuring_desktop_central/configuring_deployment_templates.html).
+
+Set a finite retry count across startup or logon and the agent refresh cycle. Stop after success or after the configured limit. Do not combine every-startup or every-refresh recurrence with a non-idempotent installer. ManageEngine notes that normal policy schedules do not apply to those repeated execution modes. See [Execution Settings](https://www.manageengine.com/products/desktop-central/help/configuring_execution_settings.html).
+
+For Windows packages, configure the expected success codes. [Windows Installer returns](https://learn.microsoft.com/en-us/windows/win32/msi/error-codes) `0` for success, `1641` for success with a restart initiated, and `3010` for success with a restart required. Accept `1641` or `3010` only when the package's **Deployment Policy** handles that restart outcome. Preserve the original code in logs. Do not convert every nonzero result to success.
+
+## Validate the pilot
+
+Check every architecture and Remote Office before expanding the target group:
+
+- Endpoint Central shows the installer and configuration tasks as successful under **All Configurations → Computer Configuration → Execution Status**.
+- The installed version matches the package version. On macOS, `pkgutil --pkg-info com.speakeasy.agent.pkg` returns the receipt.
+- Windows has `C:\Program Files\Speakeasy\speakeasyd.exe`, and the LocalSystem service is running.
+- macOS has a loaded `com.speakeasy.daemon` LaunchAgent for the console user.
+- `managed.json` is at the platform path, contains the mapped email, and is readable by the intended user.
+- `speakeasy status` reports that email with `source: managed`. On macOS, the menu-bar UI shows **Provisioned by IT**. On Windows, the MSI installs the tray UI but does not start it automatically, and the daemon works without it.
+- A configuration change takes effect after the daemon restart.
+
+## Troubleshoot a deployment
+
+Start with **All Configurations → Computer Configuration → Execution Status → Remarks**. Confirm the Endpoint Central agent is online, the device is assigned to the expected Remote Office, and the package has reached its repository or Distribution Server. Then check architecture, installer verification, execution identity, file permissions, restart result, and `speakeasy status`.
+
+For Windows installer failures, retain an MSI verbose log from a pilot rerun. ManageEngine provides specific guidance for [repository download errors](https://www.manageengine.com/products/desktop-central/software_installation_error_while_downloading_binaries.html), [wrong-architecture Win32 errors](https://www.manageengine.com/products/desktop-central/software-deployment-invalid-win32-application.html), [PowerShell errors](https://www.manageengine.com/products/desktop-central/software-deployment-powershell-script-error.html), [missing logon sessions](https://www.manageengine.com/products/desktop-central/software-deployment-specified-logon-session-does-not-exist.html), and [MSI error 1603](https://www.manageengine.com/products/desktop-central/software_installation_fatal_error.html). Daemon logs for the LocalSystem service are under `C:\Windows\System32\config\systemprofile\AppData\Local\Speakeasy\Logs\`.
+
+On macOS, enable troubleshooting logging for the **Custom Script**, inspect its **Remarks**, confirm the package receipt, and test the exact commands with absolute paths on a clean pilot. Check the effective UID, console user, file owner and mode, LaunchAgent state, Gatekeeper result, and Distribution Server replication.
+
+## Upgrade or remove the agent
+
+For Endpoint Central-controlled Windows upgrades, keep `auto_update` on `"notify"`, upload the new signed MSI as a new package, and deploy it with a version-aware precheck. If the agent controls upgrades, use `"automatic"` and do not schedule a competing Endpoint Central rollout. Validate the service, configuration, and status after either upgrade path. Use the package's MSI uninstall action for removal, then deploy a separate cleanup configuration if policy requires deleting `%ProgramData%\Speakeasy\managed.json` and the empty `%ProgramData%\Speakeasy` directory. Do not delete configuration before the uninstall reports success.
+
+For routine macOS upgrades, leave `auto_update` on `"automatic"` and do not repeatedly deploy the PKG. For a package-layout change, upload and verify the new PKG, then repeat the pilot. For removal, deploy an organization-reviewed uninstall script that unloads the current Speakeasy launch services and removes the current installer-managed files. Validate it against the current package before use. Remove `/Library/Application Support/Speakeasy/managed.json` separately, and remove any Speakeasy configuration profile if one was deployed by another management path. Removing only the package receipt does not uninstall files.
