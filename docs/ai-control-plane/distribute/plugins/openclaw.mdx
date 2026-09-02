@@ -13,11 +13,11 @@ Once installed, the plugin captures OpenClaw sessions and tool calls for [Observ
   When a model is configured with Claude CLI OAuth authentication, OpenClaw
   delegates the model and tool loop out of process to the Claude Code CLI, and
   none of the plugin's hooks fire — no prompts, tool calls, replies, or usage
-  are recorded for that model. This is the login default whenever a
-  `claude-cli` profile exists. Coverage requires a model whose agent runtime is
-  OpenClaw's embedded runtime. Instrument Claude Code itself through the
-  [Anthropic plugin](/docs/ai-control-plane/distribute/plugins/anthropic) to
-  cover the delegated path.
+  are recorded for that model. This is the login default whenever a `claude-cli`
+  profile exists. Coverage requires a model whose agent runtime is OpenClaw's
+  embedded runtime. Instrument Claude Code itself through the [Anthropic
+  plugin](/docs/ai-control-plane/distribute/plugins/anthropic) to cover the
+  delegated path.
 </Callout>
 
 <Callout title="OpenClaw has no OTEL exporter" type="info">
@@ -92,9 +92,9 @@ openclaw gateway restart
 ```
 
 <Callout type="warning">
-  A live session that records tool calls but no prompts, replies, or token
-  usage is the signature of a missing `allowConversationAccess`. Set the flag
-  and restart the Gateway.
+  A live session that records tool calls but no prompts, replies, or token usage
+  is the signature of a missing `allowConversationAccess`. Set the flag and
+  restart the Gateway.
 </Callout>
 
 ## Roll out across a fleet
@@ -131,15 +131,15 @@ If tool calls arrive but prompts do not, check `allowConversationAccess`. If not
 
 The plugin translates OpenClaw's typed plugin hooks into the platform's canonical hook events:
 
-| OpenClaw hook                       | Recorded as                                             |
-| ----------------------------------- | ------------------------------------------------------- |
-| `session_start`, `session_end`      | Session start and end                                   |
-| `before_agent_run`                  | User prompt                                             |
-| `before_tool_call`, `after_tool_call` | Tool call and result                                   |
-| `agent_end`                         | Assistant response, with the turn's token and cost usage |
-| `subagent_spawned`, `subagent_ended` | Subagent start and end                                 |
-| `llm_input`, `llm_output`           | Model request and response                              |
-| `before_compaction`, `after_compaction` | Context compaction                                  |
+| OpenClaw hook                           | Recorded as                                              |
+| --------------------------------------- | -------------------------------------------------------- |
+| `session_start`, `session_end`          | Session start and end                                    |
+| `before_agent_run`                      | User prompt                                              |
+| `before_tool_call`, `after_tool_call`   | Tool call and result                                     |
+| `agent_end`                             | Assistant response, with the turn's token and cost usage |
+| `subagent_spawned`, `subagent_ended`    | Subagent start and end                                   |
+| `llm_input`, `llm_output`               | Model request and response                               |
+| `before_compaction`, `after_compaction` | Context compaction                                       |
 
 Prompt submission and tool calls are blocking, so a risk policy set to block denies the action in OpenClaw rather than only recording it, and [spend rules](/docs/ai-control-plane/observe/costs/budgets) deny prompts and tool calls once an actor is over budget. Tool results, errors, subagent lifecycle, model traffic, and compaction are recorded without blocking. A blocked tool call is recorded as an error rather than a success, even though OpenClaw reports the block through the same hook it uses for completed calls.
 
@@ -148,6 +148,6 @@ Because there is no OTEL stream, a few details available for Claude Code are not
 - No permission-request surface, so permission prompts are neither recorded nor gated — OpenClaw exposes approval only as a response to a tool-call gate
 - No skill source resolution or prompt attachment capture
 - No MCP inventory, so configured MCP servers are not reported as part of the session
-- [OTEL forwarding](/docs/ai-control-plane/org-admin/logging-and-telemetry/otel-forwarding) copies OTEL payloads only, so OpenClaw events are not forwarded to an external collector
+- Plugin-only OpenClaw events are not included in [OTLP data exports](/docs/ai-control-plane/observe/opentelemetry)
 
 Token and cost totals are unaffected: OpenClaw reports usage at the end of each turn and the plugin forwards it, so [Costs](/docs/ai-control-plane/observe/costs) attributes OpenClaw spend normally.
