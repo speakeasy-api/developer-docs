@@ -1,0 +1,221 @@
+---
+title: Platform MCP
+description: "Reference for the Speakeasy Platform MCP: how to connect an agent to the AI Control Plane, how the tools behave, and what every tool does."
+---
+
+import { Callout } from "@/mdx/components";
+import { CodeWithTabs } from "@/components/code-tabs";
+
+The Platform MCP is a first-party MCP server that exposes the AI Control Plane to an agent. An org admin working in Claude Code, Cursor, Codex, or another MCP client can find and add MCP servers, finish their setup, put them on a plugin, author skills, manage risk policies, and read observability data without opening the dashboard.
+
+Every tool call is authorized against a live org admin grant, and the server never accepts or returns credentials, OAuth codes, or client secrets. Steps that need a secret, such as OAuth consent or entering a provider client ID, hand off to the dashboard through a link the tool returns.
+
+<Callout type="info">
+  The Platform MCP is in preview and rolls out to eligible organizations. It requires the feature to be enabled for the organization and the `org:admin` scope, which the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes. Open **Platform MCP** in the organization navigation of the dashboard to enable access and install a client.
+</Callout>
+
+## Connect an agent
+
+The Platform MCP ships as a plugin from the public Speakeasy marketplace. The plugin registers the MCP server and bundles the reviewed skills described below. Installing from the marketplace is the recommended path for every client that supports one.
+
+<CodeWithTabs client:visible tabs={[
+  { label: "Claude Code", language: "bash", code: "/plugin marketplace add https://github.com/speakeasy-api/marketplace\n/plugin install speakeasy@speakeasy" },
+  { label: "Codex", language: "bash", code: "codex plugin marketplace add https://github.com/speakeasy-api/marketplace\n# then open /plugins and install speakeasy-codex" },
+  { label: "OpenCode", language: "bash", code: "git clone https://github.com/speakeasy-api/marketplace marketplace\ncp -R marketplace/opencode-plugins/speakeasy/. ~/.config/opencode/" }
+]} />
+
+Cursor and Claude Cowork import the marketplace through their settings rather than a command:
+
+- **Cursor**: open **Settings > Plugins > Import**, paste the marketplace repository URL, and install the `speakeasy-cursor` plugin.
+- **Claude Cowork**: in Claude.ai, open **Organization Settings > Plugins > Add plugin > Sync from GitHub**, paste the marketplace repository URL, and then install the `speakeasy` plugin for the account.
+
+After installation, authorize the connection. In Claude Code, run `/mcp`, select **Platform MCP**, and choose **Authenticate**. Other clients prompt for authorization on first use. The browser flow asks which organization to connect. One authorization covers every tool in that organization.
+
+### Connect without the marketplace
+
+Any MCP client that supports streamable HTTP with OAuth can connect directly to the endpoint. This path registers the MCP server only. The reviewed skills are not installed.
+
+<CodeWithTabs client:visible tabs={[
+  { label: "Claude Code / Cursor", language: "json", code: "{\n  \"mcpServers\": {\n    \"platform\": {\n      \"type\": \"http\",\n      \"url\": \"https://app.getgram.ai/platform-mcp\"\n    }\n  }\n}" },
+  { label: "Codex", language: "toml", code: "[mcp_servers.platform]\nurl = \"https://app.getgram.ai/platform-mcp\"" },
+  { label: "OpenCode", language: "json", code: "{\n  \"mcp\": {\n    \"platform\": {\n      \"type\": \"remote\",\n      \"url\": \"https://app.getgram.ai/platform-mcp\",\n      \"enabled\": true\n    }\n  }\n}" }
+]} />
+
+### Protocol and authorization
+
+| Property | Value |
+| --- | --- |
+| Endpoint | `https://app.getgram.ai/platform-mcp` |
+| Transport | Streamable HTTP, stateless, JSON responses, `POST` only |
+| Authorization | OAuth 2.1 authorization code with PKCE (`S256`) and refresh tokens |
+| Client registration | Dynamic client registration, with client ID metadata documents where the organization allows them |
+| Discovery | `/.well-known/oauth-protected-resource/platform-mcp` and `/.well-known/oauth-authorization-server/platform-mcp` |
+| Request body limit | 64 KiB |
+
+A connection stays authorized without a new browser round trip while it is in use. Access tokens last one hour and rotate through refresh tokens. A connection expires after 30 days without use and needs a fresh authorization after 90 days regardless of use. The **Platform MCP** page in the dashboard shows the connection state and the reason a client needs to reconnect.
+
+Installing the plugin, downloading it, or copying a configuration block does not itself grant access. Setup in the dashboard advances only after the AI Control Plane observes an authorized connection from the client.
+
+## How the tools behave
+
+**Start with context.** Call `get_platform_context` at the start of a conversation. It reports the connected organization and describes how an MCP server reaches people, which frames every other request.
+
+**Scope is explicit.** Most tools take a `project_slug` or `project_id` and act on that project only. Tools that look across the organization, such as `find_mcp` with a query, label each result with its project. Nothing falls back to a default project except the risk policy read tools, which use the organization's default project when no project is named.
+
+**Adding a server does not distribute it.** Registering an MCP server writes private project configuration. Nobody receives the server until a tool such as `distribute_mcp_to_plugin` puts it on a plugin and the plugin is published. The same holds for skills: `create_skill` stores instructions that no agent loads until `distribute_skill` gives them to a plugin or an assistant.
+
+**Mutations ask first.** Tools that connect a server to an identity provider or change which clients may sign in require a `confirmed` flag, and their descriptions instruct the agent to ask before setting it. Tools that edit stored records take an `expected_version` and refuse a write when the record changed since it was read. Write tools that can be retried take an `idempotency_key`, so a repeated call settles on the same result.
+
+**Secrets stay out of chat.** No tool accepts an API key, password, token, OAuth code, client secret, or secret header, and no tool returns one. Setup steps that need a secret return a dashboard URL or an authorization URL for the person to open.
+
+**Readiness is checked live.** Readiness tools report the last stored check by default. Forcing a fresh authenticated probe is limited to three per minute per server. Having no observations is never treated as evidence that a server is healthy.
+
+**Rate limits apply.** Catalog, registration, lifecycle, and skills tools share a budget of five calls per minute per connection and 50 per minute per organization. Risk mutations, sensitive diagnostics, and session recall have separate, lower allowances.
+
+### Bundled skills
+
+The marketplace plugin ships two reviewed skills. Each one runs a complete dashboard workflow through the tools below, preserving the same project selection, confirmations, and readiness checks the dashboard requires.
+
+| Skill | Workflow |
+| --- | --- |
+| `add-mcp-from-catalog` | Search the [MCP Catalog](/docs/ai-control-plane/connect/catalog), inspect an entry, add it to a chosen project, finish setup and authorization, confirm it is working, set client admission, and add it to an existing plugin. |
+| `add-mcp-from-remote-url` | Inspect a remote MCP server by its streamable HTTP URL, add it to a chosen project, and then follow the same setup, readiness, admission, and plugin steps. |
+
+## Tools
+
+Tools are grouped by the part of the platform they act on. The **Type** column marks whether a tool only reads state or writes to it. Tools that are not yet enabled for an organization still appear in the client. They answer with a message that the capability is not switched on rather than disappearing from the list.
+
+### Orientation
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `get_platform_context` | Read | Reports the connected organization and an overview of how MCP servers reach people. Call this first in a new conversation. |
+| `list_projects` | Read | Lists the projects in the organization by identifier, name, and slug. A project is where MCP servers and skills are kept before anyone receives them. |
+
+### Catalog and inspection
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `search_mcp_catalog` | Read | Searches the reviewed [MCP Catalog](/docs/ai-control-plane/connect/catalog) by query or provider key. Searching adds nothing to a project. |
+| `inspect_mcp_candidate` | Read | Looks at one candidate before adding it, either a catalog entry or an HTTPS streamable HTTP URL. Catalog results are marked as reviewed, direct URLs as unreviewed. Inspection changes nothing. |
+
+### Adding MCP servers
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `register_catalog_mcp` | Write | Adds one catalog entry to a named project with only its declared non-secret configuration. Up to five active registrations per project. |
+| `register_remote_mcp` | Write | Adds an MCP server by its streamable HTTP URL to a named project. The URL is revalidated and re-inspected before it is stored. |
+| `get_setup_handoff` | Write | Returns the dashboard URL where the rest of a server's setup is finished, including its source and authentication. The link is not to be logged or shared. |
+| `attach_platform_mcp_identity_provider` | Write | Connects a server to the OAuth provider it advertises by resolving provider metadata and performing dynamic client registration. Requires explicit confirmation and returns an authorization URL for the person to open. |
+
+### Managing MCP servers
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `find_mcp` | Read | Finds servers already set up. Without a query it pages through one project. With a query and no project it searches the organization and returns one unique match or up to ten labeled candidates. |
+| `get_mcp` | Read | Returns a summary of one server in a named project. |
+| `update_mcp_metadata` | Write | Renames a fully set-up server. Nothing else changes, including its configuration, readiness, or plugin membership. |
+| `disable_mcp` | Write | Turns a server off so people stop being able to use it. It stays in the project and in every plugin that carries it. |
+| `enable_mcp` | Write | Turns a disabled server back on and republishes the plugins that already carry it. It is not added to any new plugin. |
+
+### Readiness and troubleshooting
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `get_mcp_readiness` | Read | Reports whether a server is working from the last stored check. Set `force` to run a fresh authenticated probe, limited to three per minute per server. |
+| `get_mcp_repair_plan` | Read | Lists the safe next actions for a server that is not working, based on the last stored check. |
+| `get_mcp_diagnostics` | Read | Works out why a server is failing by combining the latest server-side check, its call outcomes against the organization baseline, and which apps reported failures. Attributes the fault to platform configuration, the provider, the calling app, or indeterminate. |
+
+### Client admission
+
+Client admission controls which MCP client apps may sign in to a server. See [MCP Connections](/docs/ai-control-plane/org-admin/mcp-connections) for the dashboard view.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `get_mcp_client_admission` | Read | Shows the admission setting in force, the settings available, and any custom client ID metadata URLs the server allows. Read this before proposing a change. |
+| `set_mcp_client_admission` | Write | Sets the admission mode to `presets` (known apps only), `open` (any app with a valid client ID metadata document), or `disabled` (apps fall back to dynamic client registration). Requires explicit confirmation. |
+
+### Plugins
+
+A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/distribute/plugins) for how plugins are published. The Platform MCP does not create, rename, or delete plugins.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `list_plugins` | Read | Lists the plugins in a project with how much each carries, who receives it, and whether it has been published. |
+| `get_plugin` | Read | Returns one plugin and its contents: its MCP servers and its skills with the version each is fixed to. The plugin is named exactly by ID, slug, or name. |
+| `distribute_mcp_to_plugin` | Write | Adds a working server to an existing plugin so everyone the plugin is shared with receives it. An ambiguous or unknown plugin name is refused rather than falling back to the default plugin. |
+| `remove_mcp_from_plugin` | Write | Removes a server from a plugin, undoing the distribution. Only memberships this flow created are removed. |
+
+### Skills
+
+A skill is a written set of instructions an agent loads when it applies. Versions are fixed snapshots, so a correction is recorded as a new version rather than an edit. See [Skills](/docs/ai-control-plane/distribute/skills) for the dashboard view.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `list_skills` | Read | Lists the skills in a project, newest change first, with the number of versions each has. |
+| `get_skill` | Read | Reads one skill. Set `include_content` to return the instructions themselves. |
+| `list_skill_versions` | Read | Lists a skill's versions, newest first. |
+| `create_skill` | Write | Creates a skill from complete SKILL.md content, up to 64 KiB. An existing skill with the same name records a new version instead. |
+| `add_skill_version` | Write | Records a new version from complete replacement content. Refuses the write if the skill changed since the expected version was read. |
+| `update_skill_metadata` | Write | Renames a skill or changes its display name and summary without changing its instructions. |
+| `distribute_skill` | Write | Gives a skill to one plugin or one assistant in the same project. This is the only way a skill takes effect. |
+
+### Risk policies and exclusions
+
+Risk policies and exclusions are the rules the [Secure](/docs/ai-control-plane/secure) section enforces. Read tools accept an explicit project or default to the organization's default project. Policy and exclusion mutations are enabled per organization during the rollout, and exact match values are never returned or logged.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `list_risk_policies` | Read | Lists privacy-safe risk policy summaries in a project. |
+| `get_risk_policy` | Read | Reads one risk policy with its compatibility metadata. |
+| `create_risk_policy` | Write | Creates a standard or prompt-based risk policy in an explicit project. |
+| `update_risk_policy` | Write | Patches allowed fields on a risk policy. Omitted fields are preserved. |
+| `list_risk_exclusions` | Read | Lists risk exclusions in a project, optionally filtered by policy. |
+| `create_risk_exclusion` | Write | Creates an exclusion matched by exact value, rule ID, source, or entity type. Regex exclusions cannot be created here. |
+| `update_risk_exclusion` | Write | Enables or disables one exclusion without changing its definition. |
+
+### Observability
+
+These tools read the same data as [MCP and tools](/docs/ai-control-plane/observe/mcp-and-tools) in the Observe section. Every value is aggregated server-side and carries the window it covers. None of them return arguments, results, bodies, headers, or identities.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `get_project_overview` | Read | Summarizes how a project's MCP servers have behaved and what has failed over a window of 1h, 24h, 7d, or 30d. Start here for any question about how a project is doing. |
+| `query_mcp_events` | Read | Breaks one server's calls down by tool and outcome over a window of up to 24h. |
+| `query_mcp_metrics` | Read | Returns one server's totals over a window of 1h, 24h, or 7d: call volume, failures, failure rate, average latency, and active users. |
+| `query_mcp_traces` | Read | Lists one server's individual calls, newest first, each reduced to a reference to quote when escalating. Filter by outcome. |
+| `get_user_mcp_status` | Read | Reports one person's state against one server. Not yet available: it depends on organization summary tools that have not shipped. |
+
+### Sessions
+
+Session recall requires [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) capture to be enabled for the organization. Both tools see only the connected person's own sessions.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `list_my_sessions` | Read | Lists the connected person's captured coding-agent sessions with titles, summaries, project, working directory, and last activity. Never returns transcript content. |
+| `continue_session` | Write | Renders a redacted handoff digest of one previous session so its work can continue in the current conversation. Sensitive values are masked and tool inputs and outputs are omitted. Every call records a lineage edge and an audit log entry. |
+
+### Documentation and feedback
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `search_gram_docs` | Read | Searches the reviewed provider setup guides and returns up to five cited excerpts with links to the full guide. It never reads the live web or unreviewed sources. |
+| `send_platform_mcp_feedback` | Write | Stores one short feedback report about the Platform MCP for the Speakeasy team, with a category and optional rating and note. The agent asks for consent before submitting. |
+
+## Out of scope
+
+The following steps stay in the dashboard and are not reachable through the Platform MCP:
+
+- OAuth consent, secret entry, and client ID metadata document setup for an MCP server
+- Attaching a [remote identity provider](/docs/ai-control-plane/org-admin/remote-identity-providers)
+- Creating, renaming, or deleting plugins, organizations, or projects
+- Changing employees, devices, or team membership
+- Authoring a new MCP server from an OpenAPI document or function
+- Deleting MCP servers, skills, policies, or exclusions
+
+## Related
+
+- [Plugins](/docs/ai-control-plane/distribute/plugins) for publishing bundles to agent marketplaces
+- [MCP Catalog](/docs/ai-control-plane/connect/catalog) for the reviewed servers the search tools return
+- [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for the org admin grant every tool requires
+- [Platform security](/docs/ai-control-plane/reference/platform-security) for how the platform handles credentials and data
