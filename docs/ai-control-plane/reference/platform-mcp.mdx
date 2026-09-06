@@ -6,7 +6,7 @@ description: "Reference for the Speakeasy Platform MCP: how to connect an agent 
 import { Callout } from "@/mdx/components";
 import { CodeWithTabs } from "@/components/code-tabs";
 
-The Platform MCP is a first-party MCP server that exposes the AI Control Plane to an agent. An org admin working in Claude Code, Cursor, Codex, or another MCP client can find and add MCP servers, finish their setup, put them on a plugin, author skills, manage risk policies, and read observability data without opening the dashboard.
+The Platform MCP is a first-party MCP server that exposes the AI Control Plane to an agent. An org admin working in Claude Code, Cursor, Codex, or another MCP client can find and add MCP servers, finish their setup, put them on a plugin, author skills, manage risk policies, configure telemetry delivery, and read observability data without opening the dashboard.
 
 Every tool call is authorized against a live org admin grant, and the server never accepts or returns credentials, OAuth codes, or client secrets. Steps that need a secret, such as OAuth consent or entering a provider client ID, hand off to the dashboard through a link the tool returns.
 
@@ -64,7 +64,7 @@ Installing the plugin, downloading it, or copying a configuration block does not
 
 **Adding a server does not distribute it.** Registering an MCP server writes private project configuration. Nobody receives the server until a tool such as `distribute_mcp_to_plugin` puts it on a plugin and the plugin is published. The same holds for skills: `create_skill` stores instructions that no agent loads until `distribute_skill` gives them to a plugin or an assistant.
 
-**Mutations ask first.** Tools that connect a server to an identity provider or change which clients may sign in require a `confirmed` flag, and their descriptions instruct the agent to ask before setting it. Tools that edit stored records take an `expected_version` and refuse a write when the record changed since it was read. Write tools that can be retried take an `idempotency_key`, so a repeated call settles on the same result.
+**Mutations ask first.** Tools that connect a server to an identity provider, change which clients may sign in, or create a data export require a `confirmed` flag, and their descriptions instruct the agent to ask before setting it. Tools that edit stored records take an `expected_version` and refuse a write when the record changed since it was read. Write tools that can be retried take an `idempotency_key`, so a repeated call settles on the same result.
 
 **Secrets stay out of chat.** No tool accepts an API key, password, token, OAuth code, client secret, or secret header, and no tool returns one. Setup steps that need a secret return a dashboard URL or an authorization URL for the person to open.
 
@@ -176,7 +176,7 @@ Risk policies and exclusions are the rules the [Secure](/docs/ai-control-plane/s
 
 ### Observability
 
-These tools read the same data as [MCP and tools](/docs/ai-control-plane/observe/mcp-and-tools) in the Observe section. Every value is aggregated server-side and carries the window it covers. None of them return arguments, results, bodies, headers, or identities.
+These tools read the same data as [MCP and tools](/docs/ai-control-plane/observe/mcp-and-tools) and [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the Observe section. Every value is aggregated or summarized server-side and carries the window it covers. None of them return arguments, results, bodies, headers, URLs, attributes, or identities.
 
 | Tool | Type | What it does |
 | --- | --- | --- |
@@ -184,7 +184,19 @@ These tools read the same data as [MCP and tools](/docs/ai-control-plane/observe
 | `query_mcp_events` | Read | Breaks one server's calls down by tool and outcome over a window of up to 24h. |
 | `query_mcp_metrics` | Read | Returns one server's totals over a window of 1h, 24h, or 7d: call volume, failures, failure rate, average latency, and active users. |
 | `query_mcp_traces` | Read | Lists one server's individual calls, newest first, each reduced to a reference to quote when escalating. Filter by outcome. |
+| `list_recent_tool_calls` | Read | Lists the newest tool calls in one project over a window of 1h or 24h, filtered by an outcome of `success`, `error`, `blocked`, or `pending`. Each call is reduced to when it happened, the tool and target, how it ended, and the calling app where known. Returns 10 calls by default and 50 at most, with a link to the full Tool Logs page. |
 | `get_user_mcp_status` | Read | Reports one person's state against one server. Not yet available: it depends on organization summary tools that have not shipped. |
+
+### Data exports
+
+A data export delivers OpenTelemetry to an OTLP/HTTP destination outside the platform. See [Data export](/docs/ai-control-plane/observe/opentelemetry) for the dashboard view. A destination and the route that feeds it are created together, and each project carries at most one route per data source.
+
+Header values are neither accepted nor returned. A destination created through the Platform MCP has no headers, so the authentication a collector requires is added in the dashboard through the management URL each tool returns.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `list_data_exports` | Read | Lists the configured OTEL destinations and routes, either for one named project or across the organization when no project is named. Each destination carries its endpoint URL, sensitive-data policy, and header names with whether each has a value, never the values themselves. Returns 50 records per collection by default and 100 at most, flagging a truncated result. |
+| `create_data_export` | Write | Creates one destination and one route for a project in a single transaction, sending either `product_telemetry` or `risk_findings` to an HTTP or HTTPS endpoint that carries no credentials, query parameters, or fragments. Sensitive fields are excluded unless `include` is set, and delivery starts immediately unless `enabled` is false. Requires explicit confirmation, refuses a second route for the same data source, and audit logs both records. |
 
 ### Sessions
 
@@ -211,6 +223,8 @@ The following steps stay in the dashboard and are not reachable through the Plat
 - Creating, renaming, or deleting plugins, organizations, or projects
 - Changing employees, devices, or team membership
 - Authoring a new MCP server from an OpenAPI document or function
+- Adding authentication headers to a data export destination
+- Editing, pausing, or deleting a data export destination or route
 - Deleting MCP servers, skills, policies, or exclusions
 
 ## Related
@@ -218,4 +232,6 @@ The following steps stay in the dashboard and are not reachable through the Plat
 - [Plugins](/docs/ai-control-plane/distribute/plugins) for publishing bundles to agent marketplaces
 - [MCP Catalog](/docs/ai-control-plane/connect/catalog) for the reviewed servers the search tools return
 - [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for the org admin grant every tool requires
+- [Data export](/docs/ai-control-plane/observe/opentelemetry) for the dashboard view of OTEL destinations and routes
+- [Tool Logs](/docs/ai-control-plane/observe/tool-logs) for the full execution log the recent tool call summaries come from
 - [Platform security](/docs/ai-control-plane/reference/platform-security) for how the platform handles credentials and data
