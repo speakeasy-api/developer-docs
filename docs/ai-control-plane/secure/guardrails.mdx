@@ -1,40 +1,122 @@
 ---
 title: Guardrails
-description: "Create and manage the guardrail policies, detection rules, and exclusion rules that scan agent sessions for risk."
+description: "Create and manage the risk policies that scan agent sessions for secrets, sensitive information, and prompt-defined risks."
 ---
 
-import { Callout } from "@/mdx/components";
+import { Callout, CardGrid } from "@/mdx/components";
 
-The **Guardrails** page configures the policies that scan agent session interactions for secrets, sensitive information, and prompt-defined risks. Open it from **Secure > Guardrails** in the dashboard.
-
-A policy binds four things: the detection rules that decide what counts as a finding, the scope that decides which content those rules examine, the action taken when they match, and the audience of users the policy applies to. Findings surface as ranked signals in [Watchdog](/docs/ai-control-plane/secure/watchdog).
-
-Every detection setting trades recall against accuracy. Widening what a policy examines catches more real risk and also produces more false positives. The controls on this page exist to place that tradeoff deliberately, per policy, rather than accepting one global compromise.
-
-## Access requirements
+Guardrails are risk policies: rules that scan agent session interactions for secrets, sensitive information, and prompt-defined risks, then flag or block what they match. Every finding a policy records feeds [Watchdog](/docs/ai-control-plane/secure/watchdog) for triage.
 
 <Callout type="info">
-  Viewing this page and creating, editing, or deleting policies require the `org:admin` scope. Access is included in the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) but not the Member role.
+  Viewing this page and creating, editing, or deleting policies require the `org:admin` scope.
 </Callout>
 
-## Policy list
+Create and manage policies on the **Risk Policies** page, under **Secure > Risk Policies** in the dashboard. Each policy binds four things, configured as steps in the policy editor:
 
-The page has three tabs: **Policies**, **Detection Rules**, and **Exclusion Rules**. The [Detection Rules](/docs/ai-control-plane/secure/detection-rules) tab catalogs the built-in detectors and custom rules that policies compose, and the [Exclusion Rules](/docs/ai-control-plane/secure/exclusions) tab manages the rules that suppress false-positive findings.
+- **Detection**: what counts as a finding
+- **Scope**: which content is examined
+- **Action**: what happens on a match
+- **Audience**: the users the policy applies to
 
-The policy table shows each policy's name, action, severity, categories or prompt, scope, audience, and created and updated dates. Each policy has an enabled toggle and row actions to edit or delete — deleting shows the impact and affected rule groups before confirming. Create a policy with **New Policy**.
+The wider a policy scans, the more real risk it catches and the more false positives it produces. Set each of the four bindings deliberately rather than defaulting to maximum coverage.
 
-## Policy types
+This page covers:
 
-Two kinds of policy exist, and the choice is made before the editor opens:
+<CardGrid
+  cards={[
+    {
+      icon: "pen-tool",
+      title: "Create a policy",
+      description: "Step through the policy editor from type to Create policy",
+      href: "#create-a-policy",
+    },
+    {
+      icon: "square-asterisk",
+      title: "Detectors",
+      description: "The detector categories a built-in policy turns on",
+      href: "#detectors",
+    },
+    {
+      icon: "message-square-code",
+      title: "Prompt-based policies",
+      description: "Plain-language guardrails judged by an LLM",
+      href: "#prompt-based-policies",
+    },
+    {
+      icon: "list-filter",
+      title: "Detection scope",
+      description: "Which session content a policy evaluates",
+      href: "#detection-scope",
+    },
+    {
+      icon: "sliders-horizontal",
+      title: "Action, severity, and audience",
+      description: "What happens on a match, and for whom",
+      href: "#action-severity-and-audience",
+    },
+    {
+      icon: "list-checks",
+      title: "Managing existing policies",
+      description: "Enable, disable, edit, or delete a policy from the table",
+      href: "#managing-existing-policies",
+    },
+    {
+      icon: "spell-check-2",
+      title: "False positives",
+      description: "Findings dismissed by hand, and how to restore them",
+      href: "#false-positives",
+    },
+    {
+      icon: "key-round",
+      title: "Bypass requests",
+      description: "How blocked members request an exception, and where it is decided",
+      href: "#bypass-requests",
+    },
+    {
+      icon: "folder-tree",
+      title: "How many policies to create",
+      description: "Where to split policies, and where to combine them",
+      href: "#how-many-policies-to-create",
+    },
+  ]}
+/>
 
-- **Built-in detector** — scans for secrets, sensitive data, and risky tool calls using the built-in detector catalog and custom rules
-- **Prompt-based** — describes the behavior to catch in plain language, and an LLM judge evaluates each in-scope message
+## Create a policy
 
-Both editors are stepped wizards. Built-in detector policies step through **Detect > Scope > Action > Review**; prompt-based policies through **Guardrail > Scope > Evaluate > Action > Review**. Any step is reachable at any time, and the active step is held in the URL, so browser navigation moves between steps and a step is shareable as a link.
+1. On the **Policies** tab, select **New Policy**. The policy type chooser opens.
+
+   ![The Policies tab with the New Policy button highlighted](/assets/docs/ai-control-plane/secure/policy-new-button.webp)
+
+2. Select the policy type. The editor opens on that type's first step.
+   - **Built-in detector**: scans with the [detector catalog](#detectors) and custom detection rules. Choose it when the risk is a recognizable pattern: secrets, PII, financial data, risky tool calls.
+   - **Prompt-based**: an LLM judge evaluates each in-scope message against a [plain-language guardrail](#prompt-based-policies). Choose it when the risk is contextual rather than a pattern.
+
+   ![The policy type chooser with a Built-in detector card and a Prompt-based card](/assets/docs/ai-control-plane/secure/policy-type-chooser.webp)
+
+3. Complete each step, selecting **Continue** to advance: the [detectors](#detectors) or the [guardrail](#prompt-based-policies), then the [detection scope](#detection-scope), then the [action, severity, and audience](#action-severity-and-audience).
+4. On the **Review** step, check the summary and select **Create policy**. The policy appears in the policy table, enabled. Leave the name blank to generate one from the detectors or the guardrail.
+
+   ![The Review step with the Create policy button highlighted above the configuration summary](/assets/docs/ai-control-plane/secure/policy-review-step.webp)
+
+Built-in detector policies step through **Detect > Scope > Action > Review**. Prompt-based policies add an [Evaluate step](#prompt-based-policies): **Guardrail > Scope > Evaluate > Action > Review**. The active step is held in the URL, so browser navigation moves between steps and a step is shareable as a link.
 
 ## Detectors
 
-The **Detect** step turns on detector categories. A category can be enabled wholesale, or expanded to enable and disable its individual rules — see [Detection Rules](/docs/ai-control-plane/secure/detection-rules) for the full catalog and for authoring custom rules.
+On the **Detect** step of a built-in detector policy:
+
+1. Toggle on each detector category to scan. The **Built-in rules** header counts the categories that are on.
+
+   ![The Detect step of the policy editor with the Secrets category card highlighted, showing its toggle, rule count, and Customize button](/assets/docs/ai-control-plane/secure/policy-detect-step.webp)
+
+2. To adjust individual rules, select **Customize** on an enabled category. A panel opens listing the category's rule groups:
+   - Toggle a rule group on or off
+   - Expand a group to toggle its single rules
+   - Search to find a rule across groups
+   - **Enable all** and **Disable all** reset the whole selection
+
+   ![The Customize Secrets panel with the rule search field, Enable all and Disable all, and per-group toggles with rule counts](/assets/docs/ai-control-plane/secure/policy-detect-customize.webp)
+
+3. Select **Continue**.
 
 | Category | Detects | Notes |
 | -------- | ------- | ----- |
@@ -44,104 +126,83 @@ The **Detect** step turns on detector categories. A category can be enabled whol
 | Government identifiers | SSNs, passport numbers, national IDs, tax IDs | Covers US, UK, EU, and APAC identifier formats |
 | Healthcare information | Medical record numbers, patient data, Medicare IDs | |
 | Off-policy content | Requests that violate acceptable use guidelines | |
-| Prompt injection | Indirect injection through tool output and hidden instructions | |
+| Prompt injection | Indirect injection through tool output and hidden instructions | Evaluated by an LLM judge |
 | Shadow MCP | Tool calls that don't come from a Speakeasy-issued MCP server | Requires Speakeasy hooks on the agent. See [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp) |
 | Destructive tools | MCP tool calls annotated as destructive | Requires Speakeasy hooks and Speakeasy-issued tool metadata |
 | Destructive CLI commands | Shell, git, database, and cloud CLI patterns such as `rm -rf`, `git push --force`, `DROP TABLE`, and `kubectl delete ns` | Covers native terminal tools and MCP-routed tools whose arguments carry destructive content |
 | Non-corporate accounts | Sessions authenticated with a personal AI account, or an account whose email domain is off the approved list | Approved domains are set on the policy |
 | Custom patterns | Organization-specific patterns | Authored on the Detection Rules page |
 
-Detectors differ in cost and performance. Pattern and classifier-backed detectors are cheap enough to run broadly, while LLM judges cost a model call per evaluated message. Detection scope is what keeps the expensive ones affordable.
+See [Detection Rules](/docs/ai-control-plane/secure/detection-rules) for the full catalog and for authoring custom rules.
 
-Three categories detect activity that has already happened rather than content in flight, so they can only flag and never block: destructive tools, destructive CLI commands, and non-corporate accounts.
+Pattern and classifier-backed detectors are cheap to run broadly. LLM-judged categories cost a model call per evaluated message, so give them a narrow [detection scope](#detection-scope).
 
-Most findings carry a match span marking the exact portion of the original content that triggered the detector. Spans drive the highlighting in session transcripts, and they supply the value that prefills an exclusion.
+Three categories detect activity that has already happened, so they can only flag and never block: destructive tools, destructive CLI commands, and non-corporate accounts.
+
+Most findings carry a match span marking the exact content that triggered the detector. Spans drive the highlighting in session transcripts and prefill the value when creating an [exclusion](/docs/ai-control-plane/secure/exclusions).
 
 ## Prompt-based policies
 
-A prompt-based policy replaces the detector catalog with a plain-language guardrail. Use one when the risk is contextual rather than a pattern — an exfiltration attempt through `curl`, a refund issued without prior authorization, a delete against production.
+A prompt-based policy replaces the detector catalog with a plain-language guardrail. Use one when the risk is contextual rather than a pattern: an exfiltration attempt through `curl`, a refund issued without prior authorization, a delete against production.
 
-### How prompt-based policies work
+On the **Guardrail** step:
 
-The guardrail describes the behavior to flag. An LLM judge evaluates each in-scope message against that description and returns a verdict: a binary decision, a confidence score, and a human-readable rationale carried alongside the finding, so a reviewer sees why the judge flagged the message rather than only that it did.
+1. Describe the behavior to flag, or select a template chip (**No production deletes**, **External data transfer**, **PII exposure**) and edit from there.
 
-The judge reads the same scan surfaces the deterministic detectors do, so a guardrail can reason about a prompt, an assistant message, a tool call and its arguments, or a tool response.
+   ![The Guardrail step with the template chips and the guardrail text field highlighted, filled with a plain-language guardrail describing production deletes](/assets/docs/ai-control-plane/secure/policy-prompt-guardrail.webp)
 
-The **Guardrail** step also configures the judge:
+2. Configure the judge below the guardrail:
+   - **Model**: defaults to Gemini 3.1 Flash Lite, with Claude Sonnet 4.6 and Claude Haiku 4.5 also available
+   - **Temperature**: lower is more deterministic and repeatable, higher allows more nuanced judgment but less consistent results
+   - **On judge error**: fail open lets the message through when the judge times out or errors; fail closed treats the error as a match
 
-- **Model** — defaults to Gemini 3.1 Flash Lite, with Claude Sonnet 4.6 and Claude Haiku 4.5 also available
-- **Temperature** — lower is more deterministic and repeatable, higher allows more nuanced judgment but less consistent results
-- **On judge error** — fail open lets the message through when the judge times out or errors, avoiding false blocks; fail closed treats the error as a match, which is stricter but can interrupt legitimate traffic
+   ![The Judge section highlighted, with the model selector, the temperature slider, and the fail open toggle for judge errors](/assets/docs/ai-control-plane/secure/policy-prompt-judge.webp)
 
-Leaving the policy name blank generates a name from the guardrail.
+3. Select **Continue**.
 
-### Crafting a prompt-based policy
+The judge evaluates each in-scope message against the guardrail and returns a verdict, a confidence score, and a rationale that is shown with the finding. It reads the same scan surfaces as the deterministic detectors: prompts, assistant messages, tool calls and their arguments, and tool responses.
 
-Start from a template — no production deletes, external data transfer, or PII exposure — or write the guardrail directly.
+Pair the guardrail with a [detection scope](#detection-scope) rather than asking it to do all the work. Express "exfiltration through `curl`" as a scope that selects shell tool calls plus a guardrail that judges intent within them. A narrow scope cuts the judge's cost and removes the traffic most likely to produce false positives.
 
-Pair the guardrail with a detection scope rather than asking it to do all the work. A policy that catches exfiltration through `curl` is best expressed as a scope that selects shell tool calls and a guardrail that judges intent within them. Narrowing the scope cuts the judge's cost and removes the traffic most likely to produce false positives.
+On the **Evaluate** step, test the guardrail against real traffic before it goes live:
 
-The **Evaluate** step replays the guardrail against live agent sessions before it goes live. It runs the judge over recent sessions, searchable by session, and shows what each would produce. Editing the guardrail re-judges automatically after a short pause, so competing wordings can be compared against the same traffic.
+1. Pick recent agent sessions to replay, searching by session title or user. The judge runs over each session and shows the **Flagged** or **Clean** verdict it would produce.
 
-Each replayed session takes a verdict of correct, false positive, or missed. Those verdicts build a scorecard measuring how well the guardrail agrees with human judgment, and they persist with the policy, so a later edit is measured against the same review set. The **Review** step surfaces the scorecard again and links back to the sessions behind each verdict.
+   ![The Evaluate step with the session search field and a flagged session row highlighted in the replay list](/assets/docs/ai-control-plane/secure/policy-evaluate-picker.webp)
 
-Evaluation uses the same detection scope the policy will use in production, so replay verdicts match live scanning behavior.
+2. Open a session to review the judgment. The transcript opens with the judge's verdict, confidence, and rationale inline on each matched message. Under **Was the judge right?**, select **Right** or **Wrong**. The answers build a scorecard that persists with the policy, so a later edit is measured against the same review set.
 
-## Action and severity
+   ![The session review panel with the flagged banner, the judge's inline verdict with confidence and rationale, and the Right and Wrong buttons](/assets/docs/ai-control-plane/secure/policy-evaluate-review.webp)
 
-The **Action** step decides what happens when a policy fires.
+3. To tune the guardrail, edit its text in the panel on the left of the step. The judge re-runs over the replayed sessions automatically after a short pause, so competing wordings can be compared against the same traffic.
 
-Policies audit by default. An auditing policy records findings and never interrupts the session, which makes it safe to enable a new policy broadly and study what it catches before deciding whether it should enforce anything.
+   ![The Evaluate step with the guardrail panel on the left highlighted, editable beside the judged session list](/assets/docs/ai-control-plane/secure/policy-evaluate-guardrail.webp)
 
-### Enforcement
+4. Select **Continue**.
 
-Enforcement is opt-in, and builds on the agent harness permission-control primitives:
+Evaluation uses the same detection scope as production scanning, so replay verdicts match live behavior. The scorecard appears again on the Review step, with links back to the sessions behind each verdict.
 
-- **Log for review** — record the finding and let the session continue. The default
-- **Warn and confirm** — warn the user and require an acknowledgement before the action proceeds. Where confirmation isn't possible, this falls back to blocking
-- **Deny the request** — reject matching prompts and tool calls outright
+## Detection scope
 
-An acknowledgement suppresses re-prompting for the same call for a grace period, so an agent that retries immediately isn't challenged twice.
+On the **Scope** step, choose which session content the policy evaluates. Scope is set per detector category, so one policy can watch tool calls for destructive commands while watching prompts for secrets. Content outside the scope is never examined, which removes the scanning cost along with the noise.
 
-Where an outright rejection is too blunt, a blocked user can request a just-in-time bypass instead. Bypass requests run through an RBAC-protected approval flow rather than the blanket permission-bypass mode agent harnesses usually offer, so an exception is scoped to one policy or resource, attributable to the approver, and revocable. See [bypass requests](#bypass-requests).
+1. Review each category's recommended surfaces. Toggle **User**, **Assistant**, **Tool requests**, and **Tool responses** to change what is scanned; a custom selection replaces the recommendation.
 
-### Severity
+   ![The Scope step with the Secrets category row highlighted: the four surface toggles and the Granular scope control](/assets/docs/ai-control-plane/secure/policy-scope-surfaces.webp)
 
-**Severity** is a 0.1 to 10 score that findings surface as a Low, Medium, High, or Critical badge. Severity does not change what a policy detects — it groups and filters findings for triage in [Watchdog](/docs/ai-control-plane/secure/watchdog).
+2. For expression-level control, select **Granular scope**. Two CEL fields open, with one-click examples under each.
 
-### Custom messages
+   ![The two CEL fields highlighted as they open: an empty detect expression, the default exempt expression, and example chips under each](/assets/docs/ai-control-plane/secure/policy-scope-granular.webp)
 
-Warning and blocking policies accept a custom message shown to the user, and blank falls back to a default message. Warning messages support the `%{match}`, `%{entity}`, `%{policy}`, and `%{rule}` placeholders, substituted when the warning is raised.
+3. Write the expressions, or start from an example chip under each field:
+   - **Detect on messages matching**: a message must match this expression to be evaluated
+   - **Exempt messages matching**: messages matching this expression leave the policy entirely
 
-## Audiences
+   ![The two CEL fields highlighted: a detect expression matching GitHub tool calls and an exempt expression matching read-only tools, with example chips under each](/assets/docs/ai-control-plane/secure/policy-scope-cel.webp)
 
-The audience controls which users a policy evaluates:
+4. Select **Continue**.
 
-- **Everyone** — every user in the organization
-- **Specific users** — individual organization members, selected by search
-- **Specific roles** — every member of the selected [roles](/docs/ai-control-plane/org-admin/roles-and-permissions), including members added to those roles later
-
-Targeting requires at least one user or role. Audiences make staged rollout possible: run a new enforcing policy against a small group, confirm the findings are real, then widen it.
-
-## Narrowing what a policy flags
-
-Two controls reduce noise, and they act at opposite ends of the pipeline. Detection scope runs before detection and decides what is ever examined. Exclusions are a post-filter, suppressing findings that have already been produced.
-
-Reach for detection scope when whole classes of message are irrelevant to the policy — it removes the scanning work and the cost along with the noise. Reach for an exclusion when the policy is right but a specific value or rule keeps producing false positives.
-
-### Detection scope
-
-The **Scope** step chooses which session content a policy evaluates. Scope is set per detector category, so one policy can watch tool calls for destructive commands while watching prompts for secrets.
-
-Scanning covers four surfaces: user prompts, assistant messages, tool calls, and tool responses. Detectors perform best against the surfaces they were built for, so every category ships with a recommended scope that applies until overridden.
-
-Each category takes:
-
-- **Message types** — the scan surfaces to evaluate
-- **An include expression** — a CEL expression that must match for a message to be evaluated
-- **An exempt expression** — a CEL expression that takes matching messages out of the policy entirely
-
-Tool calls can be matched with real granularity — by MCP server, by the function invoked, by the harness-recognized tool name, or by drilling into the call's arguments with a path expression:
+Match tool calls by MCP server, by the function invoked, by the harness-recognized tool name, or by drilling into the call's arguments:
 
 ```text
 tool_calls.exists(t, t.server.matchExact("github"))
@@ -149,28 +210,86 @@ tool_calls.exists(t, t.function.matchGlob("*delete*"))
 tool_calls.exists(t, t.function.matchText("bash") && t.args.get("command").matchRegex("rm -rf"))
 ```
 
-The CEL editor provides syntax highlighting, an inline reference, and worked examples. A traffic preview verifies a scope against recent organization activity in real time, so a carve-out can be confirmed against what agents actually did before the policy is saved.
+Use scope for whole classes of message that are irrelevant to the policy. When the policy is right but a specific value or rule keeps producing false positives, create an [exclusion rule](/docs/ai-control-plane/secure/exclusions) instead: a post-filter that suppresses matching findings retroactively and going forward while detection coverage stays intact.
 
-### Exclusion rules
+## Action, severity, and audience
 
-Exclusions suppress findings that a policy correctly matched but that aren't real risk: a shared test account, a documentation sample, a rule that misfires on an internal identifier format. An exclusion applies retroactively and going forward, and is scoped either globally or to a single policy.
+On the **Action** step:
 
-Manage them on the **Exclusion Rules** tab — see [Exclusion Rules](/docs/ai-control-plane/secure/exclusions) for the criteria expression syntax, the built-in exclusion library, and creating exclusions from past sessions.
+1. Set **Severity** with the slider, from 0.1 to 10. Findings surface it as a Low, Medium, High, or Critical badge; it does not change what the policy detects, and [Watchdog](/docs/ai-control-plane/secure/watchdog) uses it to group and filter findings.
+
+   ![The Action step with the severity slider highlighted, showing a 5.0 Medium severity](/assets/docs/ai-control-plane/secure/policy-action-step.webp)
+
+2. Choose how the policy responds when it fires:
+   - **Log for review**: record the finding and let the session continue. The default
+   - **Warn and confirm**: warn the user and require an acknowledgement before the action proceeds. Where confirmation isn't possible, this falls back to blocking
+   - **Deny the request**: reject matching prompts and tool calls outright
+
+   ![The Log for review, Warn and confirm, and Deny the request options highlighted](/assets/docs/ai-control-plane/secure/policy-action-options.webp)
+
+3. Under **Audience**, choose who the policy evaluates:
+   - **Everyone**: every user in the organization
+   - **Specific users**: individual members, selected by search. Requires at least one selection
+   - **Specific roles**: every member of the selected [roles](/docs/ai-control-plane/org-admin/roles-and-permissions), including members added to a role later. Requires at least one selection
+
+   ![The Audience section highlighted, with the Everyone, Specific users, and Specific roles options](/assets/docs/ai-control-plane/secure/policy-action-audience.webp)
+
+4. Write the message shown to the user in the field below the audience: **Warning message** for a warning policy, **Custom Message** for a blocking one. Blank falls back to a default. Warning messages support the `%{match}`, `%{entity}`, `%{policy}`, and `%{rule}` placeholders, substituted at warn time.
+
+   ![The Warning message field highlighted, filled with a custom message using the match placeholder](/assets/docs/ai-control-plane/secure/policy-action-message.webp)
+
+5. Select **Continue**.
+
+To introduce enforcement safely:
+
+1. Create the policy with **Log for review** and a broad audience. Findings are recorded and nothing is interrupted.
+2. Review what it catches in [Watchdog](/docs/ai-control-plane/secure/watchdog), and tune the scope or add [exclusions](/docs/ai-control-plane/secure/exclusions) until the findings look real.
+3. Raise the action to **Warn and confirm** or **Deny the request**, scoped to a small audience.
+4. Widen the audience once the enforcement behavior is confirmed.
+
+An acknowledgement suppresses re-prompting for the same call for a grace period, so an agent that retries immediately isn't challenged twice. Where an outright rejection is too blunt, a blocked user can request a just-in-time [bypass](#bypass-requests) instead.
+
+## Managing existing policies
+
+The **Policies** tab lists every policy in the project, beside the [Exclusion Rules](/docs/ai-control-plane/secure/exclusions) and [False Positives](#false-positives) tabs.
+
+![The Policies tab listing existing policies with their action, enabled toggle, severity, and audience](/assets/docs/ai-control-plane/secure/risk-policies-list.webp)
+
+- To enable or disable a policy, use the toggle in its row.
+- To edit or delete a policy, use its row actions. Deleting shows the impact and affected rule groups before confirming.
+
+## False positives
+
+The **False Positives** tab lists findings that were dismissed by hand, from a [Watchdog](/docs/ai-control-plane/secure/watchdog) signal or a session transcript. Each row shows the finding, the session it came from, and when it was dismissed.
+
+![The False Positives tab listing dismissed findings with their category, session, and dismissal time](/assets/docs/ai-control-plane/secure/policy-false-positives.webp)
+
+Dismissal is per finding and changes no policy: detection continues, and only the dismissed findings leave the active counts. For false positives that recur, create an [exclusion rule](/docs/ai-control-plane/secure/exclusions) instead.
+
+To restore a finding, open its row menu and select **Undo**.
+
+![The False Positives tab with a row menu open and the Undo action highlighted](/assets/docs/ai-control-plane/secure/policy-false-positives-undo.webp)
 
 ## Bypass requests
 
-Enforcing policies feed an approval queue where blocked attempts are reviewed. A request moves through requested, approved, denied, and revoked, and can target a single shadow MCP server or the policy as a whole. Approving a request grants the exception without weakening the policy for anyone else, and revoking it withdraws the exception later.
+When an enforcing policy blocks a shadow MCP call, the block message carries a request-access link. Opening it signs the member in and files a bypass request, so an exception can be granted for that member without weakening the policy for anyone else.
 
-Shadow MCP requests attach to the server's [access review](/docs/ai-control-plane/secure/shadow-mcp/access-review) and are decided alongside its gathered evidence: an approval names its own audience — everyone, or selected people and roles — and a denial blocks the server for everyone. See [Shadow MCP allow and block lists](/docs/ai-control-plane/guides/shadow-mcp-allow-and-block-lists) for how decisions and policy URL lists interact.
+To review a request:
 
-## Designing a policy set
+1. Open **Secure > Shadow MCP**. A server with an open request shows **Pending** in the inventory.
+2. Open the server and select **Review Request**. The Decide access sheet opens with the request beside the server's gathered evidence.
+3. Decide the request, and record the rationale:
+   - **Approve**: grants an exception for an audience the approval names, everyone or selected people and roles. A granted exception can be revoked later
+   - **Deny**: blocks the server for everyone
 
-Because a policy binds detection rules, scope, action, and audience together, those four dimensions determine how many policies an organization should have. One policy covering everything cannot enforce against one group while auditing another, and a separate policy per rule quickly becomes unmanageable.
+See [Shadow MCP allow and block lists](/docs/ai-control-plane/guides/shadow-mcp-allow-and-block-lists) for how decisions and policy URL lists interact.
 
-Split policies where the bindings genuinely differ:
+## How many policies to create
 
-- **Enforcement** — auditing policies and enforcing policies belong apart, so enforcement can be introduced without disturbing broad detection coverage
-- **Audience** — a policy applied to contractors and a policy applied to everyone are separate bindings, not one policy with a filter
-- **Severity** — grouping detections of similar severity keeps the badge meaningful for triage
+The four bindings determine how many policies a project needs: one catch-all policy cannot enforce for one group while auditing another, and one policy per rule is unmanageable. Split policies where a binding genuinely differs:
+
+- **Enforcement**: keep auditing and enforcing policies separate, so enforcement can be introduced without disturbing detection coverage
+- **Audience**: a policy for contractors and a policy for everyone are separate policies, not one policy with a filter
+- **Severity**: group detections of similar severity so the badge stays meaningful for triage
 
 Detection categories that share an enforcement posture, an audience, and a severity belong in the same policy.

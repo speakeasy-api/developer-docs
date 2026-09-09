@@ -1,56 +1,98 @@
 ---
 title: Watchdog
-description: "The risk dashboard for agent sessions: findings clustered into ranked signals, with suppression and exclusion actions built in."
+description: "Triage the riskiest AI usage in the organization: ranked risk signals with redacted evidence, false-positive dismissal, and one-click exclusion rules."
 ---
 
-import { Callout } from "@/mdx/components";
+import { Callout, CardGrid } from "@/mdx/components";
 
-The **Watchdog** page shows the riskiest AI usage in the organization, clustered and ranked. Open it from **Secure > Watchdog** in the dashboard.
+The **Watchdog** page is the triage surface for risk findings. [Guardrail policies](/docs/ai-control-plane/secure/guardrails) record a finding for every match in an agent session. Watchdog clusters related findings into signals and ranks them by severity. A signal groups findings that share a root cause, such as one detection rule firing repeatedly for the same team. Triaging a short list of ranked signals is faster than reading thousands of raw findings.
+
+This page covers the triage loop, in order:
+
+<CardGrid
+  cards={[
+    {
+      icon: "chart-bar",
+      title: "Reading the dashboard",
+      description: "Locate where risk is concentrated",
+      href: "#reading-the-dashboard",
+    },
+    {
+      icon: "octagon-alert",
+      title: "Investigating a signal",
+      description: "Review the evidence behind a signal",
+      href: "#investigating-a-signal",
+    },
+    {
+      icon: "check-circle",
+      title: "Resolving signals",
+      description: "Dismiss false positives or create exclusion rules",
+      href: "#resolving-signals",
+    },
+  ]}
+/>
+
+Open the page from **Secure > Watchdog** in the dashboard.
 
 <Callout type="info">
-  Watchdog replaces the former Risk Overview page, and old Risk Overview links redirect here. The raw finding-level log lives on the [Risk Events](/docs/ai-control-plane/secure/risk-events) page.
+  Viewing this page requires the `org:admin` scope.
 </Callout>
 
-## Access requirements
+The raw finding-level log lives on [Risk Events](/docs/ai-control-plane/secure/risk-events). Watchdog replaces the former Risk Overview page, and old Risk Overview links redirect here.
+
+## Reading the dashboard
+
+![The Watchdog dashboard with headline metric cards, the exposure-by-data-type bar, and the ranked active signals list](/assets/docs/ai-control-plane/secure/watchdog-dashboard.webp)
+
+Set the time range with the field above the cards. It accepts plain language, such as `last 30 days` or `3 days ago`.
+
+Four headline cards compare the selected time range against the previous period:
+
+- **Org risk score**: a weighted score of open risk, driven up by critical signals
+- **Findings**: detection rule matches in the range
+- **Open signals**: active signal clusters, with a count of how many are critical
+- **Users exposed**: users whose sessions produced findings
+
+The exposure bar breaks findings down by data type, such as secrets or PII. Each slice is also a filter: select a data type to narrow the signal list, and select it again to clear.
+
+The **Active signals** list contains every open signal in the range. Each row shows the signal's severity score, the rule behind it, the apps it was observed in, a trend sparkline, and the count of affected users and teams. Group the list by **Severity**, **Data type**, **Team**, or **App**, and filter by severity level.
+
+## Investigating a signal
+
+1. Select a signal in the **Active signals** list. The signal drawer opens.
+
+   ![The signal drawer showing severity, user and finding counts, top affected users, and redacted evidence with a reveal control and per-finding Exclude action](/assets/docs/ai-control-plane/secure/watchdog-signal-drawer.webp)
+
+2. Review the evidence. Matched content is redacted by default: select **Click to reveal** on a match to reveal it in place, or **Reveal all** above the evidence list to reveal every match.
+
+   ![The signal drawer's evidence list with the Reveal all toggle and a match's Click to reveal control highlighted](/assets/docs/ai-control-plane/secure/watchdog-reveal-evidence.webp)
 
 <Callout type="info">
-  Viewing this page requires the `org:admin` scope. Access is included in the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) but not the Member role.
+  Every reveal is recorded in the [audit log](/docs/ai-control-plane/org-admin/audit-logs).
 </Callout>
 
-## Findings and signals
+The drawer's regions, top to bottom:
 
-[Guardrail policies](/docs/ai-control-plane/secure/guardrails) scan agent sessions and record a finding for every match. Watchdog clusters related findings into signals. A signal groups findings that share a root cause, such as one detection rule firing repeatedly for the same team or app, and ranks the result by severity. Triaging a short list of ranked signals is faster than reading thousands of raw findings.
+- The header shows the severity, the rule description, and the signal's first and last occurrence.
+- Summary cards count the affected users, findings, and teams, with the trend for the window.
+- **Top affected users** lists who triggered the findings and how often.
+- **Evidence** lists the findings, each with its message context and the rule that matched.
 
-## Headline metrics
+Findings from prompt-based policies show the judge's rationale in place of a redacted match, so their evidence carries no reveal controls. To investigate a single finding across its full session, use [Risk Events](/docs/ai-control-plane/secure/risk-events), the finding-level log.
 
-Four cards summarize the selected time range against the previous period:
+## Resolving signals
 
-- **Org risk score** — a weighted score of open risk, driven up by critical signals
-- **Findings** — detection rule matches in the range
-- **Open signals** — active signal clusters, with a count of how many are critical
-- **Users exposed** — users whose sessions produced findings
+1. Select one or more signals with the checkboxes in the **Active signals** list. The bulk actions appear.
 
-## Exposure bar
+   ![The active signals list with two signals selected and the Mark as false positive and Set up exclusion rules actions highlighted](/assets/docs/ai-control-plane/secure/watchdog-bulk-actions.webp)
 
-The exposure bar breaks findings down by data type, such as secrets or PII. Each slice doubles as a filter: select a data type to narrow the signal list, and select it again to clear.
+2. Choose the action:
+   - **Mark as false positive**: dismisses the selected findings in the window. It changes no policy and does not affect future detection. Use it for noise that is not expected to recur. Dismissed findings are listed on the [False Positives tab](/docs/ai-control-plane/secure/guardrails#false-positives) of the Risk Policies page, where a dismissal can be undone
+   - **Set up exclusion rules**: creates a global [exclusion rule](/docs/ai-control-plane/secure/exclusions) for each selected signal, suppressing its findings retroactively and going forward. Use it for false positives that recur. The rule criteria prefill from the signal
+3. Confirm. The confirmation counts the findings the action covers before it applies.
 
-## Active signals
+The drawer resolves a single signal. Its signal-level action matches the signal type: **Create exclusion rule** for a detector-backed signal, **Mark all as false positive** for a judge-backed one. A single finding is excluded from its evidence row with **Exclude**.
 
-The **Active signals** list holds every open signal in the range. Group it by **Severity**, **Data type**, **Team**, or **App**, and filter by severity or data type.
+Findings from prompt-based policies carry a judged verdict rather than a reproducible match, so they can be marked as false positives but not excluded. Tune those policies through the [guardrail](/docs/ai-control-plane/secure/guardrails) and its detection scope instead.
 
-Selecting a signal opens a drawer with the findings behind it, the detection rule that produced them, and the users and apps involved. From a finding, the full session transcript opens in the same risk-focused view as [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions), with flagged messages highlighted.
-
-Matched content is redacted by default. Revealing a value is recorded in the [audit log](/docs/ai-control-plane/org-admin/audit-logs).
-
-## Acting on signals
-
-Select one or more signals to act in bulk:
-
-- **Suppress** removes the selected findings from the active list without touching any policy. Suppressed findings stay reviewable.
-- **Create exclusion rule** turns the selection into an [exclusion rule](/docs/ai-control-plane/secure/exclusions), so the same false positive stops producing findings. The criteria prefill from the selection: the exact matched value, the rule, or the detection source.
-
-Findings from prompt-based policies carry a judged verdict rather than a reproducible match, so they can be suppressed but not excluded. Tune those through the guardrail and its detection scope instead.
-
-## Suppressed findings
-
-The **Suppressed** section below the active list holds everything the signal clusters no longer count: manually suppressed findings and findings matched by exclusion rules. Open one to review why it was suppressed, or restore it to the active list.
+For signals that reflect real risk, remediation happens outside Watchdog: rotate the exposed credential, block the server, or tighten [role grants](/docs/ai-control-plane/org-admin/roles-and-permissions). To stop the behavior rather than report it, raise the policy's action from flag to [deny](/docs/ai-control-plane/secure/guardrails#action-severity-and-audience).
