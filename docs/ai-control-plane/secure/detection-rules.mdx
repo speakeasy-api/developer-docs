@@ -1,32 +1,112 @@
 ---
 title: Detection Rules
-description: "The catalog of built-in risk detectors, plus custom rule authoring with CEL expressions, testing, and AI suggestions."
+description: "The catalog of built-in and custom detection rules behind guardrail policies, with a playground for testing rules and AI-assisted custom rule authoring."
 ---
 
-import { Callout } from "@/mdx/components";
+import { Callout, CardGrid } from "@/mdx/components";
 
-The **Detection Rules** tab catalogs the detectors that power [guardrail policies](/docs/ai-control-plane/secure/guardrails). Open it from **Secure > Guardrails** in the dashboard and select the **Detection Rules** tab. Old links to the standalone Detection Rules page redirect to the tab.
+The **Detection Rules** page catalogs the reusable rules that [guardrail policies](/docs/ai-control-plane/secure/guardrails) scan with: a built-in library grouped by category, and the organization's custom rules. Policies use rules in both directions, to flag messages and to exempt them through [exclusion rules](/docs/ai-control-plane/secure/exclusions). A rule detects nothing on its own until a policy turns it on.
 
-## Access requirements
+Open the page from **Secure > Detection Rules** in the dashboard.
 
 <Callout type="info">
-  Viewing this page requires the `org:admin` scope. Access is included in the [default Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) but not the Member role.
+  Viewing this page requires the `org:admin` scope.
 </Callout>
 
-## Built-in rules
+This page covers:
 
-Built-in detectors are grouped by category: secrets, financial data, PII, government IDs, healthcare data, shadow MCP, destructive tool use, account identity, and prompt injection. Expanding a category lists its individual rules; clicking a rule opens a detail sheet, and rule detail views are deep-linkable for sharing.
+<CardGrid
+  cards={[
+    {
+      icon: "book-open",
+      title: "Browsing the catalog",
+      description: "Find a rule and open its detail sheet",
+      href: "#browsing-the-catalog",
+    },
+    {
+      icon: "flask-round",
+      title: "Testing a rule",
+      description: "Run a rule against a pasted sample or a real session",
+      href: "#testing-a-rule",
+    },
+    {
+      icon: "pen-tool",
+      title: "Creating a custom rule",
+      description: "Draft a rule from a plain-language description, or write it by hand",
+      href: "#creating-a-custom-rule",
+    },
+    {
+      icon: "file-code",
+      title: "Editing a custom rule",
+      description: "Change, retest, or delete an existing custom rule",
+      href: "#editing-a-custom-rule",
+    },
+  ]}
+/>
 
-## Custom rules
+## Browsing the catalog
 
-Custom rules extend detection beyond the built-ins:
+1. Select a category. Its rule list expands, one row per rule with the rule's name and id.
 
-- Write the match logic as a CEL expression in an editor with syntax highlighting and worked examples
-- Assign the rule a category and a severity level
-- Rule IDs are prefixed `custom.` and validated on save
+   ![The Detection Rules catalog with the Secrets category highlighted and its rule list expanded below](/assets/docs/ai-control-plane/secure/detection-rules-catalog.webp)
 
-An AI suggestion action drafts a rule from a plain-language description of what to detect.
+2. Select a rule. The rule sheet opens with the rule's category, a description of what it detects, and a [playground](#testing-a-rule).
 
-## Testing rules
+   ![The rule sheet for a secrets rule, showing its category, description, and playground](/assets/docs/ai-control-plane/secure/detection-rules-rule-sheet.webp)
 
-The test flow runs a rule against a selected chat session and shows exactly what it matches, so a rule can be validated against real traffic before it's attached to a policy.
+The **Built-in** group covers secrets, financial information, personal identifiable information, government identifiers, healthcare information, shadow MCP, destructive tools, non-corporate accounts, and prompt injection. The organization's own rules sit above it in a **Custom** group. See the [detector category table](/docs/ai-control-plane/secure/guardrails#detectors) for what each category detects and how a policy turns categories on.
+
+## Testing a rule
+
+Every rule sheet carries a playground that runs the rule with the same scanner code the production worker uses.
+
+1. Choose the input: **Paste sample** for pasted text, or **Run on a chat** to run the rule over an existing agent session, picked by external user.
+2. Paste a sample value, an MCP payload, or a chat message snippet, and select **Run rule**.
+
+   ![The playground with the input mode radios, a pasted sample containing a fake API key, and the Run rule button highlighted](/assets/docs/ai-control-plane/secure/detection-rules-playground.webp)
+
+3. Review the matches. Each match shows the rule id, the match span, the confidence, the category, the matched value, and a description of the finding.
+
+   ![The playground result with the match count and a match row highlighted, showing span, confidence, category, and the matched value](/assets/docs/ai-control-plane/secure/detection-rules-playground-result.webp)
+
+A run that returns **0 matches** on a value the rule should catch usually means the sample doesn't match the detector's canonical format. Built-in secret detectors are tuned to the issuing service's exact token shape.
+
+## Creating a custom rule
+
+1. Select **Custom Detection Rule**. The new rule sheet opens.
+
+   ![The Detection Rules page with the Custom Detection Rule button highlighted](/assets/docs/ai-control-plane/secure/detection-rules-new-button.webp)
+
+2. Describe what to detect and select **Suggest with AI**, or select **Skip, fill manually** to start from empty fields. Include a sample value or the format in the description, so the model writes a tight expression.
+
+   ![The new rule sheet with a filled description of a token format and the Skip, fill manually and Suggest with AI buttons highlighted](/assets/docs/ai-control-plane/secure/detection-rules-describe.webp)
+
+3. Review the suggested rule and adjust any field:
+   - **Rule ID**: the identifier that policies and findings use to reference the rule. It always starts with `custom.`, must be unique across all built-in and custom rules, and cannot change after creation
+   - **Title**: the rule's display name in the catalog and on findings
+   - **Description**: what the rule detects and why it matters, shown to reviewers alongside findings
+   - **Detection expression**: the CEL expression the scanner evaluates against message content. The example chips below it insert working patterns to start from
+
+   ![The suggested rule with the rule ID, title, description, and CEL detection expression filled in](/assets/docs/ai-control-plane/secure/detection-rules-suggested.webp)
+
+4. Select **Create rule**. The rule appears in the **Custom** group of the catalog.
+
+   ![The catalog with the Custom Rules group and the newly created rule highlighted](/assets/docs/ai-control-plane/secure/detection-rules-custom-group.webp)
+
+A custom rule attaches to a policy from the **Custom Rules** section of the policy's [Detect step](/docs/ai-control-plane/secure/guardrails#detectors), where each rule is selected individually.
+
+## Editing a custom rule
+
+1. In the **Custom** group, select the rule. Its sheet opens as an editor, with the rule's fields and the playground.
+
+   ![The custom rule editor sheet with the title, description, detection expression, playground, and Save changes button](/assets/docs/ai-control-plane/secure/detection-rules-custom-editor.webp)
+
+2. Adjust the title, description, or detection expression. Test the change in the playground, then select **Save changes**.
+
+   ![The editor sheet with an edited description highlighted and the enabled Save changes button](/assets/docs/ai-control-plane/secure/detection-rules-custom-edit.webp)
+
+3. To remove the rule, select **Delete rule** in the sheet's footer, beside **Save changes**. Deletion is immediate: there is no confirmation step.
+
+<Callout type="info">
+  Built-in rules cannot be edited or deleted. To narrow one, disable it for a policy on the Detect step's [Customize panel](/docs/ai-control-plane/secure/guardrails#detectors), or suppress specific values with an [exclusion rule](/docs/ai-control-plane/secure/exclusions).
+</Callout>
