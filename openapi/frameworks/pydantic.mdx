@@ -72,7 +72,8 @@ source venv/bin/activate
 
 ## Install the required libraries
 
-Pydantic and PyYAML support schema generation and OpenAPI document formatting:
+Pydantic, FastAPI, and PyYAML support schema generation and OpenAPI document
+formatting:
 
 ```bash filename="Terminal"
 # Install the Pydantic library
@@ -80,18 +81,19 @@ pip install "pydantic>=2.13.4,<3"
 
 # Install the PyYAML library for pretty-printing the OpenAPI schema
 pip install "pyyaml>=6.0.3"
+
+# Install FastAPI for the API
+pip install "fastapi>=0.115.6"
 ```
 
 ## Pydantic to OpenAPI document walkthrough
 
 The following steps generate an OpenAPI document from a Pydantic model without
-additional libraries and improve the result in stages. After the first pass, the
-API is previewed in Scalar so the generated document can be inspected and
-refined.
+additional libraries and improve the result in stages.
 
 ## Generating the first OpenAPI document
 
-The sample app in [examples/framework-pydantic](https://github.com/speakeasy-api/examples/tree/main/examples/framework-pydantic) exposes a minimal train travel API with stations, trips, and bookings. After generating the initial OpenAPI document, the next step is to preview the API in Scalar and identify the gaps in the schema and documentation.
+The sample app in [examples/framework-pydantic](https://github.com/speakeasy-api/examples/tree/main/examples/framework-pydantic) exposes a minimal train travel API with stations, trips, and bookings.
 
 ```bash filename="Terminal"
 cd examples/framework-pydantic
@@ -100,14 +102,32 @@ source .venv/bin/activate
 pip install -e .
 
 python generate_openapi.py
-python main.py
 ```
 
 The generated document is intentionally basic at this stage: the endpoints
-exist, but the schema metadata is still minimal. After the first generation
-pass, open the FastAPI `/docs` page or the Scalar preview to inspect the
-contract and see which fields, descriptions, and examples still need
-improvement.
+exist, but the schema metadata is still minimal.
+
+## Previewing the OpenAPI document
+
+The team at [Scalar](https://scalar.com/) has built a CLI and documentation
+tool that can serve an OpenAPI document as a web app with a three-column API
+documentation layout.
+
+Generate and preview the latest OpenAPI document:
+
+```bash filename="Terminal"
+python generate_openapi.py
+npx @scalar/cli document serve openapi.yaml
+```
+
+![Scalar UI](/assets/openapi/pydantic/scalar.png)
+
+The API routes are listed in the navigation pane on the left. Select
+**`/bookings` POST** to inspect one of the Train Travel API operations:
+
+![POST request API endpoint](/assets/openapi/pydantic/scalar-post.png)
+
+As the OpenAPI is improved throughout this guide, the preview can be run again to see how it's improving.
 
 ### Defining a simple Pydantic model
 
@@ -125,7 +145,7 @@ class Station(BaseModel):
     timezone: str = Field(..., description="IANA timezone of the station.", examples=["Europe/Berlin"])
 ```
 
-### Generating a JSON schema for the Pydantic model
+### Generating JSON Schema for the Pydantic model
 
 Add a function called `print_json_schema` to inspect the generated schema before
 expanding the sample app further.
@@ -239,7 +259,6 @@ The [`models_json_schema`](https://docs.pydantic.dev/latest/api/json_schema/#pyd
 import yaml
 from pydantic import BaseModel, Field
 from pydantic.json_schema import models_json_schema
-
 
 class Station(BaseModel):
     id: str = Field(..., description="Unique station ID.")
