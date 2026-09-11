@@ -1,11 +1,11 @@
 ---
 title: "Device agent"
-description: "Enforce required AI-tool plugins and MCP configuration on developer machines and Anthropic-hosted Claude Code on the web environments, and report compliance back to the platform."
+description: "Enforce required AI-tool plugins and MCP configuration on developer machines and supported cloud coding environments, and report compliance back to the platform."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The device agent runs on developer machines and in Anthropic-hosted Claude Code on the web environments. It enforces the organization's required AI-tool plugins and MCP configuration across every coding assistant, and reports compliance back to the platform. Open the **Device Agent** page from **Organization settings > Secure > Device Agent** in the dashboard.
+The device agent runs on developer machines and supported cloud coding environments. It enforces the organization's required AI-tool plugins and MCP configuration across every coding assistant, and reports compliance back to the platform. Open the **Device Agent** page from **Organization settings > Secure > Device Agent** in the dashboard.
 
 ## Access requirements
 
@@ -73,6 +73,182 @@ Anthropic has no switch that locks members to one environment.
 ```
 
 The first session in a fresh VM may briefly show `pending`: Claude must clone the org's observability plugin marketplace before the agent can enforce its managed hooks. Server-managed `enabledPlugins` triggers that clone, and the agent reconciles again once the bundle appears.
+
+## Cursor Cloud
+
+Cursor Cloud loads project hooks from the repository before it starts an agent.
+Use a checked-in hook manifest plus a one-shot Device Agent reconcile at session
+start. The hook manifest captures Cursor agent activity and can apply the
+supported prompt and tool-call policy checks. `speakeasyd sync --once
+--cursor-cloud` installs the observability runtime for that session, then exits;
+it does not run a persistent daemon in the sandbox.
+
+The [Cursor integration](/docs/ai-control-plane/org-admin/ai-integrations/cursor)
+is complementary. It imports organization-level usage and spend from Cursor's
+Admin API. It does not replace the hooks when you need agent-session capture or
+hook policy checks.
+
+### Before you start
+
+1. Provision a dedicated Speakeasy identity for Cloud Agents, for example
+   `cursor-cloud@example.com`. Do not use an individual's identity: all Cloud
+   sessions in the environment report under this identity.
+2. Create an organization token for that identity. This is the `org_token`
+   used by the Device Agent.
+3. In Cursor, open **Cloud Agents**, select the environment for the repository,
+   and add these runtime values:
+
+   | Name | Value | Type |
+   | --- | --- | --- |
+   | `SPEAKEASY_EMAIL` | The dedicated Cloud Agent identity | Environment variable |
+   | `SPEAKEASY_ORG_TOKEN` | The organization token | Secret |
+
+<Callout type="warning">
+  Do not place the token in a Build command or Build secret. Cursor caches the
+  result of its install step in an Environment Build. The token must be exposed
+  only when an agent session starts. A person who can run an agent in the
+  environment can read runtime secrets, so use a dedicated identity and rotate
+  its token if that access changes.
+</Callout>
+
+### 1. Add the hook manifest
+
+Commit `.cursor/hooks.json` to the repository. Cursor Cloud supports repository
+hooks, not user-level hooks, so this file is required whether the environment
+is configured in code or in the Cursor dashboard.
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [{
+      "command": "bash '/opt/speakeasy/speakeasy-observability-cursor/hooks/bootstrap.sh' --config='/opt/speakeasy/speakeasy-observability-cursor/speakeasy.json' agenthooks run --provider=cursor --timeout=60s # speakeasy-device-agent-managed",
+      "failClosed": true
+    }],
+    "stop": [{"command": "bash '/opt/speakeasy/speakeasy-observability-cursor/hooks/bootstrap.sh' --config='/opt/speakeasy/speakeasy-observability-cursor/speakeasy.json' agenthooks run --provider=cursor --timeout=60s # speakeasy-device-agent-managed"}],
+    "afterAgentResponse": [{"command": "bash '/opt/speakeasy/speakeasy-observability-cursor/hooks/bootstrap.sh' --config='/opt/speakeasy/speakeasy-observability-cursor/speakeasy.json' agenthooks run --provider=cursor --timeout=60s # speakeasy-device-agent-managed"}],
+    "afterAgentThought": [{"command": "bash '/opt/speakeasy/speakeasy-observability-cursor/hooks/bootstrap.sh' --config='/opt/speakeasy/speakeasy-observability-cursor/speakeasy.json' agenthooks run --provider=cursor --timeout=60s # speakeasy-device-agent-managed"}],
+    "preToolUse": [{
+      "command": "bash '/opt/speakeasy/speakeasy-observability-cursor/hooks/bootstrap.sh' --config='/opt/speakeasy/speakeasy-observability-cursor/speakeasy.json' agenthooks run --provider=cursor --timeout=60s # speakeasy-device-agent-managed",
+      "failClosed": true
+    }],
+    "postToolUse": [{"command": "bash '/opt/speakeasy/speakeasy-observability-cursor/hooks/bootstrap.sh' --config='/opt/speakeasy/speakeasy-observability-cursor/speakeasy.json' agenthooks run --provider=cursor --timeout=60s # speakeasy-device-agent-managed"}],
+    "postToolUseFailure": [{"command": "bash '/opt/speakeasy/speakeasy-observability-cursor/hooks/bootstrap.sh' --config='/opt/speakeasy/speakeasy-observability-cursor/speakeasy.json' agenthooks run --provider=cursor --timeout=60s # speakeasy-device-agent-managed"}]
+  }
+}
+```
+
+Protect `.cursor/hooks.json` and the setup scripts with your normal branch
+protections. Cursor protects environment secrets, but repository contributors
+can change a hook command in a pull request.
+
+### 2. Configure the environment
+
+Cursor runs an **install** command when it creates an Environment Build and a
+**start** command every time it starts an agent. The install command must not
+use the identity or token. The start command writes session-scoped enrollment,
+runs the one-shot reconcile, and exposes the session runtime at the stable path
+used by the hook manifest.
+
+#### Repository has `.cursor/environment.json`
+
+Keep the file's existing settings and point its commands at two scripts:
+
+```json
+{
+  "$schema": "https://cursor.com/schemas/environment.json",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh"
+}
+```
+
+Put the install script in `.cursor/install.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION="<released version>"
+SHA256="<matching checksum>"
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends jq
+curl -fsSL -o /tmp/speakeasyd \
+  "https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v${VERSION}/speakeasyd_${VERSION}_linux_amd64"
+echo "${SHA256}  /tmp/speakeasyd" | sha256sum -c -
+sudo install -m 0755 /tmp/speakeasyd /usr/local/bin/speakeasyd
+```
+
+Get the version and checksum together from the [Device Agent release
+manifest](https://storage.googleapis.com/speakeasy-device-agent-releases-prod/releases.json).
+Pinning the release is intentional: Cloud Agent environments are short-lived,
+so the next Environment Build is the update mechanism.
+
+Put the start script in `.cursor/start.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+: "${SPEAKEASY_EMAIL:?configure SPEAKEASY_EMAIL}"
+: "${SPEAKEASY_ORG_TOKEN:?configure SPEAKEASY_ORG_TOKEN}"
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+umask 077
+jq -cn --arg email "$SPEAKEASY_EMAIL" --arg org_token "$SPEAKEASY_ORG_TOKEN" \
+  '{v: 1, email: $email, org_token: $org_token, environment: "ephemeral", auto_update: "disabled"}' > "$tmp"
+sudo install -D -o root -g "$(id -gn)" -m 0640 "$tmp" /etc/speakeasy/managed.json
+
+/usr/local/bin/speakeasyd sync --once --cursor-cloud
+
+runtime=""
+for candidate in "$HOME"/.cursor/plugins/local/*-observability-cursor; do
+  [ -d "$candidate" ] || continue
+  if [ -z "$runtime" ] || [ "$candidate" -nt "$runtime" ]; then runtime="$candidate"; fi
+done
+[ -n "$runtime" ] || { echo "Cursor observability runtime was not materialized" >&2; exit 1; }
+sudo mkdir -p /opt/speakeasy
+sudo ln -sfn "$runtime" /opt/speakeasy/speakeasy-observability-cursor
+```
+
+#### Repository has no `.cursor/environment.json`
+
+In Cursor, open **Cloud Agents**, select the repository environment, and place
+the contents of the install script in its **Install** command and the contents
+of the start script in its **Start** command. Keep `.cursor/hooks.json` in the
+repository. Cursor cannot load project hooks from dashboard-only configuration.
+
+### 3. Build, test, and verify
+
+1. Trigger an Environment Build after committing the hook manifest and setup
+   configuration. Wait for it to succeed.
+2. Start a **new** Cloud Agent from that Build. An existing agent does not
+   reload hooks from a newer Build.
+3. Inspect the start-command output. A successful setup includes `cursor armed
+   cloud hooks active: /workspace/.cursor/hooks.json`.
+4. Give the agent a normal task that includes a prompt and a tool call. The
+   earliest read-only repository exploration is outside project-hook coverage,
+   so it is not a useful validation event.
+5. In Speakeasy, open the target project and choose **Observe > Agent
+   Sessions**. Search for the dedicated Cloud Agent identity and confirm the
+   new Cursor session appears.
+
+<Callout type="info">
+  Cursor Cloud supports the prompt, agent-response, agent-thought, stop, and
+  pre/post tool-use hooks shown above. It does not run `sessionStart`,
+  `sessionEnd`, or MCP-specific repository hooks for managed Cloud Agents.
+</Callout>
+
+### Disable or revert the setup
+
+Remove the Speakeasy entries from `.cursor/hooks.json`, remove the start
+command or script, and create a new Environment Build. Delete the two Cursor
+environment values after no other environment uses them. Do not revoke the
+organization token before moving or removing every environment that relies on it,
+or those sessions will stop syncing immediately.
+
+Enforcement for Cursor on a developer's own machine is separate and unchanged:
+the Device Agent installs the organization's plugins and MCP servers into local
+Cursor as normal. See [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations).
 
 ## Fleet deployment through MDM
 
