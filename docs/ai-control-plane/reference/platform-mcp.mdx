@@ -6,7 +6,7 @@ description: "Reference for the Speakeasy Platform MCP: how to connect an agent 
 import { Callout } from "@/mdx/components";
 import { CodeWithTabs } from "@/components/code-tabs";
 
-The Platform MCP is a first-party MCP server that exposes the AI Control Plane to an agent. An org admin working in Claude Code, Cursor, Codex, or another MCP client can find and add MCP servers, finish their setup, put them on a plugin, author skills, manage risk policies, configure telemetry delivery, and read observability data without opening the dashboard.
+The Platform MCP is a first-party MCP server that exposes the AI Control Plane to an agent. An org admin working in Claude Code, Cursor, Codex, or another MCP client can find and add MCP servers, finish their setup, put them on a plugin, choose who receives a plugin, author skills, manage access roles, review shadow MCP servers, manage risk policies, configure telemetry delivery, and read observability data without opening the dashboard.
 
 Every tool call is authorized against a live org admin grant, and the server never accepts or returns credentials, OAuth codes, or client secrets. Steps that need a secret, such as OAuth consent or entering a provider client ID, hand off to the dashboard through a link the tool returns.
 
@@ -137,14 +137,16 @@ Client admission controls which MCP client apps may sign in to a server. See [MC
 
 ### Plugins
 
-A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/distribute/plugins) for how plugins are published. The Platform MCP does not create, rename, or delete plugins.
+A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/distribute/plugins) for how plugins are published. The Platform MCP does not create, rename, or delete plugins, but it can change which roles and directory groups receive one.
 
 | Tool | Type | What it does |
 | --- | --- | --- |
 | `list_plugins` | Read | Lists the plugins in a project with how much each carries, who receives it, and whether it has been published. |
-| `get_plugin` | Read | Returns one plugin and its contents: its MCP servers and its skills with the version each is fixed to. The plugin is named exactly by ID, slug, or name. |
+| `get_plugin` | Read | Returns one plugin and its contents: its MCP servers, its skills with the version each is fixed to, and up to 100 current assignments. The plugin is named exactly by ID, slug, or name. |
+| `list_plugin_assignments` | Read | Lists the roles and directory groups that can receive plugins in a project, each with a privacy-safe member count where available. Raw principal identifiers are never returned. |
 | `distribute_mcp_to_plugin` | Write | Adds a working server to an existing plugin so everyone the plugin is shared with receives it. An ambiguous or unknown plugin name is refused rather than falling back to the default plugin. |
 | `remove_mcp_from_plugin` | Write | Removes a server from a plugin, undoing the distribution. Only memberships this flow created are removed. |
+| `set_plugin_assignments` | Write | Replaces the complete set of roles and groups a plugin is assigned to. An empty set removes every assignment so the plugin reaches nobody. Requires the assignment version from a preceding read, explicit confirmation, and assignment changes to be enabled for the project. |
 
 ### Skills
 
@@ -159,6 +161,22 @@ A skill is a written set of instructions an agent loads when it applies. Version
 | `add_skill_version` | Write | Records a new version from complete replacement content. Refuses the write if the skill changed since the expected version was read. |
 | `update_skill_metadata` | Write | Renames a skill or changes its display name and summary without changing its instructions. |
 | `distribute_skill` | Write | Gives a skill to one plugin or one assistant in the same project. This is the only way a skill takes effect. |
+| `query_skill_usage` | Read | Summarizes observed skill activations for one project, with exact activation counts and privacy-suppressed user counts. An activation proves use, not success, so error evidence is reported as not recorded. |
+| `list_skill_usage_users` | Read | Lists masked people observed activating one skill, with short-lived references for a focused follow-up. Individual activation counts and raw identities are never returned. |
+| `get_user_skill_status` | Read | Confirms whether one person, by a reference from the usage list, was observed activating the same skill in the same window. Returns categorical activity only. |
+
+### Access control
+
+Access roles decide which people can enter an MCP server and which of its tools they can use. See [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for the dashboard view. Rules are scoped to one server and can be narrowed to a named tool or to a disposition class: `read_only`, `destructive`, `idempotent`, or `open_world`. Roles and members are addressed by short-lived opaque references, and every write requires the version returned by the preceding read, explicit confirmation, and an idempotency key. System roles are not editable.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `list_access_roles` | Read | Lists the organization's roles and summarizes the MCP access each carries. Member counts are withheld for small groups. |
+| `get_mcp_access` | Read | Shows which roles can enter one server and which known tools or behavior classes each can use. Servers with a dynamic tool catalog report tool access as not enumerable. |
+| `list_access_members` | Read | Finds members by an identity query of at least three characters or by role. Returns masked identities and references only when at least five people match; smaller result sets are withheld rather than enumerated. |
+| `create_mcp_access_role` | Write | Creates a custom role in one project with MCP access rules for servers in that project. |
+| `update_mcp_access_role` | Write | Adds or removes MCP access rules on a custom role while preserving every non-MCP grant. |
+| `assign_mcp_access_role` | Write | Adds one custom role, confined to one server, to one member without removing the member's current roles. Only available where per-member assignment is enabled for the project. |
 
 ### Risk policies and exclusions
 
@@ -185,7 +203,19 @@ These tools read the same data as [MCP and tools](/docs/ai-control-plane/observe
 | `query_mcp_metrics` | Read | Returns one server's totals over a window of 1h, 24h, or 7d: call volume, failures, failure rate, average latency, and active users. |
 | `query_mcp_traces` | Read | Lists one server's individual calls, newest first, each reduced to a reference to quote when escalating. Filter by outcome. |
 | `list_recent_tool_calls` | Read | Lists the newest tool calls in one project over a window of 1h or 24h, filtered by an outcome of `success`, `error`, `blocked`, or `pending`. Each call is reduced to when it happened, the tool and target, how it ended, and the calling app where known. Returns 10 calls by default and 50 at most, with a link to the full Tool Logs page. |
-| `get_user_mcp_status` | Read | Reports one person's state against one server. Not yet available: it depends on organization summary tools that have not shipped. |
+| `list_mcp_usage_users` | Read | Lists the people observed using one server, newest first, with masked identities, categorical activity and error evidence, and short-lived references for a focused follow-up. Individual call counts and raw identities are never returned. |
+| `get_user_mcp_status` | Read | Shows which tools one person, by a reference from the usage list, was observed using on one server and whether errors were observed. Categorical evidence only, over a window of at most 24h. |
+| `list_organization_events` | Read | Lists the newest Event Feed entries for the organization, defaulting to 20 from the last day and capped at 50. Each entry is reduced to when it happened, whether it is a log or a span, its source and name, and its project. Never returns attributes, trace IDs, or identities. |
+
+### Shadow MCP
+
+Shadow MCP servers are servers that people call through their agents without an admin having set them up. See [Shadow MCP access review](/docs/ai-control-plane/secure/shadow-mcp/access-review) for the dashboard view and [Shadow MCP allow and block lists](/docs/ai-control-plane/guides/shadow-mcp-allow-and-block-lists) for how decisions are enforced. Targets are addressed by short-lived opaque references, and raw URLs, requesters, and evidence documents are never returned.
+
+| Tool | Type | What it does |
+| --- | --- | --- |
+| `list_shadow_mcp_inventory` | Read | Lists observed or requested targets in a project, with use counts, privacy-safe user counts, and review state. Pending reviews appear first. |
+| `get_shadow_mcp_review` | Read | Shows the evidence and review state for one target: aggregate tool declarations, gaps, advisory counts, and research coverage. |
+| `decide_shadow_mcp_access` | Write | Records and enforces an allow or deny decision for one target. Allow takes one or more audience references from the plugin assignment list, including the Everyone reference for organization-wide access. Requires the current decision version, a rationale that is stored in the audit trail, and explicit confirmation. |
 
 ### Data exports
 
@@ -212,6 +242,7 @@ Session recall requires [Agent Sessions](/docs/ai-control-plane/observe/agent-se
 | Tool | Type | What it does |
 | --- | --- | --- |
 | `search_gram_docs` | Read | Searches the reviewed provider setup guides and returns up to five cited excerpts with links to the full guide. It never reads the live web or unreviewed sources. |
+| `read_gram_doc` | Read | Reads one reviewed setup guide in full, by the URI the search returned. Reports the guide as unavailable rather than inventing steps when no reviewed guide stands behind the URI. |
 | `send_platform_mcp_feedback` | Write | Stores one short feedback report about the Platform MCP for the Speakeasy team, with a category and optional rating and note. The agent asks for consent before submitting. |
 
 ## Out of scope
