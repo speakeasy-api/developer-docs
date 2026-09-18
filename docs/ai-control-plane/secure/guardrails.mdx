@@ -11,7 +11,7 @@ Guardrails are risk policies: rules that scan agent session interactions for sec
   Viewing this page and creating, editing, or deleting policies require the `org:admin` scope.
 </Callout>
 
-Create and manage policies on the **Risk Policies** page, under **Secure > Risk Policies** in the dashboard. Each policy binds four things, configured as steps in the policy editor:
+Create and manage policies on the **Guardrails** page, under **Security and Policy > Guardrails** in the dashboard. Each policy binds four things, configured as steps in the policy editor:
 
 - **Detection**: what counts as a finding
 - **Scope**: which content is examined
@@ -62,9 +62,9 @@ This page covers:
     },
     {
       icon: "spell-check-2",
-      title: "False positives",
-      description: "Findings dismissed by hand, and how to restore them",
-      href: "#false-positives",
+      title: "Quarantines",
+      description: "Sessions frozen by a quarantine policy, and how to release them",
+      href: "#quarantines",
     },
     {
       icon: "key-round",
@@ -125,15 +125,15 @@ On the **Detect** step of a built-in detector policy:
 | Personal identifiable information | Phone numbers, email addresses, IP and MAC addresses | |
 | Government identifiers | SSNs, passport numbers, national IDs, tax IDs | Covers US, UK, EU, and APAC identifier formats |
 | Healthcare information | Medical record numbers, patient data, Medicare IDs | |
-| Off-policy content | Requests that violate acceptable use guidelines | |
+| Off-policy content | Requests that violate usage policies or acceptable use guidelines | Shown as coming soon; not yet available |
 | Prompt injection | Indirect injection through tool output and hidden instructions | Evaluated by an LLM judge |
 | Shadow MCP | Tool calls that don't come from a Speakeasy-issued MCP server | Requires Speakeasy hooks on the agent. See [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp) |
 | Destructive tools | MCP tool calls annotated as destructive | Requires Speakeasy hooks and Speakeasy-issued tool metadata |
 | Destructive CLI commands | Shell, git, database, and cloud CLI patterns such as `rm -rf`, `git push --force`, `DROP TABLE`, and `kubectl delete ns` | Covers native terminal tools and MCP-routed tools whose arguments carry destructive content |
 | Non-corporate accounts | Sessions authenticated with a personal AI account, or an account whose email domain is off the approved list | Approved domains are set on the policy |
-| Custom patterns | Organization-specific patterns | Authored on the Detection Rules page |
+| Custom rules | Organization-specific patterns, selected individually from the **Custom Rules** section of the step | Authored on the [Detection Rules tab](/docs/ai-control-plane/secure/detection-rules) |
 
-See [Detection Rules](/docs/ai-control-plane/secure/detection-rules) for the full catalog and for authoring custom rules.
+See the [Detection Rules tab](/docs/ai-control-plane/secure/detection-rules) for the full catalog and for authoring custom rules.
 
 Pattern and classifier-backed detectors are cheap to run broadly. LLM-judged categories cost a model call per evaluated message, so give them a narrow [detection scope](#detection-scope).
 
@@ -152,11 +152,10 @@ On the **Guardrail** step:
    ![The Guardrail step with the template chips and the guardrail text field highlighted, filled with a plain-language guardrail describing production deletes](/assets/docs/ai-control-plane/secure/policy-prompt-guardrail.webp)
 
 2. Configure the judge below the guardrail:
-   - **Model**: defaults to Gemini 3.1 Flash Lite, with Claude Sonnet 4.6 and Claude Haiku 4.5 also available
    - **Temperature**: lower is more deterministic and repeatable, higher allows more nuanced judgment but less consistent results
    - **On judge error**: fail open lets the message through when the judge times out or errors; fail closed treats the error as a match
 
-   ![The Judge section highlighted, with the model selector, the temperature slider, and the fail open toggle for judge errors](/assets/docs/ai-control-plane/secure/policy-prompt-judge.webp)
+   ![The Judge section highlighted, with the temperature slider and the fail open toggle for judge errors](/assets/docs/ai-control-plane/secure/policy-prompt-judge.webp)
 
 3. Select **Continue**.
 
@@ -224,8 +223,9 @@ On the **Action** step:
    - **Log for review**: record the finding and let the session continue. The default
    - **Warn and confirm**: warn the user and require an acknowledgement before the action proceeds. Where confirmation isn't possible, this falls back to blocking
    - **Deny the request**: reject matching prompts and tool calls outright
+   - **Quarantine session**: deny the matching event and freeze the session's prompts and tool calls until an admin [releases it](#quarantines)
 
-   ![The Log for review, Warn and confirm, and Deny the request options highlighted](/assets/docs/ai-control-plane/secure/policy-action-options.webp)
+   ![The four response options highlighted: Log for review, Warn and confirm, Deny the request, and Quarantine session](/assets/docs/ai-control-plane/secure/policy-action-options.webp)
 
 3. Under **Audience**, choose who the policy evaluates:
    - **Everyone**: every user in the organization
@@ -251,24 +251,22 @@ An acknowledgement suppresses re-prompting for the same call for a grace period,
 
 ## Managing existing policies
 
-The **Policies** tab lists every policy in the project, beside the [Exclusion Rules](/docs/ai-control-plane/secure/exclusions) and [False Positives](#false-positives) tabs.
+The **Policies** tab lists every policy in the project, beside the [Detection Rules](/docs/ai-control-plane/secure/detection-rules), [Exclusion Rules](/docs/ai-control-plane/secure/exclusions), and [Quarantines](#quarantines) tabs.
 
 ![The Policies tab listing existing policies with their action, enabled toggle, severity, and audience](/assets/docs/ai-control-plane/secure/risk-policies-list.webp)
 
 - To enable or disable a policy, use the toggle in its row.
 - To edit or delete a policy, use its row actions. Deleting shows the impact and affected rule groups before confirming.
 
-## False positives
+## Quarantines
 
-The **False Positives** tab lists findings that were dismissed by hand, from a [Watchdog](/docs/ai-control-plane/secure/watchdog) signal or a session transcript. Each row shows the finding, the session it came from, and when it was dismissed.
+When a quarantine policy fires, it denies the matching event and freezes the session: further prompts and tool calls in that session are blocked until an admin releases it.
 
-![The False Positives tab listing dismissed findings with their category, session, and dismissal time](/assets/docs/ai-control-plane/secure/policy-false-positives.webp)
+The **Quarantines** tab lists every active session quarantine with the session, the policy that fired, the user, and when the session was quarantined.
 
-Dismissal is per finding and changes no policy: detection continues, and only the dismissed findings leave the active counts. For false positives that recur, create an [exclusion rule](/docs/ai-control-plane/secure/exclusions) instead.
+![The Quarantines tab listing an active session quarantine with its policy, user, and time, and the Release action](/assets/docs/ai-control-plane/secure/policy-quarantines.webp)
 
-To restore a finding, open its row menu and select **Undo**.
-
-![The False Positives tab with a row menu open and the Undo action highlighted](/assets/docs/ai-control-plane/secure/policy-false-positives-undo.webp)
+To lift a quarantine, select **Release** on its row. Release is immediate: there is no confirmation step, and the session's prompts and tool calls resume.
 
 ## Bypass requests
 
@@ -276,7 +274,7 @@ When an enforcing policy blocks a shadow MCP call, the block message carries a r
 
 To review a request:
 
-1. Open **Secure > Shadow MCP**. A server with an open request shows **Pending** in the inventory.
+1. Open **Security and Policy > Shadow AI**. A server with an open request shows **Pending** in the [MCPs inventory](/docs/ai-control-plane/secure/shadow-mcp).
 2. Open the server and select **Review Request**. The Decide access sheet opens with the request beside the server's gathered evidence.
 3. Decide the request, and record the rationale:
    - **Approve**: grants an exception for an audience the approval names, everyone or selected people and roles. A granted exception can be revoked later
