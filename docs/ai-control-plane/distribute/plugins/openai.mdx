@@ -1,0 +1,121 @@
+---
+title: "OpenAI"
+description: "Import the org's plugin marketplace into a ChatGPT workspace so the observability plugin reaches ChatGPT and Codex, and set its installation policy from the OpenAI admin dashboard."
+---
+
+import { Callout } from "@/mdx/components";
+
+Plugins reach OpenAI surfaces through the same GitHub-backed marketplace that serves Claude Code and Cursor. A ChatGPT workspace admin imports that repository once from the OpenAI admin dashboard, after which its plugins are available to ChatGPT on web, desktop, and mobile, to Codex in the ChatGPT desktop app, and to the Codex CLI. This page covers importing the marketplace, setting the observability plugin's installation policy, configuring Codex telemetry, and verifying that events arrive.
+
+The observability plugin is the prerequisite for most governance features on OpenAI surfaces: observability of AI usage across the company (tokens, cost, clients, MCP, skills), security flagging and blocking, [shadow MCP detection](/docs/ai-control-plane/secure/shadow-mcp), and more.
+
+<Callout type="info">
+  In ChatGPT, a plugin marketplace is a JSON catalog in a GitHub repository that
+  lists the plugins to import. The platform hosts such a marketplace on the
+  org's behalf containing the observability plugin and any custom plugins. Once
+  imported, each plugin's availability is controlled from the OpenAI admin
+  dashboard rather than from the repository.
+</Callout>
+
+## Access requirements
+
+<Callout type="info">
+  Publishing the marketplace requires the `project:write` scope and creating the
+  API key requires the `org:admin` scope, both held by the default [Admin
+  role](/docs/ai-control-plane/org-admin/roles-and-permissions). The OpenAI-side
+  steps require a workspace admin account on a ChatGPT Business, Enterprise, or
+  Edu workspace.
+</Callout>
+
+## Create an API key
+
+In the dashboard, open **Organization settings > API Keys** (see [API keys](/docs/ai-control-plane/org-admin/api-keys)) and create a new key with the **Hooks** scope. Copy the key — it replaces the `<MY_KEY>` placeholder in the Codex telemetry configuration below.
+
+## Grant the importing account repository access
+
+The marketplace repository is private, so the ChatGPT workspace admin performing the import needs access to it before the import can authorize. On the dashboard's **Distribute > Plugins** page, click **Re-publish**, enter that admin's GitHub username, and hit **Publish**. Then follow the link to the plugin repo and accept the invitation to collaborate (check email or GitHub notifications if it doesn't appear). Only the account performing the import needs this step.
+
+## Import the marketplace
+
+Copy the marketplace repository URL from the dashboard's **Distribute > Plugins** page. The repository is named `<speakeasy-org>-<speakeasy-project>-plugins` under the `speakeasy-plugins` GitHub org.
+
+In ChatGPT, open **Admin > Plugins** and select **Add > Import marketplace**, then complete the fields:
+
+- **Source** — the repository URL on its own, without a branch or folder path appended
+- **Path** — leave empty, since the marketplace manifest sits at the repository root
+- **Branch, tag, or commit** — leave empty to track the default branch, so later publishes are picked up automatically; pinning a commit freezes the marketplace at that revision
+
+Select **Import marketplace** and authorize GitHub when prompted. A very large marketplace can take up to an hour on first import; later syncs take minutes.
+
+<Callout title="Accepted manifests" type="info">
+  OpenAI reads a Codex marketplace at `.agents/plugins/marketplace.json`, and
+  also accepts a Claude-compatible marketplace at
+  `.claude-plugin/marketplace.json` or a standalone plugin at
+  `.claude-plugin/plugin.json`. The platform's marketplace repository is the
+  same one Claude Code and Cursor consume, so no separate repository or
+  republish is needed for OpenAI.
+</Callout>
+
+## Set the installation policy
+
+<Callout title="Import does not carry policy over" type="warning">
+  GitHub import and sync ignore the installation and authentication policies
+  declared in the repository, including `AVAILABLE`, `INSTALLED_BY_DEFAULT`,
+  `NOT_AVAILABLE`, `ON_INSTALL`, and `ON_USE`. An imported plugin reaches nobody
+  until a policy is set in the OpenAI admin dashboard, so this step is required
+  rather than optional.
+</Callout>
+
+Open **Admin > Plugins**, select the observability plugin, and set its **Installation policy** for each eligible workspace role:
+
+- **Installed** — the plugin is deployed to everyone in the role without any action on their part. Use this for a real rollout, since coverage gaps mean unobserved sessions.
+- **Available** — the plugin appears in the directory for members of the role to install themselves. Adequate for a proof of concept.
+
+Any MCP servers the plugin connects to must also be enabled, and members need access to those connected services.
+
+<Callout type="info">
+  Plugin [assignments](/docs/ai-control-plane/distribute/plugins#assignments) in
+  the dashboard don't gate marketplace installs. Scope delivery on OpenAI
+  surfaces through the per-role installation policy instead.
+</Callout>
+
+## Configure Codex telemetry
+
+The plugin's hooks cover sessions and tool calls on their own. Codex also exports OpenTelemetry, which is what associates Codex sessions with individual users and supplies token and cost detail. Without it, Codex activity arrives unattributed.
+
+Codex reads telemetry settings from the `[otel]` section of `~/.codex/config.toml`, or from `.codex/config.toml` for a single project. Export is off by default. The block takes this shape:
+
+```toml
+[otel]
+environment = "production"
+log_user_prompt = false
+exporter = { otlp-http = { endpoint = "<endpoint>", protocol = "<protocol>", headers = { "Gram-Project" = "default", "Gram-Key" = "<MY_KEY>" } } }
+metrics_exporter = { otlp-http = { endpoint = "<endpoint>", protocol = "<protocol>", headers = { "Gram-Project" = "default", "Gram-Key" = "<MY_KEY>" } } }
+```
+
+Copy the exact endpoint and protocol values from the **Install** tab of the plugin's detail page on **Distribute > Plugins**, which renders the current Codex snippet with the org's values filled in, and replace `<MY_KEY>` with the API key created above.
+
+<Callout title="Codex cloud surfaces emit no device telemetry" type="info">
+  Codex cloud web tasks and GitHub code review run off-device, so neither the
+  plugin nor this configuration covers them. Connect [OpenAI Compliance
+  Logs](/docs/ai-control-plane/org-admin/ai-integrations/openai-compliance) to
+  observe and bill that usage, bearing in mind those imports are post-hoc and
+  cannot be blocked in real time.
+</Callout>
+
+## Keep the marketplace in sync
+
+Imported marketplaces check GitHub once a day. After publishing a plugin from the dashboard, open **Admin > Plugins > Marketplaces**, select the marketplace, and choose **Sync now** to pull the change immediately. Review the status report afterward — **Completed — N errors** means some plugins failed to process and need fixing in the repository.
+
+<Callout title="Transferring ownership" type="info">
+  The GitHub connection belongs to the admin who imported the marketplace. To
+  move it to another admin, have them reimport using identical **Source**,
+  **Path**, and branch values. Deleting the marketplace removes every plugin
+  imported from it, so reimporting is the safe path.
+</Callout>
+
+## Verify
+
+- Confirm the plugin is installed. In ChatGPT, open the **Plugins** tab and check that the observability plugin appears. In the Codex CLI, run `/plugins`.
+- Execute any tool call — use an MCP server, or ask Codex to run `echo hi there`.
+- Open [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the dashboard. The tool call should appear immediately (for a local tool call, set the **Type** filter to include local tools).
