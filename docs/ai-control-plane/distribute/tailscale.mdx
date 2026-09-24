@@ -1,0 +1,83 @@
+---
+title: Tailscale private access
+description: "Serve hosted MCP servers and gateways through a Tailscale tailnet, with per-server control over public and private routes."
+---
+
+import { Callout } from "@/mdx/components";
+
+Tailscale private access gives hosted MCP servers and gateways URLs reachable from a connected tailnet. Connect a tailnet once for the organization, then choose which servers use the private route. Existing public routes remain available until a server is set to **Private only**.
+
+This controls how MCP clients reach hosted endpoints. It does not make the dashboard, management APIs, or outbound connections to tool backends private. To connect an MCP source that runs inside a private network, use a [tunneled MCP server](/docs/ai-control-plane/distribute/mcp-servers/tunneling) instead. A tunneled server can also use Tailscale private access for its client-facing URL.
+
+## Requirements
+
+- An Enterprise organization with Tailscale private access enabled. Contact the Speakeasy team if the option is unavailable.
+- The `org:admin` scope to connect and manage the tailnet. Changing an MCP server or gateway access mode requires `mcp:write` on its project.
+- A Tailscale tailnet with MagicDNS and HTTPS certificates enabled.
+- A dedicated Tailscale OAuth client, with **Devices Core**, **Auth Keys**, and **Services** write scopes and the `tag:k8s-operator` tag. Do not reuse a broadly privileged client.
+- A tailnet policy with dedicated operator, proxy, and service tags, service-advertisement auto-approval, and access rules allowing intended users to reach the service.
+
+The dashboard shows the required policy fragment during setup:
+
+```json
+{
+  "tagOwners": {
+    "tag:k8s-operator": ["autogroup:admin"],
+    "tag:gram-proxy": ["tag:k8s-operator"],
+    "tag:gram-service": ["tag:k8s-operator"]
+  },
+  "autoApprovers": {
+    "services": {
+      "tag:gram-service": ["tag:gram-proxy"]
+    }
+  }
+}
+```
+
+Add these entries to the existing tailnet policy rather than replacing its other rules. The policy also needs grants or ACLs that permit the intended users and devices to reach the generated service tag. Keep these tags dedicated to this integration.
+
+## Connect a tailnet
+
+- Open **Organization settings > Network Access**. Under **Private network access**, click **Connect Tailscale**.
+- Check the tailnet policy, then enter the OAuth client ID and secret. Credentials are encrypted when submitted and are not shown again.
+- Enter an **Organization private hostname**. Use a durable DNS label for the organization, not an individual server. Tailscale adds the tailnet's `.ts.net` suffix; the label cannot be changed after setup.
+- Optionally enable **Require user identity**. This denies tagged devices and service nodes, which do not carry a Tailscale user identity. Leave it off if these clients need private access.
+- Click **Connect Tailscale**. Setup starts asynchronously. Wait for the **Tailscale** status to become **Online** and the **Private base URL** to appear before changing server access modes. Use **Check health** to request a fresh status check if needed.
+
+The ingress belongs to the organization, but servers and gateways opt in individually. If a custom domain exists at setup, the ingress uses that domain's endpoint namespace; otherwise it uses the platform endpoint namespace. This choice is pinned at creation. Adding a custom domain later does not move existing private endpoints to it. A custom-domain IP allowlist applies to the public custom-domain route, not this separate Tailscale route.
+
+## Choose network access for a server or gateway
+
+Open a hosted server under **Distribute > MCP**, or open a gateway, and find **Network access** on its **Settings** tab. Under **Access mode**, select:
+
+| Mode                   | Client-facing routes                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Public only**        | Existing public MCP URLs only. This is the default.                                                    |
+| **Public and private** | Public URLs keep working and a private URL becomes available. Use this mode to migrate clients.        |
+| **Private only**       | Only private ingress serves the MCP endpoint. Public URLs stop serving it, with no automatic fallback. |
+
+The private options require an enabled, online ingress and an eligible server address. For an ingress pinned to the platform namespace, add a **Hosted Address** under **Server URL** or **Gateway URL**. For an ingress pinned to a custom domain, add a **Custom Address** on that domain. The **Network access** section explains which address is missing when no endpoint qualifies.
+
+After choosing **Public and private**, save and copy a URL from **Private endpoint URLs**. From a device connected to the tailnet, use that address in the MCP client. Private endpoints retain their server paths under `/mcp/` on the Tailscale hostname. Use the displayed URL rather than constructing it from the base URL. The server's private installation page provides client-specific instructions when available.
+
+Once clients connect through the private URL, select **Private only** and confirm **Make private only**. Public endpoint URLs stop serving that server or gateway. Marketplace and device-agent configurations, along with existing client URLs, are not rewritten. Update each affected client separately. Changes apply to new connections.
+
+<Callout type="warning" title="No automatic public fallback">
+  If the tailnet or ingress becomes unavailable, private-only servers remain
+  unavailable until private access returns or an administrator explicitly
+  switches them back to **Public only**. Disabling or removing the ingress does
+  not change a server's access mode.
+</Callout>
+
+Tailscale membership is an additional network restriction, not a replacement for [MCP authentication](/docs/ai-control-plane/distribute/mcp-servers/authentication). Existing server visibility, OAuth, and tool permissions continue to apply to private connections. **Require user identity** checks for an attributable Tailscale user; it does not sign that user in to Speakeasy or replace an MCP token.
+
+## Maintain or remove the connection
+
+Use **Organization settings > Network Access** to check status, toggle **Ingress enabled**, or **Rotate credentials** with a replacement OAuth client. Disabling stops private serving without changing server modes. The **Remove** action shows how many servers and gateways retain **Public and private** or **Private only** before starting cleanup. Private-only servers do not reopen on public routes after removal. Restore **Public only** explicitly where public access is intended, and update client configurations before removing the ingress. A new tailnet can be connected after cleanup completes.
+
+If a private URL does not work:
+
+- Check that the client is connected to the tailnet and permitted by its policy to reach the service. If **Require user identity** is enabled, use a user-associated device rather than a tagged or service node.
+- Check **Private network access** for **Online**, the **Private base URL**, and the latest error. A pending status can mean setup is still in progress; request **Check health** after confirming Tailscale policy and OAuth credentials.
+- Check the server's **Network access** mode and **Private endpoint URLs**. A server needs an address in the namespace pinned when the ingress was created.
+- If the network connection works but the MCP client prompts for credentials or receives an authorization error, check the server's [authentication settings](/docs/ai-control-plane/distribute/mcp-servers/authentication). Tailscale identity alone does not authorize an MCP session.
