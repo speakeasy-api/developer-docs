@@ -17,18 +17,7 @@ LiteLLM often acts as the gateway and router for model inference across OpenAI, 
 
 The integration has two independent data paths. The guardrail path is synchronous: LiteLLM calls the platform before each model request (`pre_call`) and after each response (`post_call`) using LiteLLM's Generic Guardrail API, so no custom callback code is required. The telemetry path is asynchronous: LiteLLM's OTel exporter pushes metadata-only traces and optional metrics.
 
-```mermaid
-flowchart TD
-    A[Application] --> L[LiteLLM proxy]
-    L -- Pre-call policy check --> G[Guardrail endpoint]
-    G -- Allow or block --> L
-    L -- Allowed request --> P[Model provider]
-    P --> L
-    L -- Post-call capture --> G
-    L -- Metadata-only OTel export --> O[Telemetry endpoint]
-    G --> R[Risk findings and session capture]
-    O --> V[Observability and cost views]
-```
+![LiteLLM data paths: an application sends model requests to the LiteLLM proxy. On the synchronous guardrail path, LiteLLM sends a pre-call policy check to the platform guardrail endpoint, which returns allow or block; an allowed request goes to the model provider and the response returns to LiteLLM; LiteLLM then sends a post-call capture to the guardrail endpoint, which feeds risk findings and session capture. On the asynchronous telemetry path, LiteLLM's metadata-only OTel export goes to the telemetry endpoint, which feeds the observability and cost views.](/assets/docs/ai-control-plane/diagrams/data-and-integrations/litellm-data-paths.webp)
 
 A blocked prompt never reaches the model provider; LiteLLM returns the configured policy message to the caller. Because LiteLLM model API calls have no interactive acknowledgement channel, policies configured to warn behave as blocks for LiteLLM traffic.
 

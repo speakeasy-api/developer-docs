@@ -4,7 +4,6 @@ description: "Connect an MCP server from your private network with an outbound t
 ---
 
 import { Callout } from "@/mdx/components";
-import TunnelDiagram from "@/features/docs/internal-mcp/TunnelDiagram.astro";
 import "@/features/docs/internal-mcp/internal-mcp.css";
 
 <div className="internal-mcp-guide">
@@ -17,7 +16,7 @@ Use a tunnel for internal APIs, operational tools, or services that need private
 
 The agent opens the connection from inside the private network. Speakeasy uses that connection to send MCP requests back to the server.
 
-<TunnelDiagram />
+![Private MCP request path. MCP clients such as Claude, Cursor, and custom agents connect over HTTPS to the Speakeasy hosted MCP endpoint in the AI Control Plane, which authenticates the caller, checks server and tool access, and sends a signed X-Speakeasy-Identity header when available. Inside the private network, the tunnel agent runs beside the MCP server and opens an outbound WSS connection over TLS on port 443 to Speakeasy. MCP requests travel to the tunnel agent over that open tunnel and streamed responses return along it. The tunnel agent reaches the MCP server at a fixed private destination over HTTP or HTTPS. The backend needs no public ingress.](/assets/docs/ai-control-plane/diagrams/components/internal-mcp-tunnel.webp)
 
 1. The tunnel agent authenticates with a tunnel key and opens an outbound, TLS-protected WebSocket to Speakeasy.
 2. An MCP client connects to your hosted endpoint. Speakeasy authenticates the caller and checks their access to the server and its tools.
@@ -169,7 +168,7 @@ Verify each request whose claims you use. An initialization assertion covers onl
 
 Run multiple tunnel agents with the same tunnel key to serve one source. Each agent opens its own connection. Speakeasy routes traffic across live connections and keeps established MCP sessions attached to the agent serving them.
 
-<TunnelDiagram variant="ha" />
+![Highly available MCP tunnel. One Speakeasy hosted MCP endpoint routes requests to live agents and keeps session affinity. It routes to two availability zones in the private network, A and B. Each zone holds a connected tunnel agent using the same tunnel key, which forwards local HTTP to its paired MCP server replica. Each replica opens its own outbound tunnel, the tunnel does not replicate server memory, and clients must reconnect if a session is lost.](/assets/docs/ai-control-plane/diagrams/components/internal-mcp-ha.webp)
 
 HA deployments have sustained healthy traffic at 300 requests per second. That observation does not establish a per-replica capacity limit or guarantee throughput. Size your deployment for your tools' latency, concurrency, and streaming behavior.
 

@@ -4,7 +4,6 @@ description: The security posture, architecture, and data handling practices of 
 ---
 
 import { Callout } from "@/mdx/components";
-import StackArchitectureDiagram from "@/components/astro/docs/StackArchitectureDiagram";
 
 <Callout title="Terminology" type="info">
   In this document, "Customer" refers to the user of the platform. "End User"
@@ -123,9 +122,9 @@ margin: 0,
 
 ## Architecture overview
 
-The diagram below shows the full stack. Hover or click a flow in the legend to isolate it; use **Expand** for fullscreen.
+The diagram below shows the full stack. Each numbered flow has its own color, described in the legend under the diagram.
 
-<StackArchitectureDiagram client:load />
+![AI Control Plane stack architecture. Clients: the dashboard (React, TypeScript, Vite, generated TypeScript SDK), the CLI (Go, GoReleaser), the agent client (Claude, Cursor, Copilot), and the third-party LLM (OpenAI, Anthropic, Gemini). Inside the tenanted AI Control Plane, encrypted per customer: the API server (Go, Goa design-first REST, RBAC-gated service handlers), the MCP gateway (HTTP+SSE, per-org JWT), Guardian (prompt injection, PII, secrets, egress allow-list), Temporal workflows, sandboxed function runners on per-tenant Kubernetes pods, tool connectors (OpenAPI, functions, remote and tunneled MCP), and the data stores PostgreSQL, Redis, ClickHouse, and KMS-encrypted object storage. External: WorkOS, remote MCP servers, and customer SaaS. Flow 1, control plane: the dashboard and CLI call the API over REST. Flow 2, tool invocation: the LLM emits tool calls to the agent client, which sends JSON-RPC over SSE to the MCP gateway; the gateway dispatches to tool connectors and invokes function runners, which make outbound calls to customer SaaS and proxied calls to remote MCP servers. Flow 3, guardrails: Guardian inspects every gateway request and response. Flow 4, async and deploy: the API enqueues workflows, which deploy and reap function runners, and runners fetch bundles from object storage. Flow 5, persistence: the API reads and writes PostgreSQL and Redis, and the gateway writes an audit log to ClickHouse. Flow 6, identity: WorkOS provides SSO and directory sync to the API. Runtime: Go and Goa, React and TypeScript, Temporal, Kubernetes, OTel and Datadog.](/assets/docs/ai-control-plane/diagrams/components/platform-security-architecture.webp)
 
 The platform is hosted on Speakeasy-managed cloud infrastructure. It is tenanted, with data encrypted per customer, and consists of the following components.
 

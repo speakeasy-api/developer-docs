@@ -60,23 +60,7 @@ A document for a public client looks like this:
 
 The two flows differ in who asserts the client identity:
 
-```mermaid
-sequenceDiagram
-    participant Client as MCP client
-    participant AS as Platform authorization server
-    participant Vendor as Client vendor domain
-
-    Note over Client,AS: DCR
-    Client->>AS: POST /register (name, redirect URIs)
-    AS-->>Client: New client ID for this install
-    Client->>AS: /authorize with that client ID
-
-    Note over Client,Vendor: CIMD
-    Client->>AS: /authorize with client_id = HTTPS URL
-    AS->>Vendor: GET client metadata document
-    Vendor-->>AS: Name and redirect URIs
-    AS->>AS: Check client_id matches URL and redirect URI is listed
-```
+![Sequence diagram comparing DCR and CIMD between three participants: the MCP client, the platform acting as the OAuth authorization server, and the client vendor domain. DCR, RFC 7591, where the client asserts its own identity: step 1, the client sends POST /register with its client name and redirect URIs to the authorization server; step 2, the authorization server returns a new client ID for this install, so every install registers separately; step 3, the client calls /authorize with that client ID, and the redirect URI must match a registered one exactly. CIMD, Client ID Metadata Document, where the vendor domain asserts the identity: step 1, the client calls /authorize with client_id set to an HTTPS URL, with no registration and the same client ID on every install; step 2, the authorization server sends GET for the client metadata document to the client vendor domain at the client ID URL; step 3, the vendor domain returns the name and redirect URIs, client_name and redirect_uris; step 4, the authorization server checks that client_id matches the URL and that the requested redirect URI is listed. A footnote says Client access decides which CIMD clients a server admits, and DCR stays open to every client.](/assets/docs/ai-control-plane/diagrams/access-and-servers/dcr-vs-cimd.webp)
 
 CIMD addresses the DCR problems directly. The consent screen name comes from a document only the vendor can change, there is no registration table growing with every reinstall, and there is no unauthenticated registration endpoint to spam. Most importantly, the client has a durable identity, a URL, that can be allowlisted, searched for, and revoked.
 
