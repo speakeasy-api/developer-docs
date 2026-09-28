@@ -8,7 +8,7 @@ description: "Design intuitive, validated request bodies that make your API easy
 We learned about URLs in _[What is a URL?](/api-design/urls)_ which is how an
 API defines its "resources". If an API request were a sentence, the URL would be the noun. In this section, we'll cover the verbs of API requests: HTTP methods.
 
-```curl
+```bash
 GET /places?lat=40.759211&lon=-73.984638 HTTP/1.1
 Host: api.example.org
 ```
@@ -28,7 +28,7 @@ stylesheets, and scripts. It is also used for fetching data from APIs.
 `GET` is "idempotent", meaning that if you made the same get call over and over
 again, you can expect the same outcome every time. If you `GET` the resource, but the request fails or times out, and you `GET` it again, the end result is that you got it. Nothing was deleted, or removed, or changed in any lasting way, so if this thing is got a bunch of times it is the same as being got once.
 
-```curl
+```bash
 GET /places?lat=40.759211&lon=-73.984638 HTTP/1.1
 Host: api.example.org
 ```
@@ -50,7 +50,7 @@ Host: api.example.org
 
 Creating a new location resources:
 
-```curl
+```bash
 POST /places HTTP/1.1
 Host: api.example.org
 Content-Type: application/json
@@ -64,7 +64,7 @@ Content-Type: application/json
 
 Triggering an email send:
 
-```curl
+```bash
 POST /emails/send HTTP/1.1
 Host: api.example.org
 Content-Type: application/json
@@ -100,7 +100,7 @@ already had an image or not, if the request is a success they will have one. If
 the upload fails that is fine, another request can be made, and it will be
 overridden.
 
-```curl
+```bash
 PUT /users/jane/image HTTP/1.1
 Host: api.example.org
 Content-Type: image/jpeg
@@ -124,7 +124,7 @@ fails, you cannot just retry the request as you could with a `PUT`. The server
 might have already made some changes, and retrying the request could result in a
 different outcome.
 
-```curl
+```bash
 PATCH /users/phil
 
 {
@@ -199,7 +199,7 @@ Aptly named, the `DELETE` method is used to remove resources from the system. It
 
 ### `DELETE` Example
 
-```curl
+```bash
 DELETE /places/123 HTTP/1.1
 Host: api.example.org
 ```
