@@ -126,7 +126,7 @@ The header contains the JWT without a `Bearer` prefix. Your server can ignore th
 
 ### JWT contract
 
-The protected JWT header contains `alg=RS256`, `typ=speakeasy-authz+jwt`, and a `kid` identifying the signing key. The `kid` is the public key's RFC 7638 SHA-256 thumbprint.
+The protected JWT header contains `alg=RS256`, `typ=speakeasy-identity+jwt`, and a `kid` identifying the signing key. The `kid` is the public key's RFC 7638 SHA-256 thumbprint.
 
 | Claim | Value |
 | --- | --- |
@@ -134,6 +134,7 @@ The protected JWT header contains `alg=RS256`, `typ=speakeasy-authz+jwt`, and a 
 | `iss` | `https://tunnel.speakeasy.com`. |
 | `aud` | The destination's saved resource identifier, or `tunneled-mcp-server:<TUNNELED_MCP_SERVER_ID>` if it is unset. |
 | `sub` | A stable, typed principal ID: `user:<USER_ID>`, `api_key:<API_KEY_ID>`, or `agent:<AGENT_ID>`. The prefix identifies the principal type. |
+| `organization_id` | The destination owner's Speakeasy organization ID. |
 | `email` | The human caller's profile email. Absent for API keys and agents. |
 | `iat`, `exp` | Issuance and expiry in Unix seconds. Valid for at most 60 seconds, and capped by the source credential's expiry where available. |
 | `jti` | A unique identifier for this assertion. Each forwarded request or retry gets a fresh assertion. |
@@ -154,11 +155,14 @@ https://tunnel.speakeasy.com/.well-known/jwks.json
 If your server uses these claims to identify a caller:
 
 1. Use a JWT library to select the RSA signing key by `kid` from this fixed JWKS URL. Do not follow key URLs or issuers supplied by a token.
-2. Verify the signature with an explicit RS256 allowlist. Require `typ=speakeasy-authz+jwt`, `version=1`, `iss=https://tunnel.speakeasy.com`, and the exact audience you expect for your server.
+2. Verify the signature with an explicit RS256 allowlist. Require `typ=speakeasy-identity+jwt`, `version=1`, `iss=https://tunnel.speakeasy.com`, and the exact audience you expect for your server. If your server is reachable other than through the tunnel agent, also require `organization_id` equal to your organization's ID.
 3. Require `iat` and `exp`. Reject expired or future-dated tokens, and enforce a maximum 60-second lifetime with at most five seconds of clock tolerance.
 4. Apply your own access policy to the verified identity.
 
-The default `tunneled-mcp-server:<ID>` audience is unique to your tunneled server. A saved resource identifier is not: another organization can save the same identifier, and Speakeasy then issues assertions with that audience to its own callers. When you use a custom audience, do not accept every valid assertion; allowlist the `sub` values your policy admits.
+The tunnel connection is the primary binding: only Speakeasy can deliver requests through your tunnel, and it forwards only assertions minted for this server. The assertion identifies the caller for your policy and audit, and proves the request came from Speakeasy. The default `tunneled-mcp-server:<ID>` audience is unique to your server. A saved resource identifier is not: another organization can save the same identifier and receive assertions with that audience. Do one of the following:
+
+- Accept requests only from the tunnel agent, for example with a network policy, so every request arrives through your tunnel.
+- If your server is reachable any other way, such as from the internet, require `organization_id` to match your organization's ID. This rejects assertions minted for another organization that saved the same identifier.
 
 The JWKS endpoint supports GET, HEAD, ETag, and conditional GET. It advertises a five-minute cache lifetime (`Cache-Control: public, max-age=300, must-revalidate`). On an unknown `kid`, refresh from that fixed URL once before rejecting the assertion. The JWKS always includes the current signing key and the next one, and keeps the previous key while it may still be in use. The signing key changes about every two months. Each key is published about a day before it signs and stays published about a day after it stops, so verifiers that follow this refresh rule see no gap during rotation.
 
