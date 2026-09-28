@@ -120,7 +120,7 @@ See [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissio
 Private tunneled servers receive a short-lived JWT on each forwarded request from a supported authenticated caller:
 
 ```http
-SPEAKEASY_AUTHZ: <JWT>
+X-Speakeasy-Identity: <JWT>
 ```
 
 The header contains the JWT without a `Bearer` prefix. Your server can ignore this extra header and work unchanged. Upstream OAuth credentials continue to use `Authorization`.
@@ -134,16 +134,11 @@ The protected JWT header contains `alg=RS256`, `typ=speakeasy-authz+jwt`, and a 
 | `version` | `1`. |
 | `iss` | `https://tunnel.speakeasy.com`. |
 | `aud` | The destination's saved resource identifier, or `tunneled-mcp-server:<TUNNELED_MCP_SERVER_ID>` if it is unset. |
-| `sub` | A stable, typed principal ID: `user:<USER_ID>`, `api_key:<API_KEY_ID>`, or `agent:<AGENT_ID>`. |
-| `principal_type` | `user`, `api_key`, or `agent`, matching the subject. |
+| `sub` | A stable, typed principal ID: `user:<USER_ID>`, `api_key:<API_KEY_ID>`, or `agent:<AGENT_ID>`. The prefix identifies the principal type. |
 | `email` | The human caller's profile email. Absent for API keys and agents. |
 | `iat`, `exp` | Issuance and expiry in Unix seconds. Valid for at most 60 seconds, and capped by the source credential's expiry where available. |
 | `jti` | A unique identifier for this assertion. Each forwarded request or retry gets a fresh assertion. |
-| `organization_id`, `project_id` | The destination organization and project. |
-| `mcp_server_id` | The MCP server serving the request. |
-| `tunneled_mcp_server_id` | The underlying tunneled source. |
-| `purpose` | `mcp_request` for runtime requests, or `mcp_discovery` during authenticated consent discovery. |
-| `allowed_methods` | Present for consent discovery; describes the methods Speakeasy permits in that context. |
+| `allowed_methods` | Present only during authenticated consent discovery; lists the methods Speakeasy permits in that context. Treat a token that carries it as discovery-only. |
 
 The audience matches the saved resource identifier exactly, including trailing slashes and escaped characters. In a gateway with several servers, it identifies the selected destination. A caller cannot override it with a request parameter. If you change the saved identifier, update your verifier and reconnect any upstream OAuth credentials associated with the old resource.
 
@@ -162,9 +157,11 @@ If your server uses these claims to identify a caller:
 1. Use a JWT library to select the RSA signing key by `kid` from this fixed JWKS URL. Do not follow key URLs or issuers supplied by a token.
 2. Verify the signature with an explicit RS256 allowlist. Require `typ=speakeasy-authz+jwt`, `version=1`, `iss=https://tunnel.speakeasy.com`, and the exact audience you expect for your server.
 3. Require `iat` and `exp`. Reject expired or future-dated tokens, and enforce a maximum 60-second lifetime with at most five seconds of clock tolerance.
-4. Apply your own access policy to the verified identity. If your policy binds a specific organization, project, or server, also check the corresponding ID claims.
+4. Apply your own access policy to the verified identity.
 
-The JWKS endpoint supports GET, HEAD, ETag, and conditional GET. It advertises a five-minute cache lifetime (`Cache-Control: public, max-age=300, must-revalidate`). On an unknown `kid`, refresh from that fixed URL once before rejecting the assertion. Signing keys rotate approximately every 180 days.
+The default `tunneled-mcp-server:<ID>` audience is unique to your tunneled server. A saved resource identifier is not: another organization can save the same identifier, and Speakeasy then issues assertions with that audience to its own callers. When you use a custom audience, do not accept every valid assertion; allowlist the `sub` values your policy admits.
+
+The JWKS endpoint supports GET, HEAD, ETag, and conditional GET. It advertises a five-minute cache lifetime (`Cache-Control: public, max-age=300, must-revalidate`). On an unknown `kid`, refresh from that fixed URL once before rejecting the assertion. The JWKS always includes the current signing key and the next one, and keeps the previous key while it may still be in use. The signing key changes about every two months. Each key is published about a day before it signs and stays published about a day after it stops, so verifiers that follow this refresh rule see no gap during rotation.
 
 Verify each request whose claims you use. An initialization assertion covers only that request. A response admitted before expiry can continue streaming afterwards. Use `jti` to correlate an assertion with a request; it does not prevent replay before expiry. Keep assertions out of application logs, tool arguments, and error responses.
 
@@ -191,7 +188,7 @@ Routing affinity does not replicate an MCP server's in-memory state. If the agen
 
 ### Rate limits and capacity
 
-For private, authenticated traffic, enforce any application-specific per-user quotas in your MCP server or its local proxy. Use the verified, stable `sub` claim as the quota key, scoped by tenant when quotas are tenant-specific. Monitor concurrent requests and tool latency when setting capacity; a long-running stream occupies capacity even at a low request rate.
+For private, authenticated traffic, enforce any application-specific per-user quotas in your MCP server or its local proxy. Use the verified, stable `sub` claim as the quota key. Monitor concurrent requests and tool latency when setting capacity; a long-running stream occupies capacity even at a low request rate.
 
 If you publish a tunneled server for anonymous use, open its **Settings > Anonymous Rate Limit** section and set **Requests per second** and **Burst**. All anonymous callers and MCP methods share one token bucket for that source. Requests over the limit receive HTTP 429 with `Retry-After`. These controls limit aggregate anonymous traffic; they do not set per-user quotas for private access. The dashboard shows the effective limits, including defaults when fields are blank.
 
