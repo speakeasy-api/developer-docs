@@ -1,13 +1,13 @@
 ---
-title: "Roles & permissions"
-description: "Define roles, assign scoped permissions to members, and review past authorization challenges."
+title: Roles and Permissions
+description: "Define roles, assign scoped permissions to members and agents, and review past authorization challenges."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The **Roles & Permissions** page manages access control for a team by defining roles, assigning permissions, and reviewing past authorization challenges. Open it from **Organization settings > Secure > Roles & Permissions** in the dashboard.
+Roles and Permissions control what each member and agent can do: define roles, grant their scopes, and turn denied requests into precise grants. Open the page from **Organization settings > Team > Roles & Permissions** in the dashboard.
 
-The page contains three tabs, with counts shown for the first two: **Roles**, **Members**, and **Authorization Challenges**.
+The page contains two tabs: **Roles**, with the role count shown, and **Authorization Challenges**. Role assignment for people happens inside each role (see [the role editor](#the-role-editor)) and from the **Manage roles** action on the [Members page](/docs/ai-control-plane/org-admin/team#team-members).
 
 ## Access requirements
 
@@ -17,9 +17,19 @@ The page contains three tabs, with counts shown for the first two: **Roles**, **
 
 ## Roles
 
-The **Roles** tab manages role definitions and their scope grants. Create, edit, or delete a role, and use the grant drawer to add resource-scoped permission rules, down to individual MCP servers and tool selectors. These are the same grants that appear on each MCP server's **Team Access** tab (see [MCP servers](/docs/ai-control-plane/distribute/mcp-servers)).
+The **Roles** tab lists every role with its name, description, permissions, and members, and explains the two system roles beneath the list. Click **Add Role** to create a role, or a role's edit action to change it. Both open [the role editor](#the-role-editor), where resource-scoped permission rules are added, down to individual MCP servers and tool selectors. These are the same rules that appear on each MCP server's and gateway's **Team Access** tab (see [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access)): a role granted access on a server's tab is exactly what the editor writes when `mcp:connect` is added and narrowed to that one server. Direct rules are editable on the server's tab, which links back here through **Edit in Role Manager**; organization-level rules appear there too and link back to the role that owns them. Changing one on a server's tab applies to that server only, as a block on that server. A block naming the administrator role is refused on that tab so admins cannot lock themselves out.
 
-Remote and tunneled servers can be permissioned by tool name, the same as any other server. Expanding a remote server in the **Specific tools** picker lists the tools recorded for it. A server whose tools have never been recorded has nothing to list, and the picker links to that server's **Inspect** tab instead, where connecting to the live server records them. See [Recording tool metadata](/docs/ai-control-plane/distribute/mcp-servers/remote-servers#recording-tool-metadata).
+Roles can also be assigned to registered agents through the **Assign Agents** section of the role editor, and an MCP server's **Grant access** menu offers a **Person** or an **Agent**. Once a role has agent members, permission rows for scopes agents cannot hold are marked **Not available to agents**. See [Agent identity](/docs/ai-control-plane/identity/agents).
+
+Remote and tunneled servers can be permissioned by tool name, the same as any other server. Expanding a remote server in the **Specific tools** picker lists the tools recorded for it. A server whose tools have never been recorded has nothing to list, and the picker links to that server's **Inspect** tab instead, where connecting to the live server records them. See [Recording tool metadata](/docs/ai-control-plane/mcp-gateway/remote-servers#recording-tool-metadata).
+
+## The role editor
+
+Creating or editing a role opens a full page at **Roles & Permissions > Create role** or **Edit role**. The page describes roles as carrying permissions that enable access to features, some of which can be narrowed to include or exclude certain resources. It has three parts:
+
+- **Permissions**. Click **Add permissions** to pick scopes from one searchable menu. Selected permissions split into **MCP access** and **Platform access**, and each MCP permission row carries its own narrowing control: **All servers**, **Specific projects** (servers within selected projects), **Specific servers**, or **Specific tools**. Pickers lead with a **Selected (n)** group so the servers, projects, or tools already chosen are visible without scrolling, and rows read `server · project` so same-named servers in different projects stay distinguishable.
+- **Assign Members**. Choose which organization members hold the role. When Directory Sync (SCIM) is enabled, the list still renders so current holders are visible, but rows are read-only behind a **Managed by directory sync** notice and the header reads **(N assigned by directory sync)**; assignment happens in the identity provider's group mapping instead. See [IDP and SSO](/docs/ai-control-plane/org-admin/identity).
+- **Assign Agents**. Choose which agent identities hold the role. This section is never gated on Directory Sync, because a directory syncs people, not agents. Scopes an agent cannot hold are marked as not agent-eligible; an agent's grants are filtered against the agent runtime scope allowlist when loaded, so a role cannot hand an agent a scope it could not be granted directly. See [Agent identity](/docs/ai-control-plane/identity).
 
 ## Scopes
 
@@ -28,7 +38,7 @@ A role is a set of scopes. Each scope unlocks a slice of the platform:
 | Scope | What it makes available | Implies |
 | --- | --- | --- |
 | `org:read` | View organization pages: team, billing usage, audit logs, domains, and settings | — |
-| `org:admin` | Organization administration: invites and role assignment, API keys, billing actions, publishing to collections, and the [Observe](/docs/ai-control-plane/observe) and [Secure](/docs/ai-control-plane/secure) sections | `org:read` |
+| `org:admin` | Organization administration: invites and role assignment, API keys, billing actions, organization settings, and the [Observability](/docs/ai-control-plane/observe) and [Security and Policy](/docs/ai-control-plane/secure) sections | `org:read` |
 | `project:read` | View project surfaces: sources, deployments, and the catalog | — |
 | `project:write` | Add and modify sources, retry deployments, and manage plugins | `project:read` |
 | `mcp:read` | View MCP servers and their configuration | `mcp:connect` |
@@ -38,12 +48,16 @@ A role is a set of scopes. Each scope unlocks a slice of the platform:
 | `environment:write` | Create environments and manage their variables and secrets | `environment:read` |
 | `skill:read` | View skills and their manifests | — |
 | `skill:write` | Add and version skills | `skill:read` |
-| `chat:read` | Read other members' agent session transcripts in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) | — |
+| `chat:read` | Read other members' agent session transcripts in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) and pin them | — |
+| `chat:write` | Delete other members' sessions, rename them, and submit feedback on them | `chat:read` |
+| `agent:read`, `agent:write`, `agent:authorize`, `agent:transfer` | View, manage, authorize, and transfer ownership of agent identities | — |
 
-Write scopes imply their read counterparts, so a role granting `mcp:write` never needs `mcp:read` added separately.
+Write scopes imply their read counterparts, so a role granting `mcp:write` never needs `mcp:read` added separately. Every member can always read and change sessions they own; `chat:read` and `chat:write` govern other people's sessions.
+
+Each read, write, and connect scope also has a blocking counterpart (for example `mcp:blocked_connect`). A blocking rule withdraws that scope for the matching resources even when another role grants it, which is how a server's **Access** page can exclude one principal without editing every role. The platform refuses to write a block against a principal the caller holds, since a block on `mcp:*` would also remove the read that renders the page. Blocking scopes cannot be written against agents.
 
 <Callout title="Transcript access is never a default" type="info">
-  No role includes `chat:read` by default, including Admin. Grant it through a custom role only where transcript review is required; every transcript open is audit-logged.
+  No role includes `chat:read` or `chat:write` by default, including Admin. Grant them through a custom role only where transcript review is required; every transcript open is audit-logged. The setup wizard's **Enable logging** step offers to create a **Session Auditor** custom role carrying `chat:read` for exactly this purpose.
 </Callout>
 
 ## System roles
@@ -52,22 +66,36 @@ Two preset roles ship with the platform:
 
 | Role | Scopes | Effective access |
 | --- | --- | --- |
-| Admin | Every standard scope | Full administration: manage the organization, all projects, servers, environments, and skills, plus the Observe and Secure sections |
-| Member | `org:read`, `project:read`, `mcp:read`, `mcp:connect`, `skill:read` | Read and connect: browse the org and projects, view servers and skills, and use tools — no write access, no environment access, no org administration |
+| Admin | Every standard scope | Full administration: manage the organization, all projects, servers, environments, skills, and assistants, plus the Observability and Security and Policy sections |
+| Member | `org:read`, `project:read`, `mcp:read`, `mcp:connect`, `skill:read` | Read and connect: browse the org and projects, view servers and skills, and use tools, with no write access, environment access, or org administration |
 
 Member is the baseline every invited or directory-synced member receives, so editing a system role changes access for everyone holding it at once: widening Member raises the floor for the whole organization, and narrowing Admin risks cutting administrators off from management surfaces (the platform refuses to remove the last admin, but won't stop an over-narrowed Admin role). For targeted needs, prefer creating a custom role and granting it to specific members over editing the presets.
 
 ## Members
 
-The **Members** tab assigns roles to organization members. A member can hold several roles; their access is the union of all of them.
+Role assignment for members no longer has its own tab. A member can hold several roles; their access is the union of all of them. Assign roles in three places:
 
-When Directory Sync (SCIM) is enabled, an alert notes that roles are assigned from the identity provider rather than on this page.
+- In [the role editor](#the-role-editor), under **Assign Members**, to add or remove many members from one role.
+- From the **Manage roles** action on the [Members page](/docs/ai-control-plane/org-admin/team#team-members), to change every role one member holds, including system roles.
+- From a denied [authorization challenge](#authorization-challenges), to grant the custom role whose permissions cover the denied action.
+
+When Directory Sync (SCIM) is enabled, a notice at the top of the page states that roles are assigned from the identity provider rather than here, and links to **Manage identity settings**.
 
 ## Authorization challenges
 
-The **Authorization Challenges** tab lists past denied-access events: who tried to do what, and which scope the request was missing. Unresolved challenges also surface on the organization home page.
+The **Authorization Challenges** tab lists past denied-access events: who tried to do what, and which scope the request was missing. Filter pills switch between **Denied**, **Resolved**, and **All**, each with a count, and dropdowns narrow the list by principal (**Everyone** by default) and scope (**All scopes**). Each row carries an outcome badge: **Denied** means the principal lacked the required scope or grants, **Allowed** records a permitted check, and **Resolved** marks a denial that was answered by granting access. Unresolved challenges also surface on the organization home page, and each identity's Access tab on [Identities](/docs/ai-control-plane/identity/identities) shows this log filtered to that person or agent.
 
-Challenges are actionable, not just a record. Opening a challenge leads into the grant flow: add the missing permission to one of the member's roles from the grant drawer — scoped as narrowly as needed, down to a specific server or tool — and subsequent attempts succeed without the member re-requesting anything. This turns real denials into precise role updates instead of guessing at permissions up front.
+Challenges are actionable. Opening a denied challenge leads into the **Grant Access** flow: pick a custom role whose grants cover the denied action, and the platform assigns that role to the member, keeping every role they already hold, before recording the challenge as resolved. Subsequent attempts succeed without the member re-requesting anything. This turns real denials into precise role updates instead of guessing at permissions up front.
+
+System roles are not offered from the challenge shortcut; assign Admin from the [Members page](/docs/ai-control-plane/org-admin/team#team-members) instead. Challenges recorded before selectors were captured cannot be resolved this way and can only be dismissed.
+
+## Used by
+
+- [MCP servers](/docs/ai-control-plane/mcp-gateway), whose **Access** page writes the same grant rows as the role editor
+- [MCP Sessions](/docs/ai-control-plane/identity/mcp-sessions) and [Remote Identity Providers](/docs/ai-control-plane/identity/remote-identity-providers)
+- [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions), where `chat:read` governs transcript access
+- [Guardrails](/docs/ai-control-plane/secure/guardrails), [Risk Events](/docs/ai-control-plane/secure/risk-events), and [Watchdog](/docs/ai-control-plane/secure/watchdog)
+- The [Platform MCP](/docs/ai-control-plane/reference/platform-mcp), whose tools run under the caller's roles
 
 ## Further reading
 

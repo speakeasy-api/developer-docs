@@ -1,0 +1,161 @@
+---
+title: "Cursor"
+description: "Import the org's plugin marketplace into a Cursor team so plugins and the observability plugin reach every member, and see how updates, assignments, and hooks behave in Cursor."
+---
+
+import { Callout, Screenshot } from "@/mdx/components";
+
+Plugins reach Cursor through the same GitHub-backed marketplace that serves Claude Code and Codex. A Cursor team admin imports that repository once from the Cursor dashboard, after which its plugins are available to every member of the team. This page covers importing the marketplace, making the observability plugin required, how members receive plugins and updates, and how the observability plugin's hooks behave in Cursor.
+
+The observability plugin is the prerequisite for most governance features in Cursor: observability of AI usage across the company (sessions, prompts, tool calls, MCP, and tokens), security flagging and blocking, [shadow MCP detection](/docs/ai-control-plane/secure/shadow-mcp), and more.
+
+<Callout type="info">
+  In Cursor, a team marketplace is a collection of plugins read from a GitHub
+  repository. The platform hosts such a marketplace on the org's behalf
+  containing the observability plugin and any custom plugins. Once imported,
+  each plugin can be left optional or marked required from Cursor's team
+  marketplace settings.
+</Callout>
+
+## Access requirements
+
+<Callout type="info">
+  Publishing the marketplace and managing its collaborators requires the
+  `project:write` scope, and downloading an observability package requires the
+  `org:admin` scope, both held by the default [Admin
+  role](/docs/ai-control-plane/org-admin/roles-and-permissions). The
+  Cursor-side steps require a Cursor team admin, and serving the marketplace
+  from Cursor also requires admin access to the marketplace repository.
+</Callout>
+
+## What Cursor reads from the marketplace
+
+Every publish writes a Cursor manifest at `.cursor-plugin/marketplace.json` alongside the Claude Code and Codex manifests, with the Cursor packages grouped under a `cursor-plugins/` directory. Cursor sees two kinds of plugin:
+
+- The observability plugin, named `<org>-observability-cursor` and shown as **Observability (Cursor)**. It is listed first and described as required.
+- One package per project plugin, named `<plugin-slug>-cursor` and shown as the plugin name followed by **(Cursor)**. Each carries the plugin's MCP servers in `mcp.json` and its [skills](/docs/ai-control-plane/mcp-gateway/skills) under `skills/`.
+
+No separate repository or republish is needed for Cursor. Publishing from **MCP Gateway > Plugins** updates the Cursor manifest along with the others.
+
+## Grant repository access
+
+The marketplace repository is private, so the Cursor team admin who imports it needs access first. On the dashboard's **MCP Gateway > Plugins** page, click **Manage collaborators** on the marketplace card, enter the admin's GitHub username under **GitHub Usernames**, and click **Add collaborators**. (If the marketplace has never been published, **Setup** asks for a marketplace name first and then opens the **Publish Plugins** dialog, which takes the same usernames.) Then follow the link to the repository and accept the invitation, checking email or GitHub notifications if it doesn't appear.
+
+Collaborators are added as repository admins because Cursor offers **Serve Marketplace From Cursor** only to repository admins. A collaborator added before admin became the default is upgraded by adding them again.
+
+## Import the marketplace into the Cursor team
+
+Copy the marketplace repository URL from the dashboard. The **Install instructions** sheet shows it with a copy button: open the **Install** menu on the **Observability** card or any plugin, choose **GitHub installation (preferred)**, then select **Cursor**. The repository is named `<speakeasy-org>-<speakeasy-project>-plugins` under the `speakeasy-plugins` GitHub org.
+
+The first step of the sheet asks where the team runs the plugin. Choose **Cursor**.
+
+<Screenshot
+  url="ai.speakeasy.com"
+  image={{
+    src: "/assets/docs/ai-control-plane/mcp-gateway/plugins/cursor-install-choose-platform.webp",
+    alt: "Step 1 of the install sheet, asking where the team runs the plugin, with Claude Code, Claude Cowork, Cursor, OpenAI Codex, opencode, OpenClaw, GitHub Copilot, and Pi as choices",
+  }}
+/>
+
+The second step lists the Cursor rollout: open the Cursor team dashboard, import the marketplace, and mark the plugin as required. It shows the repository URL with a copy button.
+
+<Screenshot
+  url="ai.speakeasy.com"
+  image={{
+    src: "/assets/docs/ai-control-plane/mcp-gateway/plugins/cursor-install-instructions.webp",
+    alt: "Step 2 of the install sheet for Cursor, with steps to open the Cursor team dashboard, import the marketplace from the repository URL, and mark the plugin as required",
+  }}
+/>
+
+Sign in to the [Cursor dashboard](https://cursor.com/dashboard) as a team admin, open **Settings > Plugins > Import**, and paste the repository URL. Once imported, the marketplace appears under **Team Marketplaces** with its plugin count, and its plugins are available to members of the team.
+
+<Screenshot
+  url="cursor.com/dashboard"
+  image={{
+    src: "/assets/docs/ai-control-plane/mcp-gateway/plugins/cursor-team-marketplaces.webp",
+    alt: "The Team Marketplaces list in the Cursor dashboard, showing the imported Speakeasy marketplace with 8 plugins",
+  }}
+/>
+
+### Configure the marketplace in Cursor
+
+Select the marketplace in **Team Marketplaces** to open its settings. The plugin list shows each plugin as **Default On** or **Default Off**, and each plugin's menu changes that default. The **Marketplace Settings** below the list control how the team uses the marketplace:
+
+- **Marketplace Access** chooses which members can see and use plugins from the marketplace, such as **All Members**.
+- **Enable Auto Refresh** updates plugins in Cursor whenever the platform pushes changes to the repository.
+- **Serve Marketplace From Cursor** serves the plugins from a synced copy, described below.
+- **Plugin Repository** has a **Refresh** button that fetches the latest plugins from GitHub on demand.
+- **Remove Marketplace** deletes the marketplace and its access settings from Cursor without touching the repository.
+
+<Screenshot
+  url="cursor.com/dashboard"
+  image={{
+    src: "/assets/docs/ai-control-plane/mcp-gateway/plugins/cursor-marketplace-settings.webp",
+    alt: "The marketplace settings dialog in Cursor, listing IT, FDE, Engineering, and Observability plugins as Default On or Default Off, above Marketplace Access, Enable Auto Refresh, Serve Marketplace From Cursor, Plugin Repository, and Remove Marketplace settings",
+  }}
+/>
+
+### Serve the marketplace from Cursor
+
+By default, installing from the imported marketplace depends on access to the private GitHub repository. In the marketplace's settings in Cursor, turn on **Serve Marketplace From Cursor** so Cursor serves a synced copy and team members can install the plugins without GitHub access to the repository. Only a repository admin can turn this on, which is why collaborators are added with admin permission.
+
+## Make the observability plugin required
+
+In Cursor's team marketplace settings, mark the `<org>-observability-cursor` plugin as required. Required plugins are on for every team member without per-user setup, and coverage gaps mean unobserved sessions, so this is the setting for a real rollout. Mark other plugins required when every member should have their servers and skills, or leave them available for members to install themselves.
+
+## How members receive plugins
+
+Members of the Cursor team get required plugins automatically and can install any other plugin in the marketplace from Cursor. How a plugin's MCP servers authenticate depends on the server:
+
+- Servers that use OAuth prompt each member to sign in on first use.
+- Private servers carry a consumer-scoped API key that the platform mints and embeds at publish time, so they work without per-user configuration.
+- Public servers that declare environment-backed headers read those values from the member's environment, so each member sets the listed environment variables before the server connects.
+
+The observability plugin carries its own hooks-scoped API key, embedded at publish time, so members don't configure a key for it either.
+
+### Other ways to install
+
+The [device agent](/docs/ai-control-plane/reference/device-agent) installs the organization's marketplaces and plugins into Cursor on enrolled machines and reapplies them every minute, so the configuration survives settings resets and account switches. Organizations running it get per-device delivery without relying on the Cursor team marketplace.
+
+Each plugin's **Install** menu also offers **Download as zip — Cursor**, and the **Observability** card offers the same for the observability plugin. The ZIP holds the same Cursor package with its files at the root of the archive. Each observability download mints a fresh hooks-scoped API key and embeds it in the package.
+
+## Updates
+
+Each publish stamps new versions into the Cursor plugin manifests, so a republished plugin is always seen as newer than the copy a member already has. Feature plugins get a new version on every publish. The observability plugin's version moves only when its hook content changes, such as a hooks runtime update or a change to the org's hooks settings, so unrelated publishes don't churn it.
+
+After changing a plugin's servers or skills, click **Sync changes** on the marketplace card, or **Sync** on the plugin's detail page, to push the change to the repository. With **Enable Auto Refresh** on, Cursor picks up the change automatically. Otherwise, click **Refresh** under **Plugin Repository** in the marketplace settings.
+
+## Assignments
+
+Cursor team marketplace installs don't apply plugin [assignments](/docs/ai-control-plane/mcp-gateway/plugins#assignments). Cursor controls reach instead: **Marketplace Access** decides which members see the marketplace, and each plugin's **Default On** or **Default Off** setting, or marking it required, decides whether it is on for them. To deliver a plugin to specific roles, members, or directory groups, use the [device agent](/docs/ai-control-plane/reference/device-agent), which honors assignments on each device's next sync.
+
+## How the observability plugin behaves in Cursor
+
+The Cursor observability plugin registers hooks for Cursor's native events: `sessionStart`, `beforeSubmitPrompt`, `preToolUse`, `postToolUse`, `postToolUseFailure`, `beforeMCPExecution`, `afterMCPExecution`, `afterAgentResponse`, `afterAgentThought`, `stop`, and `sessionEnd`. Each hook runs a small bootstrap script that downloads a pinned, checksum-verified hooks runtime on first use, so the first session on a machine can take longer to start.
+
+- **Attribution.** Cursor includes the signed-in user's email in every hook payload, and the platform uses it to attribute sessions and tool calls to a person. Unlike Claude Code and Codex, Cursor needs no OpenTelemetry configuration for attribution.
+- **Captured data.** Prompts, agent responses, and native and MCP tool calls feed [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) and [Tool Logs](/docs/ai-control-plane/observe/tool-logs), and token counts from agent responses feed usage metrics. What is recorded follows the org's [logging settings](/docs/ai-control-plane/org-admin/logging-and-telemetry).
+- **Blocking.** The prompt and pre-tool hooks are decision points. [Risk policies](/docs/ai-control-plane/secure/guardrails) can block a prompt or tool call, a warn policy challenges a tool call before it runs, and [shadow MCP](/docs/ai-control-plane/secure/shadow-mcp) policies block calls to unapproved MCP servers. The block reason is shown to both the member and the agent.
+- **Failure behavior.** Cursor lets an action through by default when a hook crashes or times out. The plugin registers `sessionStart` and the decision hooks as fail-closed so a broken hook doesn't silently allow traffic. Behavior during a platform outage follows the **Fail Open During Outages** setting in [Logging and telemetry](/docs/ai-control-plane/org-admin/logging-and-telemetry).
+
+<Callout title="Spend comes from the Cursor Admin API" type="info">
+  Cursor hooks report token counts but not dollar cost. To see Cursor spend on
+  [Costs](/docs/ai-control-plane/observe/costs), connect the [Cursor
+  integration](/docs/ai-control-plane/org-admin/ai-integrations/cursor), which
+  imports organization-level usage and spend from the Cursor Admin API. The
+  integration complements the plugin and doesn't capture sessions or enforce
+  policies.
+</Callout>
+
+<Callout title="Cursor Cloud agents" type="info">
+  Cursor Cloud agents load hooks from the repository rather than from team
+  plugins. Instrument them with a checked-in hook manifest and a one-shot
+  device agent reconcile at session start, as described in [Cursor
+  Cloud](/docs/ai-control-plane/reference/device-agent#cursor-cloud).
+</Callout>
+
+## Verify
+
+- Confirm the observability plugin appears as installed in Cursor for a team member.
+- Execute any tool call: use an MCP server, or ask the agent to run `echo hi there`.
+- Open [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the dashboard. The tool call should appear immediately (for a local tool call, set the **Type** filter to include local tools).

@@ -1,0 +1,89 @@
+---
+title: Identities
+description: "Every person and agent the platform knows about, account or not, with a page per identity that gathers access, usage, security findings, cost, connections, devices, and activity, and per-person killswitches."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Identities** page lists every person and agent the platform knows about, whether or not they hold an account in the organization. It answers two questions: who is using AI tools across the organization, and what one particular person or agent has access to and has done. Each identity has its own page that pulls together what the rest of the platform records about that subject. Open it from **Identity > Identities** in the project sidebar.
+
+## Access requirements
+
+<Callout type="info">
+  The roster requires the `project:read` scope, which every default role includes. Opening an identity requires `org:read`. Some panels need more: risk findings and shadow MCP servers need `org:admin`, reading another person's chat sessions needs `chat:read`, and killswitches need `org:admin`. A panel the viewer cannot see names the missing permission. See [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for how scopes map to roles.
+</Callout>
+
+## How identities are resolved
+
+The roster combines four sources:
+
+- **Organization members** and their roles. With [directory sync](/docs/ai-control-plane/org-admin/identity) connected, department, job title, employment type, and directory groups come with them.
+- **Usage reported by AI tools** in the current project. This is how people the directory has never heard of show up.
+- **Agents** registered on [Agent identity](/docs/ai-control-plane/identity/agents).
+- **Managed devices** from a connected device management integration.
+
+Each identity resolves to one canonical identifier. A member is `user:<id>`, an email address with no member behind it is `email:<address>`, a tool-reported identifier with no address is `external:<id>`, and an agent is `agent:<id>`. Every identifier seen for a subject folds onto the same identity, so a link from a tool log, audit log, session, or risk finding lands on the same page.
+
+The roster is not limited to a time window. Someone who has been inactive for months is still listed, and each identity page shows activity over its own selected time range.
+
+## Kinds of identity
+
+- **Person** covers every member, and every email address that could not be matched to a member. A person marked **No linked account** has activity the platform has seen but no single member account behind it. That usually means they are using AI tools without an account in the organization, or that several members share the address.
+- **Agent** is a registered agent.
+- **Unknown** is a tool-reported identifier with no email address. It is not evidence of an agent.
+
+## Find who is using AI tools
+
+The roster sorts by last activity by default and can be narrowed to people or agents, searched by name or email, and filtered. The filters that matter most for governance:
+
+- **Enrollment** separates identities the directory knows and has seen working from those it has not.
+- **Uses personal account** finds people working through personal AI subscriptions the organization does not govern. The **Accounts** column shows which Claude, Codex, or Cursor accounts each identity has used, labeled team or personal.
+- **Device agent** shows coverage of the on-device agent on each person's managed machines, when a device integration is connected.
+- **Last activity**, **Roles**, **Department**, and **Team** narrow the list to a slice of the organization.
+
+Filters appear only when at least one identity matches them. Sort order is kept in the URL, so a sorted roster can be shared as a link.
+
+<Callout type="info">
+  Governing personal accounts in Claude Cowork and Claude Code Desktop is not possible at this time.
+</Callout>
+
+To bring someone listed with **No linked account** under management, invite them from [Team](/docs/ai-control-plane/org-admin/team). Their activity links to their member account once they sign in.
+
+## Investigate one identity
+
+Select a row to open the identity page. A time range picker in the header scopes every panel, and each panel links to the page that owns its data, filtered to this identity.
+
+- **Overview** starts with **Needs attention**, which lists risk findings, personal-account activity, shadow MCP servers reached, denied authorization checks, and devices missing the device agent.
+- **Access** shows the person's roles, the scopes those roles grant, the MCP servers and skills they can reach, recent authorization checks, and their killswitches.
+- **Usage** shows tool calls, chat requests, and tokens, and can separate usage through company AI accounts from usage through personal ones. **Cost** shows spend, token breakdown, and model mix.
+- **Security** lists [risk findings](/docs/ai-control-plane/secure/risk-events), [shadow MCP servers](/docs/ai-control-plane/secure/shadow-mcp) reached, and device agent detections for this person.
+- **Connections** traces activity from devices through MCP clients and servers to tools, and lists the live [MCP sessions](/docs/ai-control-plane/identity/mcp-sessions) the identity holds.
+- **Accounts & devices** shows the enrollment checklist, linked AI accounts, and managed devices with their agent coverage.
+- **Activity** lists the identity's [audit log](/docs/ai-control-plane/org-admin/audit-logs) entries and [agent sessions](/docs/ai-control-plane/observe/agent-sessions).
+
+An agent's page shows its lifecycle status, owner, configured permissions, recent changes, authorization checks, and current sessions. Usage, cost, and risk figures are not recorded for agents. Select **Edit Agent Identity** to manage the agent.
+
+## Killswitches
+
+A killswitch turns off one capability for one person, across a chosen set of MCP servers, for a set period. Killswitches are managed on the **Access** tab of the person they restrict, so the decision is made while looking at what that person has been doing. Today the capability available is **MCP tool calls**.
+
+<Callout type="info">
+  Killswitches require the `org:admin` scope and are enabled per organization. They apply to members, so an identity with no member account has nothing to restrict.
+</Callout>
+
+### Turn off a capability for one person
+
+On the person's **Access** tab, select **New killswitch** and set:
+
+- The **Capability** to turn off.
+- The **MCP server scope**, either every current and future organization server or a chosen set of servers.
+- When it **Starts** and **Ends**. The end can be left open.
+- A **Public message shown to the member**, and an optional **Internal note** visible only to admins.
+
+**Review impact** lists any overlapping killswitches for the same person and capability before saving.
+
+A killswitch blocks matching tool calls without ending sessions. To end a session instead, revoke it on [MCP sessions](/docs/ai-control-plane/identity/mcp-sessions). Revoking a session never creates or lifts a killswitch.
+
+### Lift or change a killswitch
+
+Each killswitch shows as **Active**, **Scheduled**, **Expired**, or **Lifted**. Open one to see its version history, edit it, or select **Lift killswitch**. Narrowing an existing killswitch from all servers to selected servers means future servers are no longer covered.

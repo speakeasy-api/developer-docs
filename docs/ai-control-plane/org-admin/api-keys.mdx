@@ -1,34 +1,45 @@
 ---
-title: "API keys"
-description: "Create, scope, and revoke API keys that authenticate programmatic access to the platform."
+title: API keys
+description: "Create, scope, and revoke API keys that authenticate programmatic access to the platform, optionally bound to a single project."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The **API Keys** page manages the keys that authenticate programmatic access to the platform, such as MCP deployments and tool management. Open it from **Organization settings > Settings > API Keys** in the dashboard.
+API keys authenticate programmatic access to the platform, such as MCP deployments, tool management, telemetry ingestion, and device-agent enrollment. Manage them from **Organization settings > Settings > API Keys** in the dashboard.
 
 ## Access requirements
 
 <Callout type="info">
-  The entire page requires the `org:admin` scope, for both viewing and managing keys. The [default Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes this scope, so only Admins can view, create, or revoke API keys. Members cannot open this page.
+  The entire page requires the `org:admin` scope, for both viewing and managing keys. The [default Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes this scope, so only Admins can view, create, or revoke API keys. Members cannot open this page. Binding a key to a project additionally requires `project:read` on that project.
 </Callout>
 
 ## Key list
 
-The page lists every key in a table with the columns **Name**, **Key**, **Scopes**, **Created At**, and **Last Accessed At**. The **Key** column shows only the key prefix, not the full token. Each row also includes a revoke action. Use the search field to filter keys by name.
+The page lists every key in a table with the columns **Name**, **Key**, **Scopes**, **Project binding**, **Created At**, and **Last Accessed At**. The **Key** column shows only the key prefix, not the full token. **Project binding** shows **Organization-wide** or the bound project's name. Each row also includes a revoke action. Use the search field to filter keys by name.
 
 ## Creating a key
 
-Click **New API Key** to open the **Create New API Key** dialog. Enter a key name, then pick one option from the scope radio group:
+Click **New API Key** to open the **Create New API Key** dialog. Enter a key name, choose a **Project** binding, then pick one option from the **Scope** radio group:
 
-- **Consumer**: query and modify toolsets, read data, and access MCP servers
-- **Producer**: everything Consumer allows, plus uploading OpenAPI documents and triggering deployments
-- **Chat**: access the chat API
-- **Hooks**: send hook events and OTEL logs
-- **Agent**: enrollment token for device agents
+- **Consumer**: query and modify MCP server configuration, read data, and access MCP servers
+- **Producer**: everything Consumer allows, plus uploading OpenAPI documents, triggering deployments, and exporting chat transcripts
+- **Chat**: use the chat API to interact with models
+- **Hooks**: ingest authenticated AI traffic, including hook events and OpenTelemetry data
+- **Agent**: present to the device agent endpoint to fetch the user's assigned plugins; store it in `managed.json` as `org_token`, or hand it to a developer for `speakeasy enroll`
 
-On create, the dialog shows the full token once with a copy button and the warning "You will not be able to see this token value again". Copy and store the token before closing the dialog.
+On create, the dialog shows the full token once with a copy button, the key's project binding, and the warning "You will not be able to see this token value again". Copy and store the token before closing the dialog.
+
+### Project binding
+
+The **Project** select defaults to **Organization-wide**, which is how every key behaved before project binding existed. Choosing a project restricts the key to that project without changing its scope: a project-bound Producer key can still deploy, but only into the project it names. The binding is fixed at creation and shown in the key list, so a key issued for one team's automation cannot be widened later. Omitting a project always creates an organization-wide key, regardless of any project header the request carries. If a bound project is later removed, the dialog flags the selection as unavailable and requires an explicit choice before another key can be created.
 
 ## Revoking a key
 
 Use the revoke action on a key's row to invalidate it. The confirmation prompt asks for the key by name before revoking. Revoked keys stop authenticating immediately.
+
+## Used by
+
+- [Anthropic plugins](/docs/ai-control-plane/mcp-gateway/plugins/anthropic), [OpenCode](/docs/ai-control-plane/mcp-gateway/plugins/opencode), [OpenClaw](/docs/ai-control-plane/mcp-gateway/plugins/openclaw), and [Data export](/docs/ai-control-plane/observe/opentelemetry), with **Hooks** keys
+- [Device Agent](/docs/ai-control-plane/reference/device-agent), with **Agent** keys
+- The [CLI](/docs/ai-control-plane/reference/command-line) and [API](/docs/ai-control-plane/reference/api-reference), with **Producer** and **Consumer** keys
+- [Audit Logs](/docs/ai-control-plane/org-admin/audit-logs), which record key changes and requests made with a key

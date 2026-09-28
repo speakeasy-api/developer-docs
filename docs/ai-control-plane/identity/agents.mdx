@@ -1,0 +1,77 @@
+---
+title: Agent identity
+description: "Give an agent its own identity: an owner, a policy, API keys and MCP sessions attributed to the agent, and a lifecycle that can be suspended, revoked, or deleted independently of any person."
+---
+
+import { Callout } from "@/mdx/components";
+
+An agent identity lets an automated agent act under its own name instead of borrowing a person's credentials. Each agent has one human owner, a policy that caps what it can do, and credentials that can be revoked without touching anyone else's access. Tool calls, sessions, and changes the agent makes are attributed to the agent, so audit logs and risk findings show what the agent did rather than blaming the person who set it up. For the underlying model, see [What agent identity is](/docs/ai-control-plane/identity#what-agent-identity-is).
+
+Manage agents on the **Agent Identity** page, under **Identity > Agent Identity** in the project sidebar.
+
+## Access requirements
+
+<Callout type="info">
+  Any active organization member can create an agent, and owners can read, configure, and authorize their own agents without any extra permission. Managing an agent owned by someone else uses the `agent:read`, `agent:write`, `agent:authorize`, and `agent:transfer` scopes, assigned through [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions). The Admin role holds all four. Issuing API keys and revoking sessions require ownership or `agent:authorize`. Every lifecycle and permission change is recorded in [Audit Logs](/docs/ai-control-plane/org-admin/audit-logs).
+</Callout>
+
+## How authorization is evaluated
+
+An agent request succeeds only when three policies all allow it:
+
+- **The credential policy.** An API key or MCP session carries a fixed maximum policy, set when a person issued or approved it. It is never widened afterward.
+- **The agent policy.** The permissions configured on the agent, plus the permissions of any roles the agent is assigned to. This is the most the agent can ever be delegated.
+- **The owner's policy.** The owner's current permissions. An agent can never do more than its owner.
+
+The agent and owner policies are read live on every request, so removing a permission from either takes effect immediately. The request is also refused when the credential is revoked or expired, when the agent is suspended, revoked, or deleted, or when the owner has left the organization.
+
+An agent with no permissions can hold API keys, but those keys authorize nothing.
+
+## Create an agent
+
+On the **Agent Identity** page, or from **New agent identity** on the [Identities](/docs/ai-control-plane/identity/identities) roster, enter an **Agent name** and choose at least one permission, then select **Create agent**. The person creating the agent becomes its owner. The name can change later with **Save name**, but the agent ID and owner stay fixed unless the agent is transferred.
+
+## Set the agent policy
+
+The **Permissions** section on an agent holds its policy. Only scopes that are safe for a nonhuman caller are offered: MCP server access (`mcp:connect`, `mcp:read`, `mcp:write`), project build and deploy (`project:read`, `project:write`), environments (`environment:read`, `environment:write`), skills (`skill:read`, `skill:write`), and `risk_policy:evaluate`. Each permission can apply to every resource of its kind or be narrowed to chosen resources, down to individual MCP servers and specific tools. Select **Save permissions** to apply the change.
+
+Agents can also be given access in the places access is managed for people:
+
+- Assign an agent to a role in the role editor on [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions), under **Assign Agents**. A role cannot give an agent a scope that is not safe for agents; those rows are marked "Not available to agents".
+- Grant an agent access to an MCP server from that server's access settings by choosing **Agent** under **Grant access**.
+
+Agent role assignments exist only in the platform and are never synced to the identity provider.
+
+## Issue an API key
+
+In the **API keys** section, select **Create API key**, name the key, and choose an expiration. Keys expire after 90 days by default and within one year at most. Then choose the permissions to delegate. The list offers only permissions that the agent policy, the owner, and the person issuing the key all hold, and each can be narrowed to one server or resource, or to specific tools.
+
+The secret is shown once. Copy it before closing the dialog, because it cannot be retrieved later. To revoke a key, select **Revoke API key** on its row.
+
+Issuing a key requires an active agent with an eligible owner. Existing keys can always be revoked.
+
+## Connect an agent to an MCP server
+
+An agent can also hold MCP sessions. When a person authorizes an MCP client on the consent screen, they can choose to connect as themselves or as an agent they are allowed to act for. Connecting as an agent grants that session only `mcp:connect` on that one server, and the agent and owner policies are checked again at approval. Connected services and tool selection on the consent screen apply only when connecting as a person.
+
+The agent's **Sessions** section lists every session authorized to act as it. Select **Revoke session** to end one. The client must authorize again to reconnect.
+
+## Transfer or reassign an agent
+
+Transferring an agent moves it to a new owner, which changes whose policy bounds it. If the owner leaves the organization or is deactivated, the agent is blocked until it is reassigned to a new owner. Transfer and reassignment require ownership or the `agent:transfer` scope and are available through the API.
+
+## Suspend, revoke, or delete an agent
+
+Three actions on the agent page end or pause its access:
+
+| Action | Effect | Reversible |
+| --- | --- | --- |
+| **Suspend** | Blocks the agent's credentials without changing its owner or policy. **Resume** restores them. | Yes |
+| **Revoke agent** | Permanently prevents the agent from becoming active again. | No |
+| **Delete agent** | Removes the agent and frees its name for reuse. Its audit history is kept. | No |
+
+Each change applies to new requests immediately. Revoke and delete ask for confirmation.
+
+## Where agents appear
+
+Agents are listed on the [Identities](/docs/ai-control-plane/identity/identities) roster with the **Agent** kind, and each agent's identity page shows its status, owner, configured permissions, recent changes, authorization checks, and current sessions. Every change to an agent is recorded in [Audit Logs](/docs/ai-control-plane/org-admin/audit-logs) with its before and after state.

@@ -1,0 +1,115 @@
+---
+title: "Team access"
+description: "Decide who can connect to one MCP server or gateway: grant people, roles, and agents access, block access, narrow the tools they reach, and resolve conflicting roles."
+---
+
+import { Callout } from "@/mdx/components";
+
+Authentication establishes who is calling a server. Team access decides what that caller may do with it: connect and call its tools, see it in the catalog, or change its settings. The rules live on the **Team Access** tab of each MCP server and gateway. Open it from **MCP Gateway > MCP** in the project sidebar, select the server, and choose **Team Access**. Access given on this tab applies to that server only.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing the **Team Access** tab requires the `org:read` scope and the `mcp:read` scope on the server. Changing its rules requires `org:admin`, which only the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) holds.
+</Callout>
+
+## Who can connect
+
+The tab lists access rules, one row per principal. A principal is one of the following:
+
+- **Everyone** in the organization.
+- A **Role**, such as a role defined in [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions).
+- A **Person**.
+- An **Agent**, a registered [agent identity](/docs/ai-control-plane/identity/agents).
+- A directory **Group** or **Attribute** value, once [directory sync](/docs/ai-control-plane/org-admin/identity) is connected.
+
+Each row grants up to three things, edited separately with **Edit access** on the row:
+
+- **Connect**: call the server's tools, either all of them or a narrowed set.
+- **View**: see the server in the catalog.
+- **Manage**: change the server's settings and access.
+
+Access rules add up, and blocks subtract. A person reached by two rules gets the union of both. A block takes away exactly the capability it names, so blocking connect leaves view and manage as they were. A block outranks every grant: a person blocked by one rule cannot use what another rule grants.
+
+A role row shows the members it reaches as a row of faces, so the effect of changing the rule is visible before it is made.
+
+## Grant access
+
+Select **Grant access** and choose **Person** or **Agent**, then pick one or more principals in the dialog. A new rule lets its principals connect to every tool on the server. Change what it grants afterwards on the principal's row.
+
+The picker withholds principals a new rule would not change:
+
+- Anyone an unrestricted organization-wide rule already covers is shown as already able to connect, view, or manage every server.
+- Anyone a block already reaches on this server is shown as blocked, with the rule that blocks them. A grant would be outranked by the block, so the change has to be made where the block is.
+
+Granting an agent access gives it this server only. An agent still cannot do more on the server than its own policy and its owner allow. A suspended or revoked agent keeps the rule it already has, and that rule can be removed but not changed.
+
+To give a role access, edit the role in [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions#the-role-editor). A rule written there that names this server appears on this tab. A rule owned by a role links to that role, and **Edit in Role Manager** opens it.
+
+<Callout type="info">
+  Each save replaces the server's whole rule list. If someone else changed the list after the tab loaded, the save is refused rather than overwriting their change. Reload the tab and make the edit again.
+</Callout>
+
+## Block access
+
+Removing a principal from a server does one of two things, depending on where its access comes from:
+
+- A rule written on this tab is deleted.
+- Access that comes from a rule covering every server, such as a grant on a role, cannot be deleted from one server. Removing it writes a block naming this server instead, and every other server is untouched.
+
+Because a block outranks every grant, the tab confirms before writing one. For a role or **Everyone**, the confirmation warns that anyone covered loses the server even if they were also given it individually.
+
+The same applies to single capabilities. Setting **Connect**, **View**, or **Manage** to **No access** on a row whose access comes from elsewhere writes a block for that capability alone.
+
+Three blocks are refused:
+
+- A block on the Admin role. Restricting a server is often written as a block on everyone else, and blocking the Admin role that way would lock every administrator out of the page that could undo it. To take a server away from the Admin role, remove its access rather than blocking it.
+- A block on view for an audience the person saving belongs to. Blocking view takes away the read that renders this tab, so it would leave nobody on that side able to undo it. Blocks on connect and manage leave the tab readable and are allowed.
+- A block on an agent. Agents cannot hold blocks, so an agent is taken off a server by removing its rule. When an agent's access comes from another rule, such as a role it belongs to, the remove action explains that the other rule has to be changed instead.
+
+## Narrow tools
+
+A connect rule reaches every tool on the server unless it is narrowed. On a row's **Connect** line, choose **Specific tools…** to open **Narrow to tools**, which offers two ways to narrow:
+
+| Narrow by | Covers | Keeps covering new tools |
+| --- | --- | --- |
+| Tool name | Only the tools picked | No |
+| Annotation (read-only, destructive, idempotent, or open-world) | Every tool not carrying an excluded annotation | Yes |
+
+A rule stores either tool names or annotations, never both. Narrowing by annotation works by excluding the annotations left out, so a tool that carries none of them stays reachable. Narrowing by name is exact but has to be revisited whenever the server gains tools.
+
+Keeping someone off destructive tools is the most common restriction, so the **Connect** line offers **Block destructive tools** as a shortcut, and **Allow destructive tools** to lift it. The shortcut is hidden while another tool restriction stands on the row, because applying it would silently replace that restriction.
+
+Remote and tunneled servers and gateways resolve their tools per caller and publish no tool catalog, so rules on those servers narrow by annotation only. Built servers offer both.
+
+When a block from another rule already caps a row, the dialog lists only the tools that block leaves reachable. Tools outside it cannot be granted here, because the block would outrank the grant.
+
+Narrowing when the grant comes from elsewhere, such as a role, is written as a block on the tools the choice leaves out. The grant on the role stays as it is, and only this server is narrowed.
+
+## See who the rules reach
+
+Below the rules, **People this reaches** resolves every rule to the organization members it covers today. A rule naming a directory attribute reaches whoever carries that value now. The table shows each person's:
+
+- **Platform access**: whether they can view or manage the server.
+- **MCP access**: how many tools they can call, with the tool names on hover, and any tools excluded from a broader grant.
+- **Granted by**: the rules that give them access.
+
+## Resolve conflicting roles
+
+A person granted a server by one rule and blocked by another does not appear in **People this reaches**, since nothing granted survives the block. The **Conflicting roles** section lists these people by name, alongside the rules that grant and the rules that block, so nobody is silently missing from the list.
+
+To resolve a conflict, remove the block. When the block lives on a role, change it on that role's page, which the role name links to. When the block names the person directly, remove it from the rule list on this tab.
+
+## How team access relates to roles
+
+Rules on this tab are the same grants the organization-wide [role editor](/docs/ai-control-plane/org-admin/roles-and-permissions#the-role-editor) writes. A role granted access to one server here is exactly what the editor writes when `mcp:connect` is added and narrowed to that server. The three capabilities map to scopes:
+
+| Capability | Scope |
+| --- | --- |
+| **Connect** | `mcp:connect` |
+| **View** | `mcp:read` |
+| **Manage** | `mcp:write` |
+
+View and manage both satisfy a connect check, so an unnarrowed view or manage rule also reaches every tool.
+
+Organization-level rules, the ones covering every server, appear on this tab with a link to the role that owns them. They are changed on the role, or subtracted from for this one server with a block.

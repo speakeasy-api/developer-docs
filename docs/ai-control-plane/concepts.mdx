@@ -1,0 +1,61 @@
+---
+title: Concepts
+description: "The core concepts behind the AI Control Plane and how they fit together: identity, tools and MCP servers, security policy, observability, and organization settings."
+---
+
+The AI Control Plane sits between the people and agents in an organization and the tools they use. Tools are built from sources and served as MCP servers. Every call through them is attributed to an identity, checked against policy, and recorded. This page defines the concepts behind that flow and links to the page that covers each one in depth.
+
+```mermaid
+flowchart LR
+    S[Sources] --> D[Deployments]
+    D --> T[Tool definitions]
+    T --> M[MCP servers and gateways]
+    M --> P[Plugins]
+    P --> A[People and agents]
+    A -->|tool calls| M
+    I[Identity] -.-> M
+    G[Policy] -.-> M
+    O[Observability] -.-> M
+```
+
+## Identity
+
+Every action the platform authorizes or records is attributed to a principal: a person, an agent, or a workload. Attribution is what access rules, audit trails, cost reporting, and risk findings key on. See [Identity](/docs/ai-control-plane/identity) for how identity is captured.
+
+- **Identities** are the people and agents the platform knows about, whether or not they hold an account. Membership comes from the organization's identity provider through SSO and directory sync, and activity reported by AI tools is linked back to a person. See [Identities](/docs/ai-control-plane/identity/identities).
+- **Agents** are first-class nonhuman principals with one human owner, their own policy, and credentials that can be revoked independently. When an agent acts, the agent is recorded as the actor, not its owner. See [Agent identity](/docs/ai-control-plane/identity/agents).
+- **MCP sessions** are the OAuth connections the platform brokers between MCP clients and servers. Every tool call through a session carries both the person or agent behind it and the client that made it. Revoking a session cuts off access immediately. See [MCP sessions](/docs/ai-control-plane/identity/mcp-sessions) and [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions).
+- **Remote identity providers** are upstream OAuth and OIDC issuers the platform trusts to authenticate MCP clients and to obtain credentials for upstream services on a user's behalf. See [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers).
+
+## Tools and MCP servers
+
+Tools start as sources, become tool definitions through a deployment, and reach agents through MCP servers. See [MCP Gateway](/docs/ai-control-plane/mcp-gateway).
+
+- **Sources** describe the functionality tools come from: OpenAPI documents, TypeScript functions, and existing MCP servers added from the catalog, by URL, or through a tunnel. See [Sources](/docs/ai-control-plane/mcp-gateway/building-servers/sources).
+- **Deployments** are immutable snapshots of a project's sources and the tools generated from them. Every source change produces a new deployment, and the latest successful one serves the project's tools. See [Deployments](/docs/ai-control-plane/mcp-gateway/building-servers/deployments).
+- **Tool definitions** are the output of a deployment: one per API operation, function, or upstream MCP tool, holding what an LLM needs to call the tool and what the platform needs to run it. A tool's name, description, annotations, and tags can be overridden without changing its source, which helps models choose and use the right tool. See [Tools on a server](/docs/ai-control-plane/mcp-gateway#tools-on-a-server) and [Tag-based tool filtering](/docs/ai-control-plane/mcp-gateway/building-servers/tool-filtering).
+- **MCP servers** expose a selected set of tools over streamable HTTP, each with its own authentication, visibility, and team access. A server is hosted, remote, or tunneled, depending on where its tools come from. See [MCP servers](/docs/ai-control-plane/mcp-gateway).
+- **Gateways** put several MCP servers behind one address. An agent connects once and reaches every member through four tools that list, describe, and call the underlying tools on demand, so a large catalog stays out of the model's context until it is needed. See [Gateways](/docs/ai-control-plane/mcp-gateway/gateway-endpoints).
+- **Environments** hold the secrets and configuration servers need to reach upstream systems, so credentials stay centralized instead of living in client configuration. See [Environments](/docs/ai-control-plane/mcp-gateway/environments).
+- **Skills and plugins** get tools to people. A skill packages instructions an agent loads. A plugin bundles MCP servers and skills, is assigned to roles, and is published to agent marketplaces such as Claude Code, Cursor, and Codex. See [Skills](/docs/ai-control-plane/mcp-gateway/skills) and [Plugins](/docs/ai-control-plane/mcp-gateway/plugins).
+
+## Security and policy
+
+Policies decide what agents may do and flag or block what they should not. See [Security and Policy](/docs/ai-control-plane/secure).
+
+- **Risk policies** scan agent sessions for secrets, sensitive data, prompt injection, destructive tool use, and other risks. A policy combines detection rules, the content they examine, the action taken on a match, and the audience it applies to. See [Guardrails](/docs/ai-control-plane/secure/guardrails) and [Detection rules](/docs/ai-control-plane/secure/detection-rules).
+- **Findings** are the matches policies produce. They roll up into ranked signals on Watchdog and attach to the exact message in a session. See [Watchdog](/docs/ai-control-plane/secure/watchdog) and [Risk events](/docs/ai-control-plane/secure/risk-events).
+- **Shadow MCP** and **Shadow AI** are the MCP servers and AI tools people use without going through the platform. Shadow MCP servers are discovered in agent traffic, and Shadow AI tools are reported by enrolled devices. Both can be reviewed and allowed or blocked. See [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp) and [Shadow AI](/docs/ai-control-plane/secure/shadow-ai).
+
+## Observability
+
+Everything that flows through the platform is recorded and attributed. See [Observability](/docs/ai-control-plane/observe).
+
+- **Agent sessions** are captured agent conversations: a full transcript of messages and tool calls with cost and token attribution. They are where investigations start. See [Agent sessions](/docs/ai-control-plane/observe/agent-sessions).
+- **Tool logs** are the raw record of every tool call the platform observes, across hosted, tunneled, and shadow MCP servers, skills, and local tools. See [Tool logs](/docs/ai-control-plane/observe/tool-logs).
+- **Costs** track AI spend from organization totals down to individual people and sessions. Budgets give each person a spending window that flags or blocks overspend. See [Costs](/docs/ai-control-plane/observe/costs).
+- **Data export** sends logs, metrics, and traces to an external observability or SIEM destination over OpenTelemetry. See [Data export](/docs/ai-control-plane/observe/opentelemetry).
+
+## Organizations and projects
+
+An organization holds members, roles, billing, and the settings shared across its projects. Projects hold MCP servers, sources, policies, and the data they produce. Roles grant scopes, and scopes decide who can view or change each part of the platform. See [Team](/docs/ai-control-plane/org-admin/team), and [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions).

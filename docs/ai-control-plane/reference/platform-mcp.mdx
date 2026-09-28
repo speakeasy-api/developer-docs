@@ -11,7 +11,7 @@ The Platform MCP is a first-party MCP server that exposes the AI Control Plane t
 Every tool call is authorized against a live org admin grant, and the server never accepts or returns credentials, OAuth codes, or client secrets. Steps that need a secret, such as OAuth consent or entering a provider client ID, hand off to the dashboard through a link the tool returns.
 
 <Callout type="info">
-  The Platform MCP is in preview and rolls out to eligible organizations. It requires the feature to be enabled for the organization and the `org:admin` scope, which the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes. Open the **Headless** tab in the dashboard to enable access and install a client.
+  The Platform MCP is in beta and rolls out to eligible organizations. It requires the feature to be enabled for the organization and the `org:admin` scope, which the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes. Open the **Headless** tab in the dashboard to enable access and install a client.
 </Callout>
 
 ## Connect an agent
@@ -81,7 +81,7 @@ Installing the plugin, downloading it, or copying a configuration block does not
 
 **Scope is explicit.** Most tools take a `project_slug` or `project_id` and act on that project only. Tools that look across the organization, such as `find_mcp` with a query, label each result with its project. Nothing falls back to a default project except the risk policy read tools, which use the organization's default project when no project is named.
 
-**Adding a server does not distribute it.** Registering an MCP server writes private project configuration. Nobody receives the server until a tool such as `distribute_mcp_to_plugin` puts it on a plugin and the plugin is published. The same holds for skills: `create_skill` stores instructions that no agent loads until `distribute_skill` gives them to a plugin or an assistant.
+**Adding a server does not distribute it.** Registering an MCP server writes private project configuration. Nobody receives the server until a tool such as `distribute_mcp_to_plugin` puts it on a plugin and the plugin is published. The same holds for skills: `create_skill` stores instructions that no agent loads until `distribute_skill` gives them to a plugin or an assistant. Skill authoring tools check the same project-scoped `skill:write` grant as the dashboard, so delegated skill authors can use them without organization admin access; `distribute_skill` stays admin-only. See [Skills](/docs/ai-control-plane/mcp-gateway/skills) for the dashboard workflow.
 
 **Mutations ask first.** Tools that connect a server to an identity provider, change which clients may sign in, or create a data export require a `confirmed` flag, and their descriptions instruct the agent to ask before setting it. Tools that edit stored records take an `expected_version` and refuse a write when the record changed since it was read. Write tools that can be retried take an `idempotency_key`, so a repeated call settles on the same result.
 
@@ -97,7 +97,7 @@ The marketplace plugin ships six reviewed skills. Each one runs a complete dashb
 
 | Skill | Workflow |
 | --- | --- |
-| `add-mcp-from-catalog` | Search the [MCP Catalog](/docs/ai-control-plane/connect/catalog), inspect an entry, add it to a chosen project, finish setup and authorization, confirm it is working, set client admission, and add it to an existing plugin. |
+| `add-mcp-from-catalog` | Search the [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog), inspect an entry, add it to a chosen project, finish setup and authorization, confirm it is working, set client admission, and add it to an existing plugin. |
 | `add-mcp-from-remote-url` | Inspect a remote MCP server by its streamable HTTP URL, add it to a chosen project, and then follow the same setup, readiness, admission, and plugin steps. |
 | `add-existing-mcp-servers` | Inventory the remote MCP servers a local coding client already has configured, with explicit consent before any local discovery, keep only public streamable HTTP endpoints, check which ones a chosen project is missing, and add them without copying local credentials. |
 | `manage-mcp-access` | Create or select a narrow custom access role for one MCP server, assign it to one explicitly chosen member, and re-read the live role state before and after the assignment. |
@@ -119,7 +119,7 @@ Tools are grouped by the part of the platform they act on. The **Type** column m
 
 | Tool | Type | What it does |
 | --- | --- | --- |
-| `search_mcp_catalog` | Read | Searches the reviewed [MCP Catalog](/docs/ai-control-plane/connect/catalog) by query or provider key. Searching adds nothing to a project. |
+| `search_mcp_catalog` | Read | Searches the reviewed [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog) by query or provider key. Searching adds nothing to a project. |
 | `inspect_mcp_candidate` | Read | Looks at one candidate before adding it, either a catalog entry or an HTTPS streamable HTTP URL. Catalog results are marked as reviewed, direct URLs as unreviewed. Inspection changes nothing. |
 
 ### Adding MCP servers
@@ -160,7 +160,7 @@ A member without permission to add an MCP server directly can ask an organizatio
 
 ### Client admission
 
-Client admission controls which MCP client apps may sign in to a server. See [MCP Connections](/docs/ai-control-plane/org-admin/mcp-connections) for the dashboard view.
+Client admission controls which MCP client apps may sign in to a server. See [MCP Sessions](/docs/ai-control-plane/identity/mcp-sessions) for the dashboard view.
 
 | Tool | Type | What it does |
 | --- | --- | --- |
@@ -169,7 +169,7 @@ Client admission controls which MCP client apps may sign in to a server. See [MC
 
 ### Plugins
 
-A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/distribute/plugins) for how plugins are published. The Platform MCP does not create, rename, or delete plugins, but it can change which roles and directory groups receive one.
+A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/mcp-gateway/plugins) for how plugins are published. The Platform MCP does not create, rename, or delete plugins, but it can change which roles and directory groups receive one.
 
 | Tool | Type | What it does |
 | --- | --- | --- |
@@ -185,7 +185,7 @@ A plugin is the bundle of MCP servers and skills an organization shares with peo
 
 ### Skills
 
-A skill is a written set of instructions an agent loads when it applies. Versions are fixed snapshots, so a correction is recorded as a new version rather than an edit. See [Skills](/docs/ai-control-plane/distribute/skills) for the dashboard view.
+A skill is a written set of instructions an agent loads when it applies. Versions are fixed snapshots, so a correction is recorded as a new version rather than an edit. See [Skills](/docs/ai-control-plane/mcp-gateway/skills) for the dashboard view.
 
 | Tool | Type | What it does |
 | --- | --- | --- |
@@ -233,7 +233,7 @@ Risk policies and exclusions are the rules the [Secure](/docs/ai-control-plane/s
 
 ### Observability
 
-These tools read the same data as [MCP and tools](/docs/ai-control-plane/observe/mcp-and-tools) and [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the Observe section. Every value is aggregated or summarized server-side and carries the window it covers. None of them return arguments, results, bodies, headers, URLs, attributes, or identities.
+These tools read the same data as [MCP Insights](/docs/ai-control-plane/observe/mcp-and-tools) and [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the Observability section. Every value is aggregated or summarized server-side and carries the window it covers. None of them return arguments, results, bodies, headers, URLs, attributes, or identities.
 
 | Tool | Type | What it does |
 | --- | --- | --- |
@@ -298,7 +298,7 @@ Session recall requires [Agent Sessions](/docs/ai-control-plane/observe/agent-se
 The following steps stay in the dashboard and are not reachable through the Platform MCP:
 
 - OAuth consent, secret entry, and client ID metadata document setup for an MCP server
-- Attaching a [remote identity provider](/docs/ai-control-plane/org-admin/remote-identity-providers)
+- Attaching a [remote identity provider](/docs/ai-control-plane/identity/remote-identity-providers)
 - Creating, renaming, or deleting plugins, organizations, or projects
 - Changing employees, devices, or team membership
 - Authoring a new MCP server from an OpenAPI document or function
@@ -309,8 +309,8 @@ The following steps stay in the dashboard and are not reachable through the Plat
 
 ## Related
 
-- [Plugins](/docs/ai-control-plane/distribute/plugins) for publishing bundles to agent marketplaces
-- [MCP Catalog](/docs/ai-control-plane/connect/catalog) for the reviewed servers the search tools return
+- [Plugins](/docs/ai-control-plane/mcp-gateway/plugins) for publishing bundles to agent marketplaces
+- [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog) for the reviewed servers the search tools return
 - [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for the org admin grant every tool requires
 - [Data export](/docs/ai-control-plane/observe/opentelemetry) for the dashboard view of OTEL destinations and routes
 - [Tool Logs](/docs/ai-control-plane/observe/tool-logs) for the full execution log the recent tool call summaries come from

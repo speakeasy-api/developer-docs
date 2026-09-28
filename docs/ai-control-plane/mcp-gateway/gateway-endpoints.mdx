@@ -1,0 +1,100 @@
+---
+title: Gateway Endpoints
+description: "Put several MCP servers behind one address. A gateway endpoint exposes four tools for discovering and calling its members instead of every member's full catalog."
+---
+
+import { Callout } from "@/mdx/components";
+
+A gateway endpoint puts several MCP servers behind one address. People set up one URL, sign in once, and approve one consent screen, and their agents reach every member server through it. Instead of loading every member's full tool catalog into context, an agent works through four tools that let it discover and describe only what it needs. The dashboard, and the rest of this page, calls them gateways for short. Gateways are listed beside servers on the **MCP** page, under **MCP Gateway > MCP** in the project sidebar.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing a gateway requires the `mcp:read` scope. Creating a gateway, changing its settings, and adding or removing members require `mcp:write`, which the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) holds and the Member role does not. Changing who can connect on the **Team Access** tab requires `org:admin`. Gateways are enabled per organization. To turn them on, contact Speakeasy.
+</Callout>
+
+## When to use a gateway
+
+A single MCP server is the better fit when a client needs one system, should load that system's tools up front, or relies on features that apply per server, such as [tag-based tool filtering](/docs/ai-control-plane/mcp-gateway/building-servers/tool-filtering) on a built server.
+
+A gateway is the better fit when:
+
+- People use several systems and should set up one URL, one sign-in, and one consent screen instead of one per server.
+- The combined catalog is large enough that loading every tool degrades tool selection.
+- Each member needs its own upstream OAuth grant for the same people. The gateway collects every grant on one consent screen.
+- Access should be controlled in two layers: who can reach the gateway, and which members each person can see and call.
+
+The two are not exclusive. A server that joins a gateway keeps its own URL, and removing it from the gateway or deleting the gateway leaves the server untouched.
+
+## How agents work through a gateway
+
+A gateway serves the same four tools regardless of its members:
+
+- `list_servers` returns the reachable members, what each one is for, and each member's status.
+- `describe_server` returns one member's tools as qualified names in the form `server--tool`, with descriptions but no input schemas.
+- `describe_tools` returns input schemas for the specific tools the agent intends to call.
+- `execute_tool` runs one tool, with the qualified name in `name` and the JSON payload in `arguments`.
+
+The built-in instructions sent on connect teach agents to work from the outside in, never to execute a tool they have not described (guessed arguments fail validation), and to re-check `list_servers` before retrying a failed call.
+
+A failure in one member stays with that member. A timeout, an unreachable upstream, or an error response surfaces as that member's error result, and `describe_tools` reports failing members separately while healthy members return their schemas. An agent keeps working against the rest of the gateway.
+
+### Member status
+
+Each member in `list_servers` reports one of three statuses:
+
+- `available`: the member can be reached. Built members always report this, because the gateway runs their tools directly. Tunneled members report it while their tunnel is up.
+- `unavailable`: the member cannot be reached right now, for example because its tunnel is down.
+- `unknown`: the gateway cannot observe the member's health. Remote members report this. It means unobserved, not broken, and such members usually answer calls normally.
+
+Some servers can be members but are never served: a disabled server, a server without a slug, and a server that clients connect to directly without the platform in the request path. The gateway's member list marks these as **Excluded** so the reason stays visible.
+
+## Create a gateway and add servers
+
+- On the **MCP** page, select **Add new**, then **New gateway**, and name the gateway. The platform creates a hosted address and a dedicated sign-in for the gateway, so clients can connect right away and must authenticate to do so.
+- On the gateway's **Overview** tab, select **Add servers**.
+- Select existing servers from the project, or create a new one from the same sheet. A server created from here, whether from the [catalog](/docs/ai-control-plane/mcp-gateway/catalog), an OpenAPI document, a [source](/docs/ai-control-plane/mcp-gateway/building-servers/sources), or a tunnel, joins the gateway when it is created.
+
+A server must be exposed over MCP and have a slug before it can join. Two members cannot share the same backend.
+
+Members appear in `list_servers` in the order shown on the **Overview** tab. Use **Move up** and **Move down** to put the servers agents should discover first at the top. Removing a member takes its tools away from connected agents but does not delete the server.
+
+## Customize instructions
+
+Every client receives the gateway instructions when it connects. The built-in text explains the four tools. To replace it, open **Settings** and edit **Instructions**. Custom text replaces the built-in instructions entirely, and saving the field empty restores them.
+
+Anyone who can connect to the gateway can read its instructions, so keep secrets out of them. Clients that are already connected keep the previous text until they reconnect. The **Inspect** tab shows the instructions, tools, and member list exactly as a client receives them.
+
+## Control who can connect
+
+Gateways have no public visibility, and the hosted installation page of a gateway requires login. Callers authenticate with the sign-in created with the gateway, configured under **Settings > Authentication**. A gateway without a sign-in serves callers anonymously, anonymous callers never see private members, and the gateway **Overview** tab reads **Anonymous**. The **Client access** admission policy, covered in [Access, OAuth, and sessions](/docs/ai-control-plane/mcp-gateway/access), applies to gateways exactly as it does to servers.
+
+### Team access
+
+The **Team Access** tab works the same way it does on an [MCP server](/docs/ai-control-plane/mcp-gateway/access/team-access). Because a gateway publishes no per-tool catalog, rules narrow by tool annotation rather than by tool name. **Block destructive tools** keeps covering tools that members add later.
+
+Access to a gateway does not grant access to its members. A caller needs `mcp:connect` on the gateway to connect at all, and on each member to see and call that member's tools. Members a caller cannot reach are absent from their `list_servers` result.
+
+### Authentication and upstream credentials
+
+A gateway has one sign-in for its callers and can hold several upstream identity providers, one per member that needs its own OAuth grant. An individual server holds at most one, so a gateway is the one place where several [remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers) share an endpoint.
+
+When a member with an upstream identity provider joins, it is bound to the gateway sign-in automatically and appears on the consent screen without further setup. If a person has not connected a member service yet, the session still opens and only that member returns an error until they connect it.
+
+Credential routing is strict. Each grant records the member it belongs to, and a remote member receives only a token issued for its own upstream. A token issued for one member is never forwarded to another. With no matching token, the call to that member goes out anonymously.
+
+### Clients and sessions
+
+The **Clients and Sessions** tab lists the agents registered against the gateway sign-in and their sessions, and revokes them the same way as on a server. The organization-wide view is [MCP Sessions](/docs/ai-control-plane/identity/mcp-sessions).
+
+## Addresses and deletion
+
+The hosted address created with the gateway can be joined by a custom address on a verified [custom domain](/docs/ai-control-plane/org-admin/custom-domain), and one address per domain can serve as the domain root. Where private network access is enabled, the gateway also gets a [private address](/docs/ai-control-plane/mcp-gateway/private-network-access/tailscale). Manage addresses under **Gateway URL** in **Settings**.
+
+Deleting a gateway removes its addresses and memberships. Member servers keep serving their own endpoints.
+
+## Observability
+
+Calls a gateway dispatches are logged against the member that served them and tagged with the gateway that routed them. In [Tool Logs](/docs/ai-control-plane/observe/tool-logs), a gateway icon beside a row names the gateway and links to it. Tool Logs and [MCP Insights](/docs/ai-control-plane/observe/mcp-and-tools) both filter by gateway. Gateway traffic is metered like any other MCP traffic.
+
+The gateway **Overview** tab summarizes the same activity: dispatched calls, failed calls, error rate, and average latency against the previous period, plus a breakdown of calls by member.

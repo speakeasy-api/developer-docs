@@ -5,7 +5,7 @@ description: "The raw stream of tool executions across MCP servers, skills, and 
 
 import { Callout } from "@/mdx/components";
 
-The **Tool Logs** page is the raw execution log for every tool call the platform observes across hosted MCP servers, tunneled and shadow MCP servers, skills, and local tools. Open it from **Observe > Tool Logs** in the dashboard. Where [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) answers "what happened in this conversation", Tool Logs answers "what happened in this tool call" and lets an investigation cut across every session at once.
+The **Tool Logs** page is the raw execution log for every tool call the platform observes across hosted MCP servers, tunneled and shadow MCP servers, skills, and local tools. Open it from **Observability > Tool Logs** in the dashboard, or arrive from any row on [MCP Insights](/docs/ai-control-plane/observe/mcp-and-tools), which opens the stream already narrowed to that server, tool, client, skill, or person. Where [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) answers "what happened in this conversation", Tool Logs answers "what happened in this tool call" and lets an investigation cut across every session at once.
 
 ## Access requirements
 
@@ -15,23 +15,31 @@ The **Tool Logs** page is the raw execution log for every tool call the platform
 
 ## Log stream
 
-The log list is an infinite-scrolling table with columns for timestamp, source and tool, user, agent, and status. Status badges are **Success**, **Error**, **Blocked**, and **Pending**. Target types are labeled **Hosted MCP**, **Tunneled MCP**, **Shadow MCP**, **Skill**, and **Local Tools**. Tool calls that arrive without an agent hook are labeled **Direct**.
+The page is laid out like a traces explorer: a facet rail on the left, a summary strip and brushable timeline above the rows, and a dense table below. The table is infinite-scrolling, with columns for **Time**, **Server**, **Tool**, **Type**, **User**, and **Client**, plus the status of each call. Status badges are **Success**, **Error**, **Blocked**, and **Pending**. Target types are labeled **Hosted MCP**, **Tunneled MCP**, **Gateway**, **Shadow MCP**, **Skill**, and **Local Tools**.
+
+The **Client** column names the MCP client that made the call, taken from the name and version the client reports when it connects to a server. Calls the platform never saw a handshake for, such as hook-observed calls, pre-handshake sessions, and non-MCP tool calls, show a dash rather than borrowing the agent's name, since that would credit a harness that never spoke MCP to the platform.
+
+### Summary and timeline
+
+The **Summary and timeline** strip reports **Tool calls**, **Failures**, **Failure rate**, **Blocked rate**, and **Tools** for the whole selected window, not just the pages loaded so far, so the numbers do not change as the list scrolls. The timeline below it stacks **Calls**, **Failures**, **Blocked**, and **Pending** per bucket; drag across it to narrow the time range to that region.
 
 ![The Tool Logs stream with source badges, users, agents, and status per tool call](/assets/docs/ai-control-plane/observe/tool-logs-stream.webp)
 
 ## Structured filters
 
-The filter bar narrows the stream using pre-aggregated summaries, so these filters stay fast at any volume:
+The **Filters** rail lists every dimension's values with a count of matching calls in the selected window, and narrows the stream using pre-aggregated summaries, so these filters stay fast at any volume:
 
-- **Server** filters by MCP server name, grouped into **Hosted MCP** and **Shadow MCP** with per-server event counts from the selected time window.
-- **User** filters by member email, listing every user seen in the window.
-- **Date range** offers presets from 15 minutes to 90 days (default 7 days) plus custom ranges.
+- **Time range** sits at the top of the rail, with presets from 15 minutes to 90 days (default 7 days) plus custom ranges.
+- **MCP server** filters by server name, with per-server event counts from the selected time window.
+- **Client** filters by the MCP client that made the call, such as Claude Code or Cursor, as reported at the MCP handshake.
+- **Status** lists **Blocked**, **Error**, **Pending**, and **Success** in severity order.
+- **Type** selects among **Hosted MCP Servers**, **Tunneled MCP Servers**, **Gateways**, **Shadow MCP Servers**, **Local Tools**, and **Skills**. Calls a gateway dispatches to a member are attributed to the member and marked with a gateway icon naming the gateway that routed them; calls observed against the gateway itself are tagged **Gateway**. Gateways also appear by name in the **MCP server** facet, which narrows the log to either kind. See [Gateways](/docs/ai-control-plane/mcp-gateway/gateway-endpoints#observability).
+- **Agent** filters by the coding agent or harness that made the call, such as Claude Code, Cursor, or Codex.
 - **Role** resolves org roles to their member emails.
-- **Agent** filters by the coding agent that made the call, such as Claude Code, Cursor, or Codex.
-- **Type** selects among **Hosted MCP Servers**, **Tunneled MCP Servers**, **Shadow MCP Servers**, **Local Tools**, and **Skills**.
-- **Status** and **Account type** round out the bar, and a clear-all control resets everything in one step.
+- **Account** picks **Team** or **Personal**; one applies at a time.
+- **User** filters by member email, listing every user seen in the window.
 
-Every selection is written to the URL, so a narrowed view survives refreshes and bookmarks. The **More filters** panel collects the full set in one sheet, with **Reset to default** to start over.
+Every selection is written to the URL, so a narrowed view survives refreshes and bookmarks, and the rail can be resized or collapsed. The rail and the [MCP Insights](/docs/ai-control-plane/observe/mcp-and-tools) board write the same URL parameters, which is what lets a row there open the exact slice here.
 
 ![The Filters panel with server, user, date range, role, agent, type, status, account type, and custom attribute controls](/assets/docs/ai-control-plane/observe/tool-logs-filters.webp)
 
@@ -62,7 +70,7 @@ The same shapes combine for narrower questions: `gram.tool.name ~ issue` plus `h
 
 Chips are editable in place. Click a chip to change its operator or value, remove it with its close button, or clear all chips at once. Adding an `=` or `in` filter replaces any existing filter on the same key and operator, while `!=` and `~` filters stack, so layering multiple exclusions is safe.
 
-Attribute filters scan raw logs rather than the pre-aggregated summaries. When one is active, a "Custom search — may be slower" badge appears as a reminder that server, user, agent, type, and date filters stay fast while attribute filters may take longer.
+Attribute filters scan raw logs rather than the pre-aggregated summaries, so server, client, status, type, user, and date filters stay fast while attribute filters may take longer. A tool name has no summary field of its own, which is why a drill-down from MCP & Tools on a tool arrives as an attribute chip on `gram.tool.name` rather than a facet selection.
 
 ### Shareable views
 
@@ -85,6 +93,8 @@ Every filterable attribute row in the detail sheet is a dropdown offering **Filt
 The pieces combine into a few common investigations:
 
 - **Find a failing tool.** Set **Status** to **Error**, or add `http.response.status_code != 200` from the sample queries. Expand a failing trace to read its child logs, open the detail sheet, and check the **Tool Error** callout and the tool input that triggered it.
-- **Isolate one user's calls.** Pick the user's email in the **User** filter, tighten the **Date range** to the incident window, and add attribute filters from any suspicious log to narrow further.
-- **Chase a pattern across servers.** Start from one bad log, use **Filter by** on its attributes to pin the tool or status, then remove the **Server** filter to see whether the same pattern appears elsewhere.
+- **Isolate one user's calls.** Pick the user's email in the **User** facet, tighten the **Time range** to the incident window, and add attribute filters from any suspicious log to narrow further. To see the same person's sessions, devices, and risk findings alongside their calls, open their [identity page](/docs/ai-control-plane/identity/identities).
+- **Chase a pattern across servers.** Start from one bad log, use **Filter by** on its attributes to pin the tool or status, then clear the **MCP server** facet to see whether the same pattern appears elsewhere.
 - **Share the evidence.** Once the view shows the problem, copy the URL. Teammates open the identical filtered stream and can keep refining it.
+
+To stream these records to a collector, configure a **Tool call logs** export; see [Data export](/docs/ai-control-plane/observe/opentelemetry).

@@ -1,0 +1,80 @@
+---
+title: User sessions
+description: "Make MCP clients authenticate before they reach a server. The platform acts as the authorization server, registers clients, and issues tokens tied to a real person."
+---
+
+import { Callout } from "@/mdx/components";
+
+User sessions answer the question of who is calling an MCP server. The platform acts as the OAuth authorization server for the server's endpoint: MCP clients discover it, register with it, send their user through a login and a consent screen, and receive a token scoped to that server.
+
+Every tool call then carries a subject, the person behind the agent, and a client ID, the agent itself, so calls can be [attributed to the MCP client](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#how-tool-calls-are-attributed-to-clients) that made them. Once a caller is identified, the server's [team access](/docs/ai-control-plane/mcp-gateway/access/team-access) rules decide whether they may connect and which tools they reach.
+
+User sessions are configured on the server detail page, reached from **MCP Gateway > MCP** in the project sidebar. See [Access, OAuth, and sessions](/docs/ai-control-plane/mcp-gateway/access) for how they fit with upstream credentials and team access.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing a server's authentication settings requires the `mcp:read` scope and changing them requires `mcp:write`. Revoking sessions and client registrations requires `project:write`, which only the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes.
+</Callout>
+
+## What turns it on
+
+User sessions turn on once the server has an identity provider set up: **User Identity** on a remote server, or **Set up authentication** on a built or tunneled server or a gateway. See [Where authentication is configured](/docs/ai-control-plane/mcp-gateway/access#where-authentication-is-configured) for where each server type keeps the setting. The detail sidebar's **Readiness** checklist reports the state under **Authentication**.
+
+A public tunneled server is the exception. It skips the gate entirely and serves anonymous callers, as described in [Anonymous access](/docs/ai-control-plane/mcp-gateway/access#anonymous-access).
+
+## What an MCP client experiences
+
+Adding a private server's URL to Claude, Cursor, or any other MCP client kicks off a sequence the user mostly sees as one login:
+
+- The client makes an unauthenticated request and gets a 401 carrying a challenge that names the server's protected-resource metadata.
+- The client fetches that metadata, learns the authorization server is the same host, and fetches the authorization server metadata.
+- The client identifies itself, either by registering through Dynamic Client Registration (DCR) or by presenting the URL of a Client ID Metadata Document (CIMD).
+- The client opens the authorize URL with a PKCE challenge. Because the server is private, the browser is sent to Speakeasy login first.
+- After login, the consent screen appears.
+- Approving redirects back to the client with an authorization code.
+- The client exchanges the code for an access token and a refresh token.
+- The client refreshes silently from then on, until the sign-in reaches its **Session length**.
+
+How clients identify themselves, what the registration endpoint accepts, how redirect URIs are validated, and which clients the **Client access** setting admits are covered in [OAuth client registration](/docs/ai-control-plane/mcp-gateway/access/client-registration).
+
+<Callout type="info">
+  There are no OAuth scopes here. The authorization server advertises no `scopes_supported`, the registration request has no `scope` field, and tokens carry none. Access is decided by roles and per-tool [team access](/docs/ai-control-plane/mcp-gateway/access/team-access) rules rather than by scopes. Remote identity providers do use real upstream scopes, which is a separate mechanism.
+</Callout>
+
+## The consent screen
+
+Consent is always shown. It is never skipped, even for a client that has connected before, because the prompt is what guards against one client being confused for another.
+
+The screen names the client asking for access and the server it wants, shown as "**Client** is requesting access to the MCP server **slug**". When the upstream publishes RFC 9728 protected-resource metadata, the card also shows the resource's own name and its **Documentation**, **Policy**, and **Terms** links, falling back to the authorization server's metadata when the resource advertises none.
+
+A summary row reads "Signing in as" with the resolved identity and the chosen session length. Expanding **Configuration** shows the details behind it:
+
+- **Client verified from**: the host of the client ID URL, shown for CIMD clients only. The client name comes from the client's own document, but the host is something the client cannot forge, so it is the part a user can check.
+- **Will redirect to**: where the authorization code is sent.
+- **Session length**: a picker with the server maximum preselected and shorter presets below it. See [Session length](/docs/ai-control-plane/mcp-gateway/access/session-refresh#session-length).
+- **Auto refresh**: whether upstream connections are renewed in the background, shown when the server has upstream services to connect. See [What people see on the consent screen](/docs/ai-control-plane/mcp-gateway/access/session-refresh#what-people-see-on-the-consent-screen).
+
+When a CIMD client receives its authorization at a local address, an extra warning tells the user to approve only if they started the request from an app running on that computer.
+
+When the server has remote identity providers attached, a **Connect required services** list appears below, and **Give Access** stays disabled until at least one service is connected. See [What the end user sees](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#what-the-end-user-sees).
+
+The screen ends with **Give Access** and **Cancel**.
+
+## Token lifetimes
+
+Access tokens last one hour, and that value is not configurable. When the sign-in's **Session length** deadline is less than an hour away, the access token expires at the deadline instead. Refreshing never extends the sign-in past that deadline, which is fixed when the person approves access. See [Session length](/docs/ai-control-plane/mcp-gateway/access/session-refresh#session-length).
+
+Refresh tokens rotate. Each refresh returns a new refresh token and retires the one presented. When a client sends the same refresh token again within a short grace period, as happens when several open sessions refresh in parallel, it gets the same response. After that, the retired token is rejected. A refresh token is also bound to the client it was issued to, and presenting it from another client revokes it.
+
+## Revoking access
+
+Revocation exists at three levels:
+
+- One session, ending a single client's connection.
+- One client registration, rejecting every future token minted for that client ID and ending every session issued through it, including sessions on other servers the same issuer gates.
+- One person's upstream credentials, covered in [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials).
+
+Revoking takes effect immediately, but a client can authorize again and reconnect. Revoking a session or a client invalidates tokens the platform issued, not the upstream OAuth tokens obtained for the user. Those are never revoked at the upstream service. The stored credential remains encrypted and becomes effectively inaccessible, but the grant can still appear as an active session in the upstream service until it is revoked there directly.
+
+Live connections across the project can be seen and revoked from [MCP Sessions](/docs/ai-control-plane/identity/mcp-sessions) under **Identity** in the project sidebar. The same sessions and client registrations appear per server on its [Clients and Sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions) tab.

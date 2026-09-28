@@ -1,0 +1,61 @@
+---
+title: Plugins
+description: "Bundle MCP servers and skills into plugins, assign them to roles, and publish to agent marketplaces via GitHub."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Plugins** page creates distributable bundles that package MCP servers and skills together, assigns them to roles, and publishes them to Claude Code, Cursor, and Codex marketplaces via GitHub. Open it from **MCP Gateway > Plugins** in the project sidebar.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this page requires the `project:read` scope. Installing, updating, or configuring plugins requires the `project:write` scope, and adding or distributing a skill via a plugin requires the `skill:write` scope. Renaming the marketplace, enabling or disabling the observability plugin, and downloading an observability package require the `org:admin` scope. Viewing is included in both the [default Admin and Member roles](/docs/ai-control-plane/org-admin/roles-and-permissions); the Member role can view plugins, but mutations are Admin-only.
+</Callout>
+
+## Marketplace
+
+Plugins publish through a GitHub-backed marketplace: a repository the platform creates and fully manages on the project's behalf, overwriting its contents on every publish. The **Your project marketplace** card at the top of the page shows the repository, its sync state (**Not published**, **Needs syncing**, or **Up to date**), and the actions **Open**, **Manage collaborators**, and **Rename**. **Sync changes** appears when the published repository is behind the project.
+
+Set the marketplace up once with **Setup**, which asks for a marketplace name and then opens the **Publish Plugins** dialog. The marketplace name is the identifier a developer types after the plugin slug (`<plugin>@<marketplace>`) when installing from a supported agent marketplace, and it applies to every plugin in the project. Lowercase letters, digits, and hyphens are allowed.
+
+The **Publish Plugins** dialog accepts **GitHub Usernames** to add as collaborators on the repository. At least one member of the organization must be a collaborator before the repository can be connected to Claude, Cursor, or another marketplace, and GitHub emails each collaborator an invitation that must be accepted. Collaborators are added as repository admins, because platform marketplaces such as Cursor gate parts of their setup (for example, serving the marketplace from Cursor) on admin access. Adding someone who already has access upgrades them to admin, which is how a marketplace published before this behavior is brought up to date. Existing collaborators are viewed or removed on GitHub.
+
+A default plugin automatically includes newly created MCP servers, so anyone with the **Default** plugin installed always has access to the project's latest servers. Every MCP server's overview page shows whether it is published to a plugin and offers **Publish** or **Update** to change its plugin membership in place.
+
+## Managing plugins
+
+Create a plugin from the **New Plugin** card, which opens the **Create Plugin** dialog with a **Name** and optional **Description**. Each plugin card shows its server and skill counts, a **Needs syncing** badge when it has unpublished changes, and an **Install** menu. Filter the list by the servers a plugin contains, or search by name or slug.
+
+A plugin's detail page is split into sections in the left-hand menu:
+
+- **Overview** shows stat tiles for MCP servers, skills, and (for organizations running the device agent) assignments and installs, alongside the current published version and sync status. **Sync** or **Sync changes** republishes the marketplace, and **Install** offers **GitHub installation (preferred)**, **Download as zip** for Claude, Cursor, and Codex, and **Download Agent Plugins ZIP** for plugins that are Agent Plugin standard compatible.
+- **MCP Servers** lists the servers bundled in the plugin, each marked **Published** or **Unpublished** (added since the marketplace was last published). **Add Server** picks any MCP server in the project. Everyone who installs the plugin gets these servers.
+- **Skills** lists the [skills](/docs/ai-control-plane/mcp-gateway/skills) distributed through the plugin with a **Latest** or **Pinned** version badge. **Add Skill** distributes project skills to the bundle. Skills ship inside the plugin package and reach everyone who installs it.
+- **Assignments** manages which roles, members, or directory audiences receive the plugin. See [Assignments](#assignments) below.
+- **Settings** holds the plugin details (name, slug, and description, changed with **Edit details**) and the **Danger zone**, where **Delete** removes the plugin from all assigned users on the next publish. Editing details republishes the plugin on the next sync.
+
+**GitHub installation (preferred)** opens the **Install instructions** sheet with per-client steps and copy buttons for Claude Code, Claude Cowork, Cursor, OpenAI Codex, opencode, OpenClaw, GitHub Copilot, and Pi, covering per-user marketplace registration, org-wide managed settings, and team marketplace registration. Per-platform setup differs enough to warrant its own page for some agents. See [Anthropic](/docs/ai-control-plane/mcp-gateway/plugins/anthropic) for Claude Code and Claude Cowork, [OpenAI](/docs/ai-control-plane/mcp-gateway/plugins/openai) for ChatGPT and Codex, and [Cursor](/docs/ai-control-plane/mcp-gateway/plugins/cursor) for Cursor team marketplaces. Neither [OpenCode](/docs/ai-control-plane/mcp-gateway/plugins/opencode) nor [OpenClaw](/docs/ai-control-plane/mcp-gateway/plugins/openclaw) has a marketplace; both install the observability plugin as a downloadable package instead.
+
+A plugin card also shows whether the plugin is **Agent Plugin standard compatible**. A compatible plugin is additionally published as a portable Agent Plugins 1.0 package, which clients such as GitHub Copilot install; a plugin that needs a platform credential, environment-backed headers, or a non-HTTPS URL is not portable and works only in the natively supported clients.
+
+## Platform plugins
+
+The **Platform Plugins** section at the bottom of the page provides plugins the platform ships rather than ones created in the project.
+
+The **Observability** plugin forwards tool events from the team's coding agent installs to the project dashboard and is the component that feeds the [Observability](/docs/ai-control-plane/observe) section's data. It ships first in the marketplace, marked required. Its **Install** menu offers **GitHub installation (preferred)** plus **Download as zip** for Claude, Cursor, Codex, OpenCode, OpenClaw, and Pi; each download mints a fresh hooks-scoped API key and embeds it in the package. Organization administrators can switch the plugin off for a project with the toggle on the card, which removes it from the marketplace and stops the device agent from installing it.
+
+The **Platform MCP** card, shown to organization administrators, installs the [Platform MCP](/docs/ai-control-plane/reference/platform-mcp) from the public Speakeasy marketplace so MCP servers, risk policies, and logs can be managed from an agent. Organization members who connect to the Platform MCP see only the published plugins assigned to them and can retrieve their own install instructions without administrative access.
+
+## Assignments
+
+Each plugin has an **Assignments** section, opened from the left-hand menu of its detail page, for managing who receives the plugin. **Manage assignments** picks from **Everyone**, **Roles**, **Directory groups**, and **Directory attributes**, and individual members or email addresses can be assigned as well. Roles come from [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions); directory audiences come from the identity provider connected under **Organization settings > Team**. New plugins are assigned to everyone by default; narrow delivery from the same sheet. Assignments apply on each device's next sync.
+
+Assignments currently gate delivery only through the [device agent](/docs/ai-control-plane/reference/device-agent). Claude Code, Claude Cowork, Cursor, and Codex marketplace installs don't support assignments, so a published plugin is available to anyone with access to the marketplace.
+
+<Callout type="info">
+  The **Assignments** section and the assignment and install stat tiles appear
+  only for organizations enrolled in the device agent program or with devices
+  that have synced. Other projects see a notice that marketplace installs
+  receive every published plugin, so there is nothing to assign.
+</Callout>

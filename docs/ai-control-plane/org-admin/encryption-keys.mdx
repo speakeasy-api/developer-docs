@@ -1,0 +1,63 @@
+---
+title: "External Services & Encryption Keys"
+description: "Keep the keys the platform signs tokens with in the organization's own cloud KMS: register the credential the platform impersonates, the KMS key it signs with, and the JSON Web Key Set that publishes the public half."
+---
+
+import { Callout } from "@/mdx/components";
+
+External Services & Encryption Keys let an organization keep the platform's signing keys in its own cloud KMS. The platform never holds the key material. It reaches each key through a credential the organization configures and asks the KMS to sign, and identity providers and MCP servers verify the resulting tokens against a public key set the organization controls. Manage them from **Organization settings > Settings > External Services** and **Organization settings > Settings > Encryption Keys** in the dashboard.
+
+<Callout type="warning">
+  Customer-managed encryption keys are enabled per organization; contact Speakeasy to turn them on. Until then, neither page appears in the sidebar. Google Cloud is the only supported provider.
+</Callout>
+
+## Access requirements
+
+<Callout type="info">
+  Viewing both pages requires the `org:read` scope, which both the Admin and Member default roles include. Creating, editing, verifying, or deleting a credential, key, or key set requires the `org:admin` scope, held only by the [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) by default. Verification performs a real signing operation billed to the key's owner, so it is rate limited per organization.
+</Callout>
+
+## How the pieces fit
+
+Three objects chain together:
+
+- An **external credential** is how the platform authenticates into the organization's cloud account. The platform impersonates a service account the organization nominates, so it holds no long-lived credentials of its own.
+- An **encryption key** names one asymmetric key version in the organization's KMS and the credential that reaches it.
+- A **signing key set** (JSON Web Key Set, or JWKS) publishes the public half of a KMS key, so relying parties can verify the tokens the platform signs. The private half never leaves the KMS.
+
+Set them up in that order: credential, then key, then key set.
+
+## Connect a cloud account
+
+On the **External Services** page, select **New External Credential**, choose **Google Cloud Platform**, name the credential, and enter the service account to impersonate (`name@project.iam.gserviceaccount.com`).
+
+Before saving, grant the platform's own service account the `roles/iam.serviceAccountTokenCreator` role on that service account. The sheet shows the exact principal to grant. A missing grant is the most common reason verification fails later, so the same instructions repeat on the credential's **Overview** tab.
+
+Select **Verify access** on the credential to confirm the platform can still impersonate the account. The platform refuses to delete a credential while an encryption key still uses it, since the key would silently lose access to its material.
+
+## Register a KMS key
+
+On the **Encryption Keys** page, select **New KMS Key**, choose **Google Cloud KMS**, and pick the external credential that reaches the key. Choose the **Algorithm**: **RS256**, the default that every JWT verifier implements, or **ES256**. Enter the **Resource name** of a specific key version, in the form `projects/p/locations/l/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1`. Asymmetric signing keys have no primary version, so the version must be named. The resource name and algorithm cannot change after saving.
+
+The impersonated service account needs the `roles/cloudkms.signerVerifier` role on the key. Select **Verify signing** to test the whole path: the platform reads the public key, checks the algorithm, signs a probe, and verifies the signature. A failure names its cause, such as a missing signer grant, a disabled key version, or an algorithm mismatch.
+
+A key can later be pointed at a different credential, which changes how the platform reaches the key but not which key it is. The platform refuses to delete a key while a key set publishes from it.
+
+## Signing keys (JWKS)
+
+Under **Signing Keys (JWKS)**, select **New Signing Key Set**, name it, and pick the KMS key to publish from. Creating the set publishes that key immediately as its active signing key, so the key's credential has to work at creation time.
+
+Keys in a set move through a lifecycle that supports rotation without breaking outstanding tokens:
+
+- **Pending**: published so verifiers can cache it, not yet signing
+- **Active**: new tokens are signed with it
+- **Retired**: no longer signing, still published so outstanding tokens verify; a retired key can be activated again
+- **Revoked**: withdrawn, and tokens signed with it no longer verify
+
+To rotate, select **Publish new key** on the set's **Keys** tab and pick the KMS key to publish from. The new key is published as pending (or activated immediately when the set has no active key). Activate it once verifiers have cached it. The set's **Overview** tab shows its audit history, including events on its keys.
+
+## Used by
+
+- [Remote Identity Providers](/docs/ai-control-plane/identity/remote-identity-providers)
+- [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions) and [Secure with OAuth](/docs/ai-control-plane/mcp-gateway/building-servers/secure-with-oauth)
+- [Audit Logs](/docs/ai-control-plane/org-admin/audit-logs)

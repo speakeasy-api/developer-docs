@@ -1,0 +1,88 @@
+---
+title: "Clients and sessions"
+description: "See which MCP clients and people are connected to one MCP server or gateway, the upstream providers reached on their behalf, and revoke a session or a client registration."
+---
+
+import { Callout } from "@/mdx/components";
+
+Every connection to an MCP server is a user session: a token the platform issued to an MCP client, on behalf of a person or another subject, after the client registered and the user consented. The **Clients and Sessions** tab lists these connections for one server. It shows who is connected, which clients they connect through, and the upstream providers the platform reaches on their behalf, and it is where an admin revokes a session or a whole client registration. Open it from **MCP Gateway > MCP** in the project sidebar, select the server or gateway, and choose **Clients and Sessions**.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing the **Clients and Sessions** tab requires the `project:read` scope, which both default roles hold. Revoking a connection or a client registration, and refreshing a client's metadata, requires `project:write`, which only the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes.
+</Callout>
+
+## Before anyone can connect
+
+Sessions are issued only once a server has [authentication](/docs/ai-control-plane/mcp-gateway/access) configured. Until then, no client can register against the server and no session can be established, and the tab shows "No connections can be made yet" with a **Configure authentication** button that opens the server's authentication settings. See [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions) for how clients register and log in.
+
+## What the tab shows
+
+Two counts sit at the top of the tab:
+
+- **Active sessions**: currently authenticated MCP sessions on this server.
+- **Agents**: MCP clients registered against this server. The product calls the OAuth client on the other side of a connection an agent.
+
+Below them, **Connections** lists every session, grouped one of three ways:
+
+- **Identity** files each session under the subject that holds it, usually a person. API keys, agents, anonymous callers, and workloads can hold sessions too.
+- **Provider** files sessions under the upstream providers the platform holds tokens for on the subject's behalf. A session that reaches several upstreams appears under each one, and a session with none appears under **No upstream provider**.
+- **Agent** files sessions under the client registration that issued them. A registration with no connections still appears, so it stays visible and revocable.
+
+Expanding a group shows the other side: a person's clients, or a client's people. Each row shows when the connection was last used, how many connections it holds, and a status:
+
+| Status | Meaning |
+| --- | --- |
+| **Live** | The connection carried traffic in the last 15 minutes. |
+| **Idle** | The connection is usable but has not carried traffic recently. |
+| **Expiring** | The connection is usable, but its authorization lapses within a day. |
+| **Needs re-auth** | The connection expired and the client must authorize again. |
+| **Revoked** | The connection was revoked. |
+
+A group is flagged when any of its connections needs attention. The status word appears on the group only when every connection in it agrees, so a person with one expired credential and two healthy ones is not labeled as needing re-authentication as a whole.
+
+Connections unused for more than a week, or no longer usable, move to an **Inactive** section. They stay listed because they may still hold credentials worth revoking.
+
+Counts and filters run over the sessions and registrations loaded on the tab. When a very large server has more than the tab loads, a note says so, and the counts cover only what was loaded.
+
+## How tool calls are attributed to clients
+
+Each tool call is attributed to the MCP client that made it, using the name and version the client reports when it connects. That separates Claude Code acting for a person from Cursor acting for the same person, both on the server **Overview** tab and in [Tool Logs](/docs/ai-control-plane/observe/tool-logs), which records the individual calls across every server in the project. Calls without a client handshake are grouped as unattributed.
+
+The name a client reports is chosen by the client itself. For a client identified by a hosted metadata document, the listing also shows the document origin, which the client cannot forge because the platform fetched the document from it.
+
+## Inspect a client registration
+
+Each registration carries a badge for how the client registered:
+
+- **CIMD**: the client identified itself with a Client ID Metadata Document URL, whose origin is its identity. See [OAuth client registration](/docs/ai-control-plane/mcp-gateway/access/client-registration) for how CIMD differs from DCR.
+- **DCR**: the client registered up front through dynamic client registration and was issued a client ID.
+
+A registration can also carry a badge for the credential it presents. **Public** clients present no client credential and rely on PKCE. **Secret** clients present a client secret issued at registration. **Signed** clients prove their identity by signing with a published key, so no shared secret is stored. **Cannot authenticate** means the stored credentials do not match the declared method, so no session can be issued or refreshed. Revoking the registration forces the client to register again.
+
+Under the **Agent** grouping, **View registration** on a group menu opens the registration details: **Client ID**, **Registered**, **Authentication**, **Active sessions**, and **Redirect URIs**. For a CIMD client, the details also show the **Source URL**, when the document was last fetched, and when the cached copy expires, with **Refresh metadata** to fetch it again.
+
+## Revoke access
+
+Three actions end access, each from a row menu:
+
+- **Revoke connection** ends one session. The client has to authenticate again.
+- **Revoke all connections** ends every session in a group.
+- **Revoke registration** revokes the client registration, ends every session issued through it, and rejects every future token minted for that client ID.
+
+<Callout type="warning">
+  A server's sessions are issued by its session issuer. Revoking a registration ends every session that client established through that issuer, including sessions on any other MCP server the same issuer gates. Anyone using the client has to authenticate again.
+</Callout>
+
+Revoking takes effect immediately, but a client can authorize again and reconnect. A CIMD client is identified by its metadata document rather than by a registration the platform issued, so it can register again the next time it authorizes. Revoking ends its current sessions without locking it out. Which metadata documents a server accepts at all is set by **Client access** in its settings, described in [OAuth client registration](/docs/ai-control-plane/mcp-gateway/access/client-registration#client-access).
+
+To stop a person from calling tools without ending their sessions, use a [killswitch](/docs/ai-control-plane/identity/identities#killswitches). Row menus for a person offer **View killswitches** and **New killswitch…**, which opens a killswitch with the **MCP tool calls** capability preselected. Revoking a session never creates or lifts a killswitch.
+
+Revoking invalidates the token the platform issued to the client, not upstream OAuth tokens held for the user, as described in [Revoking access](/docs/ai-control-plane/mcp-gateway/access/user-sessions#revoking-access).
+
+Revoking a session ends a connection but does not change who may connect. To take a server away from a person or an agent, change the rules on the server's [Team Access](/docs/ai-control-plane/mcp-gateway/access/team-access) tab.
+
+## Organization-wide view
+
+The tab shows one server's connections. [MCP Sessions](/docs/ai-control-plane/identity/mcp-sessions), under **Identity** in the project sidebar, shows connections across every server in the project, with filters by status, MCP server, and user. Where that page is enabled, **View all project sessions** on this tab opens it.

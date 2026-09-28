@@ -5,7 +5,7 @@ description: "Export normalized OpenTelemetry logs, metrics, and traces from eac
 
 import { Callout } from "@/mdx/components";
 
-Data exports send normalized OpenTelemetry (OTEL) from AI products to project-scoped OTLP/HTTP destinations. The **Data > Exports** page shows every configured project route in one organization-level view.
+Data exports send normalized OpenTelemetry (OTEL) from AI products to project-scoped OTLP/HTTP destinations. The **Exports** page, under **Organization settings > Data > Exports** in the dashboard, shows every configured project route in one organization-level view. To confirm telemetry is reaching the platform before routing it anywhere, use the [event feed](#confirm-telemetry-is-arriving).
 
 ## Access requirements
 
@@ -38,12 +38,14 @@ The destination is independent of the producer. Changing a route does not requir
 
 ## Current signal coverage
 
-The **Product telemetry** source exports normalized OTLP logs, metrics, and traces from supported products.
+Three data sources can be exported. **Product telemetry** exports normalized OTLP logs, metrics, and traces from supported products. **Risk findings** exports one OTLP log record per policy finding, carrying a stable finding ID, the policy and policy version, rule, source, confidence, and non-secret position anchors, never the matched content; exclusion rules are re-checked before every delivery so a finding excluded after detection is not exported. **Tool call logs** exports one OTLP log record for every tool call served for hosted or proxied MCP servers, the same records as [Tool Logs](/docs/ai-control-plane/observe/tool-logs), each carrying its log ID so a destination can deduplicate.
 
 | Source                            | Signals                   | Export behavior                                                                          |
 | --------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
 | Compatible OTLP/HTTP producers    | Logs, metrics, and traces | Normalized and sent as OTLP/HTTP Protobuf to `/v1/logs`, `/v1/metrics`, and `/v1/traces` |
-| Products without an OTEL exporter | Plugin hook events        | Available to Observe and Secure, but not included in OTLP data exports                   |
+| Products without an OTEL exporter | Plugin hook events        | Available to Observability and Security and Policy, but not included in OTLP data exports |
+| Risk findings                     | Logs                      | One privacy-safe record per finding, sent to `/v1/logs`; exclusions re-checked before delivery |
+| Tool call logs                    | Logs                      | One record per tool call on hosted or proxied MCP servers, sent to `/v1/logs` with the log ID for deduplication |
 
 OpenCode and OpenClaw do not expose native OTEL exporters. Their observability plugins still supply sessions, tool calls, tokens, and cost to the platform, but those plugin-only events are not part of the **Product telemetry** export.
 
@@ -95,17 +97,17 @@ Instrumentation scopes are normalized to `com.speakeasy.ai.tracing`. Unknown OTL
 
 ### Identity context
 
-Producer identity attributes such as `user.email` and `user.id` remain on the signal. Elsewhere in the AI Control Plane, these values resolve against organization membership and [Directory Sync](/docs/ai-control-plane/org-admin/identity), which provides department, division, job title, employee type, cost center, IdP groups, and role context for identity-aware Observe views when that data is available from the connected directory.
+Producer identity attributes such as `user.email` and `user.id` remain on the signal. Elsewhere in the AI Control Plane, these values resolve against organization membership and [Directory Sync](/docs/ai-control-plane/org-admin/identity), which provides department, division, job title, employee type, cost center, IdP groups, and role context for identity-aware Observability views when that data is available from the connected directory.
 
 ## Configure a data export
 
-Open **Data > Exports** in the dashboard. The page combines configured exports from every visible project into one topology.
+Open **Organization settings > Data > Exports** in the dashboard. The page combines configured exports from every visible project into one topology.
 
 To add an export:
 
 - Click **New export**.
 - Choose a project. The picker includes only projects that do not already have a route for the selected data source.
-- Select **Product telemetry** under **Data to export**.
+- Choose **Product telemetry**, **Risk findings**, or **Tool call logs** under **Data to export**.
 - Select an existing destination for that project, or select **Create a new destination**.
 - For a new destination, enter a name, the base OTLP endpoint, and any required headers.
 - Choose whether to include sensitive data.
@@ -126,7 +128,15 @@ The policy belongs to the destination. Selecting an existing destination uses it
 
 ### Manage an export
 
-Each source card includes controls to pause or enable delivery, change its destination, or delete the route. Deleting an export stops delivery and removes the route. The destination remains available for another export in the same project.
+The **Exports** page draws every route as one map, with **Data** on the left and **Sent to** on the right. Each source card includes controls to pause or enable delivery, change its destination, or delete the route. Deleting an export stops delivery and removes the route. The destination remains available for another export in the same project.
+
+To receive risk findings over plain HTTP instead of OTLP, subscribe to `risk_finding` events with [Webhooks](/docs/ai-control-plane/org-admin/webhooks).
+
+## Confirm telemetry is arriving
+
+The **Event Feed** page, under **Organization settings > Data > Event Feed**, lists every OpenTelemetry log record and span the platform has ingested across the organization, whichever project or API key delivered it. Use it to confirm telemetry is arriving while connecting a plugin, a direct OTLP producer, or an [AI integration](/docs/ai-control-plane/org-admin/ai-integrations), before any Observability page has processed the data. The feed is in preview. Viewing it requires the `org:read` scope.
+
+Filter by time range, kind (logs or spans), source, and name, or search event bodies. Select an event to see its trace and span IDs, attributes, and the full record. The feed is read-only. What appears in it depends on the switches in [Logging Settings](/docs/ai-control-plane/org-admin/logging-and-telemetry) and on which producers send telemetry.
 
 ## Choose a destination
 
@@ -156,4 +166,4 @@ The platform sends normalized logs, metrics, and traces as `application/x-protob
 
 Delivery is asynchronous after ingestion. The relay retries transient network failures, `408` and `429` responses, and `5xx` responses. Other `4xx` responses are treated as permanent configuration or authentication failures. Each outbound attempt has a ten-second timeout.
 
-Delivery failures do not affect the source agent or the copy processed by the platform for Observe and Secure. Route and destination changes can take up to 60 seconds to reach every relay worker.
+Delivery failures do not affect the source agent or the copy processed by the platform for Observability and Security and Policy. Route and destination changes can take up to 60 seconds to reach every relay worker.

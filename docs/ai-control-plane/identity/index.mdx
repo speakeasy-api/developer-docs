@@ -1,0 +1,99 @@
+---
+title: Identity
+description: "How the platform attributes every tool call, session, and change to a person, an agent, or a workload, and where to manage those identities, their MCP sessions, and the upstream issuers that authenticate them."
+---
+
+import ExplorePlatformCta from "@/components/astro/docs/ExplorePlatformCta.astro";
+import { Callout } from "@/mdx/components";
+
+Every tool call, agent session, and configuration change the platform sees belongs to someone or something. The **Identity** group in the project sidebar is where that attribution is resolved and managed: the people and agents behind the activity, the MCP sessions they hold, and the upstream issuers that authenticate MCP clients. Knowing who acted is what makes a risk finding actionable, a cost report accurate, and an access decision enforceable.
+
+## Access requirements
+
+<Callout type="info">
+  The Identities roster requires the `project:read` scope, which every default role includes. Opening an individual identity and browsing remote identity providers require `org:read`, and managing providers, risk data, and killswitches requires `org:admin`, which only the [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) holds by default. Each page below states its exact requirements.
+</Callout>
+
+<ExplorePlatformCta />
+
+## What identity means in the platform
+
+Every action the platform records or authorizes is attributed to a principal. That covers tool calls through MCP servers, agent sessions reported by AI tools, and changes made in the dashboard or through the API. Each principal has a canonical identifier of the form `kind:id`, so the same subject resolves to the same page wherever it appears.
+
+The platform recognizes three kinds of principal:
+
+- **People.** Organization members come from single sign-on and directory sync and are identified as `user:<id>`. The platform also knows people it has only seen in AI tool activity, who may not hold an account in the organization. Those are identified by email address (`email:<address>`) or, when a tool reports no address, by the identifier the tool sent (`external:<id>`).
+- **Agents.** An agent is a first-class nonhuman principal, identified as `agent:<uuid>`, with its own owner, policy, and credentials. See [What agent identity is](#what-agent-identity-is).
+- **Workloads.** A workload is a nonhuman caller such as a CI job, a Kubernetes pod, or Claude in Slack that authenticates with an identity token issued by its own platform rather than with a stored secret. A workload is identified as `workload:<issuer-id>:<external-subject>`.
+
+Identity is captured at the points where a principal meets the platform:
+
+- Sign-in to the dashboard goes through the organization identity provider, configured under [IDP and SSO](/docs/ai-control-plane/org-admin/identity).
+- MCP clients connect through OAuth sessions the platform brokers, listed on [MCP sessions](/docs/ai-control-plane/identity/mcp-sessions). A session subject is a person, an agent, an API key, an anonymous client, or a workload.
+- [API keys](/docs/ai-control-plane/org-admin/api-keys) authenticate scripts and integrations, and agent API keys authenticate a specific agent.
+- Activity reported by AI tool hooks and integrations is linked back to a person by email address and by the AI provider account it came from.
+
+Once captured, identity shows up across the platform. The [Identities](/docs/ai-control-plane/identity/identities) roster and per-identity pages gather everything known about one subject, and [tool logs](/docs/ai-control-plane/observe/tool-logs), [agent sessions](/docs/ai-control-plane/observe/agent-sessions), [audit logs](/docs/ai-control-plane/org-admin/audit-logs), and [risk findings](/docs/ai-control-plane/secure/risk-events) all name the principal behind each record and link back to it.
+
+## What agent identity is
+
+An agent is an organization-scoped principal with the canonical identity `agent:<uuid>`. It has exactly one human owner, a direct policy of its own, and credentials that can be revoked independently of anyone else. When an agent authenticates, the agent is the actor recorded in authorization checks, audit logs, and telemetry, not its owner or the person who approved the credential.
+
+An agent is not a human account. It cannot sign in to the dashboard, approve a consent screen, issue credentials, or manage agents, including itself. Agents are also separate from assistants.
+
+Every request an agent makes has to pass all of these checks:
+
+- The credential is active.
+- The agent is active, meaning not suspended, revoked, or deleted.
+- The agent's current owner is still an eligible member of the organization.
+- The request fits the credential's maximum policy, which was fixed when a person approved the credential and is never widened.
+- The request fits the agent's current direct policy.
+- The request fits the owner's current policy.
+
+The three policy checks are evaluated live, so removing a permission from the agent or from its owner takes effect on the next request.
+
+An agent authenticates with one of two kinds of credential:
+
+- **Agent API keys**, which expire after 90 days by default and after one year at most.
+- **MCP sessions** authorized on the consent screen. When connecting an MCP client, a person chooses to connect as themselves or as an agent they are allowed to act for. Connecting as an agent grants only `mcp:connect` on that one server.
+
+If an agent's owner leaves the organization or is deactivated, the agent is blocked until it is reassigned to a new owner. Transferring an agent to a different owner changes whose policy bounds it.
+
+Agent activity records the agent as the actor, along with the person who authorized the credential, the current owner, and the credential or session used. Managing agents owned by someone else uses the `agent:read`, `agent:write`, `agent:authorize`, and `agent:transfer` scopes. Owners manage their own agents without them, and the Admin role holds all four.
+
+### Workload identity
+
+A workload can present the identity token its own platform issued and exchange it for a scoped session, with no stored secret. The exchange uses the JWT bearer grant defined in RFC 7523. A workload holds no permissions of its own. It is assigned to an agent and inherits that agent's policy, and its sessions appear on [MCP sessions](/docs/ai-control-plane/identity/mcp-sessions) under its external subject.
+
+<Callout type="info">
+  Workload identity is rolling out. To set up a workload issuer or assign workloads to an agent, contact Speakeasy.
+</Callout>
+
+People and agents are listed together on [Identities](/docs/ai-control-plane/identity/identities), and agents are created and managed on [Agent identity](/docs/ai-control-plane/identity/agents).
+
+## Sections
+
+### [Identities](/docs/ai-control-plane/identity/identities)
+
+Every person and agent the platform knows about, whether or not they hold an account. Each identity page gathers access, usage, security findings, cost, connections, devices, and activity for one subject, and is where per-person killswitches are managed.
+
+### [Agent identity](/docs/ai-control-plane/identity/agents)
+
+Create agents, set their policy, issue API keys, and suspend, revoke, or delete them.
+
+### [MCP sessions](/docs/ai-control-plane/identity/mcp-sessions)
+
+The connections the platform brokers between MCP clients and servers. Revoke a connection, every connection an agent holds, or a client registration, and set the organization policies for session refresh and tool selection on consent screens.
+
+### [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers)
+
+The upstream OAuth and OIDC issuers MCP servers use to authenticate clients and obtain credentials on a user's behalf, and the clients registered with each one.
+
+## Related organization settings
+
+- [IDP and SSO](/docs/ai-control-plane/org-admin/identity) connects single sign-on and directory sync, which supply members, departments, job titles, and directory groups.
+- [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) defines the roles and scopes that people and agents hold.
+- [Team](/docs/ai-control-plane/org-admin/team) manages membership.
+- [Device Agent](/docs/ai-control-plane/reference/device-agent) enrolls the on-device agent that reports device coverage for each identity.
+
+How an MCP client is authenticated, from discovery through the consent screen to token lifetime, is covered under [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions).

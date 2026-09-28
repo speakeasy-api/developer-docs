@@ -5,7 +5,13 @@ description: "Triage the riskiest AI usage in the organization: ranked risk sign
 
 import { Callout, CardGrid } from "@/mdx/components";
 
-The **Watchdog** page is the triage surface for risk findings. [Guardrail policies](/docs/ai-control-plane/secure/guardrails) record a finding for every match in an agent session. Watchdog clusters related findings into signals and ranks them by severity. A signal groups findings that share a root cause, such as one detection rule firing repeatedly for the same team. Triaging a short list of ranked signals is faster than reading thousands of raw findings.
+The **Watchdog** page is the triage surface for risk findings. [Guardrail policies](/docs/ai-control-plane/secure/guardrails) record a finding for every match in an agent session. Watchdog clusters related findings into signals and ranks them by severity. A signal groups findings that share a root cause, such as one detection rule firing repeatedly for the same team. Triaging a short list of ranked signals is faster than reading thousands of raw findings. Open the page from **Security and Policy > Watchdog** in the dashboard.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing this page requires the `org:admin` scope. Watchdog is enabled per organization; where it is not yet enabled, the Security and Policy group shows the former Risk Overview page in its place.
+</Callout>
 
 This page covers the triage loop, in order:
 
@@ -32,12 +38,6 @@ This page covers the triage loop, in order:
   ]}
 />
 
-Open the page from **Security and Policy > Watchdog** in the dashboard.
-
-<Callout type="info">
-  Viewing this page requires the `org:admin` scope.
-</Callout>
-
 The raw finding-level log lives on [Risk Events](/docs/ai-control-plane/secure/risk-events). Watchdog replaces the former Risk Overview page, and old Risk Overview links redirect here.
 
 ## Reading the dashboard
@@ -46,16 +46,18 @@ The raw finding-level log lives on [Risk Events](/docs/ai-control-plane/secure/r
 
 Set the time range with the picker above the cards.
 
+A status badge beside the page title reports when risk analysis last ran. It reads **Analyzing now** while a run is in flight, **Last analyzed** with the relative time once the run is idle (with the outcome appended when the last run did not finish normally, and the absolute time in a tooltip), or **No recent analysis** when no run is visible. Analysis is signal-driven rather than scheduled: it wakes within about 30 seconds of new session traffic, so an empty signal list beside a recent analysis time means nothing was found rather than nothing was checked.
+
 Four headline cards compare the selected time range against the previous period:
 
-- **Org risk score**: a weighted score of open risk, driven up by critical signals
+- **Org risk score**: a weighted score of open risk, driven up by critical signals. Each signal inherits its score from its policy, and the overall score weights the most severe signal, the average of the top signals, and the total number of findings rather than taking a plain average
 - **Findings**: detection rule matches in the range
 - **Open signals**: active signal clusters, with a count of how many are critical
 - **Users exposed**: users whose sessions produced findings
 
 The exposure bar breaks findings down by data type, such as secrets or PII. Each slice is also a filter: select a data type to narrow the signal list, and select it again to clear.
 
-The **Active signals** list contains every open signal in the range. Each row shows the signal's severity score, the rule behind it, the apps it was observed in, a trend sparkline, and the count of affected users and teams. Group the list by **Severity**, **Data type**, **Team**, or **App**, and filter by severity level.
+The **Active signals** list contains every open signal in the range. Each row shows the signal's severity score, the rule behind it, the apps it was observed in, a trend sparkline, and the count of affected users and teams. Group the list by **Severity**, **Data type**, **Team**, **App**, or **User**, and filter by severity level. Grouping by **User** ranks the people behind the findings; a person's [identity page](/docs/ai-control-plane/identity/identities) gathers their findings alongside their sessions, devices, and access.
 
 ## Investigating a signal
 
@@ -96,4 +98,4 @@ The **Suppressed** section below the active list holds everything the signal clu
 
 Findings from prompt-based policies carry a judged verdict rather than a reproducible match, so tune those policies through the [guardrail](/docs/ai-control-plane/secure/guardrails) and its detection scope rather than value-based exclusions.
 
-For signals that reflect real risk, remediation happens outside Watchdog: rotate the exposed credential, block the server, or tighten [role grants](/docs/ai-control-plane/org-admin/roles-and-permissions). To stop the behavior rather than report it, raise the policy's action from flag to [deny or quarantine](/docs/ai-control-plane/secure/guardrails#action-severity-and-audience).
+For signals that reflect real risk, remediation happens outside Watchdog: rotate the exposed credential, block the server, restrict the person with a [killswitch](/docs/ai-control-plane/identity/identities#killswitches), or tighten [role grants](/docs/ai-control-plane/org-admin/roles-and-permissions). To stop the behavior rather than report it, raise the policy's action from flag to [deny or quarantine](/docs/ai-control-plane/secure/guardrails#action-severity-and-audience).

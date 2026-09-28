@@ -1,0 +1,96 @@
+---
+title: "Access, OAuth, and sessions"
+description: "How people and agents authenticate to MCP servers and gateways, which credential a server presents upstream, who may connect and which tools they get, and who is connected right now."
+---
+
+import { Callout, Screenshot } from "@/mdx/components";
+
+Every MCP server and gateway answers the same questions about access. Each one is configured independently on the server detail page, so it helps to keep them apart:
+
+- **Who is calling this MCP server?** Answered by authentication and [user sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions), where the platform acts as the authorization server and issues tokens to MCP clients.
+- **What can the server reach upstream on the caller's behalf?** Answered by [upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials), either per end user through remote identity providers or with one shared credential for every caller.
+- **Who may connect, and which tools do they get?** Answered by [team access](/docs/ai-control-plane/mcp-gateway/access/team-access), the per-server rules that grant or block people, roles, and agents and narrow what they can call.
+
+Alongside those answers, [clients and sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions) shows who is connected right now, through which MCP clients, and lets an admin cut a connection off.
+
+Start from **MCP Gateway > MCP** in the project sidebar and open the server. Where each setting sits depends on the server type, as described in [Where authentication is configured](/docs/ai-control-plane/mcp-gateway/access#where-authentication-is-configured).
+
+## Access requirements
+
+<Callout type="info">
+  Viewing a server's authentication and identity settings requires the `mcp:read` scope and changing them requires `mcp:write`. Each page in this section lists the scopes its own settings need.
+</Callout>
+
+## In this section
+
+- [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions): how MCP clients log in, consent, and hold tokens for a server, and how a person's session is revoked.
+- [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials): per-user tokens from remote identity providers, and shared credentials from environments or upstream headers.
+- [OAuth client registration: DCR and CIMD](/docs/ai-control-plane/mcp-gateway/access/client-registration): how MCP clients identify themselves to a server, and which clients may start a sign-in.
+- [Session length and refresh](/docs/ai-control-plane/mcp-gateway/access/session-refresh): how long a sign-in lasts, and whether upstream credentials are refreshed before idle connections lapse.
+- [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access): granting and blocking access per server, narrowing tools, and resolving conflicting roles.
+- [Clients and sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions): the MCP clients and people connected to one server, and revoking their sessions or registrations.
+
+## Picking an authentication model
+
+Authentication covers the first two questions. A server can answer one, both, or neither. A server with no answer to the first question and no answer to the second is an anonymous server proxying an unauthenticated upstream.
+
+On a remote server, the **Identity** section of the **Settings** tab asks the second question as one choice, described as how callers are identified to the upstream service. Changes take effect on new connections. There are three options:
+
+- **User Identity**: each person signs in to the upstream service as themselves and keeps their own permissions there. Pick the **Identity provider** where people sign in, and the platform registers the server with it. **Manage identity providers** links to the organization-wide list. Because each upstream token is stored against a person, User Identity also requires callers to sign in to the server.
+- **Agent Identity**: every caller acts as one service account. The **Agent credential** is one credential every caller shares, sent to the upstream service as the `Authorization` header. What that account may do is managed in the control plane.
+- **No Identity**: the platform manages no identity for the upstream service, and any static headers are managed by hand. No `Authorization` header is set. When the upstream answers with an authentication challenge, the **No Identity** option carries a warning, because requests will keep failing without an identity.
+
+The collapsible **Custom Headers** row holds upstream headers sent with every request, whichever option is chosen. See [Upstream headers on remote servers](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#upstream-headers-on-remote-servers).
+
+Leaving User Identity unlinks the identity provider from the server. People who already signed in lose access through it and have to authorize again if the server switches back. Leaving Agent Identity removes the shared credential, so requests no longer authenticate upstream. Both changes ask for confirmation before saving.
+
+<Screenshot
+  url="ai.speakeasy.com"
+  image={{
+    src: "/assets/docs/ai-control-plane/mcp-gateway/access/caller-identity.webp",
+    alt: "The Identity section of a remote MCP server for Datadog, with the User Identity, Agent Identity, and No Identity options, the Identity provider picker with a Manage identity providers link, and the collapsed Custom Headers row",
+  }}
+/>
+
+Built and tunneled servers make the same decisions through separate settings, summarized in the table below.
+
+| Goal | Use | Per end user? |
+| --- | --- | --- |
+| Only organization members can connect, using their Speakeasy login | [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions) on a private server | Identity only |
+| Anyone can connect anonymously, with no login | Public visibility, which requires a [tunneled backend](/docs/ai-control-plane/mcp-gateway/tunneled-servers) and the tunnel source owner's consent | No |
+| Each end user acts against their own account on an upstream service | User Identity on a remote server, or [remote identity providers](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) layered on user sessions | Yes |
+| One shared credential for the whole server | Agent Identity on a remote server, or [environment system variables or upstream headers](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) | No |
+| Each connecting user supplies their own API key | Environment variables marked as user-provided | Yes |
+
+Per-user upstream credentials require user sessions, while shared credentials compose with anything, including a fully anonymous public server. See [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials).
+
+<Callout type="warning">
+  Two similarly named concepts run in opposite directions. User sessions are inbound: tokens the platform issues to an MCP client so it can reach the server. Remote sessions are outbound: upstream tokens the platform holds on an end user's behalf so the server can reach a third-party API. **Session length** governs the first. Reconnect prompts and [automatic session refresh](/docs/ai-control-plane/mcp-gateway/access/session-refresh) belong to the second.
+</Callout>
+
+## Where authentication is configured
+
+On a built server, the **Authentication** tab carries both halves of authentication in one place. So does the **Authentication** section of a tunneled server's **Settings** tab, described in the product as "Who may connect to this server and how they sign in. Changes take effect on new connections." Before an identity provider is attached, the section shows **Set up authentication**, which requires MCP clients to authenticate through an upstream identity provider before reaching the server. Once one is attached, the section shows the **Session length**, **Client access**, and **Remote Identity Providers** fields. [Gateways](/docs/ai-control-plane/mcp-gateway/gateway-endpoints) reuse the same section.
+
+A remote server splits the same settings across two sections of its **Settings** tab: the **Identity** section described above, and a **Sessions** section with **Session length** and **Client access**, which shows its controls once User Identity is configured. See [Session length and refresh](/docs/ai-control-plane/mcp-gateway/access/session-refresh) and [OAuth client registration](/docs/ai-control-plane/mcp-gateway/access/client-registration#client-access).
+
+Every server also has a **Team Access** tab and a **Clients and Sessions** tab.
+
+The organization-wide inventory of upstream issuers lives in [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers), and every live connection across the project is visible in [MCP Sessions](/docs/ai-control-plane/identity/mcp-sessions), both under **Identity** in the project sidebar. The per-server view of the same connections is the server's [Clients and Sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions) tab.
+
+Authentication changes apply to new client connections. Clients already holding a valid token keep working until that token expires.
+
+## Anonymous access
+
+Public visibility skips authentication entirely: any caller reaches the server with no login and every tool is exposed to the public internet. It is available only on tunneled servers whose source owner has opted in, and it is a deliberate double opt-in rather than a general visibility option.
+
+A public server still sends its own shared credentials on every call, so anonymous callers get to spend them. See [One credential for the whole server](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#one-credential-for-the-whole-server).
+
+## External servers
+
+Two guides cover OAuth against an authorization server outside the platform, on built servers. A built server whose OpenAPI document declares external OAuth shows a **Configure External OAuth** action next to **Set up authentication**, and a server already configured that way offers **Convert to User Sessions** to move onto the shared authentication section:
+
+- [Secure an MCP server with OAuth](/docs/ai-control-plane/mcp-gateway/building-servers/secure-with-oauth) covers adding OAuth to a built server and the credential styles those servers accept: pre-obtained access tokens, the client credentials flow, and several security schemes in one OpenAPI document.
+- [Build MCP with external OAuth](/docs/ai-control-plane/guides/oauth-external-server) covers pointing clients at a third-party authorization server directly.
+
+Both advertise OAuth scopes, and both handle token storage and revocation differently from user sessions.

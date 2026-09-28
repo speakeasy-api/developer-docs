@@ -1,0 +1,80 @@
+---
+title: Sources
+description: "Manage the project's tool sources: OpenAPI documents and TypeScript functions, and see where catalog, remote, and tunneled servers now live."
+---
+
+import { Callout } from "@/mdx/components";
+
+The **Sources** tab lists the OpenAPI documents and functions the project deploys, the raw inputs that become tools. Adding a source is the first step in [building an MCP server](/docs/ai-control-plane/mcp-gateway/building-servers). Open the tab from **MCP Gateway > MCP** in the project sidebar, then select the **Sources** tab. The **MCP** page has four tabs: **MCP Servers**, **Catalog**, **Sources**, and **Deployments**.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing the **Sources** tab and a source's detail page requires the `mcp:read` scope. Uploading a source, uploading a new version, and deleting a source require the `project:write` scope. Building a server from a source, and creating a remote or tunneled server, require the `mcp:write` scope. The default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes all of these actions; the default Member role can browse sources and source details but cannot add, edit, or delete them.
+</Callout>
+
+## Source types
+
+The platform builds tools from five kinds of input. Two of them are sources in the strict sense, deployed by the project and listed on the **Sources** tab:
+
+- **OpenAPI documents**: upload a spec to generate a tool for every operation; see [Add tools from an OpenAPI spec](/docs/ai-control-plane/mcp-gateway/building-servers/openapi)
+- **Functions**: TypeScript tools written as custom code; see [Add tools with TypeScript](/docs/ai-control-plane/mcp-gateway/building-servers/functions)
+
+The other three are servers with an address of their own, so they are listed on the **MCP Servers** tab rather than here:
+
+- **MCP catalog**: third-party servers added from the [catalog](/docs/ai-control-plane/mcp-gateway/catalog)
+- **Custom remote MCP**: existing remote servers registered by URL; requests are proxied using streamable HTTP transport. See [Remote MCP servers](/docs/ai-control-plane/mcp-gateway/remote-servers)
+- **Tunneled MCP**: [connect an internal MCP server](/docs/ai-control-plane/mcp-gateway/tunneled-servers/internal-mcp) through an outbound tunnel, with no public ingress to the backend. See [Tunneling](/docs/ai-control-plane/mcp-gateway/tunneled-servers) for how tunnels work
+
+Links to the old per-kind source pages redirect to the right place: OpenAPI and function sources open on the **Sources** tab, and catalog, remote, and tunneled sources open on the MCP server that fronts them.
+
+External servers are proxied rather than deployed, so their tools cannot be mixed with OpenAPI or function tools on a single MCP server. To give clients one address for both, add the servers to a [gateway](/docs/ai-control-plane/mcp-gateway/gateway-endpoints).
+
+## From source to server
+
+A source is any input that describes available functionality, and it is the starting point for tools that AI agents call through MCP servers. Sources are uploaded from the dashboard or with the [CLI](/docs/ai-control-plane/reference/command-line). Each upload creates a [deployment](/docs/ai-control-plane/mcp-gateway/building-servers/deployments), which turns the project's sources into [tool definitions](/docs/ai-control-plane/mcp-gateway#tools-on-a-server). An MCP server then serves a selection of those tools, tailored to a specific use case or workflow and installable into LLM clients.
+
+## Working with the list
+
+Switch between a card grid and a table with columns for **Name**, **Kind**, **Tools**, **Created**, and **Updated**. Search matches a source's name or slug. Four filters narrow the list:
+
+- **Kind**: **OpenAPI document** or **Function**
+- **Used in MCP**: **Used in an MCP server** or **Not used in any MCP server**
+- **Format**: **JSON** or **YAML**, for OpenAPI documents only
+- **Deployment errors**: only sources that caused the latest deployment to fail
+
+When the latest deployment failed, a **Deployment errors** button appears in the toolbar and links to that deployment's logs, and the failing sources carry a failure indicator with a **View logs** link. The **Build a server** button starts the [From an existing source](#adding-a-source) flow.
+
+Each card and table row has a menu with **View details**, **Download**, **Upload new version** (OpenAPI documents only), **Go to deployment**, and **Delete**. The write actions are disabled without the `project:write` scope. Deleting a source removes it from the project's active deployment after a typed confirmation.
+
+## Adding a source
+
+Every way of adding a server or source starts from the **MCP** page. Click **Add new** on the **MCP Servers** tab to open the **Add MCP server** page, which groups the options by how the server is reached:
+
+- **Add a server**
+  - **From the catalog**: pick a reviewed third-party server from the [catalog](/docs/ai-control-plane/mcp-gateway/catalog)
+  - **Hosted remotely**: add a server that already runs elsewhere by its URL, with a verify step before it can be saved
+  - **Reachable through a tunnel**: connect a server running inside a private network through a tunnel. Follow [Add an internal MCP](/docs/ai-control-plane/mcp-gateway/tunneled-servers/internal-mcp) for setup, signed caller identity, team access, and high availability
+- **Group servers**
+  - **New gateway**: one address fronting a set of servers; see [Gateways](/docs/ai-control-plane/mcp-gateway/gateway-endpoints)
+- **Advanced**
+  - **From your API**: upload an OpenAPI document to generate tools
+  - **From an existing source**: build a server from an OpenAPI document or function the project already has
+  - **Write custom code**: create tools with TypeScript functions
+
+<Callout type="info">
+  **Reachable through a tunnel**, **New gateway**, and **Write custom code** are shown only when the corresponding feature is enabled for the organization. Functions can still be deployed from the CLI with `npm run push` when the option is hidden; they arrive on the **Sources** tab either way.
+</Callout>
+
+Uploading an OpenAPI document creates an MCP server named after the API with every generated tool, so the new tools are connectable straight away. Functions arrive as a source first; use **Build a server** on the source, or **Add new > From an existing source**, to create a server from them.
+
+## Source detail
+
+Each source has a detail page with four tabs:
+
+- **Overview**: the source's slug, source ID, and created and updated timestamps, followed by seven-day activity (calls, failures, average latency, error rate, and the top tools) and a read-only viewer for the OpenAPI document or the manifest extracted from the function bundle. Function sources also show their runtime, memory, and instance settings.
+- **Tools**: every tool the source produced, with search, HTTP method and runtime filters, and a per-tool edit menu for name, description, annotations, and tags (requires `mcp:write`)
+- **Versions**: the deployments the source has shipped in, each linking to the deployment page for logs
+- **Settings**: the **Delete source** action
+
+The page header carries **Download**, **Upload new version** for OpenAPI documents, and **Build a server**, which opens the **From an existing source** flow with this source already selected. The `gram` CLI prints a link to a source's page after a push.

@@ -1,13 +1,13 @@
 ---
-title: "Custom domain"
-description: "Connect a custom domain to serve MCP servers from a branded URL, with DNS verification, an optional IP allowlist, a default MCP server at the domain root, and ChatGPT app verification."
+title: Custom Domains
+description: "Connect a custom domain to serve MCP servers from a branded URL, with DNS verification, health checks, an optional IP allowlist, a default MCP server at the domain root, and ChatGPT app verification."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The **Custom domain** section connects one domain to the organization so MCP servers are served from a branded URL instead of the platform default. Open it from **Organization settings > Network Access** in the dashboard. When private network access is not available, this page is called **Custom Domain**.
+Custom Domains connect one domain to the organization so MCP servers are served from a branded URL instead of the platform default. Open the page from **Organization settings > Settings > Network Access** in the dashboard. When private network access is not enabled for the organization, the sidebar entry and page are called **Custom Domain** instead.
 
-For client-facing routes inside a tailnet, see [Tailscale private access](/docs/ai-control-plane/distribute/tailscale). Its private endpoint namespace is pinned when the tailnet is connected; the public custom-domain IP allowlist does not restrict the separate private route.
+For client-facing routes inside a tailnet, see [Tailscale private access](/docs/ai-control-plane/mcp-gateway/private-network-access/tailscale). Its private endpoint namespace is pinned when the tailnet is connected, and the public custom-domain IP allowlist does not restrict the separate private route.
 
 <Callout type="info">
   Adding a custom domain requires an enterprise plan. Organizations on the base tier see a prompt to request the feature.
@@ -21,15 +21,31 @@ For client-facing routes inside a tailnet, see [Tailscale private access](/docs/
 
 ## Domain card
 
-Each organization can link one custom domain. The card shows the domain name, a status icon indicating whether the domain is being verified, verified and active, or failed verification, and a "Linked" line with the date the domain was added. An Allowed IPs row shows either "All (no restriction)" or one badge per allowed IP address or CIDR range.
+Each organization can link one custom domain. The card shows the domain name, a status icon, and a "Linked" line with the date the domain was added. An **Allowed IPs** row shows either "All (no restriction)" or one badge per allowed IP address or CIDR range. The status icon has four states:
+
+- A spinner while DNS records propagate and verification is pending. The platform re-checks every few minutes for up to 24 hours.
+- A check mark once the domain is verified and active.
+- A warning triangle when the latest health check found a problem with a verified domain.
+- A cross when verification failed, or when the domain was disabled after failing health checks for over a week.
 
 ![The Custom Domain page with a verified domain, its allowlist status, and the Edit Allowlist action](/assets/docs/ai-control-plane/org-admin/custom-domain.webp)
 
 ## Connecting a domain
 
-Click **Connect a Custom Domain** to open a three-step dialog. Enter the domain, then create two DNS records at the domain provider. The first is a CNAME record pointing the domain at the platform. The second is a TXT record at `_gram.<domain>` containing a verification value. Both steps include a copy button for the required record value. An optional advanced step configures an IP allowlist before registration. Click **Register** (or **Reverify** when retrying) to submit.
+Click **Add Domain** to open the **Connect a Custom Domain** dialog. In **Step 1**, enter the domain. In **Step 2**, create the DNS records at the domain provider:
 
-Verification depends on DNS propagation, so a newly registered domain may show as being verified until the records resolve. If verification fails, click **Reverify** to run the check again.
+- For a subdomain such as `mcp.example.com`, create a CNAME record pointing the domain at the platform.
+- For an apex domain such as `example.com`, which cannot take a CNAME, create A records for the zone root using the addresses the dialog lists. The dialog suggests **CNAME (subdomain)** or **A record (apex domain)** from the domain entered, and either can be chosen explicitly, since a delegated subzone can take a CNAME.
+
+In both cases, also create a TXT record at `_gram.<domain>` containing the verification value shown. Each record value has a copy button. An optional advanced step configures an IP allowlist and a default MCP server before registration. Click **Register** (or **Reverify** when retrying) to submit.
+
+Verification depends on DNS propagation, so a newly registered domain may show as being verified until the records resolve. While verification is pending, **Check now** triggers an immediate DNS re-check. If verification fails, click **Reverify** to open the dialog again with the records to fix.
+
+## Health checks
+
+After verification, the platform keeps checking that the domain resolves to the expected target and that its TLS certificate is present and valid. A single failed probe is treated as transient; once a problem persists, the card shows **This custom domain may not be working** with the specific issue (for example, DNS records not found, DNS pointing at a different target, or a certificate that is missing, not ready, expired, or mismatched), the exact record to create where DNS is at fault, when the check last ran, and a **Check again** button.
+
+A domain that fails health checks continuously for over a week is disabled automatically: its routing and TLS certificate are removed, and the card shows **This custom domain was disabled** with the time it became unhealthy. Fix the DNS issue, then click **Reverify domain** to provision it again.
 
 ## How network access works for MCP
 
@@ -45,7 +61,7 @@ The restriction covers everything the custom domain serves, uniformly:
 Entries are IPv4 addresses (`1.2.3.4`) or CIDR ranges (`10.0.0.0/24`); IPv6 isn't supported. There's no limit on the number of entries, and an empty allowlist allows all traffic. Saving the allowlist completes only after the network configuration updates, so changes enforce near-immediately.
 
 <Callout title="Scope of the restriction" type="info">
-  The allowlist protects the branded hostname only. The same MCP servers stay reachable at their default platform URLs, which the allowlist doesn't cover — so treat it as a network perimeter for the branded domain and rely on [server authentication and visibility](/docs/ai-control-plane/distribute/mcp-servers) as the primary access control.
+  The allowlist protects the branded hostname only. The same MCP servers stay reachable at their default platform URLs, which the allowlist doesn't cover, so treat it as a network perimeter for the branded domain and rely on [server authentication and visibility](/docs/ai-control-plane/mcp-gateway) as the primary access control. To remove the public path entirely, use [Tailscale private access](/docs/ai-control-plane/mcp-gateway/private-network-access/tailscale).
 </Callout>
 
 ## Managing the allowlist
@@ -58,9 +74,9 @@ Click **Edit allowlist** to open the **Edit IP allowlist** side sheet. Each entr
 
 By default, MCP servers on a custom domain are served under `/mcp/<slug>`. The **Default MCP server** control routes the domain root itself to one of those servers, so clients can connect at `https://your-domain.com/` with no path.
 
-Pick any MCP endpoint attached to the domain from the dropdown; endpoints are grouped by project. Once set, the root behaves like the chosen server's own URL: MCP clients connect and get the server directly, while browsers see the server's installation page. Renaming the chosen server's slug updates the routing automatically, and selecting **No root mapping** stops serving the root again.
+Pick any MCP server in the organization from the dropdown; servers are grouped by project, and a server not yet attached to the domain is marked as such. Once set, the root behaves like the chosen server's own URL: MCP clients connect and get the server directly, while browsers see the server's installation page. Renaming the chosen server's slug updates the routing automatically, and selecting **No root mapping** stops serving the root again.
 
-The same mapping can also be set from an MCP server's own settings page under [Distribute](/docs/ai-control-plane/distribute/mcp-servers). Changing the mapping requires the `org:admin` scope.
+The same mapping can also be set from an MCP server's own settings page in [MCP Gateway](/docs/ai-control-plane/mcp-gateway). Changing the mapping requires the `org:admin` scope.
 
 ## ChatGPT app verification
 
@@ -80,4 +96,11 @@ Tokens are a single line of up to 256 characters. Saving or clearing the token r
 
 ## Deleting a domain
 
-Deleting the custom domain opens a confirmation that lists the MCP endpoints that will be deactivated. Traffic to those branded URLs stops once the domain is removed.
+Deleting the custom domain opens the **Remove Custom Domain** confirmation, which lists the MCP endpoints that will be deactivated along with their project and server. Traffic to those branded URLs stops once the domain is removed, and the associated ingress and TLS certificate are deleted.
+
+## Used by
+
+- [MCP servers](/docs/ai-control-plane/mcp-gateway#distribution) and [Gateways](/docs/ai-control-plane/mcp-gateway/gateway-endpoints#addresses-and-deletion), which create a **Custom Address** on a verified domain
+- [Secure with OAuth](/docs/ai-control-plane/mcp-gateway/building-servers/secure-with-oauth) and [user sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions)
+- [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp)
+- [Tailscale private access](/docs/ai-control-plane/mcp-gateway/private-network-access/tailscale)

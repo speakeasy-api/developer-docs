@@ -1,0 +1,52 @@
+---
+title: Add OAuth to TypeScript functions
+description: "Learn how to implement OAuth authentication in TypeScript functions for secure third-party integrations."
+---
+
+import { Callout } from "@/mdx/components";
+
+Integrating OAuth into Speakeasy Functions is a simple process: declare which environment variable should carry the token, and the platform handles the OAuth exchange and supplies the token to the function on every call.
+
+## Access requirements
+
+<Callout type="info">
+  Configuring OAuth on the MCP server that exposes the function requires the `mcp:write` scope, and attaching a remote identity provider requires `org:admin`. The default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes both. Pushing the function itself requires `project:write`.
+</Callout>
+
+## Accessing the token
+
+```typescript filename="src/gram.ts"
+const gram = new Gram({
+  envSchema: {
+    GOOGLE_ACCESS_TOKEN: z.string().describe("Google OAuth2 access token"),
+  },
+  authInput: {
+    oauthVariable: "GOOGLE_ACCESS_TOKEN",
+  },
+}).tool({
+  name: "search_files",
+  description:
+    "Search for PDF files in Google Drive. Takes a search query and returns matching files based on their filename.",
+  async execute(ctx, input) {
+    const token = ctx.env.GOOGLE_ACCESS_TOKEN;
+    return fetch(`https://www.googleapis.com/drive/v3/files`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+});
+```
+
+The `authInput` object specifies which environment variable should be populated with the OAuth token.
+The platform then handles the OAuth exchange and automatically supplies the token to the function.
+
+Note that this only works once OAuth is enabled for the MCP server, as described below.
+
+## Adding OAuth to the MCP server
+
+Configuring OAuth for an MCP server that contains Functions is the same as configuring OAuth for any other MCP server. Open the server from **MCP Gateway > MCP** and follow the steps in the [OAuth guide](/docs/ai-control-plane/mcp-gateway/building-servers/secure-with-oauth) to get started.
+
+## Caveats
+
+Only one managed OAuth provider can be attached to an MCP server. However, other security schemes defined in an OpenAPI spec (API keys, bearer tokens, and so on) are still accepted alongside OAuth, so users can authenticate with whichever method they prefer. See [Multiple security schemes](/docs/ai-control-plane/mcp-gateway/building-servers/secure-with-oauth#multiple-security-schemes) for details.
+
+An MCP server can contain any number of tools that do not require OAuth alongside tools that use a single OAuth provider.

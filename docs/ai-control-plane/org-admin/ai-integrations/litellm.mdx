@@ -5,7 +5,7 @@ description: "Enforce risk policies on LiteLLM-routed model traffic and ingest L
 
 import { Callout, Screenshot } from "@/mdx/components";
 
-LiteLLM often acts as the gateway and router for model inference across OpenAI, Anthropic, and other providers. This integration makes the platform the risk enforcement point and observability sink for an existing LiteLLM proxy: prompts are checked against risk policies before they reach a model provider, allowed prompts and responses are captured for asynchronous risk analysis, and normalized usage telemetry flows into [Observe](/docs/ai-control-plane/observe) and [Costs](/docs/ai-control-plane/observe/costs). LiteLLM keeps model selection, provider credentials, retries, and budgets; the platform never becomes the model proxy.
+LiteLLM often acts as the gateway and router for model inference across OpenAI, Anthropic, and other providers. This integration makes the platform the risk enforcement point and observability sink for an existing LiteLLM proxy: prompts are checked against risk policies before they reach a model provider, allowed prompts and responses are captured for asynchronous risk analysis, and normalized usage telemetry flows into [Observability](/docs/ai-control-plane/observe) and [Costs](/docs/ai-control-plane/observe/costs). LiteLLM keeps model selection, provider credentials, retries, and budgets; the platform never becomes the model proxy.
 
 ## Access requirements
 
@@ -27,7 +27,7 @@ flowchart TD
     L -- Post-call capture --> G
     L -- Metadata-only OTel export --> O[Telemetry endpoint]
     G --> R[Risk findings and session capture]
-    O --> V[Observe and cost views]
+    O --> V[Observability and cost views]
 ```
 
 A blocked prompt never reaches the model provider; LiteLLM returns the configured policy message to the caller. Because LiteLLM model API calls have no interactive acknowledgement channel, policies configured to warn behave as blocks for LiteLLM traffic.
@@ -48,10 +48,10 @@ LiteLLM `v1.94.0` is the qualified version: every configuration fragment on this
 
 ## Create an integration
 
-Open **Organization settings > AI Integrations**, expand the **LiteLLM** section, and click **New instance**. Each instance represents one LiteLLM deployment: pick the project it reports into, name it, and choose the failure posture (see [failure posture](#failure-posture) below).
+Open **Organization settings > Settings > AI Integrations**, expand the **LiteLLM** section, and click **New instance**. Each instance represents one LiteLLM deployment: pick the project it reports into, name it, and choose the failure posture (see [failure posture](#failure-posture) below).
 
 <Screenshot
-  url="app.speakeasy.com"
+  url="ai.speakeasy.com"
   image={{
     src: "/assets/docs/ai-control-plane/org-admin/litellm-create.webp",
     darkSrc: "/assets/docs/ai-control-plane/org-admin/litellm-create-dark.webp",
@@ -142,7 +142,7 @@ Authentication and attribution are separate. The integration key identifies the 
 - A shared master key, or a virtual key without a bound email, produces organization- and project-level attribution only. Organization-wide policies still apply; user-targeted policies do not, and the traffic shows as unattributed.
 - Caller-supplied end-user identifiers are stored as an external dimension only. They are never trusted for membership resolution or policy targeting, and unattributed traffic is never assigned to the administrator who created the key.
 
-Employee attribution therefore requires issuing LiteLLM virtual keys per user with email addresses that match [enrolled members](/docs/ai-control-plane/observe/employee-enrollment). The pre-call resolution is cached per LiteLLM call, so the response capture and telemetry rows attribute to the same person and session as the enforced request.
+Employee attribution therefore requires issuing LiteLLM virtual keys per user with email addresses that match people in the [Identities](/docs/ai-control-plane/identity/identities) roster. The pre-call resolution is cached per LiteLLM call, so the response capture and telemetry rows attribute to the same person and session as the enforced request.
 
 Session grouping uses the forwarded `x-gram-session-id` header when the application sets one, then LiteLLM's trace ID, then the call ID.
 
@@ -169,7 +169,7 @@ curl "${LITELLM_PROXY_URL:-http://localhost:4000}/v1/chat/completions" \
 Back on the AI Integrations page, the instance flips from **Waiting for traffic** to **Connected** shortly after the first authenticated event arrives. The table shows each instance's health, key prefix, failure posture, and last-used time.
 
 <Screenshot
-  url="app.speakeasy.com"
+  url="ai.speakeasy.com"
   image={{
     src: "/assets/docs/ai-control-plane/org-admin/litellm-instances.webp",
     darkSrc: "/assets/docs/ai-control-plane/org-admin/litellm-instances-dark.webp",
@@ -177,7 +177,7 @@ Back on the AI Integrations page, the instance flips from **Waiting for traffic*
   }}
 />
 
-After traffic arrives, LiteLLM appears as its own source in Observe, Costs, and risk views, with sessions linking findings and per-call model telemetry through the shared call identity.
+After traffic arrives, LiteLLM appears as its own source in Observability, Costs, and risk views, with sessions linking findings and per-call model telemetry through the shared call identity.
 
 ## Streaming
 
@@ -214,7 +214,7 @@ Prompt and response content reaches the platform through exactly one channel: th
 **View diagnostics** on an instance row shows connection health, the reported LiteLLM version, last ingestion and OTel event times, the last error, and attribution rates for the past 24 hours.
 
 <Screenshot
-  url="app.speakeasy.com"
+  url="ai.speakeasy.com"
   image={{
     src: "/assets/docs/ai-control-plane/org-admin/litellm-diagnostics.webp",
     darkSrc: "/assets/docs/ai-control-plane/org-admin/litellm-diagnostics-dark.webp",
@@ -230,6 +230,6 @@ Prompt and response content reaches the platform through exactly one channel: th
 - **Payload limit exceeded** — an OTel export over 4 MiB. Reduce the exporter batch size or interval.
 - **Version shows "Not reported"** — set `OTEL_SERVICE_NAME=litellm` so trace resources carry the proxy version; guardrail callbacks alone do not report it.
 - **Low virtual-key email rate** — callers use the master key or email-less virtual keys. Issue per-user virtual keys with emails to restore employee attribution.
-- **Emails present but low user attribution** — virtual-key emails do not match enrolled members; check [employee enrollment](/docs/ai-control-plane/observe/employee-enrollment) and email aliases.
+- **Emails present but low user attribution** — virtual-key emails do not match enrolled members; check the [Identities](/docs/ai-control-plane/identity/identities) roster and email aliases.
 
 Health updates are written shortly after traffic arrives and the table refreshes every few seconds while expanded, so allow a brief lag after the first request before the badge flips.

@@ -1,0 +1,100 @@
+---
+title: MCP Catalog
+description: "Browse official third-party MCP servers from the MCP Registry and add them to a project as remote MCP servers."
+---
+
+import { Callout } from "@/mdx/components";
+
+The MCP Catalog is a directory of official third-party MCP servers, powered by the official [MCP Registry](https://registry.modelcontextprotocol.io/). Browse it to find a server, then add it to the project as a remote MCP server. Open it from **MCP Gateway > MCP** in the project sidebar and select the **Catalog** tab, or click **Add new** and choose **From the catalog**. Catalog entries are also searchable from the command palette under an **MCP Catalog** group, separate from the project's own **MCP Servers**.
+
+## Access requirements
+
+<Callout type="info">
+  Browsing the catalog requires the `project:read` or `mcp:write` scope. Adding a server to the project requires the `mcp:write` scope. Both are included in the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions). The Member role can browse the catalog, but the install flow enforces `mcp:write` before a server is added.
+</Callout>
+
+## Browsing
+
+The full catalog loads in one response, so search, filtering, and sorting are instant. The toolbar controls the view:
+
+- **Search** matches on server name
+- **Sort by** offers **Most Popular**, **Recently Released**, **Last Updated**, **A → Z**, and **Z → A**
+- **View as** switches between a card grid and a table
+- The count shows how many servers match the current filters
+
+Servers already added to the project show an **Added** badge, and their button reads **Add again**. Servers are added one at a time from the **Add** button on a card, a table row, or the detail page.
+
+### Filters
+
+Six filter dimensions narrow the list:
+
+| Filter            | Options                            |
+| ----------------- | ---------------------------------- |
+| **Auth type**     | No Auth, API Key, OAuth 2.1, Other |
+| **Setup**         | Automatic (DCR), Manual setup      |
+| **Tool behavior** | Read-only only, Can modify data    |
+| **Popularity**    | 100+ users, 1k+ users, 10k+ users  |
+| **Last updated**  | This week, This month, This year   |
+| **Tool count**    | 5+ tools, 10+ tools                |
+
+Filter state lives in the URL, so a filtered view can be bookmarked or shared.
+
+## Server details
+
+Selecting a server opens its detail page, which covers:
+
+- The server name, its website or registry specifier, and badges for **Official**, **Latest**, and **Manual Setup**
+- **About**, the server description as published to the registry
+- **Available Tools**, listing every tool with its read-only, destructive, idempotent, and write annotations and an expandable description
+- Usage estimates for **This Week**, **Monthly** (the last four weeks), and **All Time**
+- **Version & Release** details covering version, status, publish date, last update, and source
+- **Registry** details covering the registry name and the server specifier
+
+A **Manual Setup** badge means the server does not support dynamic client registration. Connecting to it requires static OAuth client credentials or an API key.
+
+## What an install creates
+
+Catalog entries install as [remote MCP servers](/docs/ai-control-plane/mcp-gateway/remote-servers). The vendor keeps running the server, and the platform registers its URL and proxies sessions to it, adding authentication, per-tool access control, and tool logs in front. Nothing is copied or re-hosted. The new server appears on the **MCP Servers** tab, not on the **Sources** tab.
+
+A catalog server keeps its tools on its own MCP server, so they cannot be combined with OpenAPI or function tools on one server. To put a catalog server and other servers behind one address, add them to a [gateway endpoint](/docs/ai-control-plane/mcp-gateway/gateway-endpoints).
+
+One entry can create several servers, because an entry can publish more than one remote endpoint. The install dialog lists them and creates one server per selected endpoint, after discarding endpoints that do not use streamable HTTP.
+
+## Adding a server
+
+Click **Add** on a server card or detail page. The install dialog then walks through configuration.
+
+When a server publishes more than one endpoint, a **Configure** step appears first. Set the **Server name** and use **Select endpoints to include** to pick which endpoints to install.
+
+The configure step collects any remaining setup:
+
+- **Server name** for the server being added
+- **Upstream headers** for servers that authenticate with an API key. Values are stored on the server and sent with every upstream request.
+
+Header values are optional at this point. Click **Skip for now** and set them later on the **Settings** tab of the created server, or fill them in and click **Add to Project**.
+
+On confirmation, the platform creates a remote MCP server pointing at the selected endpoint with private visibility and stages a default MCP endpoint so the server can serve straight away. Servers that support dynamic client registration have their OAuth configuration applied automatically. The new server is listed on the **MCP Servers** tab.
+
+<Callout title="Good to know" type="info">
+  Private visibility keeps the endpoint gated behind a user session. This matters when upstream API-key headers are stored on the server, since a public endpoint would expose them to anyone holding the URL.
+</Callout>
+
+After the install completes, the dialog links to the next actions: **Add more sources**, **Connect via coding agents**, and **Configure MCP settings**.
+
+When the catalog is opened from a gateway endpoint's **Add servers** panel, the installed server is also added to that gateway endpoint, and the dashboard returns to it afterwards.
+
+[Remote MCP servers](/docs/ai-control-plane/mcp-gateway/remote-servers) covers the rest of the install flow, upstream headers, and what to do about entries marked **Manual Setup**.
+
+## Adding the same server again
+
+Installing an entry that is already in the project is allowed. **Add again** on a card, or **Add another** on the detail page, creates another independent server rather than editing the existing one. That covers cases such as separate credentials per environment or one server per tenant of the same vendor. [Multi-tenant MCP](/docs/ai-control-plane/guides/multi-tenant-mcp) walks through that pattern.
+
+## Removing a server
+
+When the project deployment holds the catalog server, its detail page shows **Remove**. Removal drops the server from the deployment and deletes every MCP server built from its tools, not only those built exclusively from them.
+
+## Next steps
+
+- Read about [choosing which tools a server exposes](/docs/ai-control-plane/mcp-gateway#choosing-which-tools-a-server-exposes) to plan how catalog servers fit with the rest of a project
+- Read about [remote MCP servers](/docs/ai-control-plane/mcp-gateway/remote-servers) to understand what a catalog install creates
+- Follow [Multi-tenant MCP](/docs/ai-control-plane/guides/multi-tenant-mcp) to install the same catalog entry once per tenant

@@ -1,0 +1,64 @@
+---
+title: "Remote identity providers"
+description: "Trust upstream OAuth and OIDC issuers, register the clients MCP servers use with them, and decide whether each provider is shared across the organization or scoped to one project."
+---
+
+import { Callout } from "@/mdx/components";
+
+A remote identity provider is an upstream OAuth or OIDC issuer that the platform trusts, such as a company identity provider or the authorization server of a SaaS API. MCP servers use it to authenticate clients before they reach a server, and to obtain the credentials a server needs to call a third-party API on a user's behalf. Setting up the provider once lets every MCP server that talks to that issuer share the same client and sign-in flow. Open the **Remote Identity Providers** page from **Identity > Remote Identity Providers** in the project sidebar.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing providers requires the `org:read` scope, which both default roles hold. Creating, editing, moving, consolidating, and deleting providers, and managing their clients, requires `org:admin`, which only the [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes by default. Registering a client by dynamic client registration through a tunnel-bound provider requires a Speakeasy platform administrator.
+</Callout>
+
+## Where a provider lives
+
+Providers exist at three levels:
+
+- **Platform** providers are maintained by Speakeasy for common issuers. Organizations cannot edit them, but they can add clients to them.
+- **Organizational** providers are shared by every project in the organization.
+- **Project-specific** providers apply to one project.
+
+Prefer a platform provider when one exists for the issuer. Create an organizational or project-specific provider only when the organization needs its own setup documentation, branding, scopes, or audience handling.
+
+## Trust an upstream issuer
+
+Select **New Remote Identity Provider**, choose whether the provider is organizational or belongs to one project, and enter the **Issuer URL**. **Discover** reads the issuer's published metadata (RFC 8414) and fills in the authorization, token, registration, and JWKS endpoints. Endpoints the issuer does not publish can be entered by hand. Add a display name, logo, and a **Client setup documentation URL** so admins know how to create a client with this issuer.
+
+If a provider for the same authorization server already exists at any level, the form warns and links to it. The warning does not block saving. Discovery also warns when the issuer does not advertise PKCE `S256`.
+
+When the issuer changes its metadata, use **Refresh Discoverable Metadata** to update the stored endpoints.
+
+## Register a client
+
+A provider needs a registered OAuth client before MCP servers can use it. Select **Add Client** and choose how to register it:
+
+- **Dynamic Client Registration (DCR)** registers a client automatically when the issuer has a registration endpoint (RFC 7591). **Rotate client** later registers a replacement and swaps it in place, which signs out existing sessions so users reconnect once.
+- **Client ID Metadata Document (CIMD)** uses a public document the platform hosts as the client ID, when the issuer supports it. No credentials are stored, so there is nothing to expire or rotate.
+- **Manual** uses a client registered with the issuer outside the platform. Paste its client ID and secret. The sheet shows the callback URI to register with the issuer.
+
+MCP servers select a provider in their authentication settings. An MCP server holds at most one provider. A [gateway](/docs/ai-control-plane/mcp-gateway/gateway-endpoints#authentication-and-upstream-credentials) can hold one per member server. See [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) for how a server uses a provider and what users see when they connect.
+
+Deleting a client revokes every session issued through it. Client secrets are encrypted at rest and never displayed.
+
+## Authenticate a client with a signed key
+
+A client can authenticate to the issuer with a signed assertion instead of a shared secret. Set the client's token endpoint authentication method to `private_key_jwt` and attach a **Signing key set**. The assertion audience defaults to the issuer identifier and can be switched to the token endpoint URL for issuers that require it. A key set cannot be deleted while a client uses it.
+
+<Callout type="info">
+  Signing key sets are created from the organization's own KMS keys on [Encryption Keys](/docs/ai-control-plane/org-admin/encryption-keys#signing-keys-jwks) and require the customer-managed encryption keys entitlement.
+</Callout>
+
+## Reach a private issuer through a tunnel
+
+When an issuer is reachable only from a private network, bind the provider to an MCP tunnel in the project with the **OAuth network route** setting. All traffic between the platform and the issuer then goes through the tunnel, including discovery, token exchange and refresh, revocation, and client registration. Choose a tunnel whose target can reach the issuer. If the tunnel is deleted, OAuth for that provider fails until an admin changes the route. See [Tunneled MCP servers](/docs/ai-control-plane/mcp-gateway/tunneled-servers) to set up the tunnel.
+
+## Move, merge, or delete a provider
+
+- **Make organizational** shares a project-specific provider with every project. **Make project-specific** and **Move to another project** scope it to one project.
+- **Consolidate into another provider** moves this provider's clients onto another provider for the same issuer. It is refused when the two providers point at different endpoints, because existing sessions would break, or when both already have a client on the same MCP server.
+- **Delete** is blocked while clients are still registered, and names the affected MCP servers.
+
+A provider's display name and logo appear on the MCP consent page and wherever the dashboard names the provider.

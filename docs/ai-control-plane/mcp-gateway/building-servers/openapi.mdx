@@ -1,0 +1,204 @@
+---
+title: "Add tools from an OpenAPI spec"
+description: "Upload an OpenAPI document to generate a tool for every endpoint, curate them into an MCP server, and connect AI clients."
+---
+
+import { Callout, Table } from "@/mdx/components";
+
+OpenAPI documents describe the functionality of REST APIs in a standardized format known as the OpenAPI Specification. Teams use them to generate API documentation, SDKs, and client libraries, and the platform uses them to generate tools that let LLMs interact with REST APIs.
+
+The quickest way to expose an API to AI agents is uploading an OpenAPI document. The platform generates a tool definition for every operation in the spec, creates an MCP server that exposes them, and lets the server's tools be curated afterwards. The upload flow lives under **MCP Gateway > MCP > Add new**, in the **Advanced** section of the **Add MCP server** page.
+
+OpenAPI-sourced tools are ideal for:
+
+- **Internal workflows**: let teams query data and automate processes from their AI clients, like checking usage data or toggling feature flags
+- **In-app agents**: let chat agents inside an application perform API workflows on behalf of a user from natural language requests
+- **Automated workflows**: drive platforms like n8n, such as triaging GitHub issues and creating Linear tickets from them, or automate any workflow that spans multiple API calls
+- **End-user access**: make a REST API easy for end users to use through AI agents
+- **Live data**: give LLMs real-time data and functionality from an API
+
+## Access requirements
+
+<Callout type="info">
+  Uploading an OpenAPI document requires the `project:write` scope, and the MCP server the wizard creates requires the `mcp:write` scope. Editing the server's tools, environment, and visibility also requires `mcp:write`. The default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes all of these.
+</Callout>
+
+## Prerequisites
+
+This guide assumes:
+
+- An account and project exist (see [Getting started](/docs/ai-control-plane/getting-started))
+- An OpenAPI document is available for the API
+
+<Callout title="No spec handy?" type="info">
+  Follow along with the [National Weather Service's OpenAPI document](https://api.weather.gov/openapi.json). Copy the JSON and save it to a file.
+</Callout>
+
+Most teams upload documents for their own REST APIs, but tools can be generated from an OpenAPI document for any API. Some public APIs that publish OpenAPI documents:
+
+<Table
+  data={[
+    {
+      api: "Asana",
+      documentation:
+        "[developers.asana.com](https://developers.asana.com/reference/rest-api-reference)",
+      openapiDocument:
+        "[asana_oas.yaml](https://raw.githubusercontent.com/Asana/openapi/master/defs/asana_oas.yaml)",
+    },
+    {
+      api: "GitHub REST API",
+      documentation:
+        "[docs.github.com/en/rest](https://docs.github.com/en/rest)",
+      openapiDocument:
+        "[api.github.com.yaml](https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.yaml)",
+    },
+    {
+      api: "National Weather Service",
+      documentation:
+        "[weather.gov/documentation/services-web-api](https://www.weather.gov/documentation/services-web-api)",
+      openapiDocument: "[openapi.json](https://api.weather.gov/openapi.json)",
+    },
+  ]}
+  columns={[
+    { key: "api", header: "API" },
+    { key: "documentation", header: "Documentation" },
+    { key: "openapiDocument", header: "OpenAPI Document" },
+  ]}
+/>
+
+<Callout title="Note" type="info">
+  The platform works best with documents using [OpenAPI
+  3.1.x](https://spec.openapis.org/oas/v3.1.1) and its corresponding JSON Schema
+  version. See [Limitations of OpenAPI 3.0.x](#limitations-of-openapi-30x) for
+  more details.
+</Callout>
+
+## Step 1: Import the OpenAPI document
+
+In the dashboard, go to **MCP Gateway > MCP**, click **Add new**, and choose **From your API** under **Advanced**. The **Import OpenAPI specification** wizard has three steps:
+
+- **Upload OpenAPI Specification**: upload the document as a file or import it from a URL; JSON and YAML both work
+- **Name Your API**: the generated tools are scoped under this name (at least three characters, unique per project)
+- **Generate Tools**: a deployment runs and turns every operation in the spec into a tool
+
+When generation completes, the platform creates an MCP server named after the API and adds every generated tool to it. **Continue** returns to the **MCP Servers** tab, where the new server is listed. If no tools were generated, the wizard offers **View Logs**, which opens the deployment's logs to diagnose the spec.
+
+<Callout title="Spec quality matters" type="info">
+  The quality of the OpenAPI document directly shapes the quality of the generated tools. See [Optimize the document for LLMs](#optimize-the-document-for-llms), and learn about writing better OpenAPI documents in the [OpenAPI hub](/openapi).
+</Callout>
+
+To upload a new version of a document that is already in the project, open the source on the **Sources** tab and click **Upload new version**. The new version keeps the document's name and slug, and the servers built from it pick up the new tools without creating a duplicate server.
+
+## Step 2: Curate the MCP server
+
+Specs often describe dozens or hundreds of operations, and exposing all of them degrades LLM performance. Curate a focused subset instead.
+
+Open the new server from the **MCP Servers** tab and use its **Tools** tab to remove tools that agents do not need or to add tools from other sources with **Add Tools**. To build a second, differently scoped server from the same document, click **Add new** and choose **From an existing source**, pick the document, and give the server a name. See [tools on a server](/docs/ai-control-plane/mcp-gateway#tools-on-a-server) for the curation concepts.
+
+## Step 3: Set environment variables
+
+If the API requires authentication, the server needs credentials. Go to **MCP Gateway > Environments**, open or create an environment, and use **Fill for MCP Server** to prefill placeholder entries for everything the server needs; fill in the values and save. Then attach the environment to the server from the server's **Authentication** tab. See [Environments](/docs/ai-control-plane/mcp-gateway/environments) and [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) for how the values reach the API.
+
+<Callout title="Variable names" type="info">
+  Generated variable names derive from the API name given in step 1. Not every prefilled variable is required. For example, a server URL variable is unnecessary when the spec already defines the server URL.
+</Callout>
+
+## Step 4: Test in the playground
+
+Before distributing the server, open **MCP Gateway > Playground**, pick the new server, and chat with a model that calls the tools live. **Show Logs** opens a panel with each call's request and response; see [Playground](/docs/ai-control-plane/mcp-gateway/building-servers/playground).
+
+## Step 5: Connect an AI client
+
+The server's detail page shows its MCP URL with a copy button and links to a hosted installation page with per-client setup instructions for Claude, Cursor, and other MCP clients.
+
+Server visibility is controlled in the server's settings: private servers require authentication, and public servers can be used by anyone with the configuration. See [Authentication](/docs/ai-control-plane/mcp-gateway/access) for visibility, [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access) for who can connect, and [Distribution](/docs/ai-control-plane/mcp-gateway#distribution) for publishing.
+
+## Optimize the document for LLMs
+
+Tools are generated directly from the endpoint descriptions in the OpenAPI document, so those descriptions need to be accurate and informative. Writing descriptions that serve both humans and LLMs is hard: a short description may read well for a human, while an LLM often needs more context to interpret intent and usage correctly.
+
+To bridge this gap, the platform supports the `x-gram` extension on OpenAPI operations. It carries LLM-optimized metadata used only for tool generation and usage:
+
+```yaml filename="openapi.yaml" {8,9,22-33}
+openapi: 3.1.0
+info:
+  title: E-commerce API
+  version: 1.0.0
+paths:
+  /products/{merchant_id}/{product_id}:
+    get:
+      summary: Get a product
+      operationId: E-Commerce V1 / product
+      tags: [ecommerce]
+      parameters:
+        - name: merchant_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-gram:
+        name: get_product
+        summary: ""
+        description: |
+          <context>
+            This endpoint returns details about a product for a given merchant.
+          </context>
+          <prerequisites>
+            - If you are presented with a product or merchant slug then you must first resolve these to their respective IDs.
+            - Given a merchant slug use the `resolve_merchant_id` tool to get the merchant ID.
+            - Given a product slug use the `resolve_product_id` tool to get the product ID.
+          </prerequisites>
+        responseFilterType: jq
+      responses:
+        "200":
+          description: Details about a product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+```
+
+Without the `x-gram` extension, the generated tool would be named `ecommerce_e_commerce_v1_product` and have the description `"Get a product by its ID"`, which makes a poor tool. The extension customizes a tool's name and description without altering the original information in the OpenAPI document. The platform also recognizes the `x-speakeasy-mcp` extension as an alternative that works the same way.
+
+The `responseFilterType` property of the extension enables response filtering, which helps LLMs process API responses more effectively.
+
+The extension is optional. A tool's name and description can also be changed after deployment, from the per-tool edit menu on the source's **Tools** tab (see [Source detail](/docs/ai-control-plane/mcp-gateway/building-servers/sources#source-detail)). Adding `x-gram` metadata before upload keeps the OpenAPI document clean, descriptive, and LLM-ready, so the team doesn't have to fix tool names and descriptions later.
+
+## Tag tools for filtering
+
+Native OpenAPI operation `tags` are ingested automatically and become the source tags on the generated tools:
+
+```yaml
+paths:
+  /invoices:
+    post:
+      tags: [billing, finance]
+      summary: Create an invoice
+      operationId: createInvoice
+```
+
+In the e-commerce example above, the `get_product` tool inherits the `ecommerce` tag from its operation.
+
+These tags drive [tag-based tool filtering](/docs/ai-control-plane/mcp-gateway/building-servers/tool-filtering): with it enabled, MCP clients connect to a focused subset of the server's tools by selecting one or more tags. A tag set on the tool after deployment, from the same per-tool edit menu, overrides the operation tags. See the [precedence rules](/docs/ai-control-plane/mcp-gateway/building-servers/tool-filtering#effective-tag-precedence-rules) for details.
+
+## Limitations of OpenAPI 3.0.x
+
+Many LLMs don't support the JSON Schema version used in OpenAPI 3.0.x documents. When a 3.0.x document is uploaded, the platform transparently upgrades it to 3.1.0 using the steps in [Migrating from OpenAPI 3.0 to 3.1.0](https://www.openapis.org/blog/2021/02/16/migrating-from-openapi-3-0-to-3-1-0). After the upgrade, line numbers may no longer match the original document. Upgrade documents to 3.1.x so line numbers in the dashboard match the source document.
+
+<Callout title="OpenAPI resources" type="default">
+For more information on how to write, understand, and manage OpenAPI documents, see the [OpenAPI documentation](/openapi).
+
+Speakeasy also provides an OpenAPI editor and CLI for editing, saving, and linting OpenAPI documents. Log in at [app.speakeasy.com](https://app.speakeasy.com) with the same credentials used to access the platform.
+
+</Callout>
+
+## What's next?
+
+- [Choose which tools a server exposes](/docs/ai-control-plane/mcp-gateway#tools-on-a-server)
+- [Filter a server's tools by tag](/docs/ai-control-plane/mcp-gateway/building-servers/tool-filtering)
+- [Add custom-code tools with TypeScript](/docs/ai-control-plane/mcp-gateway/building-servers/functions)

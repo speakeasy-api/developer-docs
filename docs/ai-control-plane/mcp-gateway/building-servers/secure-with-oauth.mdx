@@ -1,0 +1,230 @@
+---
+title: Secure with OAuth
+description: "Put authentication in front of built MCP servers with access tokens, client credentials, Speakeasy OAuth, or a user-facing OAuth flow."
+---
+
+import { Callout } from "@/mdx/components";
+
+This page covers putting authentication in front of built MCP servers, the servers the platform generates from OpenAPI documents and TypeScript functions. For how authentication, user sessions, and upstream credentials work across every server type, see [Access, OAuth, and sessions](/docs/ai-control-plane/mcp-gateway/access). Remote servers set authentication in the **Identity** and **Sessions** sections of their **Settings** tab instead; see [Remote MCP servers](/docs/ai-control-plane/mcp-gateway/remote-servers).
+
+Starting March 2025, the MCP specification recommends OAuth-based authentication for MCP Servers. However, it's important to understand that **user-facing OAuth exchange is not actually a true requirement for an MCP server**. There are several valid approaches to authentication:
+
+- **Direct Access Tokens**: Passing in access tokens, bearer tokens, api keys directly as headers to servers is completely valid
+- **Client Credentials Flow**: For server-to-server authentication
+- **User-facing OAuth Flow**: For scenarios requiring dynamic user authentication
+
+The Speakeasy AI Control Plane exposes a variety of different options for OAuth that can be integrated into built MCP servers. These are configured on the **Authentication** tab of a built server, reached from **MCP Gateway > MCP** in the project sidebar. Servers that use an external authorization server show a **Configure External OAuth** action there, and can later switch to platform-issued user sessions with **Convert to User Sessions**; see [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions).
+The OpenAPI spec must include OAuth as a security option for its endpoints.
+
+```yaml
+security:
+  - oauth2Example: [pets:read]
+
+components:
+  securitySchemes:
+    oauth2Example:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth/authorize
+          tokenUrl: /oauth/token
+          scopes:
+            pets:read: Read pet information
+            pets:write: Modify pet information
+```
+
+## Choosing an authentication approach
+
+Before implementing OAuth, decide what kind of credentials end users provide when initializing the MCP server:
+
+### Option 1: Pre-obtained access tokens (recommended for most cases)
+- **What users provide**: A valid access token they obtained from the service
+- **How they get it**: Through the service's existing dashboard, API, or token generation system
+- **Best for**: Existing APIs with token generation, internal tools, controlled environments
+- **Complexity**: Low - no OAuth flow implementation needed
+
+### Option 2: Client credentials (server-to-server)
+- **What users provide**: `client_id` and `client_secret`
+- **How they get it**: Register an application in the service's developer portal
+- **Best for**: APIs designed for server-to-server authentication
+- **Complexity**: Medium - automatic token exchange and caching
+
+### Option 3: Speakeasy OAuth (for private servers)
+- **What users provide**: Nothing - they authenticate interactively via browser
+- **How they get it**: Authenticate with their Speakeasy account credentials
+- **Best for**: Private servers requiring organization-based access control, teams using Speakeasy accounts
+- **Complexity**: Low - no OAuth implementation needed, Speakeasy handles the OAuth flow
+- **Access control**: Based on Speakeasy organization membership
+- **Learn more**: See [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions) for how private servers gate access on a Speakeasy login
+
+### Option 4: User-facing OAuth flow (for public servers with external OAuth)
+- **What users provide**: Nothing initially - they authenticate interactively
+- **How it works**: Dynamic OAuth flow when the MCP server is accessed
+- **Best for**: Public-facing servers requiring user consent with external OAuth providers
+- **Complexity**: High - requires DCR implementation
+
+**Speakeasy can integrate OAuth into a server in any way that's currently possible within the MCP context.** The key is choosing the approach that best fits the existing authentication system and user experience goals.
+
+<Callout title="Multiple security schemes" type="info">
+If the OpenAPI spec defines multiple security schemes (for example, OAuth **and** an API key), Speakeasy accepts any of them. Users are not locked into a single authentication method; see [Multiple security schemes](#multiple-security-schemes) below.
+</Callout>
+
+## Access token based authentication
+
+**This is often the simplest and most practical approach for MCP servers.** Speakeasy allows passing pre-obtained OAuth access tokens directly to an MCP server through headers. This is completely valid and doesn't require implementing complex OAuth flows.
+
+This approach works with access tokens from any OAuth flow:
+- `authorizationCode` - User grants permission, and the server exchanges the code for a token
+- `clientCredentials` - Server-to-server authentication with client credentials  
+- `implicit` - Direct token generation (less secure, not recommended)
+
+**When to use this approach:**
+- A system for obtaining access tokens already exists
+- The MCP server should avoid the complexity of OAuth flows
+- Users can generate tokens through an existing dashboard or API
+- The server backs internal tools where token management is handled elsewhere
+
+## Client credentials flow
+
+If the API uses the `clientCredentials` flow, Speakeasy accepts a client_id and client_secret for the MCP server. The server does the token exchange using those provided environment values. The tool call flow automatically caches tokens received from a token exchange based on the expiration of that token. Both `client_secret_post` and `client_secret_basic` flows are supported natively.
+
+## Authorization code
+
+<Callout title="Note" type="info">
+Placing Managed OAuth in front of a server is a Pro and Enterprise feature.
+
+An MCP Server must be marked `public` to attach Managed OAuth in front of it.
+
+[Book time with the Speakeasy team](https://calendly.com/sagar-speakeasy/30min) for white-glove service with DCR compliance.
+</Callout>
+
+
+When the MCP spec refers to placing a user-facing OAuth flow in front of a server, it is typically referring to the `authorizationCode` flow.
+
+Speakeasy fully supports registering an OAuth server in front of MCP servers for end users to interact with. The MCP specification has specific requirements for how a company's OAuth API needs to work. 
+
+## Why DCR is required for MCP
+
+### The core difference from vanilla OAuth2
+
+The core difference in MCP OAuth from vanilla OAuth2 is that there is no generic way across MCP clients for each user to provide their own static `client_id`. MCP clients expect that in some form they are able to dynamically register a client with an auth server. This is done through Dynamic Client Registration (DCR) or Client ID Metadata Documents.
+
+Speakeasy has worked with companies to help them make changes to their OAuth APIs to support this MCP requirement. Once those changes are made, the MCP server registers auth information like the [Polar MCP example](https://mcp.polar.sh/.well-known/oauth-authorization-server/mcp/polar-mcp). This manifest is how any MCP client understands how to interact with user-facing OAuth and get a client.
+
+Separately, MCP clients are very slowly and independently adding the ability to provide `client_id` values directly in their apps, which would not require changes to auth APIs. However, adoption is still slow here. It will probably be a while before that is a general possibility for all major MCP clients (Cursor, Claude surface areas, Gemini, etc.).
+
+### The challenge DCR solves
+
+**The main requirement is that MCP clients require OAuth2.1 and Dynamic Client Registration (DCR).** This requirement exists because the MCP spec currently does not define a standard way for an MCP client to provide an OAuth `client_id`/`client_secret` from the user.
+
+Here's the challenge DCR solves:
+- **Traditional OAuth**: Requires pre-registered client credentials (`client_id`/`client_secret`)
+- **MCP Context**: Users install MCP servers dynamically, without pre-coordination
+- **DCR Solution**: Allows MCP clients to dynamically register themselves and obtain client credentials on-the-fly
+
+The requirements for MCP OAuth can be found [here](https://modelcontextprotocol.io/specification/draft/basic/authorization#overview). Dynamic Client Registration (DCR) is typically the feature that most companies do not currently support, which is why **several companies with public-facing MCPs have implemented DCR into their OAuth capabilities** to enable the self-serve option.
+
+### Registering an OAuth server
+
+Companies like [Stripe](https://docs.stripe.com/mcp), [Asana](https://developers.asana.com/docs/integrating-with-asanas-mcp-server) & more have started to support DCR in their OAuth flows to accommodate MCP. Hosting an MCP server for large-scale use by external developers means planning to build out support for DCR in the API.
+
+If the underlying API meets the OAuth requirements, any OAuth server can be placed in front of a Speakeasy MCP server from the dashboard.
+
+Only one managed OAuth flow can be placed in front of an MCP server, so the MCP server must include only a single downstream API provider that takes in OAuth. Other security schemes (API keys, bearer tokens, etc.) defined in the OpenAPI spec are still accepted alongside managed OAuth; see [Multiple security schemes](#multiple-security-schemes).
+
+The resulting artifact looks something like this:
+
+```json
+{
+  "issuer": "https://marketplace.stripe.com",
+  "authorization_endpoint": "https://marketplace.stripe.com/oauth/v2/authorize",
+  "token_endpoint": "https://marketplace.stripe.com/oauth/v2/token",
+  "registration_endpoint": "https://marketplace.stripe.com/oauth/v2/register/tailorapp%2AAZfBZ6Q69QAAADJI%23EhcKFWFjY3RfMVJlaTA0QUo4QktoWGxzQw",
+  "response_types_supported": [
+    "code"
+  ],
+  "grant_types_supported": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "code_challenge_methods_supported": [
+    "S256"
+  ],
+  "token_endpoint_auth_methods_supported": [
+    "none"
+  ]
+}
+```
+
+Note: An MCP client such as Claude uses the same client_id in perpetuity unless the `/register` response explicitly provides a `client_secret_expires_at` value. When implementing DCR, persist every client_id issued. MCP clients follow the OAuth specification precisely when it comes to retaining client_ids from DCR, and they do not forget them when a server is uninstalled.
+
+See the [guide](/docs/ai-control-plane/guides/oauth-external-server) on integrating a DCR compliant OAuth setup into a Speakeasy MCP server.
+
+## Multiple security schemes
+
+If the OpenAPI spec defines more than one security scheme, Speakeasy evaluates **all** of them when a request arrives. Access is granted as long as **at least one** scheme is satisfied. This gives users flexibility: some may authenticate with an OAuth token while others provide an API key or a bearer token.
+
+### Supported scheme types
+
+| Scheme | OpenAPI type | Credential source |
+|---|---|---|
+| API Key | `apiKey` | Header or query parameter |
+| HTTP Bearer | `http` (scheme `bearer`) | `Authorization` header |
+| HTTP Basic | `http` (scheme `basic`) | `Authorization` header (username + password) |
+| OAuth 2.0 Authorization Code | `oauth2` (authorizationCode flow) | Bearer token via managed OAuth or pass-through |
+| OAuth 2.0 Client Credentials | `oauth2` (clientCredentials flow) | `client_id` + `client_secret` environment variables |
+| OpenID Connect | `openIdConnect` | Bearer token via managed OAuth or pass-through |
+
+### How it works
+
+- Speakeasy reads the `securitySchemes` from the OpenAPI spec and classifies each one.
+- On every `tools/list` or `tools/call` request, Speakeasy merges credentials from the system environment, the user's Speakeasy environment, and any headers included in the request.
+- If **any** scheme's required credentials are present, the request proceeds. If none are satisfied, the server returns a `401` with a `WWW-Authenticate` header pointing to the OAuth metadata endpoint (when OAuth is configured).
+
+### Example: OAuth + API key
+
+```yaml
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth/authorize
+          tokenUrl: /oauth/token
+          scopes:
+            read: Read access
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - oauth2: [read]
+  - apiKey: []
+```
+
+With this configuration:
+- Users who complete the OAuth flow are authenticated via their bearer token.
+- Users who pass an `X-API-Key` header are authenticated via the API key — no OAuth flow required.
+- If neither credential is provided, the server returns `401` with OAuth discovery metadata so clients can initiate the OAuth flow.
+
+<Callout title="Managed OAuth limit" type="info">
+Only one managed OAuth provider can be attached to a server. The multi-scheme support described here applies to credentials defined in the OpenAPI spec's `securitySchemes`, not to multiple managed OAuth providers.
+</Callout>
+
+## Summary
+
+When implementing authentication for an MCP server, remember:
+
+- **OAuth exchange is NOT required** - passing access tokens directly is completely valid
+- **Multiple security schemes are supported** - if the OpenAPI spec defines OAuth, API key, and bearer auth, users can authenticate with any of them
+- **Choose the right approach** for the use case:
+   - Access tokens: Simple, works with existing systems
+   - Client credentials: Good for server-to-server auth
+   - Speakeasy OAuth: Organization-based access control for private servers (no external OAuth needed)
+   - User-facing OAuth: Best for public servers with external OAuth providers (requires DCR)
+- **DCR is only needed** when MCP clients handle OAuth flows with external providers directly, but it is a requirement for that scenario
+- **Speakeasy can help** with white-glove service for guiding towards DCR compliance
+
+The goal is to choose the authentication method that works best with the existing infrastructure while providing the right user experience for the MCP server's intended use case.

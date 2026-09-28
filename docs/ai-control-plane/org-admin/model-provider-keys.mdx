@@ -1,13 +1,19 @@
 ---
-title: "Model provider keys"
+title: Model Provider Keys
 description: "Bring an OpenRouter API key so model completions run on the organization's own OpenRouter account instead of the platform-provisioned key."
 ---
 
 import { Callout } from "@/mdx/components";
 
-By default, the platform runs model completions for the playground, assistants, and its risk-scanning judges on [OpenRouter](https://openrouter.ai) keys it provisions and manages per organization. The **Model Provider Keys** section replaces that with a customer-supplied OpenRouter key, so model spend flows through the organization's own OpenRouter account. Set one project default key that covers every surface, or override individual surfaces with dedicated keys. Open the section from the project's **Settings** page in the dashboard.
+Model Provider Keys let a project run model completions on the organization's own [OpenRouter](https://openrouter.ai) account. By default, the platform runs completions for the playground, assistants, and its risk-scanning judges on OpenRouter keys it provisions and manages per organization; a customer-supplied key replaces that, so model spend flows through the organization's own account. Set one project default key that covers every surface, or override individual surfaces with dedicated keys. Open the section from the project's **Settings** page in the dashboard (**Project settings > Model Provider Keys**); unlike the other pages in this section, it is a project-level setting rather than an entry in the organization sidebar, and is administered from there.
 
 OpenRouter is the only supported provider: completion egress stays on OpenRouter whether the key is platform-provisioned or customer-supplied, so customer keys are OpenRouter keys.
+
+## Access requirements
+
+<Callout type="info">
+  Viewing model provider keys requires the `project:read` scope. Adding, replacing, and deleting them requires `project:write`, which the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) holds and the Member role does not. Producer API keys carry the same access for the CLI and API.
+</Callout>
 
 ## Surfaces and key slots
 
@@ -16,7 +22,7 @@ Each key is bound to the project and one slot. A slot is either the project-wide
 | Surface | Slot | Covers |
 | --- | --- | --- |
 | Project default | `default` | Every surface below without a dedicated key |
-| Playground | `playground` | Completions from the dashboard [playground](/docs/ai-control-plane/connect/playground) |
+| Playground | `playground` | Completions from the dashboard [playground](/docs/ai-control-plane/mcp-gateway/building-servers/playground) |
 | Assistants | `assistants` | Completions from assistant runs and triggers |
 | Risk policy judge | `risk-policy` | Prompt-based [risk policy](/docs/ai-control-plane/secure/guardrails) evaluations of observed agent traffic |
 | Prompt injection judge | `prompt-injection` | Prompt injection scanning of observed agent traffic |
@@ -44,8 +50,8 @@ The row menu on a configured surface offers two actions:
 - **Disable** takes the key out of resolution without deleting its material. The surface falls back to the project default key, or the platform key. **Enable** restores it.
 - **Delete** removes the key entirely, with the same fallback.
 
-<Callout title="Feature gating covers configuration only" type="info">
-  The Custom Model Keys product feature gates saving and re-enabling keys. If the feature is later disabled for the organization, stored keys keep resolving; taking a key out of use requires disabling or deleting it.
+<Callout title="Availability covers configuration only" type="info">
+  Saving and re-enabling customer keys is enabled per organization; contact Speakeasy to turn it on. If it is later turned off for the organization, stored keys keep resolving, so taking a key out of use requires disabling or deleting it.
 </Callout>
 
 ## Billing and spend
@@ -70,3 +76,10 @@ The same operations are available programmatically for automation:
 | Delete a key | `DELETE /rpc/modelKeys.deleteKey` |
 
 Requests authenticate with a dashboard session or an [API key](/docs/ai-control-plane/org-admin/api-keys) with the **Producer** scope, plus a `Gram-Project` header naming the project. List responses return key metadata (slot, provider, enabled state, timestamps) but never key material. See the [API reference](/docs/ai-control-plane/reference/api-reference) for request and response schemas.
+
+## Used by
+
+- [Playground](/docs/ai-control-plane/mcp-gateway/building-servers/playground)
+- [Guardrails](/docs/ai-control-plane/secure/guardrails) prompt-based policies and prompt injection scanning
+- [OpenRouter](/docs/ai-control-plane/org-admin/ai-integrations/openrouter)
+- [Billing](/docs/ai-control-plane/org-admin/billing#inference-caps) inference caps, which apply only to platform-provisioned keys
