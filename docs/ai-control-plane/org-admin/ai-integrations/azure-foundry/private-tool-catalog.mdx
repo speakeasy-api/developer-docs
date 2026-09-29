@@ -1,0 +1,151 @@
+---
+title: "Private tool catalog"
+description: "Publish Speakeasy MCP servers to a Foundry private tool catalog in Azure API Center, secured with OAuth identity passthrough."
+---
+
+import { Callout } from "@/mdx/components";
+
+<Callout type="info">
+  This guide is most useful when integrating with Foundry AI Agents. For most
+  common MCP use-cases you likely want to go with our [Device
+  Agent](/docs/ai-control-plane/org-admin/device-agent) integration.
+</Callout>
+
+A Foundry [private tool catalog](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/private-tool-catalog) is an Azure API Center that lists MCP servers for developers in the organization. Developers find the catalog in the Foundry portal under **Build > Tools** and add its servers to their agents.
+
+This guide registers an AI Control Plane MCP server in that catalog and secures it with OAuth. Each person who uses a Foundry agent signs in with their own Speakeasy account, so tool calls in [tool logs](/docs/ai-control-plane/observe/tool-logs) are attributed to the real user rather than a shared credential.
+
+## How it fits together
+
+The AI Control Plane is the OAuth authorization server for each MCP server, as described in [User sessions](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions). Foundry is the OAuth client. API Center stores the client configuration and hands it to Foundry when a developer adds the server from the catalog.
+
+- The AI Control Plane issues the client ID and client secret and hosts the authorize and token endpoints.
+- Azure API Center stores the MCP server URL and the OAuth configuration, with the client secret held in Azure Key Vault.
+- Foundry Agent Service sends each user through the Speakeasy login and consent screen the first time an agent calls the server, then refreshes tokens on its own.
+
+## Prerequisites
+
+- A private MCP server in the AI Control Plane with user sessions enabled. The server's **Authentication** tab must show an identity provider rather than "No authentication configured".
+- A Foundry project, and permission to configure tools in it.
+- An [Azure API Center](https://learn.microsoft.com/en-us/azure/api-center/set-up-api-center). Developers find the catalog by the API Center name, so pick a descriptive one.
+- An Azure Key Vault that uses the Azure RBAC permission model, for storing the client secret.
+- Every person who uses the agent needs an account in the Speakeasy organization and at least the **Foundry Agent Consumer** role on the Foundry project.
+
+## Step 1: Copy the server values from the AI Control Plane
+
+Open the MCP server in the dashboard and copy its server URL. The URL takes this form, with the custom domain in place of `app.getgram.ai` when one is configured:
+
+```text
+https://app.getgram.ai/mcp/<server-slug>
+```
+
+The OAuth endpoints are published in the server's authorization server metadata. Fetch it to confirm the exact values:
+
+```bash
+curl https://app.getgram.ai/.well-known/oauth-authorization-server/mcp/<server-slug>
+```
+
+Copy these values from the response. Every later step uses them.
+
+| Value | Field in the metadata | Typical value |
+| --- | --- | --- |
+| Server URL | Not in the metadata | `https://app.getgram.ai/mcp/<server-slug>` |
+| Authorization URL | `authorization_endpoint` | `https://app.getgram.ai/mcp/<server-slug>/authorize` |
+| Token URL | `token_endpoint` | `https://app.getgram.ai/mcp/<server-slug>/token` |
+| Registration URL | `registration_endpoint` | `https://app.getgram.ai/mcp/<server-slug>/register` |
+
+There's no separate refresh endpoint. The token URL handles refresh too.
+
+## Step 2: Register the MCP server in API Center
+
+In the Azure portal, open the API Center and register the MCP server as an asset. Add an environment and a deployment whose runtime URL is the server URL from Step 1. Microsoft covers this in [Configure environments and deployments in Azure API Center](https://learn.microsoft.com/en-us/azure/api-center/tutorials/configure-environments-deployments).
+
+## Step 3: Get the Foundry redirect URL
+
+Foundry completes the OAuth flow at its own redirect URL, and the AI Control Plane only redirects to URLs registered for the client. Foundry shows this redirect URL once an OAuth connection for the tool is saved in the project. Copy it before moving on.
+
+The redirect URL must match byte for byte when the AI Control Plane validates it, including any trailing slash.
+
+## Step 4: Register a Foundry client with the AI Control Plane
+
+Foundry needs a fixed client ID and client secret, so register one client for Foundry against the registration URL from Step 1. Registration is open and needs no credentials:
+
+```bash
+curl -X POST https://app.getgram.ai/mcp/<server-slug>/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_name": "Azure AI Foundry",
+    "redirect_uris": ["<foundry-redirect-url>"],
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "token_endpoint_auth_method": "client_secret_post"
+  }'
+```
+
+Include `refresh_token` in `grant_types`. Without it, Foundry can't refresh the one-hour access tokens and users have to consent again every hour.
+
+The response contains `client_id` and `client_secret`. The secret is returned once and stored hashed, so copy it now. A lost secret means registering a new client and updating the configuration in Step 5.
+
+<Callout type="warning">
+  Treat the client secret as a credential. Store it only in Azure Key Vault,
+  never in source control or an agent prompt.
+</Callout>
+
+## Step 5: Add the OAuth configuration in API Center
+
+Store the client secret from Step 4 as a secret in Azure Key Vault. Then give the API Center access to it:
+
+- Under **Security > Managed identities**, turn on the **System assigned** identity for the API Center.
+- In the key vault, under **Access control (IAM)**, assign that identity the **Key Vault Secrets User** role.
+
+In the API Center, go to **Governance > Authorization** and select **Add configuration**. Fill in the form with the values collected so far:
+
+| API Center field | Value |
+| --- | --- |
+| **Title** | A recognizable name, such as `Speakeasy OAuth` |
+| **Security scheme** | **OAuth2** |
+| **Client ID** | `client_id` from Step 4 |
+| **Client secret** | The Key Vault secret reference for `client_secret` from Step 4 |
+| **Authorization URL** | Authorization URL from Step 1 |
+| **Token URL** | Token URL from Step 1 |
+| **Refresh URL** | Token URL from Step 1 |
+| **OAuth2 flow** | **Authorization code (PKCE)** |
+| **Scopes** | `offline_access` |
+
+Select **Create**. Then attach the configuration to the server: open the MCP server asset, select **Details > Versions**, select **Manage access (preview)** on the version, and select the configuration.
+
+Leave **Client credentials** unselected. The AI Control Plane requires PKCE on every authorization request and issues tokens only to a signed-in person.
+
+The AI Control Plane doesn't use OAuth scopes. Access is decided by roles and per-tool permissions. Foundry recommends `offline_access` so it refreshes tokens automatically, and the AI Control Plane ignores it.
+
+## Step 6: Grant developers access to the catalog
+
+Assign the **Azure API Center Data Reader** role on the API Center to the developers, or to a security group, who build agents with these tools. Role assignments can take up to 24 hours to propagate.
+
+## Step 7: Add the tool to an agent
+
+In the Foundry portal, open the project and go to **Build > Tools**. Search for the API Center name, select the Speakeasy MCP server, and add it to an agent.
+
+The first time a user's agent calls the server, the response includes an `oauth_consent_request` item with a `consent_link`. Opening the link sends the user through Speakeasy login and the consent screen. After they select **Give Access**, the agent continues and later calls reuse the stored token.
+
+## Verify the connection
+
+- Send a prompt that makes the agent call one of the server's tools and confirm the tool output comes back without an authentication error.
+- Confirm a second user gets their own consent link rather than reusing the first user's session.
+- Open [MCP connections](/docs/ai-control-plane/org-admin/mcp-connections) in the dashboard. Each user who consented appears with the **OAuth Client** set to the client name registered in Step 4.
+
+## Session length
+
+Access tokens last one hour and Foundry refreshes them. The server's **Session Duration** setting controls how long a refresh token stays valid without use. An agent that goes unused for longer than that sends its users through consent again. Raise **Session Duration** for agents that run infrequently.
+
+Revoking the Foundry client or a user's connection in the dashboard cuts off Foundry immediately. See [Revoking access](/docs/ai-control-plane/distribute/mcp-servers/authentication/user-sessions#revoking-access).
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| The consent page shows an `invalid_redirect_uri` or unknown client error | The redirect URL registered in Step 4 doesn't exactly match the one Foundry sends | Register a new client with the exact redirect URL from Step 3 and update the **Client ID** and Key Vault secret |
+| The consent page reports `code_challenge is required` | The API Center configuration uses **Client credentials** instead of **Authorization code (PKCE)** | Edit the configuration and select **Authorization code (PKCE)** |
+| Users are asked to consent again every hour | The client was registered without the `refresh_token` grant | Register a new client with both grant types |
+| Users are asked to consent again after a few idle days | The refresh token expired under **Session Duration** | Raise **Session Duration** on the server |
+| The catalog doesn't appear in **Build > Tools** | The Data Reader role hasn't propagated, or the wrong Foundry project is open | Wait up to 24 hours and confirm the role under **Access control (IAM)** |

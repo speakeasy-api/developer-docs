@@ -5,19 +5,19 @@ description: "Deploy the device agent with Jamf Pro and connect the tenant to th
 
 import { Callout } from "@/mdx/components";
 
-Jamf Pro supports both halves of an MDM rollout: **deploying** the agent's managed configuration to the fleet, and **verifying** the rollout by connecting the tenant to the dashboard so agent coverage is computed from the real inventory. Shared concepts (the configuration schema, delivery channels, and coverage states) are on the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
+Deploying the device agent with Jamf Pro takes two steps:
 
-## Install the agent package
+1. Deploy the configuration profile.
+2. Deploy the installer package.
 
-Download `speakeasy-agent_<version>.pkg` from **Organization Settings → Secure → Device Agent** in the dashboard, or from the release bucket at `https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v<version>/speakeasy-agent_<version>.pkg`. It's a single Developer ID signed, notarized, universal pkg that installs the daemon, CLI, menu-bar UI, and privileged helper together, and registers its own launchd jobs. No script needed.
+For the general approach to MDM installations, see the [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) page.
 
-Upload it to Jamf Pro as a **Package** and scope it to your fleet.
+## Prerequisites
 
-<Callout type="warning">
-  Scope the policy to install the pkg, and audit it by package receipt: `pkgutil --pkg-info com.speakeasy.agent.pkg`. A policy that verifies a `/Applications` bundle never finds the agent, which installs machine-wide to `/Library/Application Support/Speakeasy/` with its launchd jobs in `/Library/LaunchAgents/` and `/Library/LaunchDaemons/`. With `auto_update: "automatic"` in the managed configuration the agent keeps the daemon, CLI, and app current on its own, so routine releases need no re-push. The package is safe to re-push when one is called for: its postinstall reloads the launchd jobs idempotently.
-</Callout>
+- Download `speakeasy-agent_<version>.pkg` from **Organization Settings → Secure → Device Agent** in the dashboard, or from the release bucket at `https://storage.googleapis.com/speakeasy-device-agent-releases-prod/v<version>/speakeasy-agent_<version>.pkg`. It's a single Developer ID signed, notarized, universal pkg that installs the daemon, CLI, menu-bar UI, and privileged helper together, and registers its own launchd jobs. No script needed.
+- Get the `org_token` and `org_slug` values from the dashboard. Open **Device Agent**, select the **macOS** tile, and go to the **Set the user's identity** step. The example configuration there has `org_slug` pre-filled. Click **Generate token** in the example to mint the `org_token`, which requires the `org:admin` role. The token is shown only once, so copy it immediately. Manage or revoke agent tokens under **Settings → API Keys**.
 
-## Deploy with a Configuration Profile (preferred)
+## 1. Set up the configuration profile
 
 1. In Jamf Pro, create a **Configuration Profile** with an **Application & Custom Settings** payload.
 2. Set the preferences domain to **`com.speakeasy.agent`** and supply the configuration as a plist:
@@ -37,16 +37,17 @@ Upload it to Jamf Pro as a **Package** and scope it to your fleet.
 
 3. Use Jamf's payload variables (like `$EMAIL`) so one profile serves the whole fleet, and scope it to the target devices.
 
-No script, no execution-frequency setting, and no file-permission management: the OS owns the resulting plist. macOS writes it to `/Library/Managed Preferences/com.speakeasy.agent.plist`, which is where you can inspect the delivered configuration on a managed device (for example, with `defaults read /Library/Managed\ Preferences/com.speakeasy.agent`). The daemon still reads configuration at startup, so pair profile updates with a daemon restart policy.
+## 2. Roll out the package
 
-## Deploy with a Scripts policy (fallback)
+Upload the installer to Jamf Pro as a **Package** and scope it to the fleet.
 
-If you need the `managed.json` file path instead (for example, an existing Scripts policy already manages it), use a **Scripts policy** (not a Configuration Profile, which cannot deliver arbitrary JSON files). The script writes `/Library/Application Support/Speakeasy/managed.json` as `root:wheel` / `0644`, then restarts the daemon. Two Jamf-specific traps:
+<Callout type="warning">
+  Complete the configuration profile rollout **before** deploying the installer. The device agent relies on the identity in the profile to bootstrap correctly in the organization.
+</Callout>
 
-- **Pass the `org_token` as a script parameter**, not a literal in the script body. Script bodies are readable by anyone with console access and tend to end up in version control.
-- **Jamf policies run as root, but the daemon runs as the logged-in user.** Restart the daemon in the user's context (via `launchctl` targeting the console user's session), or the restart silently does nothing.
-
-Set the policy to run on a recurring frequency rather than once, so rotated tokens actually reach devices.
+<Callout type="info">
+  Audit the policy by package receipt: `pkgutil --pkg-info com.speakeasy.agent.pkg`. A policy that verifies a `/Applications` bundle never finds the agent, which installs machine-wide to `/Library/Application Support/Speakeasy/` with its launchd jobs in `/Library/LaunchAgents/` and `/Library/LaunchDaemons/`. With `auto_update: "automatic"` in the managed configuration the agent keeps the daemon, CLI, and app current on its own, so routine releases need no re-push. The package is safe to re-push when one is called for: its postinstall reloads the launchd jobs idempotently.
+</Callout>
 
 ## Connect Jamf to the dashboard
 
