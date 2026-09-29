@@ -79,7 +79,7 @@ Installing the plugin, downloading it, or copying a configuration block does not
 
 **Start with context.** Call `get_platform_context` at the start of a conversation. It reports the connected organization and describes how an MCP server reaches people, which frames every other request.
 
-**Scope is explicit.** Most tools take a `project_slug` or `project_id` and act on that project only. Tools that look across the organization, such as `find_mcp` with a query, label each result with its project. Nothing falls back to a default project except the risk policy read tools, which use the organization's default project when no project is named.
+**Scope is explicit.** Most tools take a `project_slug` or `project_id` and act on that project only. Tools that look across the organization, such as `find_mcp` with a query, label each result with its project. Nothing falls back to a default project except the risk read tools, which use the organization's default project when no project is named.
 
 **Adding a server does not distribute it.** Registering an MCP server writes private project configuration. Nobody receives the server until a tool such as `distribute_mcp_to_plugin` puts it on a plugin and the plugin is published. The same holds for skills: `create_skill` stores instructions that no agent loads until `distribute_skill` gives them to a plugin or an assistant. Skill authoring tools check the same project-scoped `skill:write` grant as the dashboard, so delegated skill authors can use them without organization admin access; `distribute_skill` stays admin-only. See [Skills](/docs/ai-control-plane/mcp-gateway/skills) for the dashboard workflow.
 
@@ -93,7 +93,7 @@ Installing the plugin, downloading it, or copying a configuration block does not
 
 ### Bundled skills
 
-The marketplace plugin ships six reviewed skills. Each one runs a complete dashboard workflow through the tools below, preserving the same project selection, confirmations, and readiness checks the dashboard requires.
+The marketplace plugin ships nine reviewed skills. Each one runs a complete dashboard workflow through the tools below, preserving the same project selection, confirmations, and readiness checks the dashboard requires.
 
 | Skill | Workflow |
 | --- | --- |
@@ -101,8 +101,11 @@ The marketplace plugin ships six reviewed skills. Each one runs a complete dashb
 | `add-mcp-from-remote-url` | Inspect a remote MCP server by its streamable HTTP URL, add it to a chosen project, and then follow the same setup, readiness, admission, and plugin steps. |
 | `add-existing-mcp-servers` | Inventory the remote MCP servers a local coding client already has configured, with explicit consent before any local discovery, keep only public streamable HTTP endpoints, check which ones a chosen project is missing, and add them without copying local credentials. |
 | `manage-mcp-access` | Create or select a narrow custom access role for one MCP server, assign it to one explicitly chosen member, and re-read the live role state before and after the assignment. |
+| `configure-private-mcp-access` | Change the address or network mode of an existing MCP server or gateway: select the project and plugin, read the current connection settings alongside observed public and private traffic, confirm the exact before and after, write with the fresh settings version, and then check whether the plugin package carries the new address. |
 | `review-shadow-mcp` | Review one Shadow MCP target, record an allow or deny decision for an explicit audience, and after dashboard onboarding add the approved server to an existing plugin. |
 | `migrate-mcp-between-projects` | Redeploy a Platform-managed MCP server from one project to another in the same organization: re-add the same catalog entry or remote URL in the target project, finish setup and authorization there, confirm it is working, add it to a target plugin, and optionally disable the source with a rollback path. Secrets and identity-provider connections are set up again in the target, and nothing is deleted. |
+| `manage-risk-policy-audience` | Read who a risk policy targets, then add or remove exact user and role grants with explicit confirmation and a fresh version. A request to remove the connected person stops at a plain refusal rather than a workaround. |
+| `summarize-critical-watchdog-findings` | Produce a channel-neutral digest of critical Watchdog findings for an explicit project over the last 24 hours, ranked by rule, with coverage and limitations stated. Delivery and scheduling stay out of scope. |
 
 ## Tools
 
@@ -152,6 +155,7 @@ A member without permission to add an MCP server directly can ask an organizatio
 | `get_mcp_connection_settings` | Read | Reads the stored network mode, visibility, and endpoint identifiers for one MCP server or gateway. Never returns upstream URLs, credentials, or other secrets. |
 | `set_mcp_address` | Write | Creates or updates the address for one MCP server or gateway. Requires the settings version from `get_mcp_connection_settings`, an idempotency key, and explicit confirmation. |
 | `set_mcp_network_access` | Write | Changes network access for one MCP server or gateway to `public_only`, `dual`, or `private_only`. Requires explicit confirmation; private access may be rejected where unavailable for the organization. |
+| `get_network_ingress` | Read | Reports the organization's private network ingress: whether private networking is switched on, whether an ingress is configured and enabled, its latest observed status and private DNS name, and the one next action standing between the organization and private MCP access. Readiness is required before any server uses `dual` or `private_only`, and is not proof that a tailnet client can connect. Creating, enabling, or repairing an ingress happens in the dashboard. |
 
 ### Readiness and troubleshooting
 
@@ -201,7 +205,9 @@ A skill is a written set of instructions an agent loads when it applies. Version
 | `create_skill` | Write | Creates a skill from complete SKILL.md content, up to 64 KiB. An existing skill with the same name records a new version instead. |
 | `add_skill_version` | Write | Records a new version from complete replacement content. Refuses the write if the skill changed since the expected version was read. |
 | `update_skill_metadata` | Write | Renames a skill or changes its display name and summary without changing its instructions. |
+| `list_skill_distributions` | Read | Lists which plugins carry which skills in a project, oldest first, with the version each distribution resolves to and whether it follows the skill's latest version or is pinned. Whether an assistant carries a skill is reported per skill by `get_skill` instead. |
 | `distribute_skill` | Write | Gives a skill to one plugin or one assistant in the same project. This is the only way a skill takes effect. |
+| `undistribute_skill` | Write | Takes a skill back from one plugin or one assistant so agents there stop loading it. The skill and its versions remain, and only that one distribution ends. Requires explicit confirmation, and an ambiguous or unknown target name is refused rather than falling back to the default plugin. |
 | `query_skill_usage` | Read | Summarizes observed skill activations for one project, with exact activation counts and privacy-suppressed user counts. An activation proves use, not success, so error evidence is reported as not recorded. |
 | `list_skill_usage_users` | Read | Lists masked people observed activating one skill, with short-lived references for a focused follow-up. Individual activation counts and raw identities are never returned. |
 | `get_user_skill_status` | Read | Confirms whether one person, by a reference from the usage list, was observed activating the same skill in the same window. Returns categorical activity only. |
@@ -228,12 +234,17 @@ Risk policies and exclusions are the rules the [Secure](/docs/ai-control-plane/s
 | `list_risk_policies` | Read | Lists privacy-safe risk policy summaries in a project. |
 | `get_risk_policy` | Read | Reads one risk policy with its compatibility metadata. |
 | `create_risk_policy` | Write | Creates a standard or prompt-based risk policy in an explicit project. |
-| `update_risk_policy` | Write | Patches allowed fields on a risk policy. Omitted fields are preserved. |
+| `update_risk_policy` | Write | Patches allowed fields on a risk policy. Omitted fields are preserved. Replacing an audience outright happens here. |
+| `change_risk_policy_audience` | Write | Adds and removes exact user and role principals on one targeted policy in a single write, preserving unrelated grants and every policy setting. Requires the version from a fresh read and explicit confirmation. Organization-wide audiences are refused, and removing a grant does not remove role-derived coverage. |
+| `remove_self_from_risk_policy` | Write | Always refuses. Self-removal and effective exclusion await organization-scoped coordination of audience grants, so no policy is changed. The refusal is not to be worked around with an audience change, a policy disablement, a role change, or an exclusion. |
 | `list_risk_exclusions` | Read | Lists risk exclusions in a project, optionally filtered by policy. |
 | `create_risk_exclusion` | Write | Creates an exclusion matched by exact value, rule ID, source, or entity type. Regex exclusions cannot be created here. |
 | `update_risk_exclusion` | Write | Enables or disables one exclusion without changing its definition. |
 | `get_risk_analysis_status` | Read | Reports whether the Watchdog risk analysis is running for a project and when it last ran. A project with no recent chat traffic has no recent run. |
 | `list_watchdog_findings` | Read | Reads rule-level Watchdog alerts grouped by rule, with affected users, affected apps, and one redacted sample per alert. Defaults to critical severity in the last 24 hours. |
+| `list_risk_findings` | Read | Lists individual findings in a project, newest message first, with every matched value reduced to a length and a hash fingerprint that never reaches the model. Filters by message-time window, policy, chat, category, rule, user, assistant linkage, or unique match, and pages 25 at a time up to 50. Each finding carries a stable ID and a severity band. |
+| `list_risk_findings_by_chat` | Read | Lists the chat sessions that carry live findings, each with a finding count, the latest detection time, and an organization-scoped user pseudonym. Pass a chat ID to `list_risk_findings` to read one chat's findings. |
+| `get_risk_rule_breakdown` | Read | Counts live findings per rule and detection source for one category over a detection-time window, defaulting to seven days and capped at 31. Sizes a finding set in one call instead of paging through `list_risk_findings`, and needs no Watchdog rollout. |
 
 ### Observability
 
@@ -242,6 +253,7 @@ These tools read the same data as [MCP Insights](/docs/ai-control-plane/observe/
 | Tool | Type | What it does |
 | --- | --- | --- |
 | `get_project_overview` | Read | Summarizes how a project's MCP servers have behaved and what has failed over a window of 1h, 24h, 7d, or 30d. Start here for any question about how a project is doing. |
+| `get_tool_usage_summary` | Read | Breaks a project's tool calls down by what they reached: hosted MCP servers, tunneled MCP servers, gateways, shadow MCP servers, local tools, and skills. Every target type is reported, zero included, with its share of all calls and its busiest targets. Users, calling apps, and shadow MCP server names are never returned. |
 | `query_mcp_events` | Read | Breaks one server's calls down by tool and outcome over a window of up to 24h. |
 | `query_mcp_metrics` | Read | Returns one server's totals over a window of 1h, 24h, or 7d: call volume, failures, failure rate, average latency, and active users. |
 | `query_mcp_traces` | Read | Lists one server's individual calls, newest first, each reduced to a reference to quote when escalating. Filter by outcome. |
