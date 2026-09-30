@@ -109,7 +109,7 @@ Speakeasy enforces access before forwarding requests through the tunnel. Configu
 If **Specific tools** is empty, connect from the server's **Inspect** tab first to record its tool metadata.
 
 <Callout type="info">
-  Permissions from all of a user's roles add together. The default Member role grants broad MCP read and connect access, and `mcp:read` and `mcp:write` also imply connect access. A narrow custom role does not remove an existing broad grant. To restrict a server to selected users, review those existing grants and adjust the baseline roles before assigning scoped access. Changes to a system role affect everyone who holds it.
+  Connecting requires `mcp:connect` on this MCP server. `project:read` and `project:write` are not required. Permissions from all of a user's roles add together, and `mcp:read` and `mcp:write` imply connect access. The default Member role therefore grants broad MCP read and connect access. A narrow custom role does not remove an existing broad grant. To restrict a server to selected users, review those existing grants and adjust the baseline roles before assigning scoped access. Changes to a system role affect everyone who holds it.
 </Callout>
 
 See [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for scope inheritance and directory-managed roles. An upstream server can also apply its own policy using [signed caller identity](#signed-caller-identity).
@@ -123,6 +123,14 @@ X-Speakeasy-Identity: <JWT>
 ```
 
 The header contains the JWT without a `Bearer` prefix. Your server can ignore this extra header and work unchanged. Upstream OAuth credentials continue to use `Authorization`.
+
+### How installations identify callers
+
+A private tunneled server always has a user session issuer, such as your organization's Okta connection. Its install page configures only the hosted MCP URL for Claude Code, Claude Desktop, Cursor, VS Code, Codex, OpenCode, and other clients. It does not provide a shared Speakeasy API key. Clients that support OAuth prompt each person to sign in through the issuer, so assertions identify the person who completed that sign-in. The private install page itself also requires a Speakeasy login.
+
+Published plugins follow the same rule. A plugin for a server with a user session issuer omits the `Authorization` header, so each installer signs in as themselves. Any hooks API key in the observability plugin authenticates hook delivery, not MCP calls. Public tunneled servers are the exception: their install page does not require OAuth, and requests to a public destination do not receive a caller assertion.
+
+There is no setting that disables all API-key access. Agent keys can reach a private tunnel with an `agent:<AGENT_ID>` subject, and a Speakeasy session whose subject is an API key receives an `api_key:<API_KEY_ID>` subject. If the server accepts only people, require a valid assertion whose `sub` starts with `user:`. Reject missing assertions and any other subject prefix.
 
 ### JWT contract
 
@@ -141,7 +149,9 @@ The protected JWT header contains `alg=RS256`, `typ=speakeasy-identity+jwt`, and
 | `jti` | A unique identifier for this assertion. Each forwarded request or retry gets a fresh assertion. |
 | `allowed_methods` | Present only during authenticated consent discovery; lists the methods Speakeasy permits in that context. Treat a token that carries it as discovery-only. |
 
-The audience matches the saved resource identifier exactly, including trailing slashes and escaped characters. In a gateway with several servers, it identifies the selected destination. A caller cannot override it with a request parameter. If you change the saved identifier, update your verifier and reconnect any upstream OAuth credentials associated with the old resource.
+The audience matches the saved resource identifier exactly, including trailing slashes and escaped characters. In a gateway with several servers, it identifies the selected destination. A caller cannot override it with a request parameter.
+
+The resource identifier cannot be locked. Saving or clearing it requires `mcp:write`; `mcp:connect`, `project:read`, and `project:write` do not allow the change. Each edit is recorded in the audit log as `tunneled-mcp:update`, with before and after snapshots that include the identifier. The next assertion uses the new audience, so a verifier that still expects the previous value rejects the request. Update the verifier and reconnect any upstream OAuth credentials associated with the old resource.
 
 Use `sub` as the stable identity key because email addresses can change. Subject IDs come from the Speakeasy control plane, not the external IdP. The contract does not include role names, IdP groups, or an `email_verified` claim. API keys and agents have their own identities; their subjects do not identify their human owners.
 
