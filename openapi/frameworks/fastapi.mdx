@@ -1,72 +1,56 @@
 ---
-title: How To Generate an OpenAPI Document With FastAPI
+title: How to generate an OpenAPI document with FastAPI
 description: "Creating an OpenAPI document with FastAPI and using it to generate SDKs with Speakeasy."
 ---
 
 import { Callout, YouTube } from "@/mdx/components";
 
-# How to generate an OpenAPI document with FastAPI
+FastAPI has rapidly gained traction in the Python community for its excellent performance, intuitive design, and flexibility. With OpenAPI support out of the box, FastAPI can build an APIs with matching SDKs and documentation providing convenient integration, all powered by the same source of truth.
+
+With the FastAPI generated OpenAPI document available out of the box, there is only minor customization and improvement needed to make the document usable with other tooling.
+
+To show this off check out our video guide on using FastAPI to produce top quality OpenAPI and generate SDKs with Speakeasy.
 
 <div className="mt-10 flex items-center justify-center">
   <YouTube videoId="86hiib_OA4c" />
 </div>
 
-Many developers start their API development with FastAPI, and with good reason. FastAPI has rapidly gained traction in the Python community for its excellent performance, intuitive design, and flexibility. It enables developers to craft API solutions that not only run fast but also meet their users' unique needs.
+For more in depth on the latest versions of the tools, follow along with this tutorial.
 
-FastAPI is great for building your core API, but you'll want to layer on SDKs and docs to provide your users with easy integration. For that, you'll want an OpenAPI document.
+## Introduction to FastAPI and OpenAPI
 
-The good news is that FastAPI provides you with an OpenAPI document out of the box. The less good news is that you'll need some tweaking to get the OpenAPI document to a level where it becomes usable with other tooling.
+Understanding how FastAPI generates OpenAPI documents supports informed decisions when customizing a FastAPI setup.
 
-This article will show you how to improve the default OpenAPI document generation to make the most of the generated schema.
+The process is straightforward: FastAPI builds the OpenAPI document from application routes and models. Each route adds an operation to the OpenAPI document. Each model used by these routes adds a schema definition. Request and response bodies, parameters, and headers draw from these schema definitions.
 
-## Generating an OpenAPI document with FastAPI
+While this process works well out of the box, FastAPI also offers several customization options that can change the generated OpenAPI document. The following sections cover several options.
 
-Understanding how FastAPI generates OpenAPI documents can help you make more informed decisions when you customize your FastAPI setup.
+## The FastAPI example app: Train Travel API
 
-The process is fairly straightforward: FastAPI builds the OpenAPI document based on the routes and models you've defined in your application. For every route in your FastAPI application, FastAPI adds an operation to the OpenAPI document. For every model used in these routes, FastAPI adds a schema definition. The request and response bodies, parameters, and headers all draw from these schema definitions.
+The example FastAPI application is following the common Train Travel API, which includes models for stations, trips, bookings, and payments, and provides operations for finding trips and managing bookings.
 
-While this process works well out of the box, FastAPI also offers several customization options that can change the generated OpenAPI document. We'll cover some of these options in the following sections.
-
-## Our FastAPI example app: APItizing Burgers
-
-Let's get this out of the way: The name came in a daydream shortly before lunchtime.
-
-To guide us through this journey, we'll use a simple example FastAPI application: the "APItizing Burgers" burger shop API. This API includes two models, `Burger` and `Order`, and provides basic CRUD operations for managing burgers and orders at our hypothetical burger shop. Additionally, we have a webhook defined for order status events.
-
-We'll look at how we optimized this FastAPI application and refined our models and routes so that the generated OpenAPI document is intuitive and easy to use. We will also explore how we can use this schema to generate SDKs using Speakeasy. The source code for our example API is available in the [framework-fastapi](https://github.com/speakeasy-api/examples/tree/main/framework-fastapi) folder of the Speakeasy Examples repository.
+The guide examines how this FastAPI application uses refined models and routes to produce an intuitive OpenAPI document. The schema also supports SDK generation with Speakeasy. Source code is available in the [framework-fastapi](https://github.com/speakeasy-api/examples/tree/main/framework-fastapi) folder of the Speakeasy Examples repository.
 
 The `framework-fastapi` directory consists of two directories: `app` and `sdk`.
 
-The `app` directory contains the FastAPI server definition: `app/main.py`. This is where we'll look at what we customized.
+The `app` directory contains the FastAPI server definition: `app/main.py`, including the customizations described in this guide.
 
 The `sdk` directory and the two OpenAPI documents, `openapi.yaml` and `openapi.json`, are generated by running `gen.sh` in the root of the project.
 
-Join us as we dive into FastAPI customization and discover how these tweaks can streamline your SDK generation process.
+The following sections explain how FastAPI customization can streamline SDK generation.
 
-<Callout title="Warning" type="warning">
-  When using Pydantic to define models, a known issue is that the serialization
-  of `datetime` objects is not timezone-aware. This will cause a mismatch with
-  the OpenAPI format `date-time`, which requires RFC 3339 date-time strings with
-  timezones included. Consider using
-  [`AwareDatetime`](https://docs.pydantic.dev/2.5/api/types/#pydantic.types.AwareDatetime)
-  fields in Pydantic models to enable the appropriate
-  [validation](https://docs.pydantic.dev/latest/errors/validation_errors/#timezone_aware)
-  and ensure your SDK behavior matches the response definition from your server.
-</Callout>
 
 ## Basic FastAPI setup
 
-Let's get started with the basics – some things you probably do already.
-
-These straightforward examples are trivial but will help you better understand the three steps in the automation pipeline: How FastAPI setup influences OpenAPI documents, which, in turn, influences SDK code.
+These straightforward examples illustrate the three steps in the automation pipeline: FastAPI setup influences OpenAPI documents, which in turn influence SDK code.
 
 ### Scalar API documentation
 
-FastAPI automatically generates API documentation using Swagger UI. This example also has [Scalar](https://scalar.com/) API documentation. Scalar is an alternative to Swagger UI. Its standout feature, as explained in our blog post, [Choosing a docs vendor: Mintlify vs Scalar vs Bump vs ReadMe vs Redocly](https://www.speakeasy.com/blog/choosing-a-docs-vendor#mintlify-seriously-beautiful-docs), is that it can be used as a standalone API client. Scalar is also easy to use and has a modern UI that can be customized to create branded documentation. We use it for our [Speakeasy docs](https://www.speakeasy.com/blog/release-speakeasy-docs#why-we-partnered-with-scalar).
+FastAPI automatically generates API documentation using Swagger UI. This example also has [Scalar](https://scalar.com/) API documentation. Scalar is an alternative to Swagger UI. Its standout feature, as explained in the Speakeasy blog post, [Choosing a docs vendor: Mintlify vs Scalar vs Bump vs ReadMe vs Redocly](https://www.speakeasy.com/blog/choosing-a-docs-vendor#mintlify-seriously-beautiful-docs), is that it can be used as a standalone API client. Scalar is also easy to use and has a modern UI that can be customized to create branded documentation. Scalar also powers [Speakeasy docs](https://www.speakeasy.com/blog/release-speakeasy-docs#why-we-partnered-with-scalar).
 
-We added Scalar to the FastAPI app by installing the [Scalar FastAPI plugin](https://github.com/scalar/scalar/blob/main/integrations/fastapi/README.md).
+Scalar is added to the FastAPI app by installing the [Scalar FastAPI plugin](https://github.com/scalar/scalar/blob/main/integrations/fastapi/README.md).
 
-After installing the plugin, we added a "/scalar" route, in `app/main.py`, that returns the Scalar API Reference:
+After installing the plugin, add a `/scalar` route in `app/main.py` to return the Scalar API Reference:
 
 ```python
 from scalar_fastapi import get_scalar_api_reference
@@ -88,18 +72,19 @@ async def scalar_html():
 
 ### Server configuration
 
-This may seem obvious, but while first working with FastAPI in development, the generated docs, development server, and API operations all work out of the box without the need to manually specify your server address.
+While working with FastAPI in development, generated docs, the development server, and API operations work out of the box without manually specifying a server address.
 
-However, when generating SDKs, your OpenAPI document needs to list servers.
+When generating SDKs, the OpenAPI document needs to list servers.
 
-In our `app/main.py`, we added our local server as shown:
+A common convention is to pop in the local and production servers (local can be stripped out with [overlays](https://www.speakeasy.com/openapi/overlays) later if they are not wanted showing up on live documentation) are configured in `app/main.py` as follows:
 
 ```python
 from fastapi import FastAPI
 
 app = FastAPI(
     servers=[
-        {"url": "http://127.0.0.1:8000", "description": "Local server"},
+    {"url": "http://localhost:8080", "description": "Local Server"},
+    {"url": "https://api.example.com", "description": "Production"},
     ],
 )
 ```
@@ -109,49 +94,48 @@ This leads to the following generated output in `openapi.yaml`:
 ```yaml
 # The basic server configuration in OpenAPI
 servers:
-  - description: Local server
-    url: http://127.0.0.1:8000/
-  # You can add additional servers if needed
-  # - description: Production server
-  #   url: https://api.example.com/
+  - description: Local Server
+    url: http://localhost:8080
+  - description: Production
+    url: https://api.example.com
 ```
 
 ### Application information
 
-In our `app/main.py`, if we have the following:
+The following configuration belongs in `app/main.py`:
 
 ```python
 from fastapi import FastAPI
 
 app = FastAPI(
-    summary="A simple API to manage burgers and orders",
-    description="This API is used to manage burgers and orders in a restaurant",
-    version="0.1.0",
-    title="APItizing Burger API",
+  summary="Find and book train trips across Europe",
+  description="API for finding and booking train trips across Europe.",
+  version="1.2.1",
+  title="Train Travel API",
 )
 ```
 
-FastAPI generates the following YAML in our `openapi.yaml` file:
+FastAPI generates the following YAML in `openapi.yaml`:
 
 ```yaml
 info:
-  description: This API is used to manage burgers and orders in a restaurant
-  summary: A simple API to manage burgers and orders
-  title: APItizing Burger API
-  version: 0.1.0
+  description: API for finding and booking train trips across Europe.
+  summary: Find and book train trips across Europe
+  title: Train Travel API
+  version: 1.2.1
 ```
 
 ### Route customizations
 
-With the basics out of the way, let's look at a few more substantial recommendations.
+The following sections cover more substantial recommendations.
 
 ### Typed responses
 
-When developers use your generated SDK, they may wish to see what all the possible responses for an API call could be.
+SDK users may want to see all possible responses for an API call.
 
-With FastAPI, you can add additional responses to each route by specifying a response type.
+FastAPI supports additional responses on each route through response types.
 
-In our `app/main.py`, we added this abbreviated code:
+The following abbreviated code belongs in `app/main.py`:
 
 ```python
 from fastapi import FastAPI
@@ -163,20 +147,20 @@ class ResponseMessage(BaseModel):
 
     message: str = Field(description="The response message")
 
-OPENAPI_RESPONSE_BURGER_NOT_FOUND = {
+OPENAPI_RESPONSE_STATION_NOT_FOUND = {
     "model": ResponseMessage,
-    "description": "Burger not found",
+    "description": "Station not found",
 }
 
-def response_burger_not_found(burger_id: int):
-    """Response for burger not found"""
+def response_station_not_found(station_id: int):
+  """Response for station not found"""
 
     return JSONResponse(
         status_code=404,
-        content=f"Burger with id {burger_id} does not exist",
+        content=f"Station with id {station_id} does not exist",
     )
 
-class Burger(BaseModel):
+class Station(BaseModel):
     id: int
     name: str
     description: str = None
@@ -184,21 +168,21 @@ class Burger(BaseModel):
 app = FastAPI()
 
 @app.get(
-    "/burger/{burger_id}",
-    response_model=BurgerOutput,
-    responses={404: OPENAPI_RESPONSE_BURGER_NOT_FOUND},
-    tags=["burger"],
+    "/stations/{station_id}",
+    response_model=Station,
+    responses={404: OPENAPI_RESPONSE_STATION_NOT_FOUND},
+    tags=["Stations"],
 )
-def read_burger(burger_id: Annotated[int, Path(title="Burger ID")]):
-    """Read a burger"""
+  def get_station(station_id: Annotated[int, Path(title="Station ID")]):
+    """Read a station"""
 
-    for burger in burgers_db:
-        if burger.id == burger_id:
-            return burger
-    return response_burger_not_found(burger_id)
+    for station in stations_db:
+      if station.id == station_id:
+        return station
+    return response_station_not_found(station_id)
 ```
 
-FastAPI adds a schema for our specific error message to `openapi.yaml`:
+FastAPI adds a schema for the specific error message to `openapi.yaml`:
 
 ```yaml
 components:
@@ -218,17 +202,23 @@ components:
 
 ### Operation tags
 
-As your API develops and grows bigger, you're likely to split it into separate files. FastAPI [provides conveniences](https://fastapi.tiangolo.com/tutorial/bigger-applications/) to help reduce boilerplate and repetition when splitting an API into multiple modules.
+As an API develops and grows, routes are often split into separate files. FastAPI [provides conveniences](https://fastapi.tiangolo.com/tutorial/bigger-applications/) to reduce boilerplate and repetition when splitting an API into multiple modules.
 
-While this separation may reduce cognitive overhead while you're working in particular sections of the API code, it doesn't mean similar groups are automatically created in your documentation and SDK code.
+This separation may reduce cognitive overhead during work on particular sections of API code, but similar groups are not automatically created in documentation and SDK code.
 
-We recommend you add tags to all operations in FastAPI, whether you're building a big application or only have a handful of operations, so that operations can be grouped by tag in generated SDK code and documentation.
+Add tags to all operations in FastAPI, whether the application is large or contains only a handful of operations, so that operations can be grouped by tag in generated SDK code and documentation.
 
 ```yaml filename="operation-tags.yaml"
 # Tags help organize operations into logical groups
 tags:
-  - name: burger
-  - name: order
+  - name: Stations
+    description: Find and filter train stations across Europe.
+  - name: Trips
+    description: Timetables and routes for train trips between stations.
+  - name: Bookings
+    description: Create and manage bookings for train trips.
+  - name: Payments
+    description: Pay for bookings and view payment status.
 ```
 
 The most straightforward way to add tags is to edit each operation and add a list of tags. This example highlights the tags list:
@@ -239,20 +229,20 @@ from fastapi import FastAPI
 app = FastAPI()
 
 @app.get(
-    "/burger/{burger_id}",
-    tags=["burger"],
+    "/stations",
+    tags=["Stations"],
 )
-def read_burger(burger_id: int):
+  def get_stations():
     return {
-        "burger_id": burger_id,
+      "data": [],
     }
 ```
 
 ### Tag metadata
 
-You can add metadata to your tags to further improve the developer experience.
+Tag metadata can further improve the developer experience.
 
-FastAPI accepts a parameter called `openapi_tags`, which we can use to add metadata, such as a description and a list of external documentation links.
+FastAPI accepts an `openapi_tags` parameter for metadata such as a description and a list of external documentation links.
 
 Here's how to add metadata to tags:
 
@@ -261,63 +251,65 @@ from fastapi import FastAPI
 
 tags_metadata = [
     {
-        "name": "burger",
-        "description": "Operations related to burgers",
+        "name": "Stations",
+        "description": "Find and filter train stations across Europe.",
         "externalDocs": {
-            "description": "Burger external docs",
-            "url": "https://en.wikipedia.org/wiki/Hamburger",
+            "description": "Train station external docs",
+            "url": "https://en.wikipedia.org/wiki/Train_station",
         },
     },
     {
-        "name": "order",
-        "description": "Operations related to orders",
-    },
+        "name": "Trips",
+        "description": "Timetables and routes for train trips between stations.",
+    )
 ]
 
 app = FastAPI(
     openapi_tags=tags_metadata,
 )
 
-@app.get(
-    "/burger/{burger_id}",
-    tags=["burger"],
+app = FastAPI(
+    openapi_tags=tags_metadata,
 )
-def read_burger(burger_id: int):
+
+@app.get(
+    "/trips",
+    tags=["Trips"],
+)
+  def get_trips():
     return {
-        "burger_id": burger_id,
+      "data": [],
     }
 ```
 
-When we add metadata to tags, FastAPI adds a top-level `tags` section to our OpenAPI document:
+When metadata is added to tags, FastAPI adds a top-level `tags` section to the OpenAPI document:
 
 ```yaml
 tags:
-  - description: Operations related to burgers
+  - description: Find and filter train stations across Europe.
     externalDocs:
-      description: Burger external docs
-      url: https://en.wikipedia.org/wiki/Hamburger
-    name: burger
-  - description: Operations related to orders
-    name: order
+      description: Train station external docs
+      url: https://en.wikipedia.org/wiki/Train_station
+    name: Stations
+  - description: Timetables and routes for train trips between stations.
+    name: Trips
 ```
 
-Each tagged path in our OpenAPI document also gets a list of tags:
+Each tagged path in the OpenAPI document also gets a list of tags:
 
 ```yaml
 paths:
-  /burger/{burger_id}:
+  /trips:
     get:
-      description: Read a burger
-      operationId: readBurger
-      summary: Read Burger
+      description: Find available trips
+      operationId: get-trips
+      summary: Get Trips
       tags:
-        - burger
+        - Trips
       # ...
 ```
 
 ### Operation ID customization
-
-When FastAPI outputs an OpenAPI document, it generates a unique OpenAPI `operationId` for each path. By default, this unique ID is generated by the FastAPI `generate_unique_id` function:
 
 ```python
 def generate_unique_id(route: "APIRoute") -> str:
@@ -328,14 +320,14 @@ def generate_unique_id(route: "APIRoute") -> str:
     return operation_id
 ```
 
-This can often lead to cumbersome and unintuitive names. To improve usability, we have two methods of customizing these generated strings:
+This can often lead to cumbersome and unintuitive names. Two methods are available for customizing these generated strings:
 
 1. Using a custom `generate_unique_id_function`
 2. Specifying `operation_id` per operation
 
-The preferred method is to use a custom function when you generate unique IDs for paths.
+The preferred method is a custom function for generating unique IDs for paths.
 
-The example below is an illustrative function that doesn't generate guaranteed-unique IDs and doesn't handle method names without an underscore. However, it demonstrates how you can add a function that generates IDs based on an operation's method name:
+The following illustrative function does not generate guaranteed-unique IDs or handle method names without an underscore. It demonstrates how a function can generate IDs based on an operation's method name:
 
 ```python
 from fastapi import FastAPI
@@ -358,7 +350,7 @@ app = FastAPI(
 )
 ```
 
-With FastAPI, you can also specify the `operationId` per operation. For our example, we'll add a new parameter called `operation_id` to the operation decorator:
+FastAPI also supports specifying the `operationId` per operation. The following example adds an `operation_id` parameter to the operation decorator:
 
 ```python
 from fastapi import FastAPI
@@ -366,16 +358,16 @@ from fastapi import FastAPI
 app = FastAPI()
 
 @app.get(
-    "/burger/{burger_id}",
-    operation_id="readBurger",
+    "/trips",
+    operation_id="get-trips",
 )
-def read_burger(burger_id: int):
+  def get_trips():
     pass
 ```
 
 ### Webhooks
 
-Starting with OpenAPI version 3.1.0, it is possible to specify webhooks for your application in OpenAPI.
+Starting with OpenAPI version 3.1.0, applications can specify webhooks in OpenAPI.
 
 Here's how to add a webhook to FastAPI:
 
@@ -385,20 +377,20 @@ from fastapi import FastAPI
 app = FastAPI()
 
 
-class Order(BaseModel):
+class Booking(BaseModel):
     id: int
     note: str
 
 
 @app.webhooks.post(
-    "order-status-changed",
-    operation_id="webhookOrderStatusChanged",
+    "booking-status-changed",
+    operation_id="webhookBookingStatusChanged",
 )
-def webhook_order_status_changed(body: Order):
+  def webhook_booking_status_changed(body: Booking):
     """
-    When an order status is changed, this webhook will be triggered.
+    When a booking status is changed, this webhook will be triggered.
 
-    The server will send a `POST` request with the order details to the webhook URL.
+    The server will send a `POST` request with the booking details to the webhook URL.
     """
     pass
 ```
@@ -407,20 +399,20 @@ FastAPI generates the following top-level `webhooks` section in `openapi.yaml`:
 
 ```yaml
 webhooks:
-  order-status-changed:
+  booking-status-changed:
     post:
       description:
-        "When an order status is changed, this webhook will be triggered.
+        "When a booking status is changed, this webhook will be triggered.
 
 
-        The server will send a `POST` request with the order details to the webhook
+        The server will send a `POST` request with the booking details to the webhook
         URL."
-      operationId: webhookOrderStatusChanged
+      operationId: webhookBookingStatusChanged
       requestBody:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Order"
+              $ref: "#/components/schemas/Booking"
         required: true
       responses:
         "200":
@@ -434,22 +426,22 @@ webhooks:
               schema:
                 $ref: "#/components/schemas/HTTPValidationError"
           description: Validation Error
-      summary: Webhook Order Status Changed
+      summary: Webhook Booking Status Changed
 ```
 
 ## Speakeasy integration
 
-Now that we have a customized OpenAPI document, we can use Speakeasy to generate SDKs based on it. You can generate an SDK by running the `gen.sh` bash script, which runs the `speakeasy generate` command. Alternatively, you can use the Speakeasy quick start command for a guided SDK setup:
+With a customized OpenAPI document, Speakeasy can generate SDKs from the schema. Run the `gen.sh` bash script, which runs the `speakeasy generate` command. Alternatively, use the Speakeasy quick start command for guided SDK setup:
 
 ```bash filename="Terminal"
 speakeasy quickstart
 ```
 
-Following the prompts, provide the OpenAPI document location, name your SDK, and select the SDK language.
-In the terminal, you'll see the steps taken by Speakeasy to create the SDK:
+Following the prompts, provide the OpenAPI document location, SDK name, and SDK language.
+The terminal displays the steps Speakeasy takes to generate the SDK:
 
 ```
-│   └─Source: APItizing Burgers API - success
+│   └─Source: Train Travel API - success
 │     └─Validating Document - success
 │     └─Diagnosing OpenAPI - success
 │     └─Tracking OpenAPI Changes - success
@@ -470,22 +462,22 @@ In the terminal, you'll see the steps taken by Speakeasy to create the SDK:
 │       └─Uploading Code Samples - success
 ```
 
-Speakeasy [validates](/docs/concepts#validation) the OpenAPI document to check that it's ready for code generation. Validation issues will be printed in the terminal and the generated SDK will be saved as a folder in your project.
-Speakeasy also suggests improvements for your SDK using [Speakeasy Suggest](/docs/prep-openapi/maintenance), which is an AI-powered tool in Speakeasy Studio. You can see suggestions by opening the link to your Speakeasy Studio workspace in the terminal.
+Speakeasy [validates](/docs/concepts#validation) the OpenAPI document to check that it is ready for code generation. Validation issues are printed in the terminal, and the generated SDK is saved as a folder in the project.
+Speakeasy also suggests improvements for SDKs using [Speakeasy Suggest](/docs/prep-openapi/maintenance), an AI-powered tool in Speakeasy Studio. Open the Speakeasy Studio workspace link in the terminal to view suggestions.
 
-Let's take a look at how the information we detailed in the OpenAPI document affects how Speakeasy generates SDKs.
+The following sections show how information in the OpenAPI document affects SDK generation.
 
-Adding the local server information leads to the following generated output in the `openapi.yaml` file:
+Adding the server information leads to the following generated output in the `openapi.yaml` file:
 
 ```yaml
 # This server configuration will be used by Speakeasy when generating SDKs
 openapi: 3.1.0
 info:
-  title: APItizing Burgers API
-  version: 0.1.0
+  title: Train Travel API
+  version: 1.2.1
 servers:
-  - description: Local server
-    url: http://127.0.0.1:8000/
+  - description: Local Server
+    url: http://localhost:8080
 ```
 
 After Speakeasy generates the SDK, this leads to the following abbreviated code in `sdk/src/openapi/sdkconfiguration.py`:
@@ -494,8 +486,8 @@ After Speakeasy generates the SDK, this leads to the following abbreviated code 
 from dataclasses import dataclass
 
 SERVERS = [
-    'http://127.0.0.1:8000/',
-    # Local server
+  'http://localhost:8080',
+  # Local Server
 ]
 """Contains the list of servers available to the SDK"""
 
@@ -518,14 +510,14 @@ class SDKConfiguration:
         return SERVERS[self.server_idx], {}
 ```
 
-You'll find calls to `SDKConfiguration.get_server_details()` when the SDK builds API URLs:
+Calls to `SDKConfiguration.get_server_details()` appear when the SDK builds API URLs:
 
 ```python
 from dataclasses import dataclass
 
 SERVERS = [
-    'http://127.0.0.1:8000/',
-    # Local server
+  'http://localhost:8080',
+  # Local Server
 ]
 """Contains the list of servers available to the SDK"""
 
@@ -548,13 +540,13 @@ class SDKConfiguration:
         return SERVERS[self.server_idx], {}
 ```
 
-Speakeasy uses the title, summary, and descriptions we provided earlier to add helpful text to the generated SDK documentation, including comments in the SDK code. For example, in `sdk/src/openapi/sdk.py`:
+Speakeasy uses the title, summary, and descriptions from the document to add helpful text to generated SDK documentation, including comments in SDK code. For example, in `sdk/src/openapi/sdk.py`:
 
 ```python
 class SDK(BaseSDK):
-    r"""APItizing Burgers API: A simple API to manage burgers and orders
+    r"""Train Travel API: Find and book train trips across Europe
 
-    This API is used to manage burgers and orders in a restaurant
+    API for finding and booking train trips across Europe.
     """
 ```
 
@@ -566,12 +558,12 @@ from dataclasses import dataclass
 @dataclass
 class SDKConfiguration:
     ...
-    openapi_doc_version: str = '0.1.0'
-    user_agent: str = "speakeasy-sdk/python 0.2.0 2.607.0 0.1.0 openapi"
+    openapi_doc_version: str = '1.2.1'
+    user_agent: str = "speakeasy-sdk/python 0.2.0 2.607.0 1.2.1 openapi"
     ...
 ```
 
-When users call your API using the generated SDK, the `user_agent` from `SDKConfiguration` is automatically added to the `user-agent` header. The `_build_request_with_client` method in `BaseSDK` constructs the HTTP request and sets the header using `headers[user_agent_header] = self.sdk_configuration.user_agent`:
+When an API is called using the generated SDK, the `user_agent` from `SDKConfiguration` is automatically added to the `user-agent` header. The `_build_request_with_client` method in `BaseSDK` constructs the HTTP request and sets the header using `headers[user_agent_header] = self.sdk_configuration.user_agent`:
 
 ```python
 def _build_request_with_client(
@@ -588,9 +580,9 @@ def _build_request_with_client(
 
 ### Operation ID issues and solutions
 
-The unique `operation_id` generated by FastAPI does not translate well into an SDK. We need to customize the unique `operation_id` that FastAPI generates for better readability.
+The unique `operation_id` generated by FastAPI does not translate well into an SDK. Customize the generated `operation_id` for better readability.
 
-For instance, in the operation that returns a burger by `burger_id`, the default unique ID would be `read_burger_burger__burger_id__get`. This makes its way into SDK code, leading to class names such as `ReadBurgerBurgerBurgerIDGetRequest` or function names like `read_burger_burger_burger_id_get`.
+For instance, in the operation that returns a station by `station_id`, the default unique ID would be `read_station_stations__station_id__get`. This makes its way into SDK code, leading to class names such as `ReadStationStationsStationIDGetRequest` or function names like `read_station_stations_station_id_get`.
 
 Here's a usage example after generating an SDK without customizing the `operationId`:
 
@@ -600,14 +592,14 @@ from sdk.models import operations
 
 s = sdk.SDK()
 
-req = operations.ReadBurgerBurgerBurgerIDGetRequest(
-    burger_id=847252,
+req = operations.ReadStationStationsStationIDGetRequest(
+  station_id=847252,
 )
 
-res = s.burger.read_burger_burger_burger_id_get(req)
+res = s.stations.read_station_stations_station_id_get(req)
 ```
 
-However, after using the custom function `generate_unique_id` we defined previously, the `read_burger` operation gets a friendlier operation ID, `readBurger`, and the usage example becomes easier to read:
+After applying the previously defined `generate_unique_id` function, the `get_station` operation receives the friendlier `getStation` operation ID, making the usage example easier to read:
 
 ```python
 import sdk
@@ -615,29 +607,29 @@ from sdk.models import operations
 
 s = sdk.SDK()
 
-req = operations.ReadBurgerRequest(
-    burger_id=847252,
+req = operations.GetStationRequest(
+  station_id=847252,
 )
 
-res = s.burger.read_burger(req)
+res = s.stations.get_station(req)
 ```
 
-In addition to the two methods described earlier, there is a third way to customize the `operation_id`. We can add the top-level `x-speakeasy-name-override` [Speakeasy extension](https://www.speakeasy.com/docs/speakeasy-reference/extensions) to our OpenAPI document, allowing Speakeasy to override the generated names when it generates SDK code.
+In addition to the two methods described earlier, a third way to customize the `operation_id` is available. Add the top-level `x-speakeasy-name-override` [Speakeasy extension](https://www.speakeasy.com/docs/speakeasy-reference/extensions) to the OpenAPI document, allowing Speakeasy to override generated names during SDK generation.
 To add this extension, follow the Speakeasy guide to [changing method names](/docs/customize-sdks/methods).
 
 ```yaml filename="name-override.yaml"
 # Example of x-speakeasy-name-override extension
 x-speakeasy-name-override:
   operations:
-    readBurger: getBurger
-    createBurger: addBurger
+    getStation: getStationDetails
+    createBooking: addBooking
 ```
 
 ### Adding retry functionality
 
-Speakeasy can generate SDKs that follow custom rules for retrying failed requests. For instance, if your server fails to return a response within a specified time, you may want your users to retry their request without clobbering your server.
+Speakeasy can generate SDKs that follow custom rules for retrying failed requests. For instance, if a server fails to return a response within a specified time, retrying the request can avoid unnecessary load.
 
-To add retries to SDKs generated by Speakeasy, add a top-level `x-speakeasy-retries` schema to your OpenAPI document. You can also override the retry strategy per operation by adding `x-speakeasy-retries` to each operation:
+To add retries to SDKs generated by Speakeasy, add a top-level `x-speakeasy-retries` schema to the OpenAPI document. The retry strategy can also be overridden per operation by adding `x-speakeasy-retries` to each operation:
 
 ```yaml filename="speakeasy-retries.yaml"
 # Speakeasy retries can be configured with a top-level extension
@@ -647,17 +639,17 @@ x-speakeasy-retries:
   retryConnectionErrors: true
 ```
 
-To add global retries, we need to customize the schema generated by the FastAPI `get_openapi` function:
+To add global retries, customize the schema generated by the FastAPI `get_openapi` function:
 
 ```python
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 app = FastAPI(
-    summary="A simple API to manage burgers and orders",
-    description="This API is used to manage burgers and orders in a restaurant",
-    version="0.1.0",
-    title="APItizing Burger API",
+    summary="Find and book train trips across Europe",
+    description="API for finding and booking train trips across Europe.",
+    version="1.2.1",
+    title="Train Travel API",
 )
 
 def custom_openapi():
@@ -694,7 +686,7 @@ def custom_openapi():
 app.openapi = custom_openapi
 ```
 
-Keep in mind that you'll need to add this customization _after_ declaring your operation routes.
+Add this customization _after_ declaring the operation routes.
 
 This change adds the following top-level section to `openapi.yaml`:
 
@@ -719,7 +711,7 @@ from fastapi import FastAPI
 app = FastAPI()
 
 @app.get(
-    "/burger/",
+    "/bookings",
     openapi_extra={
         "x-speakeasy-retries": {
             "strategy": "backoff",
@@ -736,7 +728,7 @@ app = FastAPI()
         }
     },
 )
-def list_burgers():
+def list_bookings():
     return []
 ```
 
@@ -744,46 +736,46 @@ def list_burgers():
 
 FastAPI supports several authentication mechanisms that can easily be integrated into your API.
 
-The example below demonstrates adding an API key authentication scheme to the `/burger/` endpoint of our API. We use the `APIKeyHeader` dependency to validate the API key passed in the `Authorization` header:
+The following example adds an API key authentication scheme to the `/bookings` endpoint. The `APIKeyHeader` dependency validates the API key passed in the `Authorization` header:
 
 ```python
 from fastapi.security import APIKeyHeader
 
-API_KEY = "your-apitizing-api-key"
+API_KEY = "your-train-travel-api-key"
 
 header_scheme = APIKeyHeader(
     name=API_KEY,
     auto_error=True,
-    description="API Key for the Burger listing API. API Key should be sent as a header, with the value 'your-apitizing-api-key'",
+    description="API Key for the booking API. API Key should be sent as a header, with the value 'your-train-travel-api-key'",
     scheme_name="api_key",
 )
 ```
 
-We can pass a `key` parameter to the `list_burgers` function, retrieve the API key from the header, and perform validation:
+Pass a `key` parameter to the `list_bookings` function to retrieve and validate the API key from the header:
 
 ```python
 @app.get(
-    "/burger/",
-    response_model=List[BurgerOutput],
-    tags=["burger"],
+    "/bookings",
+    response_model=List[Booking],
+    tags=["Bookings"],
     ...
 )
-def list_burgers(key: str = Depends(header_scheme)):
-    """List all burgers"""
+def list_bookings(key: str = Depends(header_scheme)):
+  """List all bookings"""
 
     if key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
-    return [BurgerOutput(**burger_data.dict()) for burger_data in burgers_db]
+    return [Booking(**booking_data.dict()) for booking_data in bookings_db]
 ```
 
-Now when generating the OpenAPI document, the API key authentication scheme will be included and only required for the listing on the `/burger/` endpoint.
+Now when generating the OpenAPI document, the API key authentication scheme will be included and only required for the listing on the `/bookings` endpoint.
 
 ### Handling form data
 
 Form data is a common way to receive information from clients, particularly in web applications. FastAPI provides robust support for form data through its `Form` class, and it correctly documents these form fields in the OpenAPI schema.
 
-When working with form data in FastAPI, you need to use the `Form` class from the `fastapi` module. This ensures that FastAPI correctly adds the appropriate schema information to your OpenAPI document.
+When working with form data in FastAPI, use the `Form` class from the `fastapi` module. This ensures that FastAPI adds the appropriate schema information to the OpenAPI document.
 
 ```python
 from fastapi import FastAPI, Form
@@ -791,13 +783,13 @@ from typing import Annotated
 
 app = FastAPI()
 
-@app.post("/burger/create/")
-async def create_burger_form(
+@app.post("/bookings/create/")
+async def create_booking_form(
     name: Annotated[str, Form()],
     description: Annotated[str, Form()],
     price: Annotated[float, Form()]
 ):
-    """Create a new burger using form data"""
+    """Create a new booking using form data"""
     return {
         "name": name,
         "description": description,
@@ -809,10 +801,10 @@ In the OpenAPI document, FastAPI correctly identifies this endpoint as accepting
 
 ```yaml
 paths:
-  /burger/create/:
+  /bookings/create/:
     post:
-      summary: Create Burger Form
-      operationId: createBurgerForm
+      summary: Create Booking Form
+      operationId: createBookingForm
       requestBody:
         content:
           application/x-www-form-urlencoded:
@@ -836,7 +828,7 @@ paths:
             application/json:
               schema: {}
       tags:
-        - burger
+        - Bookings
 ```
 
 When Speakeasy generates an SDK from this OpenAPI document, it will correctly handle form data submissions. The generated SDK will provide a clean interface for submitting form data:
@@ -847,13 +839,13 @@ from sdk.models import operations
 
 s = sdk.SDK()
 
-req = operations.CreateBurgerFormRequest(
-    name="Classic Burger",
-    description="Our signature burger with special sauce",
+req = operations.CreateBookingFormRequest(
+  name="John Doe",
+  description="Booking for a train trip",
     price=8.99
 )
 
-res = s.burger.create_burger_form(req)
+res = s.bookings.create_booking_form(req)
 ```
 
 #### File uploads
@@ -866,16 +858,16 @@ from typing import Annotated
 
 app = FastAPI()
 
-@app.post("/burger/image/")
-async def upload_burger_image(
-    burger_id: Annotated[int, Form()],
+@app.post("/bookings/document/")
+async def upload_booking_document(
+  booking_id: Annotated[int, Form()],
     image: Annotated[UploadFile, File()]
 ):
-    """Upload an image for a burger"""
+    """Upload a document for a booking"""
     contents = await image.read()
     # Process file contents...
     return {
-        "burger_id": burger_id,
+        "booking_id": booking_id,
         "filename": image.filename,
         "content_type": image.content_type,
         "size": len(contents)
@@ -886,12 +878,12 @@ This endpoint will be documented in the OpenAPI schema with `multipart/form-data
 
 #### Advanced form validation
 
-For form data that needs validation beyond simple type checking, you can combine Pydantic models with the `Form` class. First, define your model with the validation rules:
+For form data requiring validation beyond simple type checking, combine Pydantic models with the `Form` class. First, define the model with validation rules:
 
 ```python
 from pydantic import BaseModel, Field
 
-class BurgerFormData(BaseModel):
+class BookingFormData(BaseModel):
     name: str = Field(..., min_length=3, max_length=50)
     description: str = Field(..., min_length=10, max_length=200)
     price: float = Field(..., gt=0, le=100)
@@ -900,22 +892,26 @@ class BurgerFormData(BaseModel):
 Then use the model fields with form data:
 
 ```python
-@app.post("/burger/create/validated/")
-async def create_burger_validated(
+@app.post("/bookings/create/validated/")
+async def create_booking_validated(
     name: Annotated[str, Form()],
     description: Annotated[str, Form()],
     price: Annotated[float, Form()]
 ):
-    burger_data = BurgerFormData(
+    booking_data = BookingFormData(
         name=name,
         description=description,
         price=price
     )
-    return burger_data
+    return booking_data
 ```
 
 FastAPI will generate an OpenAPI document that includes these validation constraints, allowing SDK users to understand the requirements before submitting the form.
 
 ## Summary
 
-In this post, we've explored how you can set up a FastAPI-based SDK generation pipeline without hand-editing or updating OpenAPI documents. By using existing FastAPI methods for extending and customizing OpenAPI documents, you can improve the usability of your generated client SDKs.
+This post explored how to set up a FastAPI-based SDK generation pipeline without hand-editing or updating OpenAPI documents. Existing FastAPI methods for extending and customizing OpenAPI documents improve the usability of generated SDKs.
+
+## Further reading
+
+FastAPI can work with multiple validation libraries. Learn more about [working with Pydantic](/docs/openapi/frameworks/pydantic).
