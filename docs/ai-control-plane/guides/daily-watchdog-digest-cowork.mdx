@@ -1,0 +1,171 @@
+---
+title: "Send a daily Watchdog digest to Slack with Claude Cowork"
+description: "Use the Platform MCP skill and a scheduled Cowork task to summarize critical Watchdog findings from the last 24 hours and send them as a Slack DM."
+guideCategory: "Governance"
+---
+
+import { Callout } from "@/mdx/components";
+
+A security dashboard is easy to put off checking. A daily digest delivers the findings that need review to a place people already look.
+
+This guide uses the [Platform MCP](/docs/ai-control-plane/reference/platform-mcp) to summarize critical [Watchdog findings](/docs/ai-control-plane/secure/watchdog), then sends the summary to a Slack DM through a scheduled Claude Cowork task. The project, recipient, and daily run time are configurable.
+
+The summary skill is independent of Slack. It verifies the connected organization, queries the selected project, and returns a digest. Cowork handles the schedule and the separate delivery instruction. The same skill works without Slack to produce a summary in a conversation.
+
+## Prerequisites
+
+The walkthrough needs two connections:
+
+- **An authenticated Platform MCP connection.** The account needs permission to read Watchdog findings in the intended organization and project. A dashboard login alone does not authenticate the MCP connection.
+- **A Slack connection that can send DMs.** A search-only connector is not enough. Connect the intended workspace and confirm that the available tools support sending messages. If they do not, ask an administrator for an approved connector.
+
+The `summarize-critical-watchdog-findings` skill must also be installed and enabled through a Platform MCP plugin version that includes it. Connecting only the remote MCP endpoint does not necessarily install the skills in the plugin. If Claude cannot find the skill, check the installed plugin version before continuing.
+
+Cowork scheduled tasks require a supported paid Claude plan. An organization may restrict access to skills, connectors, or scheduling. Anthropic documents these controls in its guides to [skills](https://support.claude.com/en/articles/12512180-use-skills-in-claude), [remote MCP connectors](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp), and [scheduled tasks](https://support.claude.com/en/articles/13854387-schedule-recurring-tasks-in-claude-cowork).
+
+## Connect Platform MCP and Slack in Cowork
+
+Open **Customize > Connectors** in Claude. Connect and authenticate the Platform MCP entry provisioned by the organization. If it is not available, ask an administrator for access and the approved connection instructions. Do not substitute the dashboard URL for an MCP server URL.
+
+Connect Slack to the intended workspace, then enable both connections in the Cowork conversation. Interface labels can differ as Claude rolls out its unified chat and Cowork experience.
+
+Ask Claude to check the setup without sending anything:
+
+```text
+Help me prepare a daily Watchdog digest. Do not create a schedule
+or send any messages yet.
+
+Check that you can load the summarize-critical-watchdog-findings skill.
+Use Platform MCP get_platform_context to show the connected organization ID.
+Check whether my Slack connection supports sending DMs.
+Help me identify my Slack workspace and user ID, or an existing DM
+conversation ID. Show the proposed destination for confirmation.
+```
+
+Confirm the organization ID against the intended organization, with an administrator if needed. Browser impersonation does not prove which organization an MCP connection uses.
+
+Choose an exact project slug or ID from the dashboard. The skill accepts either and does not need to enumerate every project when one is supplied. Never assume that the Default project is the intended project.
+
+Keep the following values for the task configuration:
+
+| Setting         | What to supply                               |
+| --------------- | -------------------------------------------- |
+| Organization    | The expected Platform organization ID        |
+| Project         | One exact project slug or ID                 |
+| Slack workspace | The verified destination workspace           |
+| Slack recipient | A verified user ID or DM conversation ID     |
+| Timezone        | An IANA timezone, such as `America/New_York` |
+| Run time        | The preferred local time                     |
+
+## Preview the critical Watchdog digest
+
+Replace the placeholders in this prompt and run it in Cowork:
+
+```text
+Use the summarize-critical-watchdog-findings skill.
+
+Expected Platform organization ID: <ORG_ID>
+Project slug: <PROJECT_SLUG>
+
+Generate a digest of critical Watchdog findings detected during
+the previous 24 hours. Show the result here only.
+Do not send messages or create a schedule.
+```
+
+The skill verifies organization context, calls `list_watchdog_findings` with `severity: "critical"`, and checks that the response matches the requested project and reporting window. It reports rule-level alerts and individual findings separately, with up to five rules ranked by finding count. If the results are truncated, that ranking covers only the returned rules.
+
+Check the project and time window before enabling delivery. A successful query with no critical findings produces an explicit empty result, not silence. For example:
+
+```text
+Critical Watchdog digest
+Project: <PROJECT_NAME>
+Detection window: <FROM_UTC> inclusive to <TO_UTC> exclusive, UTC
+0 rule-level alerts · 0 findings
+
+No critical Watchdog findings were detected in this project
+during this reporting window.
+
+Counts use detection time and include matches from disabled policies.
+Findings are not proof of blocked activity.
+```
+
+This is an illustrative empty-result format. A query failure returns **Digest unavailable** instead, which is not evidence that the project has no critical findings.
+
+## Test one Slack DM
+
+Once the preview looks right, ask Cowork to deliver it separately:
+
+```text
+Send the digest you just generated to this verified Slack destination:
+
+Workspace: <SLACK_WORKSPACE>
+Recipient user ID or DM conversation ID: <SLACK_DESTINATION_ID>
+
+This is a one-time delivery test. Do not create a schedule.
+Do not send it to a channel or another recipient.
+```
+
+Review any permission requests and confirm that the DM arrives in the intended workspace. A generated summary is not proof of successful delivery.
+
+## Create the daily Cowork routine
+
+Open **Scheduled > New task > Create with Claude**. In the newer unified Claude interface, a scheduled task can also be requested directly in a conversation.
+
+Replace every placeholder in the following prompt:
+
+```text
+Create a scheduled task named "Daily critical Watchdog digest".
+Run every day at <LOCAL_TIME> in <IANA_TIMEZONE>.
+
+Save these recurring instructions:
+
+Use the summarize-critical-watchdog-findings skill.
+Expected Platform organization ID: <ORG_ID>
+Project slug: <PROJECT_SLUG>
+
+Generate a critical-only digest for the rolling 24 hours ending
+at the actual execution time. Follow the skill's scope checks,
+privacy rules, truncation handling, and failure handling.
+
+After the skill returns the digest, separately use my Slack connection
+to send one DM to:
+Workspace: <SLACK_WORKSPACE>
+Recipient user ID or DM conversation ID: <SLACK_DESTINATION_ID>
+
+If the query succeeds with no critical findings, send the empty-result
+digest. Never broaden severity or change the recipient.
+
+If the query fails, do not send an all-clear or reuse old findings.
+If the Slack destination is verified, send only a brief
+"Daily Watchdog digest unavailable" notice without raw errors or
+security data. Record the reason in the task result.
+
+If Slack fails or needs approval, retain the result in the task and
+report that delivery was not completed. Only claim delivery after
+Slack confirms it. Do not blindly retry a send with an uncertain outcome.
+
+Do not send a digest now just because you are creating this schedule.
+Show me the proposed schedule and saved instructions for review.
+```
+
+Review the task name, time, timezone, and saved instructions, then click **Schedule**. Each scheduled run is a separate session, so save the organization, project, and destination in the task rather than relying on setup conversation history.
+
+<Callout title="The skill does not grant access" type="info">
+Installing the skill does not create this schedule. It also does not grant access to Watchdog data or permission to send Slack messages. Those permissions come from the authenticated connections.
+</Callout>
+
+## Verify the first scheduled delivery
+
+Run the scheduled task on demand if the interface offers that option, or inspect its first execution under **Scheduled**. Confirm that the task can load the skill, query the configured project, and deliver exactly one DM without waiting for an interactive approval.
+
+Only grant persistent permissions for the trusted operations the routine automates, where organization policy allows them. If every send requires approval, the routine is not yet unattended. Do not bypass that requirement.
+
+The current Anthropic scheduling documentation says scheduled tasks run remotely, including when the computer is asleep. Use account-installed skills and remote connectors, and verify a scheduled run in the actual setup rather than relying only on a manual test.
+
+## Interpreting the digest
+
+The digest is a daily review aid, not a real-time incident notification service. It covers findings detected during the preceding 24 hours, not the previous calendar day. Delayed or missed runs can leave coverage gaps, and late ingestion or suppression can change the counts.
+
+A rule-level alert groups findings for a rule. It does not establish that an incident occurred or that activity was blocked. The tool includes matches from disabled policies. The summary omits raw evidence and personal identities, and flags incomplete results rather than presenting them as exhaustive.
+
+Use the digest to decide what to review, then open [Watchdog](/docs/ai-control-plane/secure/watchdog) to investigate. Keep changes to policies, exclusions, and enforcement outside this scheduled task.
