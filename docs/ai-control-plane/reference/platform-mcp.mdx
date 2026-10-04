@@ -11,21 +11,40 @@ The Platform MCP is a first-party MCP server that exposes the AI Control Plane t
 Every tool call is authorized against a live org admin grant, and the server never accepts or returns credentials, OAuth codes, or client secrets. Steps that need a secret, such as OAuth consent or entering a provider client ID, hand off to the dashboard through a link the tool returns.
 
 <Callout type="info">
-  The Platform MCP is in beta and rolls out to eligible organizations. It requires the feature to be enabled for the organization and the `org:admin` scope, which the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes. Open the **Headless** tab in the dashboard to enable access and install a client.
+  The Platform MCP is in beta and rolls out to eligible organizations. It
+  requires the feature to be enabled for the organization and the `org:admin`
+  scope, which the default [Admin
+  role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes. Open
+  the **Headless** tab in the dashboard to enable access and install a client.
 </Callout>
 
 ## Connect an agent
 
 The Platform MCP ships as a plugin from the public Speakeasy marketplace. The plugin registers the MCP server and bundles the reviewed skills described below. Installing from the marketplace is the recommended path for every client that supports one.
 
-<CodeWithTabs client:visible tabs={[
-  { label: "Claude Code", language: "bash", code: `/plugin marketplace add https://github.com/speakeasy-api/marketplace
-/plugin install speakeasy@speakeasy` },
-  { label: "Codex", language: "bash", code: `codex plugin marketplace add https://github.com/speakeasy-api/marketplace
-# then open /plugins and install speakeasy-codex` },
-  { label: "OpenCode", language: "bash", code: `git clone https://github.com/speakeasy-api/marketplace marketplace
-cp -R marketplace/opencode-plugins/speakeasy/. ~/.config/opencode/` }
-]} />
+<CodeWithTabs
+  client:visible
+  tabs={[
+    {
+      label: "Claude Code",
+      language: "bash",
+      code: `/plugin marketplace add https://github.com/speakeasy-api/marketplace
+/plugin install speakeasy@speakeasy`,
+    },
+    {
+      label: "Codex",
+      language: "bash",
+      code: `codex plugin marketplace add https://github.com/speakeasy-api/marketplace
+# then open /plugins and install speakeasy-codex`,
+    },
+    {
+      label: "OpenCode",
+      language: "bash",
+      code: `git clone https://github.com/speakeasy-api/marketplace marketplace
+cp -R marketplace/opencode-plugins/speakeasy/. ~/.config/opencode/`,
+    },
+  ]}
+/>
 
 Cursor and Claude Cowork import the marketplace through their settings rather than a command:
 
@@ -38,18 +57,31 @@ After installation, authorize the connection. In Claude Code, run `/mcp`, select
 
 Any MCP client that supports streamable HTTP with OAuth can connect directly to the endpoint. This path registers the MCP server only. The reviewed skills are not installed.
 
-<CodeWithTabs client:visible tabs={[
-  { label: "Claude Code / Cursor", language: "json", code: `{
+<CodeWithTabs
+  client:visible
+  tabs={[
+    {
+      label: "Claude Code / Cursor",
+      language: "json",
+      code: `{
   "mcpServers": {
     "platform": {
       "type": "http",
       "url": "https://app.getgram.ai/platform-mcp"
     }
   }
-}` },
-  { label: "Codex", language: "toml", code: `[mcp_servers.platform]
-url = "https://app.getgram.ai/platform-mcp"` },
-  { label: "OpenCode", language: "json", code: `{
+}`,
+    },
+    {
+      label: "Codex",
+      language: "toml",
+      code: `[mcp_servers.platform]
+url = "https://app.getgram.ai/platform-mcp"`,
+    },
+    {
+      label: "OpenCode",
+      language: "json",
+      code: `{
   "mcp": {
     "platform": {
       "type": "remote",
@@ -57,19 +89,21 @@ url = "https://app.getgram.ai/platform-mcp"` },
       "enabled": true
     }
   }
-}` }
-]} />
+}`,
+    },
+  ]}
+/>
 
 ### Protocol and authorization
 
-| Property | Value |
-| --- | --- |
-| Endpoint | `https://app.getgram.ai/platform-mcp` |
-| Transport | Streamable HTTP, stateless, JSON responses, `POST` only |
-| Authorization | OAuth 2.1 authorization code with PKCE (`S256`) and refresh tokens |
-| Client registration | Dynamic client registration, with client ID metadata documents where the organization allows them |
-| Discovery | `/.well-known/oauth-protected-resource/platform-mcp` and `/.well-known/oauth-authorization-server/platform-mcp` |
-| Request body limit | 64 KiB |
+| Property            | Value                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Endpoint            | `https://app.getgram.ai/platform-mcp`                                                                           |
+| Transport           | Streamable HTTP, stateless, JSON responses, `POST` only                                                         |
+| Authorization       | OAuth 2.1 authorization code with PKCE (`S256`) and refresh tokens                                              |
+| Client registration | Dynamic client registration, with client ID metadata documents where the organization allows them               |
+| Discovery           | `/.well-known/oauth-protected-resource/platform-mcp` and `/.well-known/oauth-authorization-server/platform-mcp` |
+| Request body limit  | 64 KiB                                                                                                          |
 
 A connection stays authorized without a new browser round trip while it is in use. Access tokens last one hour and rotate through refresh tokens. A connection expires after 30 days without use and needs a fresh authorization after 90 days regardless of use. The **Headless** tab in the dashboard shows the connection state and the reason a client needs to reconnect.
 
@@ -95,17 +129,17 @@ Installing the plugin, downloading it, or copying a configuration block does not
 
 The marketplace plugin ships nine reviewed skills. Each one runs a complete dashboard workflow through the tools below, preserving the same project selection, confirmations, and readiness checks the dashboard requires.
 
-| Skill | Workflow |
-| --- | --- |
-| `add-mcp-from-catalog` | Search the [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog), inspect an entry, add it to a chosen project, finish setup and authorization, confirm it is working, set client admission, and add it to an existing plugin. |
-| `add-mcp-from-remote-url` | Inspect a remote MCP server by its streamable HTTP URL, add it to a chosen project, and then follow the same setup, readiness, admission, and plugin steps. |
-| `add-existing-mcp-servers` | Inventory the remote MCP servers a local coding client already has configured, with explicit consent before any local discovery, keep only public streamable HTTP endpoints, check which ones a chosen project is missing, and add them without copying local credentials. |
-| `manage-mcp-access` | Create or select a narrow custom access role for one MCP server, assign it to one explicitly chosen member, and re-read the live role state before and after the assignment. |
-| `configure-private-mcp-access` | Change the address or network mode of an existing MCP server or gateway: select the project and plugin, read the current connection settings alongside observed public and private traffic, confirm the exact before and after, write with the fresh settings version, and then check whether the plugin package carries the new address. |
-| `review-shadow-mcp` | Review one Shadow MCP target, record an allow or deny decision for an explicit audience, and after dashboard onboarding add the approved server to an existing plugin. |
-| `migrate-mcp-between-projects` | Redeploy a Platform-managed MCP server from one project to another in the same organization: re-add the same catalog entry or remote URL in the target project, finish setup and authorization there, confirm it is working, add it to a target plugin, and optionally disable the source with a rollback path. Secrets and identity-provider connections are set up again in the target, and nothing is deleted. |
-| `manage-risk-policy-audience` | Read who a risk policy targets, then add or remove exact user and role grants with explicit confirmation and a fresh version. A request to remove the connected person stops at a plain refusal rather than a workaround. |
-| `summarize-critical-watchdog-findings` | Produce a channel-neutral digest of critical Watchdog findings for an explicit project over the last 24 hours, ranked by rule, with coverage and limitations stated. Delivery and scheduling stay out of scope. |
+| Skill                                  | Workflow                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `add-mcp-from-catalog`                 | Search the [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog), inspect an entry, add it to a chosen project, finish setup and authorization, confirm it is working, set client admission, and add it to an existing plugin.                                                                                                                                                                                |
+| `add-mcp-from-remote-url`              | Inspect a remote MCP server by its streamable HTTP URL, add it to a chosen project, and then follow the same setup, readiness, admission, and plugin steps.                                                                                                                                                                                                                                                       |
+| `add-existing-mcp-servers`             | Inventory the remote MCP servers a local coding client already has configured, with explicit consent before any local discovery, keep only public streamable HTTP endpoints, check which ones a chosen project is missing, and add them without copying local credentials.                                                                                                                                        |
+| `manage-mcp-access`                    | Create or select a narrow custom access role for one MCP server, assign it to one explicitly chosen member, and re-read the live role state before and after the assignment.                                                                                                                                                                                                                                      |
+| `configure-private-mcp-access`         | Change the address or network mode of an existing MCP server or gateway: select the project and plugin, read the current connection settings alongside observed public and private traffic, confirm the exact before and after, write with the fresh settings version, and then check whether the plugin package carries the new address.                                                                         |
+| `review-shadow-mcp`                    | Review one Shadow MCP target, record an allow or deny decision for an explicit audience, and after dashboard onboarding add the approved server to an existing plugin.                                                                                                                                                                                                                                            |
+| `migrate-mcp-between-projects`         | Redeploy a Platform-managed MCP server from one project to another in the same organization: re-add the same catalog entry or remote URL in the target project, finish setup and authorization there, confirm it is working, add it to a target plugin, and optionally disable the source with a rollback path. Secrets and identity-provider connections are set up again in the target, and nothing is deleted. |
+| `manage-risk-policy-audience`          | Read who a risk policy targets, then add or remove exact user and role grants with explicit confirmation and a fresh version. A request to remove the connected person stops at a plain refusal rather than a workaround.                                                                                                                                                                                         |
+| `summarize-critical-watchdog-findings` | Produce a channel-neutral digest of critical Watchdog findings for an explicit project over the last 24 hours, ranked by rule, with coverage and limitations stated. Delivery and scheduling stay out of scope.                                                                                                                                                                                                   |
 
 ## Tools
 
@@ -113,176 +147,185 @@ Tools are grouped by the part of the platform they act on. The **Type** column m
 
 ### Orientation
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `get_platform_context` | Read | Reports the connected organization and an overview of how MCP servers reach people. Call this first in a new conversation. |
-| `list_projects` | Read | Lists the projects in the organization by identifier, name, and slug. A project is where MCP servers and skills are kept before anyone receives them. |
+| Tool                   | Type | What it does                                                                                                                                          |
+| ---------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_platform_context` | Read | Reports the connected organization and an overview of how MCP servers reach people. Call this first in a new conversation.                            |
+| `list_projects`        | Read | Lists the projects in the organization by identifier, name, and slug. A project is where MCP servers and skills are kept before anyone receives them. |
 
 ### Catalog and inspection
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `search_mcp_catalog` | Read | Searches the reviewed [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog) by query or provider key. Searching adds nothing to a project. |
+| Tool                    | Type | What it does                                                                                                                                                                                    |
+| ----------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_mcp_catalog`    | Read | Searches the reviewed [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog) by query or provider key. Searching adds nothing to a project.                                                  |
 | `inspect_mcp_candidate` | Read | Looks at one candidate before adding it, either a catalog entry or an HTTPS streamable HTTP URL. Catalog results are marked as reviewed, direct URLs as unreviewed. Inspection changes nothing. |
 
 ### Adding MCP servers
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `register_catalog_mcp` | Write | Adds one catalog entry to a named project with only its declared non-secret configuration. Up to five active registrations per project. |
-| `register_remote_mcp` | Write | Adds an MCP server by its streamable HTTP URL to a named project. The URL is revalidated and re-inspected before it is stored. |
-| `get_setup_handoff` | Write | Returns the dashboard URL where the rest of a server's setup is finished, including its source and authentication. The link is not to be logged or shared. |
+| Tool                                    | Type  | What it does                                                                                                                                                                                                             |
+| --------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `register_catalog_mcp`                  | Write | Adds one catalog entry to a named project with only its declared non-secret configuration. Up to five active registrations per project.                                                                                  |
+| `register_remote_mcp`                   | Write | Adds an MCP server by its streamable HTTP URL to a named project. The URL is revalidated and re-inspected before it is stored.                                                                                           |
+| `get_setup_handoff`                     | Write | Returns the dashboard URL where the rest of a server's setup is finished, including its source and authentication. The link is not to be logged or shared.                                                               |
 | `attach_platform_mcp_identity_provider` | Write | Connects a server to the OAuth provider it advertises by resolving provider metadata and performing dynamic client registration. Requires explicit confirmation and returns an authorization URL for the person to open. |
 
 ### Review requests
 
 A member without permission to add an MCP server directly can ask an organization administrator to review one instead. Submitting a request grants no access by itself; an administrator still decides it.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `request_mcp_review` | Write | Asks an organization administrator to review an MCP server for one project. Records a request only and grants no access; credential-shaped values in the URL or command are redacted before storage. |
-| `get_my_mcp_review_request` | Read | Checks the status of one MCP review request the caller submitted, returning only the caller's own privacy-minimized state and never other requesters, evidence, or administrator rationale. |
+| Tool                        | Type  | What it does                                                                                                                                                                                         |
+| --------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request_mcp_review`        | Write | Asks an organization administrator to review an MCP server for one project. Records a request only and grants no access; credential-shaped values in the URL or command are redacted before storage. |
+| `get_my_mcp_review_request` | Read  | Checks the status of one MCP review request the caller submitted, returning only the caller's own privacy-minimized state and never other requesters, evidence, or administrator rationale.          |
 
 ### Managing MCP servers
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `find_mcp` | Read | Finds servers already set up. Without a query it pages through one project. With a query and no project it searches the organization and returns one unique match or up to ten labeled candidates. |
-| `get_mcp` | Read | Returns a summary of one server in a named project. |
-| `update_mcp_metadata` | Write | Renames a fully set-up server. Nothing else changes, including its configuration, readiness, or plugin membership. |
-| `disable_mcp` | Write | Turns a server off so people stop being able to use it. It stays in the project and in every plugin that carries it. |
-| `enable_mcp` | Write | Turns a disabled server back on and republishes the plugins that already carry it. It is not added to any new plugin. |
-| `get_mcp_connection_settings` | Read | Reads the stored network mode, visibility, and endpoint identifiers for one MCP server or gateway. Never returns upstream URLs, credentials, or other secrets. |
-| `set_mcp_address` | Write | Creates or updates the address for one MCP server or gateway. Requires the settings version from `get_mcp_connection_settings`, an idempotency key, and explicit confirmation. |
-| `set_mcp_network_access` | Write | Changes network access for one MCP server or gateway to `public_only`, `dual`, or `private_only`. Requires explicit confirmation; private access may be rejected where unavailable for the organization. |
-| `get_network_ingress` | Read | Reports the organization's private network ingress: whether private networking is switched on, whether an ingress is configured and enabled, its latest observed status and private DNS name, and the one next action standing between the organization and private MCP access. Readiness is required before any server uses `dual` or `private_only`, and is not proof that a tailnet client can connect. Creating, enabling, or repairing an ingress happens in the dashboard. |
+| Tool                          | Type  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `find_mcp`                    | Read  | Finds servers already set up. Without a query it pages through one project. With a query and no project it searches the organization and returns one unique match or up to ten labeled candidates.                                                                                                                                                                                                                                                                               |
+| `get_mcp`                     | Read  | Returns a summary of one server in a named project.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `update_mcp_metadata`         | Write | Renames a fully set-up server. Nothing else changes, including its configuration, readiness, or plugin membership.                                                                                                                                                                                                                                                                                                                                                               |
+| `disable_mcp`                 | Write | Turns a server off so people stop being able to use it. It stays in the project and in every plugin that carries it.                                                                                                                                                                                                                                                                                                                                                             |
+| `enable_mcp`                  | Write | Turns a disabled server back on and republishes the plugins that already carry it. It is not added to any new plugin.                                                                                                                                                                                                                                                                                                                                                            |
+| `get_mcp_connection_settings` | Read  | Reads the stored network mode, visibility, and endpoint identifiers for one MCP server or gateway. Never returns upstream URLs, credentials, or other secrets.                                                                                                                                                                                                                                                                                                                   |
+| `set_mcp_address`             | Write | Creates or updates the address for one MCP server or gateway. Requires the settings version from `get_mcp_connection_settings`, an idempotency key, and explicit confirmation.                                                                                                                                                                                                                                                                                                   |
+| `set_mcp_network_access`      | Write | Changes network access for one MCP server or gateway to `public_only`, `dual`, or `private_only`. Requires explicit confirmation; private access may be rejected where unavailable for the organization.                                                                                                                                                                                                                                                                         |
+| `get_network_ingress`         | Read  | Reports the organization's private network ingress: whether private networking is switched on, whether an ingress is configured and enabled, its latest observed status and private DNS name, and the one next action standing between the organization and private MCP access. Readiness is required before any server uses `dual` or `private_only`, and is not proof that a tailnet client can connect. Creating, enabling, or repairing an ingress happens in the dashboard. |
 
 ### Readiness and troubleshooting
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `get_mcp_readiness` | Read | Reports whether a server is working from the last stored check. Set `force` to run a fresh authenticated probe, limited to three per minute per server. |
-| `get_mcp_repair_plan` | Read | Lists the safe next actions for a server that is not working, based on the last stored check. |
-| `get_mcp_diagnostics` | Read | Works out why a server is failing by combining the latest server-side check, its call outcomes against the organization baseline, and which apps reported failures. Attributes the fault to platform configuration, the provider, the calling app, or indeterminate. |
+| Tool                  | Type | What it does                                                                                                                                                                                                                                                                               |
+| --------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_mcp_readiness`   | Read | Reports whether a server is working from the last stored check. Set `force` to run a fresh authenticated probe, limited to three per minute per server.                                                                                                                                    |
+| `get_mcp_repair_plan` | Read | Lists the safe next actions for a server that is not working, based on the last stored check.                                                                                                                                                                                              |
+| `get_mcp_diagnostics` | Read | Works out why a server is failing by combining the latest server-side check, its call outcomes against the organization baseline, and which apps reported failures. Attributes the fault to platform configuration, the provider, the calling app, or indeterminate.                       |
+| `get_xaa_readiness`   | Read | Reports stored Okta Cross-App Access readiness for one project and MCP server, with the derived state and the exchange evidence behind it. Reads only: it does not probe, connect, or change anything, and connected means an administrator confirmed it rather than that it was verified. |
 
 ### Client admission
 
 Client admission controls which MCP client apps may sign in to a server. See [MCP Sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view) for the dashboard view.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `get_mcp_client_admission` | Read | Shows the admission setting in force, the settings available, and any custom client ID metadata URLs the server allows. Read this before proposing a change. |
+| Tool                       | Type  | What it does                                                                                                                                                                                                      |
+| -------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_mcp_client_admission` | Read  | Shows the admission setting in force, the settings available, and any custom client ID metadata URLs the server allows. Read this before proposing a change.                                                      |
 | `set_mcp_client_admission` | Write | Sets the admission mode to `presets` (known apps only), `open` (any app with a valid client ID metadata document), or `disabled` (apps fall back to dynamic client registration). Requires explicit confirmation. |
 
 ### Plugins
 
 A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/mcp-gateway/plugins) for how plugins are published. The Platform MCP does not create, rename, or delete plugins, but it can change which roles and directory groups receive one.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_plugins` | Read | Lists the plugins in a project with how much each carries, who receives it, and whether it has been published. |
-| `get_plugin` | Read | Returns one plugin and its contents: its MCP servers, its skills with the version each is fixed to, and up to 100 current assignments. The plugin is named exactly by ID, slug, or name. |
-| `list_plugin_assignments` | Read | Lists the roles and directory groups that can receive plugins in a project, each with a privacy-safe member count where available. Raw principal identifiers are never returned. |
-| `get_my_install_instructions` | Read | Returns non-secret, client-specific install guidance for one assigned plugin or one MCP server the caller may connect to. |
-| `get_my_mcp_access` | Read | Checks the caller's own current read and connection access to one exact MCP server, without creating an access challenge. |
-| `get_my_mcp_connection_status` | Read | Checks the caller's own authorization state for one exact MCP server and returns the endpoint for reconnecting. |
-| `distribute_mcp_to_plugin` | Write | Adds a working server to an existing plugin so everyone the plugin is shared with receives it. An ambiguous or unknown plugin name is refused rather than falling back to the default plugin. |
-| `remove_mcp_from_plugin` | Write | Removes a server from a plugin, undoing the distribution. Only memberships this flow created are removed. |
-| `set_plugin_assignments` | Write | Replaces the complete set of roles and groups a plugin is assigned to. An empty set removes every assignment so the plugin reaches nobody. Requires the assignment version from a preceding read, explicit confirmation, and assignment changes to be enabled for the project. |
+| Tool                           | Type  | What it does                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list_plugins`                 | Read  | Lists the plugins in a project with how much each carries, who receives it, and whether it has been published.                                                                                                                                                                 |
+| `get_plugin`                   | Read  | Returns one plugin and its contents: its MCP servers, its skills with the version each is fixed to, and up to 100 current assignments. The plugin is named exactly by ID, slug, or name.                                                                                       |
+| `list_plugin_assignments`      | Read  | Lists the roles and directory groups that can receive plugins in a project, each with a privacy-safe member count where available. Raw principal identifiers are never returned.                                                                                               |
+| `get_my_install_instructions`  | Read  | Returns non-secret, client-specific install guidance for one assigned plugin or one MCP server the caller may connect to.                                                                                                                                                      |
+| `get_my_mcp_access`            | Read  | Checks the caller's own current read and connection access to one exact MCP server, without creating an access challenge.                                                                                                                                                      |
+| `get_my_mcp_connection_status` | Read  | Checks the caller's own authorization state for one exact MCP server and returns the endpoint for reconnecting.                                                                                                                                                                |
+| `distribute_mcp_to_plugin`     | Write | Adds a working server to an existing plugin so everyone the plugin is shared with receives it. An ambiguous or unknown plugin name is refused rather than falling back to the default plugin.                                                                                  |
+| `remove_mcp_from_plugin`       | Write | Removes a server from a plugin, undoing the distribution. Only memberships this flow created are removed.                                                                                                                                                                      |
+| `set_plugin_assignments`       | Write | Replaces the complete set of roles and groups a plugin is assigned to. An empty set removes every assignment so the plugin reaches nobody. Requires the assignment version from a preceding read, explicit confirmation, and assignment changes to be enabled for the project. |
 
 ### Skills
 
 A skill is a written set of instructions an agent loads when it applies. Versions are fixed snapshots, so a correction is recorded as a new version rather than an edit. See [Skills](/docs/ai-control-plane/mcp-gateway/skills) for the dashboard view.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_skills` | Read | Lists the skills in a project, newest change first, with the number of versions each has. |
-| `get_skill` | Read | Reads one skill. Set `include_content` to return the instructions themselves. |
-| `list_skill_versions` | Read | Lists a skill's versions, newest first. |
-| `list_skill_feedback` | Read | Reviews privacy-minimized feedback and outcome trends for one skill, with aggregate counts and no user identifiers. |
-| `list_skill_suggestions` | Read | Reviews open proposed improvements to skills in a project, with rationale for each, without applying any suggestion. |
-| `list_skill_suggestion_feedback` | Read | Reviews the privacy-minimized feedback cited by one proposed skill change, without applying it. |
-| `create_skill` | Write | Creates a skill from complete SKILL.md content, up to 64 KiB. An existing skill with the same name records a new version instead. |
-| `add_skill_version` | Write | Records a new version from complete replacement content. Refuses the write if the skill changed since the expected version was read. |
-| `update_skill_metadata` | Write | Renames a skill or changes its display name and summary without changing its instructions. |
-| `list_skill_distributions` | Read | Lists which plugins carry which skills in a project, oldest first, with the version each distribution resolves to and whether it follows the skill's latest version or is pinned. Whether an assistant carries a skill is reported per skill by `get_skill` instead. |
-| `distribute_skill` | Write | Gives a skill to one plugin or one assistant in the same project. This is the only way a skill takes effect. |
-| `undistribute_skill` | Write | Takes a skill back from one plugin or one assistant so agents there stop loading it. The skill and its versions remain, and only that one distribution ends. Requires explicit confirmation, and an ambiguous or unknown target name is refused rather than falling back to the default plugin. |
-| `query_skill_usage` | Read | Summarizes observed skill activations for one project, with exact activation counts and privacy-suppressed user counts. An activation proves use, not success, so error evidence is reported as not recorded. |
-| `list_skill_usage_users` | Read | Lists masked people observed activating one skill, with short-lived references for a focused follow-up. Individual activation counts and raw identities are never returned. |
-| `get_user_skill_status` | Read | Confirms whether one person, by a reference from the usage list, was observed activating the same skill in the same window. Returns categorical activity only. |
+| Tool                             | Type  | What it does                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_skills`                    | Read  | Lists the skills in a project, newest change first, with the number of versions each has.                                                                                                                                                                                                                                                                             |
+| `get_skill`                      | Read  | Reads one skill. Set `include_content` to return the instructions themselves.                                                                                                                                                                                                                                                                                         |
+| `list_skill_versions`            | Read  | Lists a skill's versions, newest first.                                                                                                                                                                                                                                                                                                                               |
+| `list_skill_feedback`            | Read  | Reviews privacy-minimized feedback and outcome trends for one skill, with aggregate counts and no user identifiers.                                                                                                                                                                                                                                                   |
+| `list_skill_suggestions`         | Read  | Reviews open proposed improvements to skills in a project, with rationale for each, without applying any suggestion.                                                                                                                                                                                                                                                  |
+| `list_skill_suggestion_feedback` | Read  | Reviews the privacy-minimized feedback cited by one proposed skill change, without applying it.                                                                                                                                                                                                                                                                       |
+| `list_skill_insights`            | Read  | Reports which of a project's skills are paying off: uses, sessions, the cost of those sessions, and, where sessions were scored, how well each skill did and how much time it saved. Covers 30 days unless a shorter window is asked for, ordered by time saved. A session's whole cost counts against every skill it used, so costs do not sum to the project total. |
+| `compare_skill_versions`         | Read  | Reports the same figures as `list_skill_insights` for one skill, broken down per version, newest first, including versions nobody used. Shows whether a newer version is doing better than the ones before it.                                                                                                                                                        |
+| `create_skill`                   | Write | Creates a skill from complete SKILL.md content, up to 64 KiB. An existing skill with the same name records a new version instead.                                                                                                                                                                                                                                     |
+| `add_skill_version`              | Write | Records a new version from complete replacement content. Refuses the write if the skill changed since the expected version was read.                                                                                                                                                                                                                                  |
+| `update_skill_metadata`          | Write | Renames a skill or changes its display name and summary without changing its instructions.                                                                                                                                                                                                                                                                            |
+| `approve_skill_suggestion`       | Write | Takes a proposed improvement from `list_skill_suggestions`, records it as the skill's new version, and closes the suggestion, as approving it in the dashboard does. Name the reviewed changes in `change_ids` to take the whole suggestion or only part of it.                                                                                                       |
+| `dismiss_skill_suggestion`       | Write | Discards a proposed improvement without changing the skill. Carries a destructive hint and needs `confirmed`, so tell the person which suggestion is going and have them confirm first. Dismissing an already-dismissed suggestion is safe to retry; an approved or superseded one is refused as a conflict.                                                          |
+| `list_skill_distributions`       | Read  | Lists which plugins carry which skills in a project, oldest first, with the version each distribution resolves to and whether it follows the skill's latest version or is pinned. Whether an assistant carries a skill is reported per skill by `get_skill` instead.                                                                                                  |
+| `distribute_skill`               | Write | Gives a skill to one plugin or one assistant in the same project. This is the only way a skill takes effect.                                                                                                                                                                                                                                                          |
+| `undistribute_skill`             | Write | Takes a skill back from one plugin or one assistant so agents there stop loading it. The skill and its versions remain, and only that one distribution ends. Requires explicit confirmation, and an ambiguous or unknown target name is refused rather than falling back to the default plugin.                                                                       |
+| `query_skill_usage`              | Read  | Summarizes observed skill activations for one project, with exact activation counts and privacy-suppressed user counts. An activation proves use, not success, so error evidence is reported as not recorded.                                                                                                                                                         |
+| `list_skill_usage_users`         | Read  | Lists masked people observed activating one skill, with short-lived references for a focused follow-up. Individual activation counts and raw identities are never returned.                                                                                                                                                                                           |
+| `get_user_skill_status`          | Read  | Confirms whether one person, by a reference from the usage list, was observed activating the same skill in the same window. Returns categorical activity only.                                                                                                                                                                                                        |
 
 ### Access control
 
 Access roles decide which people can enter an MCP server and which of its tools they can use. See [Roles and permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for the dashboard view. Rules are scoped to one server and can be narrowed to a named tool or to a disposition class: `read_only`, `destructive`, `idempotent`, or `open_world`. Roles and members are addressed by short-lived opaque references, and every write requires the version returned by the preceding read, explicit confirmation, and an idempotency key. System roles are not editable.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_access_roles` | Read | Lists the organization's roles and summarizes the MCP access each carries. Member counts are withheld for small groups. |
-| `get_mcp_access` | Read | Shows which roles can enter one server and which known tools or behavior classes each can use. Servers with a dynamic tool catalog report tool access as not enumerable. |
-| `list_access_members` | Read | Finds members by an identity query of at least three characters or by role. Returns masked identities and references only when at least five people match; smaller result sets are withheld rather than enumerated. |
-| `create_mcp_access_role` | Write | Creates a custom role in one project with MCP access rules for servers in that project. |
-| `update_mcp_access_role` | Write | Adds or removes MCP access rules on a custom role while preserving every non-MCP grant. |
-| `assign_mcp_access_role` | Write | Adds one custom role, confined to one server, to one member without removing the member's current roles. Only available where per-member assignment is enabled for the project. |
+| Tool                     | Type  | What it does                                                                                                                                                                                                        |
+| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_access_roles`      | Read  | Lists the organization's roles and summarizes the MCP access each carries. Member counts are withheld for small groups.                                                                                             |
+| `get_mcp_access`         | Read  | Shows which roles can enter one server and which known tools or behavior classes each can use. Servers with a dynamic tool catalog report tool access as not enumerable.                                            |
+| `list_access_members`    | Read  | Finds members by an identity query of at least three characters or by role. Returns masked identities and references only when at least five people match; smaller result sets are withheld rather than enumerated. |
+| `create_mcp_access_role` | Write | Creates a custom role in one project with MCP access rules for servers in that project.                                                                                                                             |
+| `update_mcp_access_role` | Write | Adds or removes MCP access rules on a custom role while preserving every non-MCP grant.                                                                                                                             |
+| `assign_mcp_access_role` | Write | Adds one custom role, confined to one server, to one member without removing the member's current roles. Only available where per-member assignment is enabled for the project.                                     |
 
 ### Risk policies and exclusions
 
 Risk policies and exclusions are the rules the [Secure](/docs/ai-control-plane/secure) section enforces. Read tools accept an explicit project or default to the organization's default project. Policy and exclusion mutations are enabled per organization during the rollout, and exact match values are never returned or logged.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_risk_policies` | Read | Lists privacy-safe risk policy summaries in a project. |
-| `get_risk_policy` | Read | Reads one risk policy with its compatibility metadata. |
-| `create_risk_policy` | Write | Creates a standard or prompt-based risk policy in an explicit project. |
-| `update_risk_policy` | Write | Patches allowed fields on a risk policy. Omitted fields are preserved. Replacing an audience outright happens here. |
-| `change_risk_policy_audience` | Write | Adds and removes exact user and role principals on one targeted policy in a single write, preserving unrelated grants and every policy setting. Requires the version from a fresh read and explicit confirmation. Organization-wide audiences are refused, and removing a grant does not remove role-derived coverage. |
-| `remove_self_from_risk_policy` | Write | Always refuses. Self-removal and effective exclusion await organization-scoped coordination of audience grants, so no policy is changed. The refusal is not to be worked around with an audience change, a policy disablement, a role change, or an exclusion. |
-| `list_risk_exclusions` | Read | Lists risk exclusions in a project, optionally filtered by policy. |
-| `create_risk_exclusion` | Write | Creates an exclusion matched by exact value, rule ID, source, or entity type. Regex exclusions cannot be created here. |
-| `update_risk_exclusion` | Write | Enables or disables one exclusion without changing its definition. |
-| `get_risk_analysis_status` | Read | Reports whether the Watchdog risk analysis is running for a project and when it last ran. A project with no recent chat traffic has no recent run. |
-| `list_watchdog_findings` | Read | Reads rule-level Watchdog alerts grouped by rule, with affected users, affected apps, and one redacted sample per alert. Defaults to critical severity in the last 24 hours. |
-| `list_risk_findings` | Read | Lists individual findings in a project, newest message first, with every matched value reduced to a length and a hash fingerprint that never reaches the model. Filters by message-time window, policy, chat, category, rule, user, assistant linkage, or unique match, and pages 25 at a time up to 50. Each finding carries a stable ID and a severity band. |
-| `list_risk_findings_by_chat` | Read | Lists the chat sessions that carry live findings, each with a finding count, the latest detection time, and an organization-scoped user pseudonym. Pass a chat ID to `list_risk_findings` to read one chat's findings. |
-| `get_risk_rule_breakdown` | Read | Counts live findings per rule and detection source for one category over a detection-time window, defaulting to seven days and capped at 31. Sizes a finding set in one call instead of paging through `list_risk_findings`, and needs no Watchdog rollout. |
-| `mark_risk_findings_false_positive` | Write | Dismisses named findings in a project as reviewed false positives, moving them to the Dismissed tab. Takes up to 200 finding IDs returned by the dashboard or `list_risk_findings`, an optional reason, and explicit confirmation. Only the findings named are suppressed, never future findings matching the same rule, so a whole class belongs in `create_risk_exclusion`. The receipt reports each ID as changed, already dismissed, or not in the project, and an unknown ID never fails the call. |
-| `unmark_risk_findings_false_positive` | Write | Restores dismissed findings so they return to the active list, undoing the mark. Takes the same finding IDs and explicit confirmation, and reports each ID as changed, already active, or not in the project. |
+| Tool                                  | Type  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_risk_policies`                  | Read  | Lists privacy-safe risk policy summaries in a project.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `get_risk_policy`                     | Read  | Reads one risk policy with its compatibility metadata.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `create_risk_policy`                  | Write | Creates a standard or prompt-based risk policy in an explicit project.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `update_risk_policy`                  | Write | Patches allowed fields on a risk policy. Omitted fields are preserved. Replacing an audience outright happens here.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `change_risk_policy_audience`         | Write | Adds and removes exact user and role principals on one targeted policy in a single write, preserving unrelated grants and every policy setting. Requires the version from a fresh read and explicit confirmation. Organization-wide audiences are refused, and removing a grant does not remove role-derived coverage.                                                                                                                                                                                  |
+| `remove_self_from_risk_policy`        | Write | Always refuses. Self-removal and effective exclusion await organization-scoped coordination of audience grants, so no policy is changed. The refusal is not to be worked around with an audience change, a policy disablement, a role change, or an exclusion.                                                                                                                                                                                                                                          |
+| `list_risk_exclusions`                | Read  | Lists risk exclusions in a project, optionally filtered by policy.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `create_risk_exclusion`               | Write | Creates an exclusion matched by exact value, rule ID, source, or entity type. Regex exclusions cannot be created here.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `update_risk_exclusion`               | Write | Enables or disables one exclusion without changing its definition.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `get_risk_analysis_status`            | Read  | Reports whether the Watchdog risk analysis is running for a project and when it last ran. A project with no recent chat traffic has no recent run.                                                                                                                                                                                                                                                                                                                                                      |
+| `list_watchdog_findings`              | Read  | Reads rule-level Watchdog alerts grouped by rule, with affected users, affected apps, and one redacted sample per alert. Defaults to critical severity in the last 24 hours.                                                                                                                                                                                                                                                                                                                            |
+| `list_risk_findings`                  | Read  | Lists individual findings in a project, newest message first, with every matched value reduced to a length and a hash fingerprint that never reaches the model. Filters by message-time window, policy, chat, category, rule, user, assistant linkage, or unique match, and pages 25 at a time up to 50. Each finding carries a stable ID and a severity band.                                                                                                                                          |
+| `list_risk_findings_by_chat`          | Read  | Lists the chat sessions that carry live findings, each with a finding count, the latest detection time, and an organization-scoped user pseudonym. Pass a chat ID to `list_risk_findings` to read one chat's findings.                                                                                                                                                                                                                                                                                  |
+| `get_risk_rule_breakdown`             | Read  | Counts live findings per rule and detection source for one category over a detection-time window, defaulting to seven days and capped at 31. Sizes a finding set in one call instead of paging through `list_risk_findings`, and needs no Watchdog rollout.                                                                                                                                                                                                                                             |
+| `mark_risk_findings_false_positive`   | Write | Dismisses named findings in a project as reviewed false positives, moving them to the Dismissed tab. Takes up to 200 finding IDs returned by the dashboard or `list_risk_findings`, an optional reason, and explicit confirmation. Only the findings named are suppressed, never future findings matching the same rule, so a whole class belongs in `create_risk_exclusion`. The receipt reports each ID as changed, already dismissed, or not in the project, and an unknown ID never fails the call. |
+| `unmark_risk_findings_false_positive` | Write | Restores dismissed findings so they return to the active list, undoing the mark. Takes the same finding IDs and explicit confirmation, and reports each ID as changed, already active, or not in the project.                                                                                                                                                                                                                                                                                           |
 
 ### Observability
 
 These tools read the same data as [MCP Insights](/docs/ai-control-plane/observe/mcp-and-tools) and [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the Observability section. Every value is aggregated or summarized server-side and carries the window it covers. None of them return arguments, results, bodies, headers, URLs, attributes, or identities.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `get_project_overview` | Read | Summarizes how a project's MCP servers have behaved and what has failed over a window of 1h, 24h, 7d, or 30d. Start here for any question about how a project is doing. |
-| `get_tool_usage_summary` | Read | Breaks a project's tool calls down by what they reached: hosted MCP servers, tunneled MCP servers, gateways, shadow MCP servers, local tools, and skills. Every target type is reported, zero included, with its share of all calls and its busiest targets. Users, calling apps, and shadow MCP server names are never returned. |
-| `query_mcp_events` | Read | Breaks one server's calls down by tool and outcome over a window of up to 24h. |
-| `query_mcp_metrics` | Read | Returns one server's totals over a window of 1h, 24h, or 7d: call volume, failures, failure rate, average latency, and active users. |
-| `query_mcp_traces` | Read | Lists one server's individual calls, newest first, each reduced to a reference to quote when escalating. Filter by outcome. |
-| `get_mcp_network_traffic` | Read | Summarizes observed public and private inbound requests and last-seen times for one MCP server or gateway over 24 hours or 7 days. A quiet route does not prove every client migrated. |
-| `list_recent_tool_calls` | Read | Lists the newest tool calls in one project over a window of 1h or 24h, filtered by an outcome of `success`, `error`, `blocked`, or `pending`. Each call is reduced to when it happened, the tool and target, how it ended, and the calling app where known. Returns 10 calls by default and 50 at most, with a link to the full Tool Logs page. |
-| `list_mcp_usage_users` | Read | Lists the people observed using one server, newest first, with masked identities, categorical activity and error evidence, and short-lived references for a focused follow-up. Individual call counts and raw identities are never returned. |
-| `get_user_mcp_status` | Read | Shows which tools one person, by a reference from the usage list, was observed using on one server and whether errors were observed. Categorical evidence only, over a window of at most 24h. |
-| `list_organization_events` | Read | Lists the newest Event Feed entries for the organization, defaulting to 20 from the last day and capped at 50. Each entry is reduced to when it happened, whether it is a log or a span, its source and name, and its project. Never returns attributes, trace IDs, or identities. |
+| Tool                       | Type | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_project_overview`     | Read | Summarizes how a project's MCP servers have behaved and what has failed over a window of 1h, 24h, 7d, or 30d. Start here for any question about how a project is doing.                                                                                                                                                                                                                                                                                                                                         |
+| `get_tool_usage_summary`   | Read | Breaks a project's tool calls down by what they reached: hosted MCP servers, tunneled MCP servers, gateways, shadow MCP servers, local tools, and skills. Every target type is reported, zero included, with its share of all calls and its busiest targets. Users, calling apps, and shadow MCP server names are never returned.                                                                                                                                                                               |
+| `query_mcp_events`         | Read | Breaks one server's calls down by tool and outcome over a window of up to 24h.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `query_mcp_metrics`        | Read | Returns one server's totals over a window of 1h, 24h, or 7d: call volume, failures, failure rate, average latency, and active users.                                                                                                                                                                                                                                                                                                                                                                            |
+| `query_mcp_traces`         | Read | Lists one server's individual calls, newest first, each reduced to a reference to quote when escalating. Filter by outcome.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `get_mcp_network_traffic`  | Read | Summarizes observed public and private inbound requests and last-seen times for one MCP server or gateway over 24 hours or 7 days. A quiet route does not prove every client migrated.                                                                                                                                                                                                                                                                                                                          |
+| `list_recent_tool_calls`   | Read | Lists the newest tool calls in one project over a window of 1h or 24h, filtered by an outcome of `success`, `error`, `blocked`, or `pending`. Each call is reduced to when it happened, the tool and target, how it ended, and the calling app where known. Returns 10 calls by default and 50 at most, with a link to the full Tool Logs page.                                                                                                                                                                 |
+| `list_mcp_usage_users`     | Read | Lists the people observed using one server, newest first, with masked identities, categorical activity and error evidence, and short-lived references for a focused follow-up. Individual call counts and raw identities are never returned.                                                                                                                                                                                                                                                                    |
+| `get_user_mcp_status`      | Read | Shows which tools one person, by a reference from the usage list, was observed using on one server and whether errors were observed. Categorical evidence only, over a window of at most 24h.                                                                                                                                                                                                                                                                                                                   |
+| `search_tool_calls`        | Read | Searches one project's tool calls across every MCP server over up to 30 days, newest first, narrowed by tool name, error text, outcome, one server, a person reference, or attribute filters found with `list_attribute_keys`. Each call is reduced to when it happened, the tool and server, how it ended, and the calling app. Not a log reader: no arguments, results, bodies, headers, URLs, or raw identities. One search walks at most 500 calls, so an exhausted walk is not proof nothing else matches. |
+| `list_attribute_keys`      | Read | Lists the attribute keys on a project's telemetry, split into the custom `@`-prefixed keys integrations attached and the system keys the platform recorded. Call it before `search_tool_calls` to learn which filters exist. Keys only, never values, and system keys carrying tool content, a header, or an identity are withheld because a search refuses them.                                                                                                                                               |
+| `search_users`             | Read | Finds people observed in a project's telemetry whose identity contains a partial email address or user id, over up to 30 days, most recently seen first. Each match is reduced to a masked identity, categorical activity and error evidence, when they were last seen, and a short-lived person reference for a focused follow-up.                                                                                                                                                                             |
+| `get_user_metrics_summary` | Read | Summarizes one person's activity across a project over up to 30 days, from a reference returned by `search_users` or `list_mcp_usage_users`: call volume, failures, failure rate, the servers their tools name, and their most-failing tools with exact counts.                                                                                                                                                                                                                                                 |
+| `list_organization_events` | Read | Lists the newest Event Feed entries for the organization, defaulting to 20 from the last day and capped at 50. Each entry is reduced to when it happened, whether it is a log or a span, its source and name, and its project. Never returns attributes, trace IDs, or identities.                                                                                                                                                                                                                              |
 
 ### Shadow MCP
 
 Shadow MCP servers are servers that people call through their agents without an admin having set them up. See [Shadow MCP access review](/docs/ai-control-plane/secure/shadow-mcp/access-review) for the dashboard view and [Shadow MCP allow and block lists](/docs/ai-control-plane/guides/shadow-mcp-allow-and-block-lists) for how decisions are enforced. Targets are addressed by short-lived opaque references, and raw URLs, requesters, and evidence documents are never returned.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_shadow_mcp_inventory` | Read | Lists observed or requested targets in a project, with use counts, privacy-safe user counts, and review state. Pending reviews appear first. |
-| `get_shadow_mcp_review` | Read | Shows the evidence and review state for one target: aggregate tool declarations, gaps, advisory counts, and research coverage. |
-| `decide_shadow_mcp_access` | Write | Records and enforces an allow or deny decision for one target. Allow takes one or more audience references from the plugin assignment list, including the Everyone reference for organization-wide access. Requires the current decision version, a rationale that is stored in the audit trail, and explicit confirmation. |
+| Tool                        | Type  | What it does                                                                                                                                                                                                                                                                                                                |
+| --------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_shadow_mcp_inventory` | Read  | Lists observed or requested targets in a project, with use counts, privacy-safe user counts, and review state. Pending reviews appear first.                                                                                                                                                                                |
+| `get_shadow_mcp_review`     | Read  | Shows the evidence and review state for one target: aggregate tool declarations, gaps, advisory counts, and research coverage.                                                                                                                                                                                              |
+| `decide_shadow_mcp_access`  | Write | Records and enforces an allow or deny decision for one target. Allow takes one or more audience references from the plugin assignment list, including the Everyone reference for organization-wide access. Requires the current decision version, a rationale that is stored in the audit trail, and explicit confirmation. |
 
 ### Shadow AI
 
 Shadow AI covers AI tools running on enrolled devices without an admin having approved them: coding harnesses, general-purpose assistants, and locally run open models. Detections are organization-scoped, since a detection belongs to a device and a person rather than to a project.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_shadow_ai_inventory` | Read | Lists AI tools detected running on enrolled devices, with the gateway access decision for each: allowed, blocked, or unreviewed. |
-| `list_ai_scan_library` | Read | Lists the AI tools device agents probe for, including which were added by the organization and which are blockable at the gateway. |
+| Tool                       | Type | What it does                                                                                                                       |
+| -------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `list_shadow_ai_inventory` | Read | Lists AI tools detected running on enrolled devices, with the gateway access decision for each: allowed, blocked, or unreviewed.   |
+| `list_ai_scan_library`     | Read | Lists the AI tools device agents probe for, including which were added by the organization and which are blockable at the gateway. |
 
 ### Data exports
 
@@ -290,28 +333,28 @@ A data export delivers OpenTelemetry to an OTLP/HTTP destination outside the pla
 
 Header values are neither accepted nor returned. A destination created through the Platform MCP has no headers, so the authentication a collector requires is added in the dashboard through the management URL each tool returns.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_data_exports` | Read | Lists the configured OTEL destinations and routes, either for one named project or across the organization when no project is named. Each destination carries its endpoint URL, sensitive-data policy, and header names with whether each has a value, never the values themselves. Returns 50 records per collection by default and 100 at most, flagging a truncated result. |
+| Tool                 | Type  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list_data_exports`  | Read  | Lists the configured OTEL destinations and routes, either for one named project or across the organization when no project is named. Each destination carries its endpoint URL, sensitive-data policy, and header names with whether each has a value, never the values themselves. Returns 50 records per collection by default and 100 at most, flagging a truncated result.                                                                               |
 | `create_data_export` | Write | Creates one destination and one route for a project in a single transaction, sending either `product_telemetry` or `risk_findings` to an HTTP or HTTPS endpoint that carries no credentials, query parameters, or fragments. Sensitive fields are excluded unless `include` is set, and delivery starts immediately unless `enabled` is false. Requires explicit confirmation, refuses a second route for the same data source, and audit logs both records. |
 
 ### Sessions
 
 Session recall requires [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) capture to be enabled for the organization. Both tools see only the connected person's own sessions.
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `list_my_sessions` | Read | Lists the connected person's captured coding-agent sessions with titles, summaries, project, working directory, and last activity. Never returns transcript content. |
+| Tool               | Type  | What it does                                                                                                                                                                                                                                   |
+| ------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_my_sessions` | Read  | Lists the connected person's captured coding-agent sessions with titles, summaries, project, working directory, and last activity. Never returns transcript content.                                                                           |
 | `continue_session` | Write | Renders a redacted handoff digest of one previous session so its work can continue in the current conversation. Sensitive values are masked and tool inputs and outputs are omitted. Every call records a lineage edge and an audit log entry. |
 
 ### Documentation and feedback
 
-| Tool | Type | What it does |
-| --- | --- | --- |
-| `search_gram_docs` | Read | Searches the reviewed provider setup guides and returns up to five cited excerpts with links to the full guide. It never reads the live web or unreviewed sources. |
-| `read_gram_doc` | Read | Reads one reviewed setup guide in full, by the URI the search returned. Reports the guide as unavailable rather than inventing steps when no reviewed guide stands behind the URI. |
-| `send_platform_mcp_feedback` | Write | Stores one short feedback report about the Platform MCP for the Speakeasy team, with a category and optional rating and note. The agent asks for consent before submitting. |
-| `record_workflow_run` | Write | Records what one run of a Speakeasy workflow handled, for diagnostics while the workflow is new. Runs only when explicitly requested, and never sends credentials, headers, tokens, or local commands. |
+| Tool                         | Type  | What it does                                                                                                                                                                                           |
+| ---------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `search_gram_docs`           | Read  | Searches the reviewed provider setup guides and returns up to five cited excerpts with links to the full guide. It never reads the live web or unreviewed sources.                                     |
+| `read_gram_doc`              | Read  | Reads one reviewed setup guide in full, by the URI the search returned. Reports the guide as unavailable rather than inventing steps when no reviewed guide stands behind the URI.                     |
+| `send_platform_mcp_feedback` | Write | Stores one short feedback report about the Platform MCP for the Speakeasy team, with a category and optional rating and note. The agent asks for consent before submitting.                            |
+| `record_workflow_run`        | Write | Records what one run of a Speakeasy workflow handled, for diagnostics while the workflow is new. Runs only when explicitly requested, and never sends credentials, headers, tokens, or local commands. |
 
 ## Out of scope
 
