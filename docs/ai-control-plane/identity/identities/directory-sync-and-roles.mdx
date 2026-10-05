@@ -1,0 +1,76 @@
+---
+title: Directory sync and roles
+description: "How people reach the platform from the organization's identity provider, how directory sync provisions them, and how directory groups and attribute values map to roles."
+---
+
+import { Callout } from "@/mdx/components";
+
+People reach the platform through the organization's own identity provider. Single sign-on decides who can sign in, directory sync decides who is a member, and role mappings turn directory groups and attribute values into roles. Together they keep access in step with the directory: adding someone to a group grants a role, and removing them takes it away.
+
+To connect a provider for the first time, see [IDP and SSO](/docs/ai-control-plane/org-admin/identity).
+
+## Access requirements
+
+<Callout type="info">
+  Managing single sign-on, directory sync, and role mappings requires the `org:admin` scope, which only the Admin role holds by default. Single sign-on and directory sync depend on the organization's plan.
+</Callout>
+
+## Sign-in through the identity provider
+
+The organization's identity provider authenticates each person, so its MFA, device trust, and conditional access policies apply, and the platform holds no separate password. Single sign-on works with SAML 2.0 providers such as Okta, Entra ID, and Google Workspace, and with any OpenID Connect provider. It requires a verified email domain. See [how federated sign-in works](/docs/ai-control-plane/org-admin/identity#how-federated-sign-in-works).
+
+Single sign-on on its own controls authentication only. Without directory sync, admins invite members from [Team](/docs/ai-control-plane/org-admin/team) and assign roles by hand.
+
+## How directory sync works
+
+Directory sync uses SCIM. The identity provider pushes users, groups, group memberships, and profile attributes such as department and job title, and the platform applies each change automatically. A synced person is a member before their first sign-in and already holds their mapped roles. See [How Directory Sync works](/docs/ai-control-plane/org-admin/identity#how-directory-sync-works) for the event flow.
+
+With directory sync on, the directory is the source of truth. Members can't be invited manually, and roles can't be assigned to members by hand. Roles come only from mappings. Agents are the exception: a directory syncs people, so admins still [assign roles to agents](/docs/ai-control-plane/org-admin/roles-and-permissions) directly.
+
+Removing, deleting, or suspending a person in the identity provider deprovisions them. Their membership and role assignments end right away, and [agents](/docs/ai-control-plane/identity/agents) they own are blocked until an admin reassigns them. Reactivating the person restores their membership and mapped roles.
+
+People who use AI tools without a member account still appear on [Identities](/docs/ai-control-plane/identity/identities), identified by the email address their tools report. Once such a person is provisioned and signs in, their earlier activity links to their member account.
+
+## Map groups and attributes to roles
+
+Once a directory is connected, **Configure role mappings** on [**IDP and SSO**](https://app.getgram.ai/@self/identity) lists every directory group with a role picker. Groups with no role sort first, because their members get nothing from them.
+
+- **Map a group.** Find the group, select **Assign role**, and pick a role. The mapping saves immediately. Each group maps to one role.
+- **Map an attribute value.** Select **Map by attribute**, pick an attribute such as `department_name`, a value, and a role. Use attribute mappings when groups don't match the split needed, such as one role for a whole department. Matches are exact on the value the directory sends.
+- **Create a role for a mapping.** Select **Create role…** in the role picker to open the [role editor](/docs/ai-control-plane/org-admin/roles-and-permissions#the-role-editor) with the group or value name filled in. Saving the role maps it automatically.
+
+Select **Sync groups** to pull in groups that have not sent any changes yet.
+
+### How roles combine
+
+A member holds every role mapped from their groups and attribute values, plus any roles assigned to them directly. Mappings have no priority, and access is the union of all the roles' grants. The exception is blocking rules: a block on any role removes that capability for matching resources, even when another role grants it. See [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access#who-can-connect).
+
+Mapped roles follow the current directory state. When a person joins or leaves a group, the role follows as soon as the change syncs. Removing a mapping removes only the role that mapping granted.
+
+Every synced member already holds the Member [system role](/docs/ai-control-plane/org-admin/roles-and-permissions#system-roles), so mapping a group to Member adds nothing. Mapping a group to Admin grants full administration to everyone in it, so keep that group small and use custom roles for team access.
+
+## Example: give Engineering access to approved servers
+
+To let everyone in the Okta group "Engineering" connect to two approved MCP servers:
+
+- In **Configure role mappings**, find "Engineering" and select **Assign role**, then **Create role…**.
+- Name the role "Developer". Under **Add permissions**, add `mcp:connect`, narrow it to **Specific servers**, and pick the two servers.
+- Select **Create Role**. The mapping from "Engineering" to "Developer" saves automatically.
+
+Adding someone to "Engineering" in Okta now grants the Developer role, and removing them takes it away.
+
+## Where directory data is reused
+
+Directory groups and attributes also drive:
+
+- [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access) rules on an MCP server.
+- [Plugin assignments](/docs/ai-control-plane/mcp-gateway/plugins#assignments).
+- Filters and profile details on [Identities](/docs/ai-control-plane/identity/identities).
+- Spend breakdowns in [Costs](/docs/ai-control-plane/observe/costs) and [budget rules](/docs/ai-control-plane/observe/costs/budgets#budget-rules).
+- Identity context in [telemetry](/docs/ai-control-plane/observe/opentelemetry#identity-context).
+
+## Related
+
+- [IDP and SSO](/docs/ai-control-plane/org-admin/identity) to connect single sign-on and directory sync
+- [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for scopes, system roles, and the role editor
+- [How identity works](/docs/ai-control-plane/concepts#how-identity-works) for how people, agents, and workloads resolve to one principal

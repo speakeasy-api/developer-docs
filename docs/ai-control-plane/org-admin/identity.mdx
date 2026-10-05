@@ -1,11 +1,11 @@
 ---
 title: IDP and SSO
-description: "Connect an identity provider to manage sign-in and membership through SSO and Directory Sync."
+description: "Manage employee sign-in, directory sync, and agent access through your identity providers."
 ---
 
 import { Callout } from "@/mdx/components";
 
-IDP and SSO connects the organization to its identity provider, so people sign in through Single Sign-On and membership and roles follow the directory through Directory Sync. Open the page from [**Organization settings > Team > IDP and SSO**](https://app.getgram.ai/@self/identity) in the dashboard; the page itself is titled **Identity**.
+IDP and SSO manages employee sign-in, directory sync, and agent access through the organization's identity providers. People sign in through Single Sign-On, and membership and roles follow the directory through Directory Sync. Open the page from [**Organization settings > Team > IDP and SSO**](https://app.getgram.ai/@self/identity) in the dashboard. The page has a **Single sign-on** tab. Admins also see a **Slack workspaces** tab (preview) and, where it is enabled for the organization, an **Identity providers** tab (preview) for [Enterprise Managed Auth](/docs/ai-control-plane/identity/identities/enterprise-managed-auth).
 
 ## Access requirements
 
@@ -15,13 +15,21 @@ IDP and SSO connects the organization to its identity provider, so people sign i
 
 ## Configuring a connection
 
-The page shows two cards, **Single Sign-On** and **Directory Sync**. Each has a **Configure** button whose behavior depends on the current state:
+The **Single sign-on** tab has three sections: **Domain verification**, **Single Sign-On**, and **Directory Sync**. Single Sign-On needs a verified domain. The Single Sign-On and Directory Sync cards each have a **Configure** button whose behavior depends on the current state:
 
 - When the feature is already active, the card shows **Connected** and the button opens the admin portal for managing the connection.
 - When the feature is available but not yet set up, the button enters the setup wizard at the matching step. See [getting started](/docs/ai-control-plane/getting-started) for the full wizard flow.
 - When the feature isn't included in the current plan, the button contacts the team to enable SSO and Directory Sync.
 
 The **Directory Sync** card spells out what turning it on changes: members are provisioned automatically from the directory, roles are assigned from identity provider group mappings, members can't be invited manually, and roles can't be assigned to members manually.
+
+Once a directory is connected, admins see the directory's role mappings in place of the Directory Sync card, with a **Manage connection** button below them that opens the directory connection. See [Directory sync and roles](/docs/ai-control-plane/identity/identities/directory-sync-and-roles) for how mappings work.
+
+## Identity providers
+
+The [**Identity providers**](https://app.getgram.ai/@self/identity?tab=identity-providers) tab connects the identity providers the organization uses. The platform syncs their applications and, where a provider supports it, manages how AI agents access those applications through Enterprise Managed Auth. Employee sign-in and directory sync stay on the **Single sign-on** tab.
+
+The tab is in preview, is enabled per organization, and appears only to people with the `org:admin` scope. It shows one card per supported provider. Okta is supported today: its card shows the connection status, such as **Verified**, the Okta organization URL, and a **Connect Okta** or **Manage Okta** button. The Okta workspace has **Setup**, **Applications**, and **Cross App Access** tabs for connecting Okta, syncing its applications, and setting up resource connections for the Speakeasy AI agent. See [Enterprise Managed Auth](/docs/ai-control-plane/identity/identities/enterprise-managed-auth) for the full setup.
 
 ## How federated sign-in works
 
@@ -41,15 +49,17 @@ Speakeasy identity keeps enterprise roles and members in lockstep between the or
 
 Directory Sync keeps the Control Plane's users and roles current from the organization's directory of record. It runs continuously and asynchronously, with no admin intervention needed after setup.
 
-![Directory Sync sequence across three lanes: the organization IDP (directory of record), Speakeasy IDP (SCIM target and event stream), and the AI Control Plane (sync worker, users, and roles). Step 1, push: the organization IDP pushes directory changes to the identity layer over SCIM. Step 2, poll: the AI Control Plane polls the identity layer for new events every 30 seconds with a cursor per organization. Step 3, apply: the AI Control Plane applies user and membership updates in one transaction. Step 4, groups: group membership events (additions, removals, renames) arrive in the same poll. Step 5, roles: the AI Control Plane updates role grants and advances the cursor in the same transaction. The poll is continuous, exactly once, with about 30 seconds of latency.](/assets/docs/ai-control-plane/diagrams/components/identity-directory-sync.webp)
+![Directory Sync sequence across three lanes: the organization IDP (directory of record), Speakeasy IDP (SCIM target and event stream), and the AI Control Plane (sync worker, users, and roles). Step 1, push: the organization IDP pushes directory changes to the identity layer over SCIM. Step 2, notify: the identity layer notifies the AI Control Plane of new events, and the AI Control Plane reads them with a cursor per organization. Step 3, apply: the AI Control Plane applies user and membership updates in one transaction. Step 4, groups: group membership events (additions, removals, renames) arrive in the same batch. Step 5, roles: the AI Control Plane updates role grants and advances the cursor in the same transaction. Sync is continuous and exactly once.](/assets/docs/ai-control-plane/diagrams/components/identity-directory-sync.webp)
 
 - **Push** - When an admin adds, edits, or removes a user, or changes a group's membership, the directory pushes the change to the Speakeasy identity layer via SCIM.
-- **Poll** - The Control Plane's sync worker polls the identity layer's event stream about every 30 seconds, tracking a cursor per organization.
+- **Notify** - The identity layer sends the Control Plane a webhook when new events arrive. The sync worker waits about 10 seconds to batch closely spaced changes, then reads the event stream with a cursor per organization.
 - **Apply** - User and membership events apply in a single transaction, so a member's account already exists by the time they first sign in.
-- **Groups** - Group membership events (additions, removals, and renames) arrive in the same poll.
-- **Roles** - Each group maps to a Control Plane role. Grants are inserted or revoked, and the cursor advances in the same transaction as the writes, giving exactly-once semantics: no event is applied twice or dropped.
+- **Groups** - Group membership events (additions, removals, and renames) arrive in the same batch.
+- **Roles** - Groups and attribute values that an admin has mapped to a Control Plane role grant that role. Unmapped groups grant nothing. Grants are inserted or revoked, and the cursor advances in the same transaction as the writes, giving exactly-once semantics: no event is applied twice or dropped.
 
 Synced members, departments, job titles, employment types, and directory groups populate the [Identities](/docs/ai-control-plane/identity/identities) roster and its **Department** and **Team** filters, and appear in the header of each identity page.
+
+To map directory groups and attribute values to roles, and for what deprovisioning does, see [Directory sync and roles](/docs/ai-control-plane/identity/identities/directory-sync-and-roles).
 
 ## Used by
 

@@ -1,0 +1,58 @@
+---
+title: Killswitches
+description: "Turn off MCP tool calls for one person across all or chosen MCP servers, now or on a schedule, without ending their sessions or changing their roles, and lift it when the incident is over."
+---
+
+import { Callout } from "@/mdx/components";
+
+A killswitch stops one person's MCP tool calls on a chosen set of servers, right away or on a schedule, until it is lifted or expires. The gateway refuses matching calls before they reach the server, while the person keeps their account, roles, and sessions. That makes it a fast, reversible way to contain a problem without a disciplinary-looking change to the account.
+
+Killswitches are managed on the person's **Access** tab under [**Identity > Identities**](https://app.getgram.ai/@self/projects/default/identities), so the decision is made while looking at what that person has been doing.
+
+## Access requirements
+
+<Callout type="info">
+  Managing killswitches requires the `org:admin` scope, which the Admin role includes, and a signed-in dashboard session. API keys cannot manage killswitches.
+</Callout>
+
+## When to use a killswitch
+
+- **Incident response.** Pause one person's tool calls on the affected servers while the incident is investigated.
+- **Suspected compromise.** A flagged laptop or an unusual [risk finding](/docs/ai-control-plane/secure/risk-events) calls for stopping activity before the facts are known.
+- **Runaway AI clients.** A client acting as the person keeps calling tools in a loop or against the wrong system. The killswitch holds even if the client reconnects.
+
+A killswitch applies to calls a member makes through their own signed-in MCP sessions. It does not cover API keys or registered [agents](/docs/ai-control-plane/identity/agents), even ones the person owns. For a lasting change to who may use a server, edit the server's [Team Access](/docs/ai-control-plane/mcp-gateway/access/team-access) rules instead. For a compromised identity, also disable the account in the identity provider.
+
+## Start a killswitch
+
+- On the person's **Access** tab, select **New killswitch**.
+- Under **Which MCP servers**, choose **All MCP servers**, which also covers servers added later, or **Selected servers**.
+- Under **Schedule**, choose when it starts (now or later) and when it ends (until lifted or at a set time).
+- Write a **Public message shown to the member**, which appears in the error their client receives, so leave confidential details out. Add an **Internal note** for other admins.
+- Select **Review impact** to check the scope, the schedule, and any overlapping killswitches, then select **Turn off MCP tool calls**.
+
+The same form is available from the person's row menu on [MCP sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view) and the [Members page](/docs/ai-control-plane/org-admin/team#team-members).
+
+## What the person experiences
+
+Each tool call on a server in scope fails with a forbidden error that carries the public message and the code `mcp_tool_calls_paused`. This applies to hosted, remote, and tunneled servers. Everything else keeps working: the person stays signed in, clients can still connect and list tools, and servers outside the scope are unaffected. If the gateway cannot complete the check, it refuses the call rather than letting it through.
+
+## Lift or change a killswitch
+
+Select a killswitch on the person's **Access** tab to open its record, which includes a version history of every change and who made it.
+
+- **Edit killswitch** changes the server scope, schedule, or notes of an active or scheduled killswitch. Servers removed from the scope regain access immediately.
+- **Lift killswitch** ends the restriction. The dialog warns if other killswitches still cover the same person, because lifting one does not lift the others.
+
+A killswitch with an end time expires on its own. Every change is also recorded in the [audit logs](/docs/ai-control-plane/org-admin/audit-logs).
+
+## How killswitches differ from other controls
+
+| Control | What it stops | Who it affects | Ends sessions |
+| --- | --- | --- | --- |
+| Killswitch | Tool calls on the servers in scope, for a set period | One member | No |
+| [Revoke a session](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#revoke-access) | The current connection, though the client can sign in again | One session or client | Yes |
+| [Disable a server](/docs/ai-control-plane/mcp-gateway#distribution) | All traffic to the server | Everyone | Yes |
+| [Suspend an agent](/docs/ai-control-plane/identity/agents#suspend-revoke-or-delete-an-agent) | All requests made with the agent's credentials | One agent | Its credentials stop working |
+
+Revoking a session and starting a killswitch are independent. To stop a person and force a clean reconnect, use both.
