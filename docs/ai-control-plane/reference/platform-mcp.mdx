@@ -152,6 +152,15 @@ Tools are grouped by the part of the platform they act on. The **Type** column m
 | `get_platform_context` | Read | Reports the connected organization and an overview of how MCP servers reach people. Call this first in a new conversation.                            |
 | `list_projects`        | Read | Lists the projects in the organization by identifier, name, and slug. A project is where MCP servers and skills are kept before anyone receives them. |
 
+### Projects
+
+A project is where MCP servers, skills, and plugins are kept before anyone receives them.
+
+| Tool             | Type  | What it does                                                                                                                                      |
+| ---------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_project` | Write | Creates an empty project in the organization. Creating a project grants nothing and reaches nobody until something is added to it and shared through a plugin. |
+| `rename_project` | Write | Changes the display name of one exact project. The project's slug, MCP servers, skills, plugins, and their audiences are untouched.                |
+
 ### Catalog and inspection
 
 | Tool                    | Type | What it does                                                                                                                                                                                    |
@@ -167,6 +176,7 @@ Tools are grouped by the part of the platform they act on. The **Type** column m
 | `register_remote_mcp`                   | Write | Adds an MCP server by its streamable HTTP URL to a named project. The URL is revalidated and re-inspected before it is stored.                                                                                           |
 | `get_setup_handoff`                     | Write | Returns the dashboard URL where the rest of a server's setup is finished, including its source and authentication. The link is not to be logged or shared.                                                               |
 | `attach_platform_mcp_identity_provider` | Write | Connects a server to the OAuth provider it advertises by resolving provider metadata and performing dynamic client registration. Requires explicit confirmation and returns an authorization URL for the person to open. |
+| `create_mcp_from_functions`             | Write | Creates a new MCP server in a project from tools the project's functions already produce. Used when no existing server fits; to add a tool to a server that already exists, use `add_tools_to_mcp` instead.            |
 
 ### Review requests
 
@@ -190,6 +200,9 @@ A member without permission to add an MCP server directly can ask an organizatio
 | `set_mcp_address`             | Write | Creates or updates the address for one MCP server or gateway. Requires the settings version from `get_mcp_connection_settings`, an idempotency key, and explicit confirmation.                                                                                                                                                                                                                                                                                                   |
 | `set_mcp_network_access`      | Write | Changes network access for one MCP server or gateway to `public_only`, `dual`, or `private_only`. Requires explicit confirmation; private access may be rejected where unavailable for the organization.                                                                                                                                                                                                                                                                         |
 | `get_network_ingress`         | Read  | Reports the organization's private network ingress: whether private networking is switched on, whether an ingress is configured and enabled, its latest observed status and private DNS name, and the one next action standing between the organization and private MCP access. Readiness is required before any server uses `dual` or `private_only`, and is not proof that a tailnet client can connect. Creating, enabling, or repairing an ingress happens in the dashboard. |
+| `list_project_tools`          | Read  | Lists the tools a project produces, with the function or API document each one came from. Used to find a tool that was just pushed before putting it on an MCP server.                                                                                                                                                                                                                                                                                                             |
+| `add_tools_to_mcp`            | Write | Adds named tools to one exact MCP server, without disturbing the tools it already exposes.                                                                                                                                                                                                                                                                                                                                                                                          |
+| `remove_tools_from_mcp`       | Write | Removes named tools from one exact MCP server, leaving the rest of its tools in place.                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ### Readiness and troubleshooting
 
@@ -211,7 +224,7 @@ Client admission controls which MCP client apps may sign in to a server. See [MC
 
 ### Plugins
 
-A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/mcp-gateway/plugins) for how plugins are published. The Platform MCP does not create, rename, or delete plugins, but it can change which roles and directory groups receive one.
+A plugin is the bundle of MCP servers and skills an organization shares with people. See [Plugins](/docs/ai-control-plane/mcp-gateway/plugins) for how plugins are published. The Platform MCP does not delete plugins, but it can create one, rename one, republish one, and change which roles and directory groups receive one.
 
 | Tool                           | Type  | What it does                                                                                                                                                                                                                                                                   |
 | ------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -224,6 +237,9 @@ A plugin is the bundle of MCP servers and skills an organization shares with peo
 | `distribute_mcp_to_plugin`     | Write | Adds a working server to an existing plugin so everyone the plugin is shared with receives it. An ambiguous or unknown plugin name is refused rather than falling back to the default plugin.                                                                                  |
 | `remove_mcp_from_plugin`       | Write | Removes a server from a plugin, undoing the distribution. Only memberships this flow created are removed.                                                                                                                                                                      |
 | `set_plugin_assignments`       | Write | Replaces the complete set of roles and groups a plugin is assigned to. An empty set removes every assignment so the plugin reaches nobody. Requires the assignment version from a preceding read, explicit confirmation, and assignment changes to be enabled for the project. |
+| `create_plugin`                | Write | Creates one empty plugin in a project.                                                                                                                                                                                                                                          |
+| `rename_plugin`                | Write | Changes the display name of one exact plugin.                                                                                                                                                                                                                                   |
+| `republish_plugin`             | Write | Requests a publish of a project's plugin packages now, for a plugin whose published package is stale, instead of waiting for the periodic refresh. Regenerates every plugin in the project, not only the one named.                                                           |
 
 ### Skills
 
@@ -307,6 +323,7 @@ These tools read the same data as [MCP Insights](/docs/ai-control-plane/observe/
 | `search_users`             | Read | Finds people observed in a project's telemetry whose identity contains a partial email address or user id, over up to 30 days, most recently seen first. Each match is reduced to a masked identity, categorical activity and error evidence, when they were last seen, and a short-lived person reference for a focused follow-up.                                                                                                                                                                             |
 | `get_user_metrics_summary` | Read | Summarizes one person's activity across a project over up to 30 days, from a reference returned by `search_users` or `list_mcp_usage_users`: call volume, failures, failure rate, the servers their tools name, and their most-failing tools with exact counts.                                                                                                                                                                                                                                                 |
 | `list_organization_events` | Read | Lists the newest Event Feed entries for the organization, defaulting to 20 from the last day and capped at 50. Each entry is reduced to when it happened, whether it is a log or a span, its source and name, and its project. Never returns attributes, trace IDs, or identities.                                                                                                                                                                                                                              |
+| `list_chats`               | Read | Lists a project's chats active in a window of up to 30 days, newest activity first, as metadata only.                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ### Shadow MCP
 
@@ -337,6 +354,8 @@ Header values are neither accepted nor returned. A destination created through t
 | -------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `list_data_exports`  | Read  | Lists the configured OTEL destinations and routes, either for one named project or across the organization when no project is named. Each destination carries its endpoint URL, sensitive-data policy, and header names with whether each has a value, never the values themselves. Returns 50 records per collection by default and 100 at most, flagging a truncated result.                                                                               |
 | `create_data_export` | Write | Creates one destination and one route for a project in a single transaction, sending either `product_telemetry` or `risk_findings` to an HTTP or HTTPS endpoint that carries no credentials, query parameters, or fragments. Sensitive fields are excluded unless `include` is set, and delivery starts immediately unless `enabled` is false. Requires explicit confirmation, refuses a second route for the same data source, and audit logs both records. |
+| `pause_data_export`  | Write | Stops one data export route from sending data to its destination, leaving the route and destination configured so it can be resumed later.                                                                                                                                                                                                                                                                                                                 |
+| `resume_data_export` | Write | Starts a paused data export route sending data to its destination again.                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### Sessions
 
@@ -362,11 +381,11 @@ The following steps stay in the dashboard and are not reachable through the Plat
 
 - OAuth consent, secret entry, and client ID metadata document setup for an MCP server
 - Attaching a [remote identity provider](/docs/ai-control-plane/identity/remote-identity-providers)
-- Creating, renaming, or deleting plugins, organizations, or projects
+- Creating or renaming organizations; deleting plugins, organizations, or projects
 - Changing employees, devices, or team membership
-- Authoring a new MCP server from an OpenAPI document or function
+- Authoring a new MCP server from an OpenAPI document
 - Adding authentication headers to a data export destination
-- Editing, pausing, or deleting a data export destination or route
+- Editing or deleting a data export destination or route
 - Deleting MCP servers, skills, policies, or exclusions
 - Moving an MCP server between projects in place. The `migrate-mcp-between-projects` skill re-creates it in the target project instead.
 
