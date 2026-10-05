@@ -3,7 +3,31 @@ title: Concepts
 description: "The core concepts behind the AI Control Plane and how they fit together: identity, tools and MCP servers, security policy, observability, and organization settings."
 ---
 
-The AI Control Plane sits between the people and agents in an organization and the tools they use. Tools are built from sources and served as MCP servers. Every call through them is attributed to an identity, checked against policy, and recorded. This page defines the concepts behind that flow and links to the page that covers each one in depth.
+import { Callout } from "@/mdx/components";
+
+The AI Control Plane sits between the people and agents in an organization and the tools they use. Tools are built from sources and served as MCP servers. Every call through them is attributed to an identity, checked against policy, and recorded. The first half of this page summarizes each product area and defines its core concepts. The sections after it explain how each area works in more depth, and link to the pages that cover setup and configuration.
+
+## Product areas
+
+The AI Control Plane is one layer between the people and agents in an organization and the systems their AI tools reach. AI clients such as Claude Code, Cursor, Codex, and custom agents connect through it to SaaS tools, internal APIs, and data. The control plane decides who is calling, what they may reach, and whether the content is safe, and it records what happened.
+
+![The AI Control Plane sits between AI clients on the left (Claude Code, Cursor, Codex, and custom agents) and the systems they reach on the right (SaaS tools, internal APIs, data, and model providers). Inside the control plane, five areas apply to every request: Identity, MCP gateway, AI gateway, Security and policy, and Observability.](/assets/docs/ai-control-plane/diagrams/concepts/overview.webp)
+
+Each area answers one question about a request.
+
+| Area | Question it answers | Core capabilities |
+| --- | --- | --- |
+| [Identity](/docs/ai-control-plane/concepts#how-identity-works) | Who is calling? | SSO, directory sync, roles from identity provider groups, agent and workload identity, and federation to upstream systems |
+| [MCP gateway](/docs/ai-control-plane/concepts#how-the-mcp-gateway-works) | What can they reach, and how? | Hosted and proxied MCP servers, OAuth 2.1, per-tool access control, verified clients, kill switches, and plugin distribution |
+| [AI gateway](/docs/ai-control-plane/concepts#ai-gateway-and-model-routing) | Which model should handle this? | Model access through managed or customer-owned provider keys, LiteLLM integration, spend rules, and budgets |
+| [Security and policy](/docs/ai-control-plane/concepts#how-security-policies-work) | Is this safe? | Guardrails on prompts and tool calls, PII and secret detection, prompt-injection detection, and Shadow AI and Shadow MCP discovery |
+| [Observability](/docs/ai-control-plane/concepts#how-observability-works) | What happened? | Agent session capture from hooks, inference integrations, and OpenTelemetry, with dashboards and export |
+
+The [device agent](/docs/ai-control-plane/concepts#device-agent) runs on laptops and agent hosts and keeps each AI tool routed through these areas. For deeper detail on two parts of the identity model, see [Agent identity model](/docs/ai-control-plane/concepts#agent-identity-model) and [OAuth and upstream providers](/docs/ai-control-plane/concepts#oauth-and-upstream-providers).
+
+## How the concepts connect
+
+Tools follow one path from source to agent, and identity, policy, and observability apply to every call along the way.
 
 ![Flow of the AI Control Plane: Sources become Deployments, which produce Tool definitions, served by MCP servers and gateways, bundled into Plugins, and installed by People and agents, whose tool calls return to the MCP servers and gateways. Identity, Policy, and Observability each apply to every call through an MCP server.](/assets/docs/ai-control-plane/diagrams/concepts-and-building/concepts-flow.webp)
 
@@ -48,3 +72,480 @@ Everything that flows through the platform is recorded and attributed. See [Obse
 ## Organizations and projects
 
 An organization holds members, roles, billing, and the settings shared across its projects. Projects hold MCP servers, sources, policies, and the data they produce. Roles grant scopes, and scopes decide who can view or change each part of the platform. See [Team](/docs/ai-control-plane/org-admin/team), and [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions).
+
+## How identity works
+
+The platform resolves the principal behind a request before any policy runs, then carries it through every later step: access checks, guardrails, audit logs, cost reports, and risk findings.
+
+The diagram below shows the three kinds of caller resolving to one principal, which the platform then represents to upstream systems with the right credential.
+
+![Identity in the AI Control Plane. On the left, three kinds of caller: People, who arrive through SSO, directory sync, and roles from identity provider groups; Agents, which have one human owner, their own policy, and API keys or MCP sessions; and Workloads, which present a platform-issued token and run as an assigned agent. All three resolve to one principal in the center, identified as user, agent, or workload, and attributed before policy runs. On the right, the principal federates to upstream systems four ways: per-user OAuth with each person's own token, a shared credential used for every caller of a server, Cross App Access with Okta, and signed caller identity sent to private tunneled servers.](/assets/docs/ai-control-plane/diagrams/concepts/identity.webp)
+
+Each principal has a canonical identifier of the form `kind:id`, such as `user:<id>`, `agent:<uuid>`, or `workload:<issuer-id>:<external-subject>`. The same subject resolves to the same identity wherever it appears, so a link from a tool log, an audit log entry, or a risk finding lands on one page. See [Identity](/docs/ai-control-plane/identity) for how identity is captured, and [Identities](/docs/ai-control-plane/identity/identities) for the roster of everyone the platform knows about.
+
+### People
+
+People reach the platform through the organization's own identity provider. The platform does not hold a separate password for them.
+
+- **Single sign-on.** Sign-in is federated to the organization's identity provider, such as Okta, Microsoft Entra ID, or Google Workspace. The provider performs authentication, so existing MFA, device trust, and conditional access policies apply.
+- **Directory sync.** SCIM provisions users, groups, and attributes such as department and job title. Changes in the directory, including removing a person, flow to the platform continuously.
+- **Roles from the directory.** Directory groups and attribute values map to roles. Under directory sync, role membership follows the directory instead of manual assignment.
+
+People who use AI tools without an account in the organization still appear as identities, matched by the email address or identifier their tools report. They stay visible for governance until they are invited and sign in.
+
+See [IDP and SSO](/docs/ai-control-plane/org-admin/identity) for how federated sign-in and directory sync work, and [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for the roles and scopes a person holds.
+
+### Agents and workloads
+
+Nonhuman callers get their own identity instead of borrowing a person's credentials.
+
+- **Agents.** An agent is a first-class identity with exactly one human owner and its own policy. It authenticates with an agent API key or an MCP session. Every request has to fit the credential, the agent's policy, and the owner's policy, and the agent and owner policies are checked live on each request. Agents can be suspended, revoked, or transferred, and their actions are recorded under the agent rather than the owner.
+- **Workloads.** CI jobs, Kubernetes pods, and other automated callers exchange the identity token their own platform already issues for a scoped session, so no long-lived secret is stored. Administrators decide which issuers to trust and which subjects to admit. A workload holds no permissions of its own and acts as the agent it is assigned to.
+
+See [Agent identity model](/docs/ai-control-plane/concepts#agent-identity-model) for how agent and workload permissions are computed, and [Agent identity](/docs/ai-control-plane/identity/agents) to create and manage agents.
+
+### Federation to upstream systems
+
+Knowing who is calling answers only half the question. The platform also decides which credential reaches the API behind an MCP server, and how the caller's identity travels with it.
+
+- **Per-user OAuth.** Each person connects their own account to an upstream service, so a tool call runs as that person upstream. Tokens are encrypted at rest and refreshed automatically. See [Credentials per end user](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#credentials-per-end-user).
+- **Shared credential.** One credential for a server, used for every caller. Access to the server itself is still controlled per person and per agent. See [One credential for the whole server](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#one-credential-for-the-whole-server).
+- **Cross App Access.** With Okta, the platform exchanges the person's identity provider assertion for an upstream token using the Identity Assertion JWT Authorization Grant (ID-JAG). People reach a connected app without a separate consent prompt for each one.
+- **Trusted identity providers for MCP sign-in.** MCP client sign-in can be federated to an upstream OAuth or OIDC issuer the organization trusts. See [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers).
+- **Signed identity to private servers.** Tunneled servers inside a private network receive a short-lived signed token that names the caller, so the server can apply its own policy. See [Signed caller identity](/docs/ai-control-plane/mcp-gateway/tunneled-servers/internal-mcp#signed-caller-identity).
+
+See [OAuth and upstream providers](/docs/ai-control-plane/concepts#oauth-and-upstream-providers) for how the inbound and upstream OAuth relationships fit together.
+
+### Where identity is enforced
+
+The resolved principal decides what happens at the MCP gateway. Per-server [team access](/docs/ai-control-plane/mcp-gateway/access/team-access) grants or blocks people, roles, and agents and narrows the tools they can call. [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions) authenticate MCP clients and record the person or agent behind each connection. [Clients and sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view) lists every live connection and revokes it on demand.
+
+## Agent identity model
+
+Nonhuman identity comes in two families. Agents are identities with their own policy and one human owner. Workloads are machines whose own platform already vouches for them, and each workload runs as an agent. This section describes the identity types, how each one authenticates, how permissions are computed, and how agents are controlled over their lifetime. For where agents fit among all principals, see [Identity](/docs/ai-control-plane/concepts#how-identity-works).
+
+### Identity types
+
+| Type | What it represents | How it authenticates |
+| --- | --- | --- |
+| **Agent** | An organization-scoped nonhuman identity, `agent:<uuid>`, with exactly one human owner. It acts as itself, never as its owner. | Through an agent API key or an agent MCP session. |
+| **Agent API key** | A headless agent calling the platform or MCP servers. | Issued by a person, with a maximum policy fixed at issuance. Keys expire after 90 days by default and after one year at most. |
+| **Agent MCP session** | An agent connected through an MCP client. | Standard MCP OAuth. On the consent screen, a person chooses to connect as an agent they are allowed to act for. The session grants only `mcp:connect` on that one server. |
+| **Workload** | A CI job, Kubernetes pod, agent runtime, or pipeline, identified by its issuer and subject as `workload:<issuer-id>:<external-subject>`. | Exchanges the identity token its own platform issued for a short-lived session. The platform issues no secret. |
+
+An agent is not a human account. It cannot sign in to the dashboard, approve a consent screen, issue credentials, or manage agents, including itself. See [What agent identity is](/docs/ai-control-plane/identity#what-agent-identity-is) for the full set of checks on each request, and [Agent identity](/docs/ai-control-plane/identity/agents) to create agents, set their policy, and issue keys.
+
+### Workload identity
+
+A workload proves who it is with a token its platform already issues, such as a GitHub Actions OIDC token or a Kubernetes service account token. The exchange follows the JWT bearer grant defined in RFC 7523 and the MCP proposal for workload identity federation (SEP-1933), so no long-lived secret has to be stored with the workload.
+
+Two lists decide which workloads get in:
+
+- **Trusted issuers.** The identity platforms the organization accepts tokens from. Issuers must publish their metadata and signing keys over HTTPS.
+- **Admitted subjects.** The specific workloads from each issuer that may exchange a token. A subject is admitted by exact match or by a prefix ending in `*`. The prefix form covers platforms that mint a new identity per resource, such as Claude in Slack, which creates a new identity for each channel.
+
+Issuer trust is required because a platform such as GitHub Actions signs tokens for every customer's jobs. A valid signature only shows that the platform minted the token. Admission is what ties a subject to the organization.
+
+Examples of issuers in this model include GitHub Actions, Kubernetes, SPIFFE, Google Cloud, Microsoft Entra ID, and Claude in Slack.
+
+<Callout type="info">
+  Workload identity is rolling out. To set up a workload issuer or assign workloads to an agent, contact Speakeasy.
+</Callout>
+
+### How permissions are computed
+
+Every mode is an intersection of policies, so a credential can never grant more than any one of them allows.
+
+The diagram below shows the three policies an agent credential must satisfy. Only the region where all three overlap is allowed.
+
+![Effective permission for an agent credential, shown as three overlapping circles. The credential maximum is fixed when a person issues the API key or approves the MCP session. The agent policy is the agent's own permissions plus any roles assigned to it, read live on every request. The owner policy is the owner's current permissions, also read live on every request. The effective permission is the small region where all three circles overlap.](/assets/docs/ai-control-plane/diagrams/concepts/agent-permissions.webp)
+
+| Mode | Effective permission |
+| --- | --- |
+| **Agent credential** | Credential maximum ∩ the agent's live policy ∩ the owner's live policy |
+| **Workload** | Session maximum ∩ the assigned agent's live policy. The agent's owner must remain an eligible member of the organization. |
+
+Three rules follow from this model:
+
+- **Workloads hold no grants of their own.** Each workload inherits from one agent, and one agent can serve many workloads.
+- **The agent is always the recorded actor.** Audit logs and telemetry also record the owner, the person who authorized the credential, and the credential or session used.
+- **Failures never widen access.** A missing workload assignment, a failed lookup, or an owner who has left the organization blocks the request. It never falls back to the owner's broader privileges.
+
+The agent and owner policies are read live, so removing a permission from either one takes effect on the next request. See [How authorization is evaluated](/docs/ai-control-plane/identity/agents#how-authorization-is-evaluated) for the details, and [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions) for the scopes that make up each policy.
+
+### Lifecycle and controls
+
+- **Suspend, revoke, or delete.** Suspension is reversible. Revoking an agent permanently cuts off all of its credentials at once. Deleting an agent removes it and keeps its audit history. See [Suspend, revoke, or delete an agent](/docs/ai-control-plane/identity/agents#suspend-revoke-or-delete-an-agent).
+- **Owner departure.** If the owner leaves or is deactivated, the agent is blocked until it is reassigned to a new owner.
+- **Transfer.** Ownership moves to another person, which changes whose policy bounds the agent. See [Transfer or reassign an agent](/docs/ai-control-plane/identity/agents#transfer-or-reassign-an-agent).
+- **Sessions.** Each MCP session, including a workload session, can be revoked on its own from [MCP sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view). Withdrawing trust in an issuer turns off admission for every workload from that platform in one step.
+- **Management rights.** An agent's owner manages it by default. Anyone else needs the `agent:read`, `agent:write`, `agent:authorize`, or `agent:transfer` scope to view, configure, authorize, or transfer it. The Admin role holds all four.
+
+Every lifecycle and permission change is recorded in [Audit logs](/docs/ai-control-plane/org-admin/audit-logs).
+
+Delegated access on a person's behalf does not go through agent credentials. It uses per-user OAuth or Cross App Access with the identity provider, described in [OAuth and upstream providers](/docs/ai-control-plane/concepts#oauth-and-upstream-providers).
+
+## How the MCP gateway works
+
+The MCP gateway hosts or proxies every MCP server an organization runs through the AI Control Plane. Whatever sits behind a server, the gateway runs the same checks on the way in, so authentication, access rules, and logging work the same for a generated server, a vendor server, and a server inside a private network.
+
+### The request path
+
+Each request from an AI client passes through a fixed sequence before it reaches the upstream server. The gateway authenticates the caller from their OAuth token, admits or refuses the AI client, checks the caller's access to the server and tool, checks for an active killswitch, evaluates blocking risk policies, and records the call with the person and client behind it. Client admission happens when a client signs in or refreshes its token. The access, killswitch, and policy checks run on every tool call. A call that clears them is forwarded with the upstream credential for that server.
+
+![Request path through the MCP gateway, left to right. An AI client such as Claude Code, Cursor, or a custom agent sends a request into the MCP gateway, which runs six steps in order: 01 Authenticate, using the OAuth token to identify the person or agent; 02 Admit client, applying the server's client access setting and any Shadow AI block; 03 Authorize, applying team access rules and tool narrowing; 04 Killswitch, refusing tool calls turned off for one person; 05 Guardrails, applying block-mode risk policies; and 06 Record, writing a tool log entry with the person and client. The request then reaches the upstream MCP server, a SaaS API or internal service. A footnote says client admission runs when a client signs in or refreshes its token, and checks 03 to 05 run on every tool call.](/assets/docs/ai-control-plane/diagrams/concepts/mcp-gateway.webp)
+
+Policy evaluation inline on hosted MCP tool calls depends on risk policies scoped to MCP servers, which are rolling out. See [Guardrails](/docs/ai-control-plane/secure/guardrails) and [Security and policy](/docs/ai-control-plane/concepts#how-security-policies-work).
+
+### Server sources
+
+Every MCP server has exactly one backend, fixed when the server is created. The backend decides where tools come from. Everything above it, including authentication, access rules, addresses, and tool logs, belongs to the MCP server.
+
+| Source | How it works |
+| --- | --- |
+| **Built** | Generated from an OpenAPI document or TypeScript functions and hosted by the platform. See [Building MCP servers](/docs/ai-control-plane/mcp-gateway/building-servers). |
+| **Remote** | An existing MCP server that someone else runs, reached over streamable HTTP and proxied through the gateway. See [Remote MCP servers](/docs/ai-control-plane/mcp-gateway/remote-servers). |
+| **Catalog** | Reviewed third-party servers from the official MCP Registry, such as Slack, Salesforce, Linear, and Datadog, added as remote servers. See [MCP Catalog](/docs/ai-control-plane/mcp-gateway/catalog). |
+| **Tunneled** | A server inside a private network. A tunnel agent on Docker or Kubernetes dials out to the platform, so nothing is exposed inbound. See [Tunneled MCP servers](/docs/ai-control-plane/mcp-gateway/tunneled-servers). |
+| **Gateway endpoint** | Several servers behind one URL, one sign-in, and one consent screen. Agents reach member tools through four discovery tools instead of loading every catalog. See [Gateway Endpoints](/docs/ai-control-plane/mcp-gateway/gateway-endpoints). |
+
+Built servers capture their tool list once per deployment. Remote and tunneled servers proxy `tools/list` live, which decides how tool changes propagate and which tool features apply. See [Tool discovery](/docs/ai-control-plane/mcp-gateway/tool-discovery).
+
+### Authentication
+
+Authentication answers two separate questions, and each server configures them independently.
+
+The first is who is calling. The platform is the OAuth 2.1 authorization server for each MCP server. Clients identify themselves with Dynamic Client Registration (DCR) or a Client ID Metadata Document (CIMD), sign in with PKCE, and see a consent screen on every sign-in. Access tokens are short-lived and refresh tokens rotate. See [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions).
+
+The second is which credential reaches the upstream API. A remote server calls upstream as each user, with one shared agent credential, or with no identity. Built servers read secrets from [environments](/docs/ai-control-plane/mcp-gateway/environments). See [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials).
+
+[OAuth and upstream providers](/docs/ai-control-plane/concepts#oauth-and-upstream-providers) covers both relationships in detail.
+
+#### Network edge
+
+A server can use an address on a verified [custom domain](/docs/ai-control-plane/org-admin/custom-domain), with an optional IP allowlist enforced before requests reach the server. The allowlist covers the branded hostname only. On Enterprise plans, remote and tunneled servers and gateway endpoints can serve through public URLs, private [Tailscale](/docs/ai-control-plane/mcp-gateway/private-network-access/tailscale) URLs, or both. Network access is separate from authentication, so private servers still require OAuth.
+
+### Access controls
+
+#### Team access and roles
+
+Each server has rules that grant or block three capabilities: **Connect** to call tools, **View** to see the server in the catalog, and **Manage** to change its settings. Rules name everyone, a role, a person, an agent, or a directory group or attribute. Grants add up, and a block always outranks a grant. A connect rule can be narrowed to named tools or by tool annotation, such as excluding destructive tools. Rules on a server are the same grants the organization-wide role editor writes. See [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access) and [Roles and Permissions](/docs/ai-control-plane/org-admin/roles-and-permissions).
+
+#### Verified clients
+
+The **Client access** setting decides which AI clients may start a sign-in through CIMD:
+
+- **Verified clients** admits a Speakeasy-maintained catalog of client metadata documents, including Claude Code, Claude, Visual Studio Code, ChatGPT, and Codex, plus URLs the organization allows.
+- **Any client** admits any client with a valid document.
+- **Off** admits no CIMD client, and clients fall back to DCR.
+
+Separately, an AI tool blocked through [Shadow AI](/docs/ai-control-plane/secure/shadow-ai) review is refused when it authenticates, on every MCP server in the organization. See [OAuth client registration](/docs/ai-control-plane/mcp-gateway/access/client-registration#client-access).
+
+#### Killswitches and server status
+
+A killswitch turns off MCP tool calls for one person across every server or a chosen set, for a set window. It blocks calls without ending sessions. To take a whole server out of service, set its status to **Disabled**. To cut off a connection, revoke the session or the client registration. See [Killswitches](/docs/ai-control-plane/identity/identities#killswitches) and [Clients and sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions).
+
+#### Denied access
+
+Every denied authorization check is recorded with the caller and the missing scope. The **Authorization Challenges** tab lists these denials, and opening one leads to a grant flow that adds the missing permission to a role. See [Authorization challenges](/docs/ai-control-plane/org-admin/roles-and-permissions#authorization-challenges).
+
+Who a caller is, and how people, agents, and workloads resolve to one principal, is covered in [Identity](/docs/ai-control-plane/concepts#how-identity-works).
+
+### Distribution
+
+Plugins bundle MCP servers and [skills](/docs/ai-control-plane/mcp-gateway/skills) and publish them through a GitHub-backed marketplace to Claude Code, Cursor, Codex, GitHub Copilot, and other clients. A default plugin picks up new servers automatically. Plugins can be assigned to roles, members, directory groups, or directory attributes. Assignments gate delivery through the [device agent](/docs/ai-control-plane/reference/device-agent). Marketplace installs make a published plugin available to anyone with access to the marketplace. See [Plugins](/docs/ai-control-plane/mcp-gateway/plugins).
+
+## OAuth and upstream providers
+
+Every governed MCP connection involves two separate OAuth relationships. Inbound, the AI Control Plane is the authorization server that MCP clients sign in to. Upstream, the control plane is an OAuth client of the SaaS API or identity provider behind the server. The inbound relationship decides who is calling. The upstream relationship decides which credential reaches the API.
+
+The following diagram shows both relationships on one connection.
+
+![Two OAuth relationships on a governed connection. An MCP client such as Claude Code, Cursor, or an agent signs in to the AI Control Plane, which then presents a credential to an upstream service such as Linear, GitHub, Slack, or an identity provider. The inbound panel says the control plane is the authorization server: clients identify with DCR or a CIMD and sign in with PKCE, a consent screen appears on every sign-in with no OAuth scopes, access tokens last one hour and refresh tokens rotate, and this relationship decides who is calling. The upstream panel says the control plane is an OAuth client: remote identity providers live at the platform, organization, or project tier, a server uses a per-user token, a shared agent credential, or none, tokens are encrypted at rest and refreshed before use, and this relationship decides which credential reaches the API. A footnote says the two relationships are configured, refreshed, and revoked separately, and revoking a sign-in does not revoke the grant at the upstream provider.](/assets/docs/ai-control-plane/diagrams/concepts/oauth-two-relationships.webp)
+
+### Inbound: the control plane as authorization server
+
+The platform implements standard MCP authorization for every server with user sessions. An MCP client discovers the authorization server from the server's protected-resource metadata, identifies itself with Dynamic Client Registration (DCR) or a Client ID Metadata Document (CIMD), and completes an authorization code flow with PKCE. See [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions) and [OAuth client registration](/docs/ai-control-plane/mcp-gateway/access/client-registration).
+
+- **Consent on every sign-in.** The consent screen names the client and the server and, for CIMD clients, the verified host of the client ID URL. People can choose a shorter session than the server allows and, where the organization turns it on, limit the connection to specific tools. See [The consent screen](/docs/ai-control-plane/mcp-gateway/access/user-sessions#the-consent-screen).
+- **No OAuth scopes.** Tokens carry no scopes. Roles and per-tool [team access](/docs/ai-control-plane/mcp-gateway/access/team-access) rules decide access, on top of whatever scopes the upstream service enforces.
+- **Token lifetimes.** Access tokens last one hour. Refresh tokens rotate on every use and are bound to the client they were issued to. The **Session length** set on each server fixes an absolute deadline that refreshing never extends. See [Token lifetimes](/docs/ai-control-plane/mcp-gateway/access/user-sessions#token-lifetimes) and [Session length](/docs/ai-control-plane/mcp-gateway/access/session-refresh#session-length).
+- **Client admission.** Each server admits verified clients, any client, or no CIMD clients, through its **Client access** setting. See [Client access](/docs/ai-control-plane/mcp-gateway/access/client-registration#client-access).
+- **Shared session issuers.** A server's sessions come from its session issuer, which can be owned by a project or by the organization and can gate several servers. A [gateway endpoint](/docs/ai-control-plane/mcp-gateway/gateway-endpoints) puts several servers behind one sign-in and one consent screen.
+- **Revocation.** Admins can end one session, or revoke a client registration, which ends every session issued to that client through the same issuer. See [Clients and sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#revoke-access).
+
+A built server can also authenticate against an authorization server outside the platform. See [Build MCP with external OAuth](/docs/ai-control-plane/guides/oauth-external-server).
+
+### Upstream: remote identity providers
+
+A remote identity provider is an upstream OAuth or OIDC issuer the platform trusts, such as Linear, GitHub, Slack, or a company identity provider. It is configured once and reused by every server that talks to that issuer. Providers live at three tiers, and a lookup prefers the most specific one.
+
+| Tier | Maintained by |
+| --- | --- |
+| **Platform** | Speakeasy, for common services, so they work with no setup. Organizations can add clients but cannot edit the provider. |
+| **Organization** | The organization, shared by every project. |
+| **Project** | The organization, scoped to one project that needs its own branding, scopes, or audience handling. |
+
+- **Issuer discovery.** Admins add an issuer by URL. The platform reads its endpoints from published metadata (RFC 8414) and warns when the issuer does not advertise PKCE `S256`.
+- **Client registration.** Each provider needs a registered client, created by DCR (RFC 7591), by a CIMD the platform hosts with no stored secret, or entered manually.
+- **Signed-key client authentication.** A client can authenticate to the issuer with `private_key_jwt` instead of a shared secret. The assertion is signed with a signing key set built from the organization's own KMS keys, which requires the customer-managed encryption keys entitlement. See [Encryption Keys](/docs/ai-control-plane/org-admin/encryption-keys#signing-keys-jwks).
+- **Private issuers.** An issuer reachable only from a private network can be bound to an MCP tunnel. Discovery, token exchange, refresh, revocation, and client registration then go through the tunnel.
+- **Housekeeping.** Providers can move between project and organization scope or be consolidated into another provider for the same issuer. DCR clients can be rotated in place. Client secrets are encrypted at rest and never displayed.
+
+See [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers) for setup.
+
+### Upstream credential modes
+
+Each server decides what reaches the upstream API.
+
+| Mode | What reaches the upstream API |
+| --- | --- |
+| **User Identity** | Each person's own OAuth token from the remote identity provider. A tool call runs as that person in the upstream system. |
+| **Agent Identity** | One shared credential for the server, sent as the `Authorization` header for every caller. |
+| **No Identity** | No managed credential. Suitable for public upstream APIs, with any static headers set by hand. |
+| **Environment variables** | On built servers, values from an attached environment injected by the system, or supplied by each user when they connect. |
+
+Per-user credentials require user sessions, since each token is stored against a known person. Shared credentials work on any server. See [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) and [Picking an authentication model](/docs/ai-control-plane/mcp-gateway/access#picking-an-authentication-model).
+
+Cross App Access with Okta is in rollout. For a remote or tunneled server bound to the organization identity provider, the platform exchanges the signed-in user's identity assertion for an upstream token, so people are not asked to connect each server separately.
+
+### Connecting, refreshing, and revoking
+
+- **Connecting services.** Attached providers appear on the consent screen under **Connect required services**, one card per upstream, marked connected or expired. Access cannot be granted until at least one service is connected. See [What the end user sees](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#what-the-end-user-sees).
+- **Storage and refresh.** Upstream tokens are encrypted at rest and refreshed just before use, with one refresh shared by concurrent calls. The organization's automatic session refresh policy also renews idle connections in the background: **Disabled**, **Required**, or **User controlled**, where each person chooses on the consent screen. See [Automatic session refresh](/docs/ai-control-plane/mcp-gateway/access/session-refresh#automatic-session-refresh).
+- **Revocation.** Disconnecting a service deletes the stored credential. Revoking a session in the platform does not revoke the grant at the upstream provider, which has to be revoked there. See [Revoking access](/docs/ai-control-plane/mcp-gateway/access/user-sessions#revoking-access).
+- **Private servers.** Private tunneled servers also receive a signed JWT naming the caller in the `X-Speakeasy-Identity` header, valid for at most 60 seconds, so the server can apply its own policy. See [Signed caller identity](/docs/ai-control-plane/mcp-gateway/tunneled-servers/internal-mcp#signed-caller-identity).
+
+How a request is checked after sign-in is covered in [MCP gateway](/docs/ai-control-plane/concepts#how-the-mcp-gateway-works), and how people and agents become principals in [Identity](/docs/ai-control-plane/concepts#how-identity-works).
+
+## AI gateway and model routing
+
+The AI gateway sits between AI products and model inference. It has two layers. The execution layer reaches models and applies controls to each request. The decision layer, which is in development, chooses which model should handle a piece of work. Usage telemetry from the [observability layer](/docs/ai-control-plane/concepts#how-observability-works) connects the two.
+
+The diagram shows the decision layer above the execution layer, the paths the execution layer uses to reach model providers, and the telemetry loop that feeds results back into routing.
+
+![The AI gateway in three parts. At the top, the decision layer, marked as in development, chooses a model based on task type, historical usage, cost, model performance, person and team context, and enterprise policy. In the middle, the execution layer receives requests from AI products and agents and reaches model providers through four paths: the OpenAI-compatible endpoint, managed access through OpenRouter, the organization's own OpenRouter keys, and existing LiteLLM deployments. A bar across the execution layer lists the controls applied to each request: identity, guardrails, budgets and inference caps, and token and cost metering. At the bottom, a telemetry loop records workload, model, cost, tools used, and outcome, and feeds them back to the decision layer.](/assets/docs/ai-control-plane/diagrams/concepts/ai-gateway.webp)
+
+### Execution layer
+
+The execution layer handles model connectivity. It builds on existing gateway infrastructure, OpenRouter and LiteLLM, instead of rebuilding an integration for every model provider.
+
+#### One OpenAI-compatible endpoint
+
+The platform exposes an OpenAI-compatible chat completions API. The [playground](/docs/ai-control-plane/mcp-gateway/building-servers/playground) and assistants call it, and so can any service that holds an [API key](/docs/ai-control-plane/org-admin/api-keys) with the **Chat** scope. Every request authenticates as a dashboard session, an API key, or an assistant token, so each completion is attributed to a project and a caller.
+
+#### Managed model access
+
+By default, completions reach models through [OpenRouter](/docs/ai-control-plane/org-admin/ai-integrations/openrouter) on keys the platform provisions and funds per organization. Monthly credit caps bound that spend, and organization billing contacts receive warning emails as usage crosses 50%, 75%, 90%, and 100% of the cap. Admins manage the caps under [Inference caps](/docs/ai-control-plane/org-admin/billing#inference-caps) on the Billing page.
+
+#### Bring your own keys
+
+An organization with its own OpenRouter account can run completions on that account instead. [Model provider keys](/docs/ai-control-plane/org-admin/model-provider-keys) are set per project, either as one project default or per surface: the playground, assistants, and the two risk-scanning judges. Completions on a customer key bill to the OpenRouter account that issued it, and budgets for that traffic live on the OpenRouter side. OpenRouter is the only supported provider for customer keys, and the feature is enabled per organization.
+
+#### Existing LiteLLM deployments
+
+Organizations that already route model traffic through LiteLLM keep that deployment. The [LiteLLM integration](/docs/ai-control-plane/org-admin/ai-integrations/litellm) makes the platform the policy enforcement point and telemetry sink for the proxy. LiteLLM calls the platform before each model request and after each response, so [guardrails](/docs/ai-control-plane/secure/guardrails) run on that traffic, and its OpenTelemetry exporter sends model, token, and cost data to [Costs](/docs/ai-control-plane/observe/costs). LiteLLM keeps model selection, provider credentials, and retries, so traffic on an organization's contracted capacity with OpenAI, Anthropic, and other providers comes under the same controls without changing providers.
+
+#### Controls on every request
+
+The platform applies its controls to model traffic on every path it sits in, independent of the model provider behind it. Which controls apply depends on where the platform sits in the request path:
+
+| Control | What it does | Applies to |
+| --- | --- | --- |
+| Identity | Attributes each request to a person, an agent, or a project | Every path. LiteLLM traffic is attributed to a person through the email bound to its LiteLLM virtual key |
+| Guardrails | Evaluate prompts before the model call and allow or block them. Responses are captured for asynchronous analysis | LiteLLM traffic and [Anthropic inference hooks](/docs/ai-control-plane/org-admin/ai-integrations/anthropic-inference-hooks) |
+| Budgets | Give each matched person a daily, weekly, or monthly spending window that flags or blocks overspend | Claude Code, Codex, and Cursor traffic |
+| Inference caps | Limit monthly spend on each platform-managed key | Completions on platform-provisioned OpenRouter keys |
+| Token and cost metering | Records tokens and cost per session, model, person, and team | All captured model traffic |
+
+[Budgets](/docs/ai-control-plane/observe/costs/budgets) are in preview and enabled per organization.
+
+### Decision layer
+
+<Callout title="In development" type="info">
+  The decision layer is in development and not yet available. This section
+  describes how it is designed to work.
+</Callout>
+
+The platform observes agent sessions across the organization, so it can classify the work people and agents perform. The decision layer uses that classification to choose which available model should handle a workload. It weighs:
+
+- Task type
+- Historical model usage
+- Cost
+- Model performance
+- Person and team context
+- Enterprise policy
+
+The decision layer routes across the models and inference capacity an organization already has, including providers reached through its own keys or LiteLLM deployment.
+
+### Why observability and routing belong together
+
+Routing improves when the gateway knows what happened after each decision. The OpenTelemetry records that power usage and cost analytics carry that information for every session: the workload, the model selected, its cost, the tools used, and the outcome. Each result informs the next routing decision, so routing becomes a feedback loop instead of a static table.
+
+The telemetry this loop depends on is in place today. The observability layer captures sessions across providers, normalizes them on OpenTelemetry, attributes cost to people and teams, and enriches each record with identity attributes from the directory. See [Agent sessions](/docs/ai-control-plane/observe/agent-sessions) and [Costs](/docs/ai-control-plane/observe/costs).
+
+## How security policies work
+
+Guardrails inspect prompts, model responses, and tool traffic. They block in real time where the platform sits in the request path and record everything else for review. Each event is evaluated against the policies that apply to it, and a match produces a finding and an action.
+
+The diagram shows events from three enforcement points passing through guardrail evaluation, the four actions a match can produce, and where findings go for review.
+
+![Events from agent hooks, inference hooks, and the MCP gateway flow into guardrail evaluation, which checks what the policy detects, which content is in scope, and which audience it applies to. A match leads to one of four actions: log for review, warn and confirm, deny, or quarantine the session until an admin releases it. Every finding then flows to review in Watchdog, Risk Events, the audit log, and webhooks.](/assets/docs/ai-control-plane/diagrams/concepts/security-and-policy.webp)
+
+### Guardrails
+
+Each guardrail policy defines four parts. See [Guardrails](/docs/ai-control-plane/secure/guardrails) for the policy editor.
+
+| Part | Options |
+| --- | --- |
+| Detect | Secrets and credentials; PII; government identifiers in US, UK, EU, and APAC formats; financial and healthcare data; prompt injection; destructive tools and shell commands; shadow MCP; non-corporate AI accounts; and custom rules |
+| Scope | User prompts, assistant output, tool requests, and tool responses. Tool calls can be matched by MCP server, tool, or argument |
+| Action | Log for review, warn and confirm, deny the request, or quarantine the session until an admin releases it |
+| Audience | Everyone, specific users, or specific roles |
+
+Built-in detectors cover recognizable patterns. The [Detection rules](/docs/ai-control-plane/secure/detection-rules) catalog lists every detector, and custom rules add organization-specific patterns written as CEL expressions. Three categories detect activity that has already happened, so they can only log: destructive tools, destructive CLI commands, and non-corporate accounts.
+
+For risks that depend on context rather than a pattern, admins write a plain-language policy that an LLM judge evaluates, such as "no deletes against production". Before the policy goes live, the judge replays it against recent agent sessions, and admins mark each verdict right or wrong. See [Prompt-based policies](/docs/ai-control-plane/secure/guardrails#prompt-based-policies).
+
+**Warn and confirm** asks the user to acknowledge the warning before the action proceeds. Where a client offers no way to confirm, the warning falls back to a block. **Quarantine** denies the matching event and blocks every further prompt and tool call in the session until an admin releases it from the [Quarantines](/docs/ai-control-plane/secure/guardrails#quarantines) tab.
+
+### Where enforcement happens
+
+A policy can block only where the platform sees an event before it takes effect. Three points in the request path return a verdict in time:
+
+- **Agent hooks.** Claude Code, Codex, Cursor, GitHub Copilot, and other instrumented agents send each prompt and tool request to the platform through the observability plugin. The platform returns allow or deny before the step runs. The [device agent](/docs/ai-control-plane/reference/device-agent) keeps these hooks installed on managed machines.
+- **Inference hooks.** [Anthropic inference hooks](/docs/ai-control-plane/org-admin/ai-integrations/anthropic-inference-hooks) check Claude prompts before the model call, and the [LiteLLM integration](/docs/ai-control-plane/org-admin/ai-integrations/litellm) checks model requests before the call and captures responses for analysis. See [AI gateway and model routing](/docs/ai-control-plane/concepts#ai-gateway-and-model-routing).
+- **The MCP gateway.** Policies scoped to an MCP server served by the platform run on its tool calls before they reach the tool. See [MCP gateway](/docs/ai-control-plane/concepts#how-the-mcp-gateway-works).
+
+Traffic the platform only observes after the fact, such as chats imported through provider compliance APIs, is scanned for findings but cannot be blocked.
+
+### Review and response
+
+Findings feed a review workflow that ranks risk, protects the matched data, and keeps false positives down.
+
+- **Watchdog.** [Watchdog](/docs/ai-control-plane/secure/watchdog) clusters findings into ranked signals and computes an organization risk score. It breaks exposure down by data type and groups signals by severity, data type, team, app, or user. [Risk Events](/docs/ai-control-plane/secure/risk-events) lists each finding individually, and every finding links to the exact message in its [agent session](/docs/ai-control-plane/observe/agent-sessions).
+- **Redaction by default.** Matched values are stored redacted, as keyed fingerprints. Revealing an original value requires read access to the session and is recorded in the [audit log](/docs/ai-control-plane/org-admin/audit-logs).
+- **Tuning.** [Exclusion rules](/docs/ai-control-plane/secure/exclusions) suppress known-safe values retroactively and going forward. One-time suppression in Watchdog dismisses noise that is not expected to recur. When a policy blocks a call to an unapproved MCP server, the user can file a just-in-time [bypass request](/docs/ai-control-plane/secure/guardrails#bypass-requests), so an admin can grant an exception for that person without weakening the policy for everyone.
+- **Discovery.** [Shadow MCP](/docs/ai-control-plane/secure/shadow-mcp) inventories MCP servers people use outside the gateway and gives each one an evidence-backed [access review](/docs/ai-control-plane/secure/shadow-mcp/access-review). [Shadow AI](/docs/ai-control-plane/secure/shadow-ai) uses the device agent to inventory AI clients, assistants, and local models on enrolled machines.
+- **Audit log.** The [audit log](/docs/ai-control-plane/org-admin/audit-logs) records every admin change and sensitive access across the organization, including policy edits, exclusions, evidence reveals, and access decisions. [Webhooks](/docs/ai-control-plane/org-admin/webhooks) deliver audit log events and risk findings to external systems.
+
+## How observability works
+
+AI usage in an organization is spread across models, coding agents, MCP servers, skills, and internal applications. Inference logs alone do not show who uses what, for which work, or at what cost. The observability layer of the AI Control Plane collects usage from every surface and answers questions such as:
+
+- Which AI products are in use?
+- Which teams and people are adopting them?
+- Which agents, models, skills, and tools drive usage?
+- What work are agents performing?
+- What does that usage cost?
+- Where are security or governance risks emerging?
+- How does adoption differ across teams, roles, and applications?
+
+Every capture path lands in one OpenTelemetry-based store, so cost, adoption, security, and audit views query the same records. The pipeline has four stages: capture, normalize and enrich, analyze, and use.
+
+![Observability pipeline in four stages. Capture: agent hooks and plugins, native OTLP ingest, the device agent, inference hooks, provider APIs, and the MCP gateway. Normalize and enrich: each producer's data is mapped to OpenTelemetry GenAI semantic conventions and attributed to a person or agent with IdP groups, department, and cost center. Analyze: one OpenTelemetry store holds agent sessions, tool logs, MCP Insights, costs, and risk findings. Use: dashboards for sessions, tools, costs, and skills; budgets that flag or block spend per person; data export to Datadog, Grafana, and Langfuse; and session portability to continue a session in another harness.](/assets/docs/ai-control-plane/diagrams/concepts/observability.webp)
+
+### Capture
+
+Usage reaches the platform through several paths. Each one covers a surface the others cannot see, and an organization can use any combination.
+
+- **Agent hooks and plugins.** The observability plugin records prompts, turns, and tool calls from Claude Code, Claude Cowork, Codex, Cursor, GitHub Copilot, OpenCode, OpenClaw, and Pi. See [Plugins](/docs/ai-control-plane/mcp-gateway/plugins).
+- **Native OTLP ingest.** Any OpenTelemetry exporter can send traces, logs, and metrics directly. See [Connect without a plugin](/docs/ai-control-plane/observe/opentelemetry#connect-without-a-plugin).
+- **The device agent.** On macOS, Windows, and Linux, the [device agent](/docs/ai-control-plane/concepts#device-agent) wires each coding agent's telemetry to the platform and discovers the AI tools installed on the machine.
+- **Inference hooks.** [Anthropic inference hooks](/docs/ai-control-plane/org-admin/ai-integrations/anthropic-inference-hooks) capture conversations across the Claude Enterprise suite, and the [LiteLLM integration](/docs/ai-control-plane/org-admin/ai-integrations/litellm) receives telemetry from model traffic routed through LiteLLM.
+- **Provider APIs.** [AI Integrations](/docs/ai-control-plane/org-admin/ai-integrations) import usage from the Anthropic Compliance API, OpenAI Compliance Logs, and the Cursor Admin API, covering claude.ai chats, ChatGPT and Codex usage, and Cursor spend that device telemetry alone cannot see.
+- **The MCP gateway.** Every tool call served by a hosted or proxied MCP server is logged. With **Record Tool I/O** turned on, the log also stores the call's input and output.
+
+What each path records is controlled in [Logging Settings](/docs/ai-control-plane/org-admin/logging-and-telemetry). A disabled switch shows up as missing data rather than an error.
+
+### Normalize and enrich
+
+Every producer reports usage in its own format. The platform maps each producer's data to the OpenTelemetry GenAI semantic conventions, covering model, tokens, tools, and cost. A session from Claude Code and a session from Codex therefore look the same downstream, and one query covers both.
+
+Records are then attributed to the person or [agent](/docs/ai-control-plane/identity/agents) behind them. Identity values resolve against organization membership and [directory sync](/docs/ai-control-plane/org-admin/identity), which adds IdP groups, department, division, job title, and cost center. That context is what lets cost and adoption views break down by team or role. The [Telemetry enrichment](/docs/ai-control-plane/observe/opentelemetry#telemetry-enrichment) reference lists the attributes the platform adds.
+
+### Use
+
+The same normalized records drive every view and action in the platform.
+
+- **Agent sessions.** Full transcripts of agent conversations with tool calls, token counts, and cost per turn. Sessions are where investigations start. See [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions).
+- **Tool logs.** The raw stream of tool executions across MCP servers, gateways, skills, and local tools. See [Tool Logs](/docs/ai-control-plane/observe/tool-logs).
+- **MCP Insights.** Call volumes, failures, and ranked lists of the most used servers, tools, clients, and skills. See [MCP Insights](/docs/ai-control-plane/observe/mcp-and-tools).
+- **Costs.** AI spend from organization totals down to individual sessions, broken down by role, person, model, and agent. See [Costs](/docs/ai-control-plane/observe/costs).
+- **Budgets.** Per-person spending windows that flag or block overspend. See [Budgets](/docs/ai-control-plane/observe/costs/budgets).
+- **Skill adoption and efficacy.** Activation coverage, version drift, and scored estimates of whether a skill helped a session. See [Measuring skill efficacy](/docs/ai-control-plane/mcp-gateway/skills/measuring-skill-efficacy).
+- **Data export.** Product telemetry, risk findings, and tool call logs stream over OTLP to Datadog, Grafana Cloud, Langfuse, or any OpenTelemetry Collector. Sensitive content is redacted by default. See [Data export](/docs/ai-control-plane/observe/opentelemetry).
+- **Session portability.** A captured session can continue in Claude Code, Codex, or Cursor, with the lineage kept in Agent Sessions. See [Session Portability](/docs/ai-control-plane/observe/agent-sessions/session-portability).
+
+Risk policies read the same sessions and tool calls, so a finding links to the exact message that triggered it. See [Guardrails](/docs/ai-control-plane/secure/guardrails).
+
+## Device agent
+
+Gateway and policy controls apply only when an AI tool routes through the AI Control Plane. The device agent is the endpoint-side guarantee that it does. It keeps each developer's AI tools configured with the organization's plugins, MCP servers, telemetry, and guardrails, even when a tool updates or a person switches to a personal account.
+
+<Callout type="info">
+  The device agent is in beta and enabled per organization. See the [Device
+  Agent reference](/docs/ai-control-plane/reference/device-agent) for the
+  current release.
+</Callout>
+
+### What it does
+
+- **Configuration sync.** The agent renders the organization's plugin and MCP policy into the native configuration of Claude Code, Codex, Cursor, OpenCode, GitHub Copilot, OpenClaw, and Pi. It tracks what it installed and never touches entries the user added. Which plugins reach a device follows each plugin's [assignments](/docs/ai-control-plane/mcp-gateway/plugins#assignments).
+- **Continuous reconciliation.** The agent re-fetches and re-applies policy every 60 seconds by default, so required configuration survives tool updates, settings resets, and account switches. Admins can change the sync interval on the **Configuration** tab.
+- **Telemetry wiring.** The agent points tools with an OpenTelemetry exporter, such as Claude Code, at the platform's telemetry ingest. Hook plugins resolve the developer's identity from the agent locally, so every event is attributed to the right person. See [Observability](/docs/ai-control-plane/concepts#how-observability-works).
+- **Shadow AI discovery.** The agent scans the machine for AI tools, assistants, and local models from a built-in and admin-defined target list. Findings feed the [Shadow AI](/docs/ai-control-plane/secure/shadow-ai) inventory.
+- **Access requests at the desktop.** When a policy blocks an unapproved MCP server, the developer gets a desktop notification that offers to file an access request. The request lands in the admin's [access review](/docs/ai-control-plane/secure/shadow-mcp/access-review) queue.
+- **Session portability.** From the menu bar, a developer can continue a captured session in another tool or share it with a single-use link. See [Session Portability](/docs/ai-control-plane/observe/agent-sessions/session-portability).
+
+The agent polls the platform over HTTPS for policy, and each poll doubles as the device heartbeat. The MDM deploys the agent and, separately, syncs device inventory into the platform.
+
+![Device agent connectivity. On the developer machine, the menu bar app talks to the speakeasyd daemon over IPC, and the daemon writes config for the AI agents: Claude Code, Codex, Cursor, and OpenCode. The daemon sends a policy fetch and heartbeat to the AI Control Plane Policy API over HTTPS with its enrollment key every 60 seconds. The AI agents send session telemetry over OTEL to the telemetry ingest. The Policy API reports coverage to the dashboard, which shows employee enrollment and MDM coverage. The MDM (Jamf, Iru, or Intune) deploys the agent and managed config to the developer machine and syncs device inventory to the dashboard. Every connection the agent makes is outbound HTTPS on port 443.](/assets/docs/ai-control-plane/diagrams/components/device-agent-connectivity.webp)
+
+### Where it runs
+
+| Environment                | How it is deployed                                                                                                                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Laptops**                | A background daemon with a menu bar app on macOS, Windows, and Linux. Deployed zero-touch through MDM (Jamf Pro, Iru, Microsoft Intune, or ManageEngine Endpoint Central) or configuration management on Linux, or enrolled self-service by the developer. |
+| **Cloud coding sandboxes** | Installed by the environment's setup script for Claude Code on the web and Cursor Cloud, with a dedicated identity for the environment.                                                                                                                |
+
+The [MDM installations](/docs/ai-control-plane/reference/device-agent/mdm-installations) guides cover each provider, including [Jamf Pro](/docs/ai-control-plane/reference/device-agent/mdm-installations/jamf), [Iru](/docs/ai-control-plane/reference/device-agent/mdm-installations/iru), [Microsoft Intune](/docs/ai-control-plane/reference/device-agent/mdm-installations/intune), [ManageEngine Endpoint Central](/docs/ai-control-plane/reference/device-agent/mdm-installations/manageengine-endpoint-central), and [Linux](/docs/ai-control-plane/reference/device-agent/mdm-installations/linux). Cloud sandbox setup is covered in [Claude Code on the web](/docs/ai-control-plane/reference/device-agent#claude-code-on-the-web) and [Cursor Cloud](/docs/ai-control-plane/reference/device-agent#cursor-cloud).
+
+### Fleet visibility and operations
+
+- **Coverage.** Each policy poll records a device check-in. The dashboard shows which people have an active, stale, or missing agent, and joins MDM inventory against agent heartbeats to show fleet-wide coverage. See [Device status in the dashboard](/docs/ai-control-plane/reference/device-agent#device-status-in-the-dashboard).
+- **Compliance evidence.** With an MDM inventory source connected, coverage can be pushed to [Drata](/docs/ai-control-plane/reference/device-agent/mdm-installations/drata) and [Vanta](/docs/ai-control-plane/reference/device-agent/mdm-installations/vanta) as continuously tested evidence.
+- **Small network surface.** Every connection the agent makes is outbound HTTPS on port 443, and it opens no inbound ports. See the [network allowlist](/docs/ai-control-plane/reference/device-agent#network-allowlist).
+- **Managed updates.** Each release is verified by SHA-256 against a signed manifest, and the agent reverts to the previous version if an updated daemon fails to start. Fleets choose automatic updates, notify-only, or updates disabled so the MDM controls versions. See [Automatic updates](/docs/ai-control-plane/reference/device-agent#automatic-updates).
+
+## Kit agent runtime
+
+<Callout type="warning">
+  Kit is experimental. It is published as open source under the MIT license at
+  [github.com/speakeasy-api/kit](https://github.com/speakeasy-api/kit), and its
+  behavior and interfaces can change between releases.
+</Callout>
+
+Kit is a coding agent runtime that explores a different way to build an agent harness. Most harnesses expose many tools and spend one model round trip on each tool call. Kit gives the model one tool, `compose`. The argument to `compose` is a short program that can run commands, apply edits, retry failed steps, call MCP tools, and delegate work to subagents, all in one round trip.
+
+The diagram below compares the two approaches for the same task.
+
+![Two ways to complete the same task. On the left, a conventional harness takes four round trips between the model and its tools: read_file, run_tests, apply_edit, and run_tests again, with each result returned and the full context resent. On the right, Kit takes one round trip: the model sends compose() to a compose program that reads the file and runs baseline tests in parallel, applies an anchored edit, reruns tests with up to two retries on failure, and returns one result to the model.](/assets/docs/ai-control-plane/diagrams/concepts/kit.webp)
+
+### Why the compose model matters
+
+- **Fewer round trips.** Each model request does more work, so less context is resent. The Kit README reports a comparison on 16 production engineering tasks from July and August 2026, all of whose pull requests merged. Per hand-written line, Kit used about half the input tokens and active time of Codex CLI and Claude Code, and needed fewer user messages per session. See [How it compares](https://github.com/speakeasy-api/kit#how-it-compares) in the repository.
+- **Concurrency and control flow in the program.** Independent calls in a program run in parallel. Ordering, retries, and error handling are written in the program rather than negotiated turn by turn.
+- **Harnesses as building blocks.** A subagent is a reusable value that can be continued, forked, or required to return JSON that matches a schema. The subagent can be Kit itself or another harness, such as Claude Code, Codex, or Cursor, connected over the Agent Client Protocol.
+
+### Open protocols
+
+- **Agent Client Protocol (ACP)** connects Kit to editors and clients, and lets Kit drive other harnesses as subagents.
+- **Agent-to-Agent (A2A)** works in both directions: other agents can call Kit, and Kit can call other agents.
+- **MCP, Agent Skills, and Agent Plugins** load into Kit, so the same [plugins](/docs/ai-control-plane/mcp-gateway/plugins), [skills](/docs/ai-control-plane/mcp-gateway/skills), and MCP servers the AI Control Plane distributes to other agents also work in Kit.
+
+### How it connects to the AI Control Plane
+
+- **Models through the platform.** Kit can use the AI Control Plane as its model provider, alongside ChatGPT subscriptions and OpenRouter. A resumed Kit session stays in one conversation thread on the platform.
+- **OpenTelemetry.** Kit exports GenAI spans for the main agent, subagents, and context compaction. Message content capture is off by default. See [Observability](/docs/ai-control-plane/concepts#how-observability-works) for how the platform ingests OpenTelemetry.
+- **A runtime, not a security boundary.** Kit has no sandbox or permission framework of its own. Run it inside a boundary the operator trusts, with identity, policy, and observability provided by the AI Control Plane. See [Guardrails](/docs/ai-control-plane/secure/guardrails).
