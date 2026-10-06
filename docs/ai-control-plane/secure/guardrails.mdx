@@ -1,11 +1,11 @@
 ---
 title: Guardrails
-description: "Create and manage the risk policies that scan agent sessions for secrets, sensitive information, and prompt-defined risks."
+description: "Create and manage the risk policies that scan agent sessions and MCP tool traffic for secrets, sensitive information, and prompt-defined risks."
 ---
 
 import { Callout, CardGrid } from "@/mdx/components";
 
-Guardrails are risk policies: rules that scan agent session interactions for secrets, sensitive information, and prompt-defined risks, then flag or block what they match. Every finding a policy records feeds [Watchdog](/docs/ai-control-plane/secure/watchdog) for triage. Create and manage policies on the **Guardrails** page, under [**Security and Policy > Guardrails**](https://app.getgram.ai/@self/projects/default/risk-policies) in the dashboard.
+Guardrails are risk policies: rules that scan agent session interactions and MCP tool traffic for secrets, sensitive information, and prompt-defined risks, then flag or block what they match. Every finding a policy records feeds [Watchdog](/docs/ai-control-plane/secure/watchdog) for triage. Create and manage policies on the **Guardrails** page, under [**Security and Policy > Guardrails**](https://app.getgram.ai/@self/projects/default/risk-policies) in the dashboard.
 
 ## Access requirements
 
@@ -55,6 +55,12 @@ This page covers:
       title: "Action, severity, and audience",
       description: "What happens on a match, and for whom",
       href: "#action-severity-and-audience",
+    },
+    {
+      icon: "server",
+      title: "MCP-scoped policies",
+      description: "Policies the MCP gateway enforces on tool calls and results",
+      href: "#mcp-scoped-policies",
     },
     {
       icon: "list-checks",
@@ -185,7 +191,9 @@ Evaluation uses the same detection scope as production scanning, so replay verdi
 
 ## Detection scope
 
-On the **Scope** step, choose which session content the policy evaluates. Scope is set per detector category, so one policy can watch tool calls for destructive commands while watching prompts for secrets. Content outside the scope is never examined, which removes the scanning cost along with the noise.
+On the **Scope** step, choose which session content the policy evaluates. Where [MCP-scoped policies](#mcp-scoped-policies) are enabled, the step opens with a choice between **Everywhere** and **Selected MCP servers**. The rest of this section describes **Everywhere**, the scope for agent sessions.
+
+Scope is set per detector category, so one policy can watch tool calls for destructive commands while watching prompts for secrets. Content outside the scope is never examined, which removes the scanning cost along with the noise.
 
 1. Review each category's recommended surfaces. Toggle **User**, **Assistant**, **Tool requests**, and **Tool responses** to change what is scanned; a custom selection replaces the recommendation.
 
@@ -229,6 +237,8 @@ On the **Action** step:
 
    ![The four response options highlighted: Log for review, Warn and confirm, Deny the request, and Quarantine session](/assets/docs/ai-control-plane/secure/policy-action-options.webp)
 
+   An [MCP-scoped policy](#mcp-scoped-policies) offers only **Log for review** and **Deny the request**.
+
 3. Under **Audience**, choose who the policy evaluates:
    - **Everyone**: every user in the organization
    - **Specific users**: individual members, selected by search. Requires at least one selection
@@ -250,6 +260,63 @@ To introduce enforcement safely:
 4. Widen the audience once the enforcement behavior is confirmed.
 
 An acknowledgement suppresses re-prompting for the same call for a grace period, so an agent that retries immediately isn't challenged twice. Where an outright rejection is too blunt, a blocked user can request a just-in-time [bypass](#bypass-requests) instead.
+
+## MCP-scoped policies
+
+An MCP-scoped policy applies to tool calls through selected MCP servers. The [MCP gateway](/docs/ai-control-plane/mcp-gateway) evaluates it on every matching call, so it needs no agent hooks or chat capture: any MCP client that reaches the server through the platform is covered, including agents and assistants. This makes MCP-scoped policies a data loss prevention control for what reaches an MCP server and for what comes back from it.
+
+<Callout type="info">
+  MCP-scoped policies are enabled per organization. To turn them on, contact Speakeasy.
+</Callout>
+
+The gateway checks each call twice: the tool request before it is forwarded to the server, and the tool result before it is returned to the client.
+
+![A tool call flowing from the user prompt through the model to the MCP server and back. Two inference boundaries mark where content enters the model provider's context. Everywhere policies check content through agent hooks and chat capture. The Speakeasy MCP gateway wraps the MCP server and checks twice: an MCP-scoped request check, where a Block policy denies the call before the server runs it, and an MCP-scoped response check, where a Block policy withholds the result so it never reaches the model.](/assets/docs/ai-control-plane/diagrams/secure/mcp-scoped-policies.webp)
+
+### Everywhere and MCP-scoped policies
+
+The two kinds of policy never overlap:
+
+- An **Everywhere** policy evaluates agent sessions through hooks, chat capture, and session analysis. It never runs at the MCP gateway.
+- An MCP-scoped policy runs only at the MCP gateway. Hooks and session analysis skip it.
+
+A tool call that is visible to both, such as a Claude Code call to a platform-hosted server, meets the Everywhere policies through hooks and the MCP-scoped policies at the gateway. Choose MCP scope for controls that must hold for every client of a server, and Everywhere for prompts and assistant output, which never pass through the gateway.
+
+### Choosing servers and tools
+
+On the **Scope** step, select **Selected MCP servers**, then pick what the policy covers:
+
+1. Select servers in the **Servers** list. **All MCP servers** covers every server in the project, including Platform MCP and servers added later.
+2. To narrow a server to some of its tools, select it and choose tools in the **Tools on** pane. Leaving every tool unchecked covers all of them.
+3. To choose tools by behavior rather than by name, set the tool rule under **Tools per server** to **Tools with MCP annotations** and check **Destructive**, **Read-only**, **Idempotent**, or **Open world**. A tool matches if it carries any checked hint, so tools added later are covered when they match. Tools without annotations never match.
+4. Under **Inspect**, choose the surfaces each detector scans: **Tool Request**, **Tool Response**, or both. Prompts and assistant messages are not part of an MCP call, and the CEL fields are not available in MCP mode.
+5. Select **Continue**.
+
+[Gateway endpoints](/docs/ai-control-plane/mcp-gateway/gateway-endpoints) appear in the same list but are not included in **All MCP servers**; select each one explicitly. Selecting a gateway covers every tool on its member servers. Membership resolves on each call, so servers added to the gateway later are covered automatically.
+
+Calls through a legacy toolset URL count as calls to the MCP server that wraps that toolset. When no single server wraps it, only policies that cover **All MCP servers** apply.
+
+### Detectors at the gateway
+
+Secrets, PII, prompt injection, destructive CLI commands, custom rules, and [prompt-based](#prompt-based-policies) guardrails all run at the gateway. Two categories cannot be MCP-scoped:
+
+- **Shadow MCP** watches unmanaged servers, which never pass through the gateway
+- **Non-corporate accounts** evaluates the session's account rather than tool traffic
+
+The **Destructive tools** detector reads Speakeasy-issued tool metadata, which only built servers carry. For remote and tunneled servers, select destructive tools with the **Destructive** tool rule instead.
+
+### Actions at the gateway
+
+MCP-scoped policies support two actions. **Warn and confirm** and **Quarantine session** are unavailable, since an MCP call has no confirmation step and no session to freeze.
+
+- **Log for review** (Flag): the call proceeds unchanged, and the finding is recorded in the background.
+- **Deny the request** (Block): the policy is evaluated before the call continues. A matching request is rejected before it reaches the server, and a matching result is withheld from the client. The client receives an MCP error carrying the policy's **Block message**, or a default message naming the policy.
+
+Block policies add their detection time to each matching call, so scope them to the servers and tools that need enforcement. The [audience](#action-severity-and-audience) applies at the gateway the same way it does in sessions: a policy targeted at specific users or roles only evaluates their calls.
+
+Each check reads the first 50 KiB of the request or result. When a scan cannot finish in time, or the content is larger than that limit, the call is allowed through rather than blocked.
+
+Findings from MCP-scoped policies appear in [Risk Events](/docs/ai-control-plane/secure/risk-events#mcp-findings) and [Watchdog](/docs/ai-control-plane/secure/watchdog) with the server, tool, and outcome in place of a session. Policies can also be created from an MCP server, on its [**Guardrails** tab](/docs/ai-control-plane/mcp-gateway/remote-servers#guardrails), or when [adding a remote server](/docs/ai-control-plane/mcp-gateway/remote-servers) or a server [from the catalog](/docs/ai-control-plane/mcp-gateway/catalog#adding-a-server).
 
 ## Managing existing policies
 

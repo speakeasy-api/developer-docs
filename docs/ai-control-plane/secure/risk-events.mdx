@@ -1,11 +1,11 @@
 ---
 title: Risk Events
-description: "Review individual policy findings across analyzed agent sessions, with redacted matches and full-session investigation."
+description: "Review individual policy findings across agent sessions and MCP tool calls, with redacted matches and per-finding investigation."
 ---
 
 import { Callout } from "@/mdx/components";
 
-The **Risk Events** page is the finding-level log: every policy finding across recently analyzed sessions, one row per finding. Open it from [**Security and Policy > Risk Events**](https://app.getgram.ai/@self/projects/default/risk-events) in the dashboard.
+The **Risk Events** page is the finding-level log: every policy finding across recently analyzed sessions and MCP tool calls, one row per finding. Open it from [**Security and Policy > Risk Events**](https://app.getgram.ai/@self/projects/default/risk-events) in the dashboard.
 
 Where [Watchdog](/docs/ai-control-plane/secure/watchdog) clusters findings into ranked signals for triage, Risk Events lists the raw findings themselves — useful for auditing individual matches, tracking down a specific rule or user, or handing a single finding to a teammate.
 
@@ -17,20 +17,33 @@ Where [Watchdog](/docs/ai-control-plane/secure/watchdog) clusters findings into 
 
 ## Event list
 
-Each finding shows its timestamp, category, severity, rule, session name, user, matched content, and the [guardrail policy](/docs/ai-control-plane/secure/guardrails) that raised it. The list loads continuously with a running count of findings shown.
+Each finding shows its timestamp, category, severity, rule, session or tool, user, matched content, and the [guardrail policy](/docs/ai-control-plane/secure/guardrails) that raised it. The list loads continuously with a running count of findings shown.
 
-Filters narrow the stream. **Policy** and **Date range** are always visible, and the rest live behind **More filters**:
+Filters narrow the stream. **Policy**, **Date range**, and **MCP server** are always visible, and the rest live behind **More filters**:
 
-- **Policy** — including inactive policies, which are labeled and produce a notice
+- **Policy**: including inactive policies, which are labeled and produce a notice
 - **Date range**
-- **Rule ID** — matches rule IDs containing the entered text
+- **MCP server**: findings on tool calls through one server, gateway endpoint, or Platform MCP toolset, with the finding count beside each option
+- **Rule ID**: matches rule IDs containing the entered text
 - **User**
 - **Unique matches only**
-- **Assistant** — including sessions with no assistant
+- **Assistant**: including sessions with no assistant
+
+## MCP findings
+
+[MCP-scoped policies](/docs/ai-control-plane/secure/guardrails#mcp-scoped-policies) record findings on tool calls rather than on session messages. An MCP finding carries an **MCP** badge and the name of the server, gateway endpoint, or toolset in place of a session name, with the surface, tool, and outcome beneath it. The outcome is one of:
+
+- **Logged**: a Flag policy recorded the finding and the call proceeded
+- **Denied**: a Block policy rejected the tool request before it reached the server
+- **Withheld**: a Block policy kept the tool result from the client
+
+To list the findings for one server, filter by **MCP server**, or select **Open in Risk Events** on the server's [**Guardrails** tab](/docs/ai-control-plane/mcp-gateway/remote-servers#guardrails).
 
 ## Redaction and reveal
 
 Matched content is redacted by default. Individual matches can be revealed inline, and a **Reveal all** toggle in the header switches the whole view. Findings from natural-language guardrails open a match dialog with the evaluated content. Redacted matches are visible with the `org:admin` scope alone; revealing them follows the same [audit-logged](/docs/ai-control-plane/org-admin/audit-logs) rules as Watchdog.
+
+Revealing a match also requires the `chat:read` scope: on the finding's session for a session finding, and on all sessions for an MCP finding, which has no session. The matched content of an MCP finding is stored encrypted for 90 days; findings recorded before evidence storage show **Evidence not stored**.
 
 ## Suppressing findings
 
@@ -38,6 +51,15 @@ Select findings with the row checkboxes (or **Select all loaded findings**) to a
 
 ## Investigating a finding
 
-Clicking a finding opens the session detail in a risk-focused view, the same transcript panel as [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions), with flagged messages highlighted and unflagged messages dimmed. Each finding also has a **Copy link** action for handing an investigation to a teammate. The user column names the person behind the session; their [identity page](/docs/ai-control-plane/identity/identities) gathers every finding, device, and session for that one person.
+Clicking a finding opens the finding drawer. Move to the next or previous finding with `j` and `k`, and use **Copy link** to hand the finding to a teammate. **Suppress** in the drawer header offers the same **Suppress Once** and **Create Rule** actions as the list.
+
+For a session finding, **Open transcript** opens the session in a risk-focused view, the same transcript panel as [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions), with flagged messages highlighted and unflagged messages dimmed.
+
+For an MCP finding, the drawer shows the tool call itself:
+
+- **Call path** traces the call from the client through the gateway to the MCP server, and states what the gateway did: stopped the request, withheld the result, or forwarded the call unchanged.
+- The payload section shows the tool request arguments or the tool result that was scanned. Select **Reveal matches** to unredact the flagged values in place. Revealing the full payload requires the `chat:read` scope on all sessions, and every reveal is recorded in the audit log. Payloads are stored when **Record Tool I/O** is on for the organization, up to 64 KB each, for 90 days.
+- **Findings in this call** lists every other finding on the same call.
+- **Details** lists the user, MCP server, tool, surface, phase (request or response), policy, rule ID, and timestamp. The user column names the person behind the session; their [identity page](/docs/ai-control-plane/identity/identities) gathers every finding, device, and session for that one person.
 
 Findings can also be delivered to an OTLP destination through a **Risk findings** export, with exclusions re-checked before every delivery; see [Data export](/docs/ai-control-plane/observe/opentelemetry).

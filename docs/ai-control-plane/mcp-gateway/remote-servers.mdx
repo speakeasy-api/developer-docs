@@ -29,6 +29,8 @@ On the **MCP** page, click **Add new** and choose **Hosted remotely**, described
   **Verify connectivity** checks reachability, not credentials. An upstream that answers with 401 or 403 still counts as verified, reported as "Reachable: received authorization required response". A verified URL means the endpoint exists and responds, not that the server is configured to call it successfully.
 </Callout>
 
+Where [MCP-scoped policies](/docs/ai-control-plane/secure/guardrails#mcp-scoped-policies) are enabled, the form also has a **Guardrails** section. Turn on its switch to create a guardrail with the server, scoped to that server only, as described in [Guardrails](#guardrails).
+
 Adding the server does four things in sequence: it registers the remote server record, links an MCP server config to it, tries to configure authentication automatically, and pre-stages a default MCP endpoint. A failure partway through rolls the record back, so a half-created server does not linger.
 
 ### Automatic authentication setup
@@ -118,13 +120,33 @@ Reading tool metadata requires the `mcp:read` scope, and recording or syncing it
 
 ## Editing a server afterwards
 
-The server detail page carries everything that can change after creation, across five tabs:
+The server detail page carries everything that can change after creation, across these tabs:
 
 - **Overview**: tool calls, failed calls, error rate, and average latency, with tool call trends and top tools, each call attributed to the MCP client that made it
 - **Inspect**: the live tool list and the stored tool metadata reconciled against it, described in [Recording tool metadata](#recording-tool-metadata)
 - **Team Access**: which members, roles, and agents can connect, view, or manage the server, described in [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access)
+- **Guardrails**: the risk policies that inspect traffic through the server, and its risk events, described in [Guardrails](#guardrails)
 - **Clients and Sessions**: the agents registered against the server and their live sessions, with the organization-wide view in [MCP Sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view)
 - **Settings**: **Branding** (icon and display name), the source's **Name**, the **Upstream URL** (an absolute http or https URL, usually ending in `/mcp`), **Server URL** (hosted, custom, and private addresses), **Network access**, **Upstream Headers**, **Tool Filtering**, and the **Danger Zone** with a **Server Availability** switch and deletion, plus the **Identity** section, which sets how callers are identified to the upstream (User Identity, Agent Identity, or No Identity) and holds **Custom Headers**, and the **Sessions** section, which holds **Session length** and the **Client access** admission policy for clients that identify themselves by a hosted metadata document. To bundle this server with others for distribution, add it to a [plugin](/docs/ai-control-plane/mcp-gateway/plugins).
+
+## Guardrails
+
+A guardrail is an [MCP-scoped policy](/docs/ai-control-plane/secure/guardrails#mcp-scoped-policies): a risk policy that the gateway evaluates on tool requests and tool responses through a server. The **Guardrails** tab of a server collects the policies that apply to it. It appears where MCP-scoped policies are enabled, on servers whose traffic routes through the platform, and requires the `org:admin` scope.
+
+The tab has two views:
+
+- **Policies** lists **Scoped to this server**, the policies that select this server, and **Inherited**, the policies that cover every MCP server. Inherited policies are managed on the [Guardrails](/docs/ai-control-plane/secure/guardrails) page.
+- **Risk events** shows the latest findings on tool calls through the server. **Open in Risk Events** opens the full log filtered to this server.
+
+To add a guardrail from the tab:
+
+1. Select **Add guardrail**.
+2. Under **Detect**, choose what to look for: **Secrets**, **PII**, **Destructive tools**, or **Prompt injection**.
+3. Under **Tools**, choose **All tools**, which also covers tools added later, or **Selected tools**. Tools left out of a selection pass through uninspected. **Select all destructive** selects every tool annotated as destructive.
+4. Choose the action and audience. A guardrail always inspects both tool requests and tool responses.
+5. Optionally set a name, then select **Create guardrail**.
+
+When adding a server by URL, turning on the **Guardrails** switch opens the same form, and the guardrail is created with the server. The server's tools are not listed yet at that point, so the guardrail covers all tools. Change it later from the server's **Guardrails** tab, or edit it on the Guardrails page for detectors and scope options the tab does not offer.
 
 When several servers share one upstream, the **Upstream Headers** section warns that the headers are stored on the source and therefore shared by every server built on it.
 
