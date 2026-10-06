@@ -48,11 +48,23 @@ A role is a set of scopes. Each scope unlocks a slice of the platform:
 | `environment:write` | Create environments and manage their variables and secrets | `environment:read` |
 | `skill:read` | View skills and their manifests | — |
 | `skill:write` | Add and version skills | `skill:read` |
+| `assistant:read` | View assistants and chat with them, including the Project Assistant | — |
+| `assistant:write` | Create, edit, and delete assistants, and change their status and instructions | `assistant:read` |
 | `chat:read` | Read other members' agent session transcripts in [Agent Sessions](/docs/ai-control-plane/observe/agent-sessions) and pin them | — |
 | `chat:write` | Delete other members' sessions, rename them, and submit feedback on them | `chat:read` |
 | `agent:read`, `agent:write`, `agent:authorize`, `agent:transfer` | View, manage, authorize, and transfer ownership of agent identities | — |
 
 Write scopes imply their read counterparts, so a role granting `mcp:write` never needs `mcp:read` added separately. A role needs only `mcp:connect` on a server to connect and call its tools, including for a [private tunneled server](/docs/ai-control-plane/mcp-gateway/tunneled-servers/internal-mcp#grant-users-and-roles-access); `project:read` and `project:write` are not required. Every member can always read and change sessions they own; `chat:read` and `chat:write` govern other people's sessions.
+
+Skill and assistant scopes are separate from project scopes: `project:write` does not grant `assistant:write`, and `assistant:write` does not grant `project:write`. Assistant triggers still use `project:read` and `project:write`. The Admin and Member roles include their assistant scopes automatically, but custom roles do not, so add `assistant:read` or `assistant:write` to any custom role that needs assistant access. Attaching skills to an assistant also requires `skill:read`, and attaching an MCP server requires `mcp:connect` on that server.
+
+An assistant grant covers one of three ranges:
+
+- **All assistants** in the organization.
+- **Specific projects**: every assistant in the selected projects, including creating new ones there.
+- **A single assistant**: only that assistant. This grant cannot create assistants or see other assistants in the project. The role editor offers the first two options; single-assistant grants are created through the API.
+
+Agent policies can also include `assistant:read` and `assistant:write` with the same ranges, so an agent can, for example, hold `assistant:write` on its own assistant only. See [Agent identity](/docs/ai-control-plane/identity/agents).
 
 Each read, write, and connect scope also has a blocking counterpart (for example `mcp:blocked_connect`). A blocking rule withdraws that scope for the matching resources even when another role grants it, which is how a server's **Access** page can exclude one principal without editing every role. The platform refuses to write a block against a principal the caller holds, since a block on `mcp:*` would also remove the read that renders the page. Blocking scopes cannot be written against agents.
 
@@ -67,7 +79,7 @@ Two preset roles ship with the platform:
 | Role | Scopes | Effective access |
 | --- | --- | --- |
 | Admin | Every standard scope | Full administration: manage the organization, all projects, servers, environments, skills, and assistants, plus the Observability and Security and Policy sections |
-| Member | `org:read`, `project:read`, `mcp:read`, `mcp:connect`, `skill:read` | Read and connect: browse the org and projects, view servers and skills, and use tools, with no write access, environment access, or org administration |
+| Member | `org:read`, `project:read`, `mcp:read`, `mcp:connect`, `skill:read`, `assistant:read` | Read and connect: browse the org and projects, view servers, skills, and assistants, chat with assistants, and use tools, with no write access, environment access, or org administration |
 
 Member is the baseline every invited or directory-synced member receives, so editing a system role changes access for everyone holding it at once: widening Member raises the floor for the whole organization, and narrowing Admin risks cutting administrators off from management surfaces (the platform refuses to remove the last admin, but won't stop an over-narrowed Admin role). For targeted needs, prefer creating a custom role and granting it to specific members over editing the presets.
 
