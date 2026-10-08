@@ -57,12 +57,12 @@ The key authenticates the LiteLLM deployment and fixes the organization and proj
 Set the environment variables on the LiteLLM proxy, pasting the key into the first one. The values below match what the dashboard generates.
 
 ```bash
-export GRAM_LITELLM_INGEST_KEY="<PASTE_KEY_FROM_DASHBOARD>"
-export GRAM_PROJECT_SLUG="default"
+export SPEAKEASY_AI_LITELLM_INGEST_KEY="<PASTE_KEY_FROM_DASHBOARD>"
+export SPEAKEASY_AI_PROJECT="default"
 export LITELLM_OTEL_V2=true
 export OTEL_EXPORTER=otlp_http
 export OTEL_ENDPOINT="https://app.getgram.ai/rpc/hooks.otel"
-export OTEL_HEADERS="Gram-Key=${GRAM_LITELLM_INGEST_KEY},Gram-Project=${GRAM_PROJECT_SLUG}"
+export OTEL_HEADERS="Speakeasy-AI-Key=${SPEAKEASY_AI_LITELLM_INGEST_KEY},Speakeasy-AI-Project=${SPEAKEASY_AI_PROJECT}"
 export OTEL_SERVICE_NAME=litellm
 export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=no_content
 export LITELLM_OTEL_INTEGRATION_ENABLE_METRICS=true
@@ -79,10 +79,10 @@ guardrails:
       mode: [pre_call, post_call]
       api_base: https://app.getgram.ai/rpc/litellm.ingest
       headers:
-        Gram-Key: os.environ/GRAM_LITELLM_INGEST_KEY
-        Gram-Project: os.environ/GRAM_PROJECT_SLUG
+        Speakeasy-AI-Key: os.environ/SPEAKEASY_AI_LITELLM_INGEST_KEY
+        Speakeasy-AI-Project: os.environ/SPEAKEASY_AI_PROJECT
       extra_headers:
-        - x-gram-session-id
+        - speakeasy-ai-session-id
       default_on: true
       streaming_end_of_stream_only: true
       fail_on_error: true
@@ -90,7 +90,7 @@ guardrails:
 ```
 
 <Callout title="Required settings" type="warning">
-  `streaming_end_of_stream_only: true` is required — without it LiteLLM's default streaming mode sends repeated cumulative callbacks that the platform does not accept. `extra_headers` is required to forward the `x-gram-session-id` value; without it LiteLLM sends a placeholder instead of the session identifier.
+  `streaming_end_of_stream_only: true` is required — without it LiteLLM's default streaming mode sends repeated cumulative callbacks that the platform does not accept. `extra_headers` is required to forward the `speakeasy-ai-session-id` value; without it LiteLLM sends a placeholder instead of the session identifier.
 </Callout>
 
 The proxy needs outbound HTTPS to the platform host for both the guardrail and OTel endpoints. Endpoints must use HTTPS; plain HTTP is accepted only for loopback hosts during local development. A deployment that serves multiple projects configures one guardrail destination and one key per project.
@@ -107,12 +107,12 @@ services:
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro
     environment:
-      GRAM_LITELLM_INGEST_KEY: ${GRAM_LITELLM_INGEST_KEY}
-      GRAM_PROJECT_SLUG: ${GRAM_PROJECT_SLUG}
+      SPEAKEASY_AI_LITELLM_INGEST_KEY: ${SPEAKEASY_AI_LITELLM_INGEST_KEY}
+      SPEAKEASY_AI_PROJECT: ${SPEAKEASY_AI_PROJECT}
       LITELLM_OTEL_V2: "true"
       OTEL_EXPORTER: otlp_http
       OTEL_ENDPOINT: https://app.getgram.ai/rpc/hooks.otel
-      OTEL_HEADERS: Gram-Key=${GRAM_LITELLM_INGEST_KEY},Gram-Project=${GRAM_PROJECT_SLUG}
+      OTEL_HEADERS: Speakeasy-AI-Key=${SPEAKEASY_AI_LITELLM_INGEST_KEY},Speakeasy-AI-Project=${SPEAKEASY_AI_PROJECT}
       OTEL_SERVICE_NAME: litellm
       OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: no_content
       LITELLM_OTEL_INTEGRATION_ENABLE_METRICS: "true"
@@ -133,7 +133,7 @@ Authentication and attribution are separate. The integration key identifies the 
 
 Employee attribution therefore requires issuing LiteLLM virtual keys per user with email addresses that match people in the [Identities](/docs/ai-control-plane/identity/identities) roster. The pre-call resolution is cached per LiteLLM call, so the response capture and telemetry rows attribute to the same person and session as the enforced request.
 
-Session grouping uses the forwarded `x-gram-session-id` header when the application sets one, then LiteLLM's trace ID, then the call ID.
+Session grouping uses the forwarded `speakeasy-ai-session-id` header when the application sets one, then LiteLLM's trace ID, then the call ID.
 
 ## Verify the connection
 
@@ -214,7 +214,7 @@ Prompt and response content reaches the platform through exactly one channel: th
 - **Waiting for traffic with no last ingestion** — no event has authenticated with this instance's key yet. Check that the guardrail fragment is merged, `default_on: true` is set, and the proxy restarted after configuration.
 - **Connected but no OTel events** — enforcement works but the exporter does not. Check the `LITELLM_OTEL_V2`, `OTEL_EXPORTER`, `OTEL_ENDPOINT`, and `OTEL_HEADERS` variables; without them, usage and cost views stay empty even though policies are enforced.
 - **Last ingestion missing while OTel flows** — traffic is observed but unenforced; the guardrail configuration is missing or disabled on the proxy.
-- **Authentication failure** — the proxy uses a rotated or revoked key, or the `Gram-Project` header does not match the project the key is bound to.
+- **Authentication failure** — the proxy uses a rotated or revoked key, or the `Speakeasy-AI-Project` header does not match the project the key is bound to.
 - **Invalid payload** — malformed export, usually an unqualified LiteLLM version or a non-LiteLLM sender using the key.
 - **Payload limit exceeded** — an OTel export over 4 MiB. Reduce the exporter batch size or interval.
 - **Version shows "Not reported"** — set `OTEL_SERVICE_NAME=litellm` so trace resources carry the proxy version; guardrail callbacks alone do not report it.
