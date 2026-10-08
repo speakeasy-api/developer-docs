@@ -1,11 +1,11 @@
 ---
 title: Data export
-description: "Export normalized OpenTelemetry logs, metrics, and traces from each project to an OTLP/HTTP destination."
+description: "Export product telemetry, risk findings, and MCP tool call logs from each project to an OTLP/HTTP destination."
 ---
 
 import { Callout } from "@/mdx/components";
 
-Data exports send normalized OpenTelemetry (OTEL) from AI products to project-scoped OTLP/HTTP destinations. The **Exports** page, under [**Organization settings > Data > Exports**](https://app.getgram.ai/@self/data/exports) in the dashboard, shows every configured project route in one organization-level view. To confirm telemetry is reaching the platform before routing it anywhere, use the [event feed](#confirm-telemetry-is-arriving).
+Data exports send normalized OpenTelemetry (OTEL) from AI products, policy findings, and MCP tool calls to project-scoped OTLP/HTTP destinations. The **Exports** page, under [**Organization settings > Data > Exports**](https://app.getgram.ai/@self/data/exports) in the dashboard, shows every configured project route in one organization-level view. To confirm telemetry is reaching the platform before routing it anywhere, use the [event feed](#confirm-telemetry-is-arriving).
 
 ## Access requirements
 
@@ -13,8 +13,7 @@ Data exports send normalized OpenTelemetry (OTEL) from AI products to project-sc
   A direct OTEL connection requires a **Hooks** API key and a project slug.
   Plugins handle the connection automatically. Viewing data exports requires the
   `org:read` scope. Creating, changing, pausing, or deleting an export requires
-  the `org:admin` scope, which is
-  included in the default [Admin
+  the `org:admin` scope, which is included in the default [Admin
   role](/docs/ai-control-plane/org-admin/roles-and-permissions).
 </Callout>
 
@@ -26,18 +25,65 @@ AI products with native OTEL exporters send telemetry to the platform. The platf
 
 The destination is independent of the producer. Changing a route does not require reconfiguring the AI product that sends telemetry to the platform.
 
+Risk findings and tool call logs originate inside the platform instead of at an OTLP producer. Their routes need no producer configuration.
+
 ## Current signal coverage
 
-Three data sources can be exported. **Product telemetry** exports normalized OTLP logs, metrics, and traces from supported products. **Risk findings** exports one OTLP log record per policy finding, carrying a stable finding ID, the policy and policy version, rule, source, confidence, and non-secret position anchors, never the matched content; exclusion rules are re-checked before every delivery so a finding excluded after detection is not exported. **Tool call logs** exports one OTLP log record for every tool call served for hosted or proxied MCP servers, the same records as [Tool Logs](/docs/ai-control-plane/observe/tool-logs), each carrying its log ID so a destination can deduplicate.
+Three data sources can be exported. **Product telemetry** exports normalized OTLP logs, metrics, and traces from supported products. **Risk findings** exports one OTLP log record per policy finding, carrying a stable finding ID, the policy and policy version, rule, source, confidence, and non-secret position anchors, never the matched content; exclusion rules are re-checked before every delivery so a finding excluded after detection is not exported. **Tool call logs** exports one OTLP log record for every tool call the platform serves for hosted or proxied MCP servers, successes and failures alike, each carrying its log ID so a destination can deduplicate. See [Export MCP tool call logs](#export-mcp-tool-call-logs).
 
-| Source                            | Signals                   | Export behavior                                                                          |
-| --------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
-| Compatible OTLP/HTTP producers    | Logs, metrics, and traces | Normalized and sent as OTLP/HTTP Protobuf to `/v1/logs`, `/v1/metrics`, and `/v1/traces` |
-| Products without an OTEL exporter | Plugin hook events        | Available to Observability and Security and Policy, but not included in OTLP data exports |
-| Risk findings                     | Logs                      | One privacy-safe record per finding, sent to `/v1/logs`; exclusions re-checked before delivery |
+| Source                            | Signals                   | Export behavior                                                                                                 |
+| --------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Compatible OTLP/HTTP producers    | Logs, metrics, and traces | Normalized and sent as OTLP/HTTP Protobuf to `/v1/logs`, `/v1/metrics`, and `/v1/traces`                        |
+| Products without an OTEL exporter | Plugin hook events        | Available to Observability and Security and Policy, but not included in OTLP data exports                       |
+| Risk findings                     | Logs                      | One privacy-safe record per finding, sent to `/v1/logs`; exclusions re-checked before delivery                  |
 | Tool call logs                    | Logs                      | One record per tool call on hosted or proxied MCP servers, sent to `/v1/logs` with the log ID for deduplication |
 
 OpenCode and OpenClaw do not expose native OTEL exporters. Their observability plugins still supply sessions, tool calls, tokens, and cost to the platform, but those plugin-only events are not part of the **Product telemetry** export.
+
+## Export MCP tool call logs
+
+Organizations that use the MCP gateway usually need a record of each tool call the gateway serves. **Product telemetry** does not carry those records. It relays only what producers send to the OTLP ingest endpoints, such as Claude Code telemetry enriched with platform context. A tool call the platform executes for a hosted or proxied MCP server never passes through those endpoints, so a failed call can appear in [Tool Logs](/docs/ai-control-plane/observe/tool-logs) and still be missing from a **Product telemetry** destination. Route the **Tool call logs** source to deliver those calls.
+
+| Data needed at the destination                                             | Data source       |
+| -------------------------------------------------------------------------- | ----------------- |
+| Tool calls served by hosted or proxied MCP servers, including failed calls | Tool call logs    |
+| Agent sessions, model usage, and tool use reported by agent OTEL exporters | Product telemetry |
+| Policy findings from risk policies                                         | Risk findings     |
+
+Each source is a separate route, so a project can send tool call logs and product telemetry to the same destination or to different ones. Existing **Product telemetry** routes do not start carrying tool call logs. Add a **Tool call logs** route to receive them.
+
+### What the export includes
+
+The **Tool call logs** source covers the tool calls the platform executes itself:
+
+- Every tool call served for a hosted or proxied MCP server, whatever the outcome.
+- Tool arguments and results, when **Record Tool I/O** is on in [Logging Settings](/docs/ai-control-plane/org-admin/logging-and-telemetry). A destination that excludes sensitive data receives them as `[REDACTED]`. See [Control sensitive data](#control-sensitive-data).
+
+It leaves out records that reach the platform another way:
+
+- Tool use that agents report through hooks, such as calls to shadow MCP servers, skills, and local tools. Tool Logs shows these calls, but they leave the platform through **Product telemetry** where the producer supports it. Routing both sources never delivers the same call twice.
+- MCP resource reads and tool discovery requests on the same servers.
+
+### Record format
+
+Each tool call becomes one OTLP log record sent to `/v1/logs`. The record keeps the attributes Tool Logs filters on, so a query written for Tool Logs translates directly to the destination.
+
+| Field                   | Value                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| Event name              | `gram.tool_call`                                                                                      |
+| Instrumentation scope   | `github.com/speakeasy-api/gram/server/internal/telemetry`                                             |
+| Severity                | `INFO`, `WARN`, or `ERROR`, with the matching OTLP severity number                                    |
+| Body                    | The log message shown in Tool Logs                                                                    |
+| Trace and span IDs      | The IDs of the call, when it has valid ones                                                           |
+| Resource attributes     | The service and deployment that served the call, such as `service.name` and `gram.deployment.id`      |
+| `gram.telemetry.log.id` | The ID of the Tool Logs record, for deduplication                                                     |
+| `gram.event.source`     | Always `tool_call`                                                                                    |
+| `gram.org.id`           | Organization ID                                                                                       |
+| Tool attributes         | Tool and response context, such as `gram.tool.name`, `gram.tool.urn`, and `http.response.status_code` |
+
+Numeric attributes keep their type. An HTTP status code or a nanosecond timestamp arrives as an integer, not a floating-point value.
+
+Delivery is at-least-once, so a destination can occasionally receive the same record twice. Deduplicate on `gram.telemetry.log.id` when exact counts matter.
 
 ## Connect without a plugin
 
@@ -130,7 +176,7 @@ Filter by time range, kind (logs or spans), source, and name, or search event bo
 
 ## Choose a destination
 
-Data exports use the open OTLP/HTTP format. Any destination that accepts OTLP/HTTP Protobuf at the standard signal paths can receive exported telemetry. The configurations below support OTLP/HTTP traces. Confirm log and metric support with the destination when all three signals are required.
+Data exports use the open OTLP/HTTP format. Any destination that accepts OTLP/HTTP Protobuf at the standard signal paths can receive exported telemetry. The configurations below support OTLP/HTTP traces. Confirm log and metric support with the destination when all three signals are required. **Risk findings** and **Tool call logs** send only logs, so their destinations must accept OTLP logs at `/v1/logs`.
 
 ### Langfuse
 
