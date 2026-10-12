@@ -264,6 +264,15 @@ A plugin is the bundle of MCP servers and skills an organization shares with peo
 | `create_plugin`                | Write | Creates one empty plugin in a project.                                                                                                                                                                                                                                          |
 | `rename_plugin`                | Write | Changes the display name of one exact plugin.                                                                                                                                                                                                                                   |
 | `republish_plugin`             | Write | Requests a publish of a project's plugin packages now, for a plugin whose published package is stale, instead of waiting for the periodic refresh. Regenerates every plugin in the project, not only the one named.                                                           |
+| `remove_plugin_server`         | Write | Removes one exact server membership from a plugin, including an entry added automatically. Changes distribution only, not server access, audiences, or the plugin and server themselves.                                                                                      |
+
+### Assistants
+
+An assistant is a project-scoped AI agent that runs inside the dashboard. Only one tool manages assistant identity today: granting an assistant its own agent and workload identity.
+
+| Tool                                 | Type  | What it does                                                                                                                                                                                                                                                   |
+| ------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `upgrade_assistant_workload_identity` | Write | Gives one assistant an agent and a workload identity, either a new agent or an existing agent of the same project. Requires explicit confirmation and organization administrator access. Unavailable until assistant workload identity is enabled for the organization. |
 
 ### Skills
 
@@ -327,6 +336,21 @@ Risk policies and exclusions are the rules the [Secure](/docs/ai-control-plane/s
 | `mark_risk_findings_false_positive`   | Write | Dismisses named findings in a project as reviewed false positives, moving them to the Dismissed tab. Takes up to 200 finding IDs returned by the dashboard or `list_risk_findings`, an optional reason, and explicit confirmation. Only the findings named are suppressed, never future findings matching the same rule, so a whole class belongs in `create_risk_exclusion`. The receipt reports each ID as changed, already dismissed, or not in the project, and an unknown ID never fails the call. |
 | `unmark_risk_findings_false_positive` | Write | Restores dismissed findings so they return to the active list, undoing the mark. Takes the same finding IDs and explicit confirmation, and reports each ID as changed, already active, or not in the project.                                                                                                                                                                                                                                                                                           |
 
+### Signals intelligence
+
+Signals intelligence authors project-scoped sensors and the signals they apply to agent conversations. A sensor matches messages by a boolean expression over message role and classifies a match into one or more signals. Authoring a sensor or signal always previews the proposal first, then requires explicit confirmation, a fresh version, and a stable idempotency key before it commits.
+
+| Tool                  | Type  | What it does                                                                                                                                      |
+| ---------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `find_signals`         | Read  | Finds reusable signals by name or slug in a project, before creating duplicates.                                                                     |
+| `find_sensors`         | Read  | Finds project sensor summaries by name or slug, with matching expressions, signal counts, and configuration readiness.                              |
+| `get_sensor`           | Read  | Reads one exact sensor, its expanded signals, matching expression, and configuration readiness.                                                     |
+| `preview_sensor_match` | Read  | Validates a boolean matching expression and evaluates up to 20 caller-supplied role examples, without retrieving messages or running inference.     |
+| `create_sensor`        | Write | Creates a sensor with its inline signals and ordered memberships.                                                                                    |
+| `create_signal`        | Write | Creates a reusable signal that a sensor can reference.                                                                                               |
+| `update_sensor`        | Write | Updates an existing sensor, preserving omitted fields and replacing supplied memberships.                                                            |
+| `update_signal`        | Write | Updates a shared signal, affecting every sensor that references it.                                                                                  |
+
 ### Observability
 
 These tools read the same data as [MCP Insights](/docs/ai-control-plane/observe/mcp-and-tools) and [Tool Logs](/docs/ai-control-plane/observe/tool-logs) in the Observability section. Every value is aggregated or summarized server-side and carries the window it covers. None of them return arguments, results, bodies, headers, URLs, attributes, or identities.
@@ -348,6 +372,16 @@ These tools read the same data as [MCP Insights](/docs/ai-control-plane/observe/
 | `get_user_metrics_summary` | Read | Summarizes one person's activity across a project over up to 30 days, from a reference returned by `search_users` or `list_mcp_usage_users`: call volume, failures, failure rate, the servers their tools name, and their most-failing tools with exact counts.                                                                                                                                                                                                                                                 |
 | `list_organization_events` | Read | Lists the newest Event Feed entries for the organization, defaulting to 20 from the last day and capped at 50. Each entry is reduced to when it happened, whether it is a log or a span, its source and name, and its project. Never returns attributes, trace IDs, or identities.                                                                                                                                                                                                                              |
 | `list_chats`               | Read | Lists a project's chats active in a window of up to 30 days, newest activity first, as metadata only.                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+### Analytics
+
+Three read-only tools query a project's agent session and tool call analytics catalog, used in order: describing the catalog, listing a dimension's values, then running a query. Every query names fields from the catalog rather than SQL. Available only when Explore is switched on for the organization.
+
+| Tool                               | Type | What it does                                                                                                                       |
+| ----------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `describe_analytics_catalog`        | Read | Describes the catalog: every dataset, its dimensions and measures, the time grains, and the query limits. Call this first.             |
+| `list_analytics_dimension_values`   | Read | Lists the values one dimension of a dataset holds inside a time window, for choosing filter values before `run_analytics_query`.       |
+| `run_analytics_query`               | Read | Runs one grouped or ungrouped query against a dataset from `describe_analytics_catalog`, in catalog vocabulary.                        |
 
 ### Shadow MCP
 
