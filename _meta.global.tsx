@@ -1074,10 +1074,6 @@ const meta = {
       //   type: "separator",
       //   title: <SidebarSeparator>{"Support"}</SidebarSeparator>,
       // },
-      // "slack-community": {
-      //   title: "Slack Community",
-      //   href: "https://go.speakeasy.com/slack",
-      // },
       // "enterprise-support": {
       //   title: "Enterprise Support",
       // },
