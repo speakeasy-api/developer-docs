@@ -4,7 +4,7 @@ description: Deploy the Speakeasy tunnel agent into an existing AWS account on a
 guideCategory: Deployment guides
 ---
 
-This guide deploys the Speakeasy tunnel agent (`gram-tunnel-agent`) into
+This guide deploys the Speakeasy tunnel agent (`speakeasy-tunnel-agent`) into
 an AWS account you already operate, onto one of three compute targets:
 an existing EKS cluster's node group, an ECS Fargate task, or a Docker
 container on an EC2 host, supervised by systemd. The agent dials outbound to
@@ -147,11 +147,11 @@ conditional case for your own node type, not a default step.
 Save the manifest to a file, then apply it:
 
 ```bash
-cat > gram-tunnel.yaml <<'EOF'
+cat > speakeasy-tunnel.yaml <<'EOF'
 apiVersion: v1
 kind: Secret
 metadata:
-  name: gram-tunnel-key
+  name: speakeasy-tunnel-key
 type: Opaque
 stringData:
   TUNNEL_KEY: "<YOUR_TUNNEL_KEY>"
@@ -159,16 +159,16 @@ stringData:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gram-tunnel
+  name: speakeasy-tunnel
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gram-tunnel
+      app: speakeasy-tunnel
   template:
     metadata:
       labels:
-        app: gram-tunnel
+        app: speakeasy-tunnel
     spec:
       containers:
         - name: tunnel-agent
@@ -177,7 +177,7 @@ spec:
             - name: TUNNEL_KEY
               valueFrom:
                 secretKeyRef:
-                  name: gram-tunnel-key
+                  name: speakeasy-tunnel-key
                   key: TUNNEL_KEY
             - name: TUNNEL_LOCAL_MCP_URL
               value: "<local MCP URL>"
@@ -186,7 +186,7 @@ spec:
             - name: TUNNEL_SERVICE_VERSION
               value: "<service version>"
 EOF
-kubectl apply -f gram-tunnel.yaml
+kubectl apply -f speakeasy-tunnel.yaml
 ```
 
 `<YOUR_TUNNEL_KEY>`, `<local MCP URL>`, and `<service version>` — see
@@ -196,19 +196,19 @@ origin.
 **Verify**: check the pod reached `Running`:
 
 ```bash
-kubectl get pods -l app=gram-tunnel
+kubectl get pods -l app=speakeasy-tunnel
 ```
 
 ```text
 NAME                           READY   STATUS    RESTARTS   AGE
-gram-tunnel-6b7f9c8d5f-abcde   1/1     Running   0          30s
+speakeasy-tunnel-6b7f9c8d5f-abcde   1/1     Running   0          30s
 ```
 
 If `STATUS` shows `CrashLoopBackOff` or `RESTARTS` is climbing, read the
 container's logs:
 
 ```bash
-kubectl logs -l app=gram-tunnel --tail=20
+kubectl logs -l app=speakeasy-tunnel --tail=20
 ```
 
 A malformed `TUNNEL_KEY` or `TUNNEL_LOCAL_MCP_URL` surfaces here as a
@@ -222,8 +222,8 @@ egress from the node is wrong — revisit
 `CrashLoopBackOff` with climbing `RESTARTS` means the agent itself is
 failing — read the trimmed `kubectl logs` output above for its error.
 
-The Deployment name (`gram-tunnel`), the manifest filename
-(`gram-tunnel.yaml`), and the namespace are starting points, not
+The Deployment name (`speakeasy-tunnel`), the manifest filename
+(`speakeasy-tunnel.yaml`), and the namespace are starting points, not
 requirements.
 
 ## ECS Fargate variant
@@ -287,7 +287,7 @@ is gone.
 
 ```bash
 aws secretsmanager create-secret \
-  --name gram-tunnel-key \
+  --name speakeasy-tunnel-key \
   --secret-string '{"TUNNEL_KEY":"<YOUR_TUNNEL_KEY>"}'
 ```
 
@@ -296,8 +296,8 @@ command's own JSON output on success matters for the next step:
 
 ```json
 {
-  "ARN": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:gram-tunnel-key-<SUFFIX>",
-  "Name": "gram-tunnel-key",
+  "ARN": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:speakeasy-tunnel-key-<SUFFIX>",
+  "Name": "speakeasy-tunnel-key",
   "VersionId": "<VERSION_ID>"
 }
 ```
@@ -312,12 +312,12 @@ resolve.
 **Verify**:
 
 ```bash
-aws secretsmanager describe-secret --secret-id gram-tunnel-key
+aws secretsmanager describe-secret --secret-id speakeasy-tunnel-key
 ```
 
 Expect the response to include the same full ARN (with its
 six-character suffix) returned by `create-secret` above, and
-`"Name": "gram-tunnel-key"`. This is also the safe way to recover the
+`"Name": "speakeasy-tunnel-key"`. This is also the safe way to recover the
 full ARN if you did not copy it from the `create-secret` output.
 
 If a secret with this name already exists, `create-secret` fails with
@@ -325,7 +325,7 @@ If a secret with this name already exists, `create-secret` fails with
 `describe-secret`) rather than retrying with a new name, or
 delete-and-recreate if that is safe.
 
-The secret name `gram-tunnel-key` is this guide's choice, substitutable,
+The secret name `speakeasy-tunnel-key` is this guide's choice, substitutable,
 as long as the task definition's `valueFrom` below is updated to match
 the ARN this command actually returns.
 
@@ -352,7 +352,7 @@ cat > ecs-secret-access-policy.json <<'EOF'
 EOF
 aws iam put-role-policy \
   --role-name ecsTaskExecutionRole \
-  --policy-name gram-tunnel-secret-access \
+  --policy-name speakeasy-tunnel-secret-access \
   --policy-document file://ecs-secret-access-policy.json
 ```
 
@@ -367,7 +367,7 @@ not added here since this guide does not create a customer-managed key.
 **Verify**:
 
 ```bash
-aws iam get-role-policy --role-name ecsTaskExecutionRole --policy-name gram-tunnel-secret-access
+aws iam get-role-policy --role-name ecsTaskExecutionRole --policy-name speakeasy-tunnel-secret-access
 ```
 
 Expect the response's `PolicyDocument` to show
@@ -381,7 +381,7 @@ re-run `describe-secret` from
 [Create the tunnel key secret](#ecs-create-secret) to confirm the ARN
 matches exactly, including the suffix.
 
-The inline policy name (`gram-tunnel-secret-access`) is this guide's
+The inline policy name (`speakeasy-tunnel-secret-access`) is this guide's
 choice, substitutable; the action and resource scope are the documented
 requirement, not a starting point.
 
@@ -396,7 +396,7 @@ use the smallest documented Fargate combination, `256` (.25 vCPU) /
 ```bash
 cat > tunnel-agent-task-def.json <<'EOF'
 {
-  "family": "gram-tunnel-agent",
+  "family": "speakeasy-tunnel-agent",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
@@ -420,7 +420,7 @@ cat > tunnel-agent-task-def.json <<'EOF'
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/gram-tunnel-agent",
+          "awslogs-group": "/ecs/speakeasy-tunnel-agent",
           "awslogs-region": "<REGION>",
           "awslogs-stream-prefix": "tunnel-agent"
         }
@@ -445,17 +445,17 @@ aws ecs register-task-definition --cli-input-json file://tunnel-agent-task-def.j
 backed by Secrets Manager, never via `environment` — the ECS equivalent
 of the Kubernetes `secretKeyRef`.
 
-A CloudWatch Logs log group (`/ecs/gram-tunnel-agent`) must exist before
+A CloudWatch Logs log group (`/ecs/speakeasy-tunnel-agent`) must exist before
 tasks start logging to it:
 
 ```bash
-aws logs create-log-group --log-group-name /ecs/gram-tunnel-agent
+aws logs create-log-group --log-group-name /ecs/speakeasy-tunnel-agent
 ```
 
 **Verify**:
 
 ```bash
-aws ecs describe-task-definition --task-definition gram-tunnel-agent
+aws ecs describe-task-definition --task-definition speakeasy-tunnel-agent
 ```
 
 Expect `status: ACTIVE` and the container definition to show the pinned
@@ -467,7 +467,7 @@ reference fails at task start if the execution role lacks
 `secretsmanager:GetSecretValue` on that ARN.
 
 `256`/`512` is a starting point — the smallest Fargate-supported pair —
-not a requirement. The family name `gram-tunnel-agent` and the log group
+not a requirement. The family name `speakeasy-tunnel-agent` and the log group
 name are this guide's choice, substitutable.
 
 ### Create the cluster and the awsvpc service
@@ -478,11 +478,11 @@ It is reversible — deleting the service stops the task. The `awsvpc`
 network mode requires `networkConfiguration` on the service.
 
 ```bash
-aws ecs create-cluster --cluster-name gram-tunnel-cluster
+aws ecs create-cluster --cluster-name speakeasy-tunnel-cluster
 aws ecs create-service \
-  --cluster gram-tunnel-cluster \
-  --service-name gram-tunnel \
-  --task-definition gram-tunnel-agent \
+  --cluster speakeasy-tunnel-cluster \
+  --service-name speakeasy-tunnel \
+  --task-definition speakeasy-tunnel-agent \
   --desired-count 1 \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[<PRIVATE_SUBNET_ID>],securityGroups=[<SECURITY_GROUP_ID>],assignPublicIp=DISABLED}"
@@ -496,7 +496,7 @@ reached via NAT — this is also the documented default.
 **Verify**:
 
 ```bash
-aws ecs describe-services --cluster gram-tunnel-cluster --services gram-tunnel
+aws ecs describe-services --cluster speakeasy-tunnel-cluster --services speakeasy-tunnel
 ```
 
 Expect `"runningCount": 1` and `"status": "ACTIVE"`.
@@ -508,7 +508,7 @@ no route to pull the image over the internet/NAT — revisit
 instance/subnet is exhausted — a day-two capacity concern outside this
 guide's scope.
 
-The cluster name `gram-tunnel-cluster` and service name `gram-tunnel`
+The cluster name `speakeasy-tunnel-cluster` and service name `speakeasy-tunnel`
 are this guide's choice, substitutable; `desired-count` of `1` matches
 the single-replica Kubernetes example.
 
@@ -551,15 +551,15 @@ First create the instance profile and attach the managed policy:
 
 ```bash
 aws iam create-role \
-  --role-name gram-tunnel-instance-role \
+  --role-name speakeasy-tunnel-instance-role \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
 aws iam attach-role-policy \
-  --role-name gram-tunnel-instance-role \
+  --role-name speakeasy-tunnel-instance-role \
   --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-aws iam create-instance-profile --instance-profile-name gram-tunnel-instance-profile
+aws iam create-instance-profile --instance-profile-name speakeasy-tunnel-instance-profile
 aws iam add-role-to-instance-profile \
-  --instance-profile-name gram-tunnel-instance-profile \
-  --role-name gram-tunnel-instance-role
+  --instance-profile-name speakeasy-tunnel-instance-profile \
+  --role-name speakeasy-tunnel-instance-role
 ```
 
 Then launch with that instance profile and no `--key-name`, since
@@ -571,7 +571,7 @@ aws ec2 run-instances \
   --instance-type t3.micro \
   --subnet-id <PRIVATE_SUBNET_ID> \
   --security-group-ids <SECURITY_GROUP_ID> \
-  --iam-instance-profile Name=gram-tunnel-instance-profile \
+  --iam-instance-profile Name=speakeasy-tunnel-instance-profile \
   --count 1
 ```
 
@@ -715,14 +715,14 @@ Create the directory and the environment file with restrictive
 permissions, since it holds `TUNNEL_KEY`:
 
 ```bash
-sudo mkdir -p /etc/gram-tunnel
-sudo tee /etc/gram-tunnel/env > /dev/null <<'EOF'
+sudo mkdir -p /etc/speakeasy-tunnel
+sudo tee /etc/speakeasy-tunnel/env > /dev/null <<'EOF'
 TUNNEL_GATEWAY_URL=wss://tunnel.speakeasy.com/connect
 TUNNEL_KEY=<YOUR_TUNNEL_KEY>
 TUNNEL_LOCAL_MCP_URL=<local MCP URL>
 TUNNEL_SERVICE_VERSION=<service version>
 EOF
-sudo chmod 600 /etc/gram-tunnel/env
+sudo chmod 600 /etc/speakeasy-tunnel/env
 ```
 
 `chmod 600` restricts the file to the owner (`root`, since it is written
@@ -738,7 +738,7 @@ Then create the unit and enable it, now that the file it depends on
 exists:
 
 ```ini
-# /etc/systemd/system/gram-tunnel.service
+# /etc/systemd/system/speakeasy-tunnel.service
 [Unit]
 Description=Speakeasy tunnel agent
 After=docker.service network-online.target
@@ -746,9 +746,9 @@ Requires=docker.service
 Wants=network-online.target
 
 [Service]
-EnvironmentFile=/etc/gram-tunnel/env
-ExecStartPre=-/usr/bin/docker rm -f gram-tunnel
-ExecStart=/usr/bin/docker run --name gram-tunnel --env-file /etc/gram-tunnel/env ghcr.io/speakeasy-api/gram-tunnel-agent:0.1.0
+EnvironmentFile=/etc/speakeasy-tunnel/env
+ExecStartPre=-/usr/bin/docker rm -f speakeasy-tunnel
+ExecStart=/usr/bin/docker run --name speakeasy-tunnel --env-file /etc/speakeasy-tunnel/env ghcr.io/speakeasy-api/gram-tunnel-agent:0.1.0
 Restart=on-failure
 RestartSec=5s
 
@@ -758,12 +758,12 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now gram-tunnel.service
+sudo systemctl enable --now speakeasy-tunnel.service
 ```
 
 `Requires=docker.service` and `After=docker.service` make the unit's
 own dependency on the Docker daemon explicit rather than relying on
-boot-order luck. `ExecStartPre=-/usr/bin/docker rm -f gram-tunnel` (the
+boot-order luck. `ExecStartPre=-/usr/bin/docker rm -f speakeasy-tunnel` (the
 leading `-` makes a non-zero exit non-fatal) removes a stale container
 of the same name left over from a previous crashed run, since `docker
 run --name` fails if a container by that name already exists — without
@@ -782,12 +782,12 @@ it directly on a command line.
 **Verify**:
 
 ```bash
-stat -c '%a %n' /etc/gram-tunnel/env
-systemctl is-active gram-tunnel.service
-docker logs gram-tunnel --tail 20
+stat -c '%a %n' /etc/speakeasy-tunnel/env
+systemctl is-active speakeasy-tunnel.service
+docker logs speakeasy-tunnel --tail 20
 ```
 
-Expect `600 /etc/gram-tunnel/env`, `active`, and the log tail to show
+Expect `600 /etc/speakeasy-tunnel/env`, `active`, and the log tail to show
 `tunnel agent connected`, not merely the first-seen `tunnel-agent
 starting` line (see
 [Speakeasy deployment](#deploy-speakeasy-workload) for the
@@ -796,21 +796,21 @@ compute target's Verify reads — `docker logs` is this target's form of
 that same check, parallel to `kubectl logs` (EKS) and `aws logs tail` /
 CloudWatch (ECS Fargate).
 
-If `/etc/gram-tunnel/env` does not exist at start time, `systemctl
+If `/etc/speakeasy-tunnel/env` does not exist at start time, `systemctl
 enable --now` exits non-zero and `systemctl is-active` shows `failed` —
 the ordering above prevents this; if it happens anyway,
-`journalctl -u gram-tunnel.service` shows "Failed to load environment
+`journalctl -u speakeasy-tunnel.service` shows "Failed to load environment
 files" or similar. `docker run` fails with "Cannot connect to the Docker
 daemon" if Docker (from
 [Install and enable Docker on the instance](#ec2-install-docker)) is not
 active — `Requires=docker.service` surfaces this as the unit failing to
 start rather than starting and immediately erroring. The container
 restart-loops (climbing restart count visible in `systemctl status
-gram-tunnel.service`) if `TUNNEL_KEY` or `TUNNEL_LOCAL_MCP_URL` is
-malformed, visible in `docker logs gram-tunnel`.
+speakeasy-tunnel.service`) if `TUNNEL_KEY` or `TUNNEL_LOCAL_MCP_URL` is
+malformed, visible in `docker logs speakeasy-tunnel`.
 
-The unit name (`gram-tunnel.service`), the container name
-(`gram-tunnel`), `RestartSec=5s`, and the `EnvironmentFile` path are this
+The unit name (`speakeasy-tunnel.service`), the container name
+(`speakeasy-tunnel`), `RestartSec=5s`, and the `EnvironmentFile` path are this
 guide's starting point, not a requirement — any process supervisor
 documented for your own AMI/distribution that can run `docker run` in
 the foreground and restart it on failure achieves the same effect.
@@ -851,7 +851,7 @@ confirmed in
 apiVersion: v1
 kind: Secret
 metadata:
-  name: gram-tunnel-key
+  name: speakeasy-tunnel-key
 type: Opaque
 stringData:
   TUNNEL_KEY: "<YOUR_TUNNEL_KEY>"
@@ -859,16 +859,16 @@ stringData:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gram-tunnel
+  name: speakeasy-tunnel
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gram-tunnel
+      app: speakeasy-tunnel
   template:
     metadata:
       labels:
-        app: gram-tunnel
+        app: speakeasy-tunnel
     spec:
       containers:
         - name: tunnel-agent
@@ -877,7 +877,7 @@ spec:
             - name: TUNNEL_KEY
               valueFrom:
                 secretKeyRef:
-                  name: gram-tunnel-key
+                  name: speakeasy-tunnel-key
                   key: TUNNEL_KEY
             - name: TUNNEL_LOCAL_MCP_URL
               value: "<local MCP URL>"
@@ -896,7 +896,7 @@ Set `<service version>` to your own MCP service's version string.
 
 The image tag is pinned to `0.1.0` here rather than the Control Plane
 setup screen's `:latest`, so this guide's behavior does not change under
-you later. The Deployment name (`gram-tunnel`) is this guide's own name,
+you later. The Deployment name (`speakeasy-tunnel`) is this guide's own name,
 not the Control Plane setup screen's scratch `gram-tunnel-test` name.
 
 **ECS Fargate.** The secret you created in
@@ -923,7 +923,7 @@ that started it.
 Populate the environment file loaded by that unit:
 
 ```ini
-# /etc/gram-tunnel/env
+# /etc/speakeasy-tunnel/env
 TUNNEL_GATEWAY_URL=wss://tunnel.speakeasy.com/connect
 TUNNEL_KEY=<YOUR_TUNNEL_KEY>
 TUNNEL_LOCAL_MCP_URL=<local MCP URL>
@@ -931,8 +931,8 @@ TUNNEL_SERVICE_VERSION=<service version>
 ```
 
 ```ini
-# /etc/systemd/system/gram-tunnel.service (relevant line; full unit in #ec2-supervise-agent)
-ExecStart=/usr/bin/docker run --name gram-tunnel --env-file /etc/gram-tunnel/env ghcr.io/speakeasy-api/gram-tunnel-agent:0.1.0
+# /etc/systemd/system/speakeasy-tunnel.service (relevant line; full unit in #ec2-supervise-agent)
+ExecStart=/usr/bin/docker run --name speakeasy-tunnel --env-file /etc/speakeasy-tunnel/env ghcr.io/speakeasy-api/gram-tunnel-agent:0.1.0
 ```
 
 Set `<local MCP URL>` to the private DNS name or IP you located in
@@ -962,11 +962,11 @@ line has started and has **not** dialed — that distinction is the whole
 point of this check, so read the log rather than stopping at
 process/pod/task status:
 
-- EKS: `kubectl logs -l app=gram-tunnel --tail=20` (see
+- EKS: `kubectl logs -l app=speakeasy-tunnel --tail=20` (see
   [Save the manifest and apply the tunnel agent Deployment (EKS)](#eks-deploy-tunnel-agent)).
-- ECS Fargate: `aws logs tail /ecs/gram-tunnel-agent`, or the CloudWatch
+- ECS Fargate: `aws logs tail /ecs/speakeasy-tunnel-agent`, or the CloudWatch
   console.
-- EC2-host: `docker logs gram-tunnel --tail 20` (see
+- EC2-host: `docker logs speakeasy-tunnel --tail 20` (see
   [Write the environment file, then supervise the agent container](#ec2-supervise-agent)).
 
 A fourth message, `tunnel-agent init failed`, means the agent rejected
@@ -1000,12 +1000,12 @@ as soon as you do, and a running agent still holding it fails to
 re-establish its session. After rotating, update the secret **and
 restart the agent**:
 
-- EKS: update the `gram-tunnel-key` Secret, then
-  `kubectl rollout restart deployment/gram-tunnel`.
+- EKS: update the `speakeasy-tunnel-key` Secret, then
+  `kubectl rollout restart deployment/speakeasy-tunnel`.
 - ECS Fargate: update the Secrets Manager secret, then force a new
-  deployment: `aws ecs update-service --cluster gram-tunnel-cluster --service gram-tunnel --force-new-deployment`.
-- EC2-host: edit `/etc/gram-tunnel/env`, then
-  `sudo systemctl restart gram-tunnel.service`.
+  deployment: `aws ecs update-service --cluster speakeasy-tunnel-cluster --service speakeasy-tunnel --force-new-deployment`.
+- EC2-host: edit `/etc/speakeasy-tunnel/env`, then
+  `sudo systemctl restart speakeasy-tunnel.service`.
 
 Rotating the key without restarting the agent leaves it running against
 a key the Control Plane no longer accepts.

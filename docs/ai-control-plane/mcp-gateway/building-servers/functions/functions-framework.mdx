@@ -7,27 +7,35 @@ import { Callout } from "@/mdx/components";
 
 ## Overview
 
-The Speakeasy Functions Framework is a lightweight way to build MCP tools in TypeScript, published as the [`@gram-ai/functions`](https://github.com/speakeasy-api/gram/tree/main/ts-framework/functions) package. It handles the MCP implementation so a function only has to contain its tool logic. A function bundle's [manifest and entrypoint](/docs/ai-control-plane/mcp-gateway/building-servers/functions#bundle-structure) can be written by hand, but the framework handles manifest generation, bundling, input validation, and packaging automatically at build time. Deployed functions appear on the **Sources** tab of [**MCP Gateway > MCP**](https://app.getgram.ai/@self/projects/default/mcp) in the dashboard.
+The Speakeasy Functions Framework is a lightweight way to build MCP tools in TypeScript, published as the [`@speakeasy-api/functions`](https://github.com/speakeasy-api/gram/tree/main/ts-framework/functions) package. It handles the MCP implementation so a function only has to contain its tool logic. A function bundle's [manifest and entrypoint](/docs/ai-control-plane/mcp-gateway/building-servers/functions#bundle-structure) can be written by hand, but the framework handles manifest generation, bundling, input validation, and packaging automatically at build time. Deployed functions appear on the **Sources** tab of [**MCP Gateway > MCP**](https://ai.speakeasy.com/@self/projects/default/mcp) in the dashboard.
 
-The project scaffolder offers the framework as its first choice:
+<Callout type="info" title="Previously @gram-ai/functions">
+    The framework was published as `@gram-ai/functions`, with a `Gram` class and
+    `withGram` and `fromGram` helpers. Those names still work as aliases of
+    `@speakeasy-api/functions`, `Functions`, `withFunctions` and `fromFunctions`,
+    so existing projects do not need to change. Files named `gram.config.ts`,
+    `src/gram.ts` and `gram.deploy.json` are also still read.
+</Callout>
+
+The project scaffolder, `speakeasy functions init`, offers the framework as its first choice:
 
 ![Choosing the Functions framework in the project scaffolder](/assets/docs/gram/img/functions/npm_gram-framework.png)
 
-To skip the prompt and scaffold straight onto the framework, pass the `gram` template. With pnpm:
+To skip the prompt and scaffold straight onto the framework, pass the `functions` template:
 
 ```bash
-pnpm create @gram-ai/function@latest --template gram
+speakeasy functions init my-functions --template functions
 ```
 
 ## Function structure
 
 Every Function follows this basic structure:
 
-```typescript filename="gram.ts"
-import { Gram } from "@gram-ai/functions";
+```typescript filename="functions.ts"
+import { Functions } from "@speakeasy-api/functions";
 import * as z from "zod/mini";
 
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "add",
   description: "Add two numbers together",
   inputSchema: { a: z.number(), b: z.number() },
@@ -36,7 +44,7 @@ const gram = new Gram().tool({
   },
 });
 
-export default gram;
+export default functions;
 ```
 
 ## Tool definition
@@ -52,10 +60,10 @@ Each tool requires the following properties:
 A tool that computes a result from validated input:
 
 ```typescript filename="src/functions.ts"
-import { Gram } from "@gram-ai/functions";
+import { Functions } from "@speakeasy-api/functions";
 import * as z from "zod/mini";
 
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "calculate_discount",
   description: "Calculate the final price after applying a discount percentage",
   inputSchema: {
@@ -74,7 +82,7 @@ const gram = new Gram().tool({
   },
 });
 
-export default gram;
+export default functions;
 ```
 
 ## Context object
@@ -89,7 +97,7 @@ The `execute` function receives a context object with several helper methods for
 - **`ctx.fail(data, options?)`:** Throws an error response
 
 ```typescript
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "format_data",
   inputSchema: { format: z.enum(["json", "text", "html"]), data: z.string() },
   async execute(ctx, input) {
@@ -110,7 +118,7 @@ const gram = new Gram().tool({
 - **`ctx.env`:** Access to parsed environment variables
 
 ```typescript
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "long_running_task",
   inputSchema: { url: z.string() },
   async execute(ctx, input) {
@@ -138,7 +146,7 @@ Tool calls that arrive over MCP carry attribution about the caller:
 Every field is optional. Calls that do not arrive over MCP, such as direct instance invocations and resource reads, leave all three undefined.
 
 ```typescript
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "record_action",
   inputSchema: { action: z.string() },
   async execute(ctx, input) {
@@ -171,7 +179,7 @@ The Functions Framework validates inputs against the provided Zod schema by defa
 To allow unvalidated inputs, enable lax mode:
 
 ```typescript
-const gram = new Gram({ lax: true }).tool({
+const functions = new Functions({ lax: true }).tool({
   name: "flexible_tool",
   inputSchema: { required: z.string() },
   async execute(ctx, input) {
@@ -186,7 +194,7 @@ const gram = new Gram({ lax: true }).tool({
 Functions can access environment variables directly from `process.env`:
 
 ```typescript
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "api_call",
   inputSchema: { endpoint: z.string() },
   async execute(ctx, input) {
@@ -204,7 +212,7 @@ For more details on configuring and managing environment variables in Functions,
 Tools can make requests to downstream APIs and respond with the following result:
 
 ```typescript
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "spacex-ships",
   description: "Get the latest SpaceX ship list",
   inputSchema: {},
@@ -225,7 +233,7 @@ Tools can return responses in multiple formats:
 - Custom Web API response objects with specific headers and status codes
 
 ```typescript
-const gram = new Gram().tool({
+const functions = new Functions().tool({
   name: "custom_response",
   inputSchema: { code: z.number() },
   async execute(ctx, input) {
@@ -239,17 +247,17 @@ const gram = new Gram().tool({
 
 ## Composability
 
-Instances of `Gram` can be composed together using the `.extend()` method, allowing tool definitions to be split across multiple files and modules. This pattern is similar to Hono's grouping pattern and helps organize larger codebases.
+Instances of `Functions` can be composed together using the `.extend()` method, allowing tool definitions to be split across multiple files and modules. This pattern is similar to Hono's grouping pattern and helps organize larger codebases.
 
 ### Basic composition
 
 Split tool definitions into separate modules and combine them:
 
 ```typescript filename="train.ts"
-import { Gram } from "@gram-ai/functions";
+import { Functions } from "@speakeasy-api/functions";
 import * as z from "zod/mini";
 
-export const trainGram = new Gram({
+export const trainFunctions = new Functions({
   envSchema: {
     TRAIN_API_KEY: z.string().describe("API key for the train service"),
   },
@@ -276,10 +284,10 @@ export const trainGram = new Gram({
 ```
 
 ```typescript filename="flight.ts"
-import { Gram } from "@gram-ai/functions";
+import { Functions } from "@speakeasy-api/functions";
 import * as z from "zod/mini";
 
-export const flightGram = new Gram({
+export const flightFunctions = new Functions({
   envSchema: {
     FLIGHT_API_KEY: z.string().describe("API key for the flight service"),
   },
@@ -305,23 +313,23 @@ export const flightGram = new Gram({
   });
 ```
 
-```typescript filename="gram.ts"
-import { Gram } from "@gram-ai/functions";
-import { trainGram } from "./train";
-import { flightGram } from "./flight";
+```typescript filename="functions.ts"
+import { Functions } from "@speakeasy-api/functions";
+import { trainFunctions } from "./train";
+import { flightFunctions } from "./flight";
 
-const gram = new Gram().extend(trainGram).extend(flightGram);
+const functions = new Functions().extend(trainFunctions).extend(flightFunctions);
 
-export default gram;
+export default functions;
 ```
 
 ### Environment schema merging
 
-When composing `Gram` instances, environment schemas are automatically merged. Each module can define its own environment variables, and the final composed instance will validate all required variables:
+When composing `Functions` instances, environment schemas are automatically merged. Each module can define its own environment variables, and the final composed instance will validate all required variables:
 
 ```typescript
 // Each module defines its own environment requirements
-const weatherGram = new Gram({
+const weatherFunctions = new Functions({
   envSchema: {
     WEATHER_API_KEY: z.string(),
   },
@@ -335,7 +343,7 @@ const weatherGram = new Gram({
   },
 });
 
-const newsGram = new Gram({
+const newsFunctions = new Functions({
   envSchema: {
     NEWS_API_KEY: z.string(),
   },
@@ -350,16 +358,16 @@ const newsGram = new Gram({
 });
 
 // Composed instance requires both environment variables
-const gram = new Gram().extend(weatherGram).extend(newsGram);
+const functions = new Functions().extend(weatherFunctions).extend(newsFunctions);
 // Both WEATHER_API_KEY and NEWS_API_KEY must be provided
 ```
 
 ### Benefits of composition
 
-Composing `Gram` instances provides several advantages:
+Composing `Functions` instances provides several advantages:
 
 - **Modularity**: Organize related tools into separate files
-- **Reusability**: Share tool definitions across different `Gram` instances
+- **Reusability**: Share tool definitions across different `Functions` instances
 - **Maintainability**: Easier to manage large codebases with many tools
 - **Team collaboration**: Different team members can work on separate modules
 

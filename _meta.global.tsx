@@ -713,13 +713,13 @@ const meta = {
             },
           },
           "why-gram": {
-            title: "Why Gram?",
+            title: "Why the AI Control Plane?",
           },
           "getting-started": {
             title: "Getting started",
             items: {
               typescript: {
-                title: "Use TypeScript (Gram Functions)",
+                title: "Use TypeScript (Speakeasy Functions)",
               },
               openapi: {
                 title: "Use an OpenAPI spec",
@@ -960,7 +960,7 @@ const meta = {
                 title: "Add OAuth to MCP servers",
               },
               "add-oauth-functions": {
-                title: "Add OAuth to Gram Functions",
+                title: "Add OAuth to Speakeasy Functions",
               },
               "oauth-proxy-for-internal-servers": {
                 title: "OAuth proxy for internal servers",
@@ -1002,10 +1002,10 @@ const meta = {
                 },
               },
               "agents-api": {
-                title: "Gram Agents API (Beta)",
+                title: "Agents API (Beta)",
                 items: {
                   overview: {
-                    title: "Gram Agents API overview",
+                    title: "Agents API overview",
                   },
                   "billing-and-usage": {
                     title: "Billing and usage",
