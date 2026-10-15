@@ -10,7 +10,7 @@ A remote identity provider is an upstream OAuth or OIDC issuer that the platform
 ## Access requirements
 
 <Callout type="info">
-  Viewing providers requires the `org:read` scope, which both default roles hold. Creating, editing, moving, consolidating, and deleting providers, and managing their clients, requires `org:admin`, which only the [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes by default. Registering a client by dynamic client registration through a tunnel-bound provider requires a Speakeasy platform administrator.
+  Viewing providers requires the `org:read` scope, which both default roles hold. Creating, editing, moving, consolidating, and deleting providers, and managing their clients, requires `org:admin`, which only the [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions) includes by default. Registering a client by dynamic client registration through a tunnel-bound provider requires a Speakeasy platform administrator. A service account client can also be created from an MCP server's **Identity** section with `project:write` and `mcp:write`, as described in [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#oauth-client-credentials-on-remote-servers).
 </Callout>
 
 ## Where a provider lives
@@ -33,7 +33,14 @@ When the issuer changes its metadata, use **Refresh Discoverable Metadata** to u
 
 ## Register a client
 
-A provider needs a registered OAuth client before MCP servers can use it. Select **Add Client** and choose how to register it:
+A provider needs a registered OAuth client before MCP servers can use it. Select **Add Client**, or **New Client** on the provider's **Clients** tab.
+
+**Signs in as** decides whose upstream credential the client holds, and is fixed once the client is created:
+
+- **Each user**: every caller connects their own account at the provider. This is the client a server uses for [User Identity](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#credentials-per-end-user).
+- **Service account**: the client gets one token for itself with the OAuth client credentials grant, and every caller shares it. See [Service account clients](#service-account-clients).
+
+An **Each user** client can be registered three ways:
 
 - **Dynamic Client Registration (DCR)** registers a client automatically when the issuer has a registration endpoint (RFC 7591). **Rotate client** later registers a replacement and swaps it in place, which signs out existing sessions so users reconnect once.
 - **Client ID Metadata Document (CIMD)** uses a public document the platform hosts as the client ID, when the issuer supports it. No credentials are stored, so there is nothing to expire or rotate.
@@ -43,9 +50,29 @@ MCP servers select a provider in their authentication settings. An MCP server ho
 
 Deleting a client revokes every session issued through it. Client secrets are encrypted at rest and never displayed.
 
+### Service account clients
+
+A service account client holds one upstream credential for itself instead of one per person. The platform requests its access token from the provider's token endpoint with the OAuth client credentials grant, and an MCP server that uses it sends that token upstream for every caller. See [OAuth client credentials on remote servers](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#oauth-client-credentials-on-remote-servers) for how a server uses one.
+
+The quickest way to create one is from the MCP server's **Identity** section, which creates the client and attaches it to the server in one step. To create one from the provider instead, choose **Service account** under **Signs in as** in the **New Client** sheet:
+
+1. Create a machine-to-machine app at the provider that is allowed the client credentials grant, and turn off DPoP for it, since the platform does not send DPoP proofs.
+2. Paste the app's **Client ID**.
+3. Choose the **Token Endpoint Auth Method**: a secret in the Authorization header (`client_secret_basic`, the default), a secret in the request body (`client_secret_post`), or an assertion signed with one of the organization's key sets (`private_key_jwt`). Enter the **Client Secret**, or pick the key set and the **Client assertion audience**. `private_key_jwt` shows **Requires KMS** without the customer-managed encryption keys entitlement.
+4. Optionally set **Scope (override)**, comma-separated, and **Audience (optional)**. A service account client requests no scopes when the override is empty. On an organizational provider, also choose whether the client serves all projects or one.
+5. Select **Create**.
+
+Selecting **Create** opens the client's page. For a `private_key_jwt` client, that page shows the **Key set URL** and **Public key** to register with the provider.
+
+The provider must have a token endpoint. When it publishes none, **Service account** is disabled until one is added on the provider's **Settings** tab. The endpoint can be entered by hand without metadata discovery, and it cannot be removed while a service account client depends on it.
+
+A service account client is marked **Service account** on the provider's **Clients** tab and on its own page, where **Signs in as** reads **Itself**. Its token endpoint auth method can be changed later, except to `none`, since a service account client must always authenticate. It cannot be rotated by dynamic client registration or used for trusted identity provider login. When the provider stops accepting its credentials, MCP servers that use it report an upstream credential error to callers until a new secret or key is entered. Deleting a service account client is allowed while MCP servers use it, and those servers then stop authenticating upstream.
+
 ## Authenticate a client with a signed key
 
 A client can authenticate to the issuer with a signed assertion instead of a shared secret. Set the client's token endpoint authentication method to `private_key_jwt` and attach a **Signing key set**. The assertion audience defaults to the issuer identifier and can be switched to the token endpoint URL for issuers that require it. A key set cannot be deleted while a client uses it.
+
+For a service account client, the client's page also shows the **Key set URL** and the **Public key** to register with the provider, so the provider can verify the client's assertions.
 
 <Callout type="info">
   Signing key sets are created from the organization's own KMS keys on [Encryption Keys](/docs/ai-control-plane/org-admin/encryption-keys#signing-keys-jwks) and require the customer-managed encryption keys entitlement.

@@ -223,7 +223,7 @@ Authentication answers two separate questions, and each server configures them i
 
 The first is who is calling. The platform is the OAuth 2.1 authorization server for each MCP server. Clients identify themselves with Dynamic Client Registration (DCR) or a Client ID Metadata Document (CIMD), sign in with PKCE, and see a consent screen on every sign-in. Access tokens are short-lived and refresh tokens rotate. See [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions).
 
-The second is which credential reaches the upstream API. A remote server calls upstream as each user, with one shared agent credential, or with no identity. Built servers read secrets from [environments](/docs/ai-control-plane/mcp-gateway/environments). See [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials).
+The second is which credential reaches the upstream API. A remote server calls upstream as each user, with one shared service account credential, or with no managed identity. Built servers read secrets from [environments](/docs/ai-control-plane/mcp-gateway/environments). See [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials).
 
 [OAuth and upstream providers](/docs/ai-control-plane/concepts#oauth-and-upstream-providers) covers both relationships in detail.
 
@@ -293,7 +293,7 @@ A remote identity provider is an upstream OAuth or OIDC issuer the platform trus
 | **Project** | The organization, scoped to one project that needs its own branding, scopes, or audience handling. |
 
 - **Issuer discovery.** Admins add an issuer by URL. The platform reads its endpoints from published metadata (RFC 8414) and warns when the issuer does not advertise PKCE `S256`.
-- **Client registration.** Each provider needs a registered client, created by DCR (RFC 7591), by a CIMD the platform hosts with no stored secret, or entered manually.
+- **Client registration.** Each provider needs a registered client, created by DCR (RFC 7591), by a CIMD the platform hosts with no stored secret, or entered manually. A client either signs in as each user, holding a token per person, or as a service account, holding one token for itself obtained with the OAuth client credentials grant.
 - **Signed-key client authentication.** A client can authenticate to the issuer with `private_key_jwt` instead of a shared secret. The assertion is signed with a signing key set built from the organization's own KMS keys, which requires the customer-managed encryption keys entitlement. See [Encryption Keys](/docs/ai-control-plane/org-admin/encryption-keys#signing-keys-jwks).
 - **Private issuers.** An issuer reachable only from a private network can be bound to an MCP tunnel. Discovery, token exchange, refresh, revocation, and client registration then go through the tunnel.
 - **Housekeeping.** Providers can move between project and organization scope or be consolidated into another provider for the same issuer. DCR clients can be rotated in place. Client secrets are encrypted at rest and never displayed.
@@ -307,8 +307,8 @@ Each server decides what reaches the upstream API.
 | Mode | What reaches the upstream API |
 | --- | --- |
 | **User Identity** | Each person's own OAuth token from the remote identity provider. A tool call runs as that person in the upstream system. |
-| **Agent Identity** | One shared credential for the server, sent as the `Authorization` header for every caller. |
-| **No Identity** | No managed credential. Suitable for public upstream APIs, with any static headers set by hand. |
+| **Service Account** | One shared credential for the server, sent as the `Authorization` header for every caller. Either a static credential, or an access token the platform obtains for itself with the OAuth client credentials grant. |
+| **Manual** | No managed credential. Suitable for public upstream APIs, with any static headers set by hand. |
 | **Environment variables** | On built servers, values from an attached environment injected by the system, or supplied by each user when they connect. |
 
 Per-user credentials require user sessions, since each token is stored against a known person. Shared credentials work on any server. See [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) and [Picking an authentication model](/docs/ai-control-plane/mcp-gateway/access#picking-an-authentication-model).
