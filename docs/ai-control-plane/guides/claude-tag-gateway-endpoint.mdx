@@ -1,0 +1,113 @@
+---
+title: "Roll out Claude Tag with a gateway endpoint"
+description: "Give Claude Tag in Slack access to MCP servers through one gateway connector, so every tool call runs with the invoking person's own credentials and Speakeasy permissions."
+guideCategory: "Governance"
+---
+
+import { Callout } from "@/mdx/components";
+
+[Claude Tag](https://claude.com/docs/claude-tag/admins/setup-overview) brings Claude into Slack. Anyone in a connected workspace can mention Claude in a thread and ask it to act on their behalf. Once Claude Tag needs MCP tools, three problems tend to surface:
+
+- **Connector sprawl**: each MCP server added in Claude is another connector to maintain in the Claude admin settings, and every user sees every connector whether or not they can use it.
+- **Shared credentials**: a connector configured with static credentials gives everyone in Slack the same access to the downstream service.
+- **Read scope expansion**: a privileged person runs a tool in a channel whose members lack that access, and the result lands in front of all of them.
+
+Routing Claude Tag through a single [gateway endpoint](/docs/ai-control-plane/mcp-gateway/gateway-endpoints) addresses the first two. Claude Tag's review settings address the third. This guide covers:
+
+- [Limiting the rollout to a pilot group](#limit-the-rollout-to-a-pilot-group)
+- [Connecting the Slack workspace](#connect-the-slack-workspace)
+- [Adding the gateway as a connector](#add-the-gateway-as-a-connector)
+- [Pointing users to the gateway connector](#point-users-to-the-gateway-connector)
+- [How user-scoped permissions work](#how-user-scoped-permissions-work)
+- [Controlling read scope expansion](#control-read-scope-expansion)
+
+## Prerequisites
+
+- A gateway endpoint with the MCP servers Claude Tag should reach. To create one, follow [Permission a Claude connector with a gateway endpoint](/docs/ai-control-plane/guides/claude-connector-gateway-endpoint).
+- Owner or admin access to a Claude organization with Claude Tag available.
+- Permission to install apps in the Slack workspace.
+
+## Limit the rollout to a pilot group
+
+Before connecting Slack, consider restricting Claude Tag to a small group of people while the setup is tested.
+
+In the Claude organization's admin settings, open **Claude Tag > Claude's access > Channels > Slack > Advanced** and turn on **Restrict to roles with Claude Tag access**. Then create a role for the pilot group and grant it Claude Tag access. Widen access once the connector and permissions behave as expected.
+
+## Connect the Slack workspace
+
+Follow Anthropic's [Claude Tag setup guide](https://claude.com/docs/claude-tag/admins/setup-overview) to pair the Slack workspace with the Claude organization.
+
+After pairing, check the **Connectors** tab in the Claude Tag settings. It lists every connector Claude Tag can offer to people in Slack. Each person still authenticates as themselves, but review the list so it contains only the connectors intended for Slack.
+
+## Add the gateway as a connector
+
+Add the gateway endpoint to Claude as one custom connector rather than adding each MCP server separately. One gateway connector has two advantages over many individual connectors:
+
+- **Less admin maintenance**: servers added to the gateway in Speakeasy appear for permitted people automatically, so the Claude admin settings don't change each time a server is added.
+- **Simpler onboarding**: Claude can't limit a connector to specific users or roles, so with individual connectors everyone sees the full list and only learns they lack access when a connection fails. With a gateway, each person connects once and sees only the servers their [Speakeasy roles](/docs/ai-control-plane/mcp-gateway/access/team-access) allow.
+
+In the **Connectors** tab, add a **Web** connector. Paste the gateway's connection URL and complete the steps on screen. The gateway's sign-in handles client registration, so no client ID or secret is needed.
+
+## Point users to the gateway connector
+
+Claude Tag does not reliably guide people to custom connectors. Without help, a new user can get stuck the first time they ask for something that needs an MCP tool. Workspace instructions fix this by telling Claude Tag to send a direct link to the gateway connector.
+
+To get the connector link, open the personal account settings in Claude (not the organization settings) and go to **Connectors**. Select the gateway connector and copy the URL from the browser. Trim the URL to this form:
+
+```text
+https://claude.ai/customize/connectors/yours/id/CONNECTOR_ID
+```
+
+Next, in the organization's admin settings, open **Claude Tag > Claude's access > Channels** and select the Slack workspace. Add instructions like the following to the **Workspace instructions** field, replacing the link with the one copied above:
+
+```text
+If the user's request requires a connector or tool you don't have and the
+Gateway connector isn't available or is disconnected, ask them to connect to
+the gateway, then search the tools available there. Here is the link:
+https://claude.ai/customize/connectors/yours/id/CONNECTOR_ID
+```
+
+<Callout title="Built-in connector suggestions" type="info">
+  Claude Tag can still show a "Set up" button for a Claude-native connector,
+  such as Linear, alongside the gateway link, even when the organization has not
+  added that connector. People can't connect through that button. Mention this
+  in rollout notes so that people use the gateway link instead.
+</Callout>
+
+## How user-scoped permissions work
+
+With the gateway connector in place, every MCP call from Claude Tag uses the invoking person's own authentication. This relies on Claude Tag's support for [personal connectors in channels](https://claude.com/resources/articles/claude-tag-now-supports-personal-connectors-in-channels).
+
+Each call is limited by two things:
+
+- The person's access in the downstream service, through [User Identity](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) credentials.
+- The person's Speakeasy roles, which decide which gateway servers and tools they can reach.
+
+Actions in the downstream service are attributed to the person who invoked Claude Tag, not to a shared account.
+
+<Callout title="Avoid static credentials in Claude Tag" type="warning">
+  The **Claude's access** section of the Claude Tag settings can give Claude Tag
+  its own static credentials for a connector. Everyone who can reach Claude Tag
+  in Slack then shares that level of access to the service. If a service needs a
+  static credential, configure it on the server in Speakeasy instead, as
+  described in [Share a remote MCP server with a static
+  credential](/docs/ai-control-plane/guides/share-a-remote-mcp-server-with-a-static-credential),
+  so that Speakeasy roles still control who can use its tools.
+</Callout>
+
+## Control read scope expansion
+
+Per-user credentials stop people from calling tools they lack access to, but they don't control who sees the result. If a person with broad read access, such as a finance lead who can list salaries, runs a tool in a channel, the reply could expose that data to channel members who lack the same access.
+
+By default, Claude Tag asks the invoking person to review a reply before posting it to the channel whenever a tool was used. The person must opt in to sharing the result, and Claude Tag doesn't post it on its own.
+
+To tighten this, open **Claude Tag > Personal connectors** in the admin settings and select "Edit". From there, it's possible to:
+
+- Require review for every message.
+- Define sensitive topics that always require review.
+
+## Next steps
+
+- Read [How do you give Claude Tag an agent identity?](/blog/agent-identity-for-claude-tag) for how Speakeasy records the agent and the invoking person on every call.
+- Follow [Govern agent actions with enterprise identity](/docs/ai-control-plane/guides/govern-agent-actions-with-enterprise-identity) to drive server access from identity provider groups.
+- Follow [Google Workspace setup](/docs/ai-control-plane/guides/google-workspace-setup) to add Gmail, Google Calendar, and Google Drive to the gateway.

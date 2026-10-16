@@ -1,0 +1,72 @@
+---
+title: "Permission a Claude connector with a gateway endpoint"
+description: "Put several MCP servers behind one gateway endpoint, add it to Claude as a single organization connector, and let Speakeasy roles decide which servers each person sees."
+guideCategory: "Governance"
+---
+
+import { Callout } from "@/mdx/components";
+
+Adding every MCP server to Claude as its own connector means one connector, one sign-in, and one access decision per server, all managed in Claude. A [gateway endpoint](/docs/ai-control-plane/mcp-gateway/gateway-endpoints) collapses that into one connector. Each person connects to it once, and the gateway returns only the servers their Speakeasy roles allow them to reach.
+
+This guide covers creating the gateway, adding servers to it, registering it as a connector in the Claude organization, and confirming that access follows each person's permissions.
+
+## Prerequisites
+
+- Gateway endpoints enabled for the Speakeasy organization. Gateways are enabled per organization. To turn them on, contact Speakeasy.
+- The `mcp:write` scope in the Speakeasy project, held by the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions).
+- At least one MCP server in the project, for example a [catalog](/docs/ai-control-plane/mcp-gateway/catalog) server or a [remote server](/docs/ai-control-plane/mcp-gateway/remote-servers).
+- Owner or admin access to a Claude organization on a plan that supports custom connectors.
+
+## Create the gateway endpoint
+
+Open [**MCP Gateway > MCP**](https://ai.speakeasy.com/@self/projects/default/mcp) in the dashboard, select **Add new**, then **New gateway**. Give the gateway a name that tells people what it is for, such as `Team` or the name of a department.
+
+The platform creates a hosted address and a dedicated sign-in for the gateway, so callers must authenticate before they can connect.
+
+## Add the servers
+
+On the gateway's **Overview** tab, select **Add servers**. Pick the servers the connector should offer. **Select all** adds every server in the project, which suits a single company-wide connector. A narrower selection suits a connector for one team.
+
+A server must be exposed over MCP and have a slug before it can join. Servers that cannot be served, such as a disabled server, appear as **Excluded** in the member list with the reason.
+
+<Callout title="Membership is not access" type="info">
+  Adding a server to the gateway makes it available through the gateway, not to
+  everyone. A caller needs `mcp:connect` on the gateway to connect and on each
+  member to see that member. Configure who can reach each server on its **Team
+  Access** tab, as described in [Team
+  access](/docs/ai-control-plane/mcp-gateway/access/team-access).
+</Callout>
+
+## Copy the connection URL
+
+On the gateway's page, copy its connection URL. This is the address Claude connects to. If the organization uses a [custom domain](/docs/ai-control-plane/org-admin/custom-domain), the custom address under **Gateway URL** in **Settings** works too.
+
+## Add the gateway as a Claude connector
+
+In the Claude organization's admin settings, open **Connectors** and add a custom connector. Paste the connection URL from the previous step and name the connector something people will recognize, such as "Speakeasy". Anthropic documents the custom connector flow in [Get started with custom connectors using remote MCP](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
+
+The gateway sign-in handles client registration, so no client ID or secret is needed in Claude.
+
+<Callout title="Roll out gradually" type="info">
+  If the Claude plan supports limiting a connector to specific groups or roles,
+  restrict the connector to a pilot group first. Widen it once access behaves as
+  expected.
+</Callout>
+
+## Test the connection
+
+In Claude, connect to the new connector and complete the sign-in. If any member server uses [User Identity](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials), the consent screen collects each upstream grant in the same flow. A member that has not been connected yet returns an error until the person connects it, while the rest of the gateway keeps working.
+
+Ask Claude to list the servers available through the connector. Claude calls the gateway's `list_servers` tool, which returns only the members the signed-in person is allowed to reach. Sign in as two people with different roles to confirm that each sees a different list.
+
+From then on, each person connects to the connector once and reaches every server they are permitted to use. Changing access is done in Speakeasy, not in Claude:
+
+- Add a server to the gateway and it appears for everyone with access to it, without a new connector.
+- Change a server's **Team Access** rules and the change applies to the next `list_servers` call.
+- Remove a server from the gateway and its tools disappear from connected sessions. The server itself is not deleted.
+
+## Next steps
+
+- Read [Gateway endpoints](/docs/ai-control-plane/mcp-gateway/gateway-endpoints) for member status, custom instructions, and observability.
+- Follow [Govern agent actions with enterprise identity](/docs/ai-control-plane/guides/govern-agent-actions-with-enterprise-identity) to drive server access from identity provider groups.
+- Follow [Google Workspace setup](/docs/ai-control-plane/guides/google-workspace-setup) to add Gmail, Google Calendar, and Google Drive to the gateway.

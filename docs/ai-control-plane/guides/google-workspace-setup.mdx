@@ -1,0 +1,151 @@
+---
+title: "Google Workspace setup"
+description: "Set up one Google OAuth client for the Speakeasy-hosted Gmail, Google Calendar, and Google Drive MCP servers, without enrolling in the Google Workspace Developer Preview."
+guideCategory: "MCP setup guides"
+guideTag: "Speakeasy maintained"
+---
+
+import { Callout } from "@/mdx/components";
+
+Speakeasy hosts MCP servers for Gmail, Google Calendar, and Google Drive. All three can share a single Google OAuth client, so one Google Cloud project, one consent screen, and one Workspace approval cover the whole suite. Each person then signs in with their own Google account, and every tool call runs with that person's own Google permissions.
+
+<Callout title="Why use this guide" type="info">
+  Use this guide to connect Gmail, Google Calendar, and Google Drive without
+  applying to the Google Workspace Developer Preview. Google's own Workspace MCP
+  servers are available only to projects accepted into that program. The
+  Speakeasy-maintained servers in this guide work with any Google Workspace
+  organization.
+</Callout>
+
+This guide sets up the shared OAuth client and adds all three servers. To set up a single server, follow its own guide instead:
+
+- [Gmail (Speakeasy-hosted)](/docs/ai-control-plane/guides/speakeasy-gmail)
+- [Google Calendar (Speakeasy-hosted)](/docs/ai-control-plane/guides/speakeasy-google-calendar)
+- [Google Drive (Speakeasy-hosted)](/docs/ai-control-plane/guides/speakeasy-google-drive)
+
+## Speakeasy-hosted or Google-hosted servers
+
+Google also runs its own MCP servers for Gmail, Calendar, and Drive, covered in the [Gmail](/docs/ai-control-plane/guides/gmail), [Google Calendar](/docs/ai-control-plane/guides/google-calendar), and [Google Drive](/docs/ai-control-plane/guides/google-drive) guides. Those servers are in the Google Workspace Developer Preview Program. The Speakeasy-hosted servers differ in three ways:
+
+- No Google Workspace Developer Preview enrollment.
+- No MCP API services to enable and no **MCP Tool User** role to grant.
+- The servers call the standard Gmail, Google Calendar, and Google Drive APIs with each user's own OAuth token.
+
+## Prerequisites
+
+- A Google Workspace account in the organization whose users will connect.
+- A Google Cloud project owned by that organization, and permission to enable APIs (**Service Usage Admin** or **Owner**) and configure **Google Auth Platform**.
+- If the Workspace restricts third-party access to Gmail, Calendar, or Drive, a Workspace administrator with the **Service Settings** privilege.
+- The `mcp:write` scope in the Speakeasy project, held by the default [Admin role](/docs/ai-control-plane/org-admin/roles-and-permissions).
+
+## Prepare the Google Cloud project
+
+Open the [Google Cloud console](https://console.cloud.google.com/) and select the project in the toolbar's resource selector. Keep it selected for every Google Cloud step.
+
+Go to **APIs & Services > API Library**. Search for and enable each of these APIs:
+
+- **Gmail API**
+- **Google Calendar API**
+- **Google Drive API**
+
+## Configure the consent screen
+
+The consent screen is what people see when they first connect a Google server. Configure it under **Google Auth Platform**:
+
+- **Branding**: open **Google Auth Platform > Branding** and click "Get Started" if prompted. Enter an app name people will recognize, such as `Speakeasy Google Workspace`, and a monitored **User support email**.
+- **Audience**: choose **Internal**. Only users in the organization can connect, and Google app verification does not apply. The option appears only when the Cloud project belongs to the Workspace organization.
+- **Contact information**: enter a monitored email address.
+- **Finish**: with approval from the application or security owner, accept the **Google API Services: User Data Policy**, then click "Create".
+
+<Callout title="External audiences need verification" type="warning">
+  Several of these scopes, including the Gmail read and modify scopes and full
+  Drive access, are restricted scopes. An app with an **External** audience that
+  requests them must pass Google app verification before it can leave testing.
+  Use **Internal** unless people outside the Workspace organization need to
+  connect.
+</Callout>
+
+Next, open **Data Access** and click "Add or Remove Scopes". Under **Manually add scopes**, paste all 13 scopes below. Click "Add to Table", then "Update", then "Save".
+
+```text
+https://www.googleapis.com/auth/gmail.readonly
+https://www.googleapis.com/auth/gmail.modify
+https://www.googleapis.com/auth/gmail.compose
+https://www.googleapis.com/auth/gmail.send
+https://www.googleapis.com/auth/gmail.settings.basic
+https://www.googleapis.com/auth/calendar.calendarlist.readonly
+https://www.googleapis.com/auth/calendar.events.readonly
+https://www.googleapis.com/auth/calendar.events
+https://www.googleapis.com/auth/calendar.freebusy
+https://www.googleapis.com/auth/calendar.settings.readonly
+https://www.googleapis.com/auth/drive.readonly
+https://www.googleapis.com/auth/drive.file
+https://www.googleapis.com/auth/drive
+```
+
+Each server requests only its own subset of these scopes when a person connects it.
+
+## Create the OAuth client
+
+Go to **Google Auth Platform > Clients** and click "Create Client". Set **Application type** to **Web application** and give the client a name, such as `Speakeasy AI Control Plane`.
+
+Under **Authorized redirect URIs**, click "+ Add URI" and enter the Speakeasy callback URL, then click "Create":
+
+```text
+https://ai.speakeasy.com/mcp/remote_login_callback
+```
+
+<Callout title="Custom domains" type="info">
+  The identity provider sheet in Speakeasy shows the exact callback URI to
+  register. If the organization serves MCP servers from a [custom
+  domain](/docs/ai-control-plane/org-admin/custom-domain), register the callback
+  shown there.
+</Callout>
+
+Copy the **Client ID** and **Client Secret** into an approved secret store before closing the dialog.
+
+<Callout title="The secret is shown once" type="warning">
+  Google does not show the client secret again after the dialog closes. If it
+  closes before the secret is stored, create a new web client with the same
+  redirect URI and use its credentials instead.
+</Callout>
+
+## Permit the app under Workspace policy
+
+Skip this step only after the Workspace security owner confirms that Gmail, Calendar, and Drive are not **Restricted** for third-party apps.
+
+- In the [Google Admin console](https://admin.google.com/), go to **Security > Access and data control > API controls > Manage App Access**.
+- Under **Configured apps**, click "Configure new app", search for the Client ID, and select the matching app.
+- Choose the organizational units that contain the connecting users, set **Access to Google data** to **Trusted**, and click "Finish".
+
+## Add the servers in Speakeasy
+
+Add each of the three servers to the Speakeasy project with the same Google credentials. The server URLs are:
+
+| Server          | MCP server URL                               |
+| --------------- | -------------------------------------------- |
+| Gmail           | `https://catalog.speakeasy.com/gmail/mcp`    |
+| Google Calendar | `https://catalog.speakeasy.com/calendar/mcp` |
+| Google Drive    | `https://catalog.speakeasy.com/drive/mcp`    |
+
+For each server:
+
+- In the sidebar under **MCP Gateway**, select **MCP**, then **Add new**, then **Hosted remotely**.
+- Enter the server's URL from the table and click "Verify connectivity".
+- Under **Identity**, choose **User Identity**. Confirm the identity provider is Google (`https://accounts.google.com/`), then choose **Manual**.
+- Paste the **Client ID** and **Client secret** from the OAuth client. Google requires the secret even though the field is labeled optional.
+- Leave **Advanced > Scope** empty, since each server requests its own scopes, and click "Save".
+
+If a server shows **Disabled** after saving, open its **Settings > Danger Zone > Server Availability** and turn on **Enable MCP server**.
+
+## Connect and test
+
+Connect an MCP client to one of the servers, or to a [gateway endpoint](/docs/ai-control-plane/mcp-gateway/gateway-endpoints) that includes all three. On first use, each person signs in with their Google account and approves the requested access. A gateway collects all three Google grants on one consent screen.
+
+Ask the agent to list recent emails, upcoming events, or recent files. Each call runs as the signed-in person and returns only data that person can already access in Google Workspace.
+
+## Next steps
+
+- Follow [Permission a Claude connector with a gateway endpoint](/docs/ai-control-plane/guides/claude-connector-gateway-endpoint) to offer the Google servers in Claude through one connector.
+- Read [Team access](/docs/ai-control-plane/mcp-gateway/access/team-access) to control which people can reach each server.
+- Read [Upstream credentials](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials) for how per-user Google tokens are stored and refreshed.
