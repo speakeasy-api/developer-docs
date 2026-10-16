@@ -28,12 +28,14 @@ The two are not exclusive. A server that joins a gateway keeps its own URL, and 
 
 ## How agents work through a gateway
 
-A gateway serves the same four tools regardless of its members:
+A gateway serves the same five tools regardless of its members. Four of them discover and call member tools:
 
 - `list_servers` returns the reachable members, what each one is for, and each member's status.
 - `describe_server` returns one member's tools as qualified names in the form `server--tool`, with descriptions but no input schemas.
 - `describe_tools` returns input schemas for the specific tools the agent intends to call.
 - `execute_tool` runs one tool, with the qualified name in `name` and the JSON payload in `arguments`.
+
+The fifth, `connection_status`, shows which members a person still needs to connect. See [Check which members are connected](#check-which-members-are-connected).
 
 The built-in instructions sent on connect teach agents to work from the outside in, never to execute a tool they have not described (guessed arguments fail validation), and to re-check `list_servers` before retrying a failed call.
 
@@ -49,6 +51,22 @@ Each member in `list_servers` reports one of three statuses:
 
 Some servers can be members but are never served: a disabled server, a server without a slug, and a server that clients connect to directly without the platform in the request path. The gateway's member list marks these as **Excluded** so the reason stays visible.
 
+### Check which members are connected
+
+Members that use their own OAuth grant, such as a SaaS service behind the gateway, need each person to connect them once. Until they do, calls to that member fail while the rest of the gateway keeps working. To see where they stand, people can ask their agent to check the gateway connection status. The agent calls `connection_status`, which lists the members that person can reach, shows which are ready, and links to the gateway's connect page for the rest. It works before any member is connected, and agents also call it on their own when a member reports that it needs authentication.
+
+Connecting happens in the browser, on the same page an authentication challenge opens. The result does not refresh by itself, so ask the agent to check again after connecting.
+
+Clients that support [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps), such as Claude, show the result as an interactive panel with a **Connect** link for each member that still needs one. Other clients get the same list and link as text.
+
+![The connection_status panel in Claude, with three members ready and Linear waiting to be connected](/assets/docs/ai-control-plane/mcp-gateway/connection-status-panel.webp)
+
+A gateway without a sign-in has no connect page, so its members' credentials have to be set up by an administrator.
+
+<Callout type="info">
+  Custom instructions replace the built-in guidance that tells agents when to call `connection_status`. Mention the tool in custom instructions if agents should keep using it. Members that receive credentials through [identity chaining](/docs/ai-control-plane/identity/identities/enterprise-managed-auth) show as not connected, even though calls to them succeed.
+</Callout>
+
 ## Create a gateway and add servers
 
 - On the **MCP** page, select **Add new**, then **New gateway**, and name the gateway. The platform creates a hosted address and a dedicated sign-in for the gateway, so clients can connect right away and must authenticate to do so.
@@ -61,7 +79,7 @@ Members appear in `list_servers` in the order shown on the **Overview** tab. Use
 
 ## Customize instructions
 
-Every client receives the gateway instructions when it connects. The built-in text explains the four tools. To replace it, open **Settings** and edit **Instructions**. Custom text replaces the built-in instructions entirely, and saving the field empty restores them.
+Every client receives the gateway instructions when it connects. The built-in text explains the five gateway tools. To replace it, open **Settings** and edit **Instructions**. Custom text replaces the built-in instructions entirely, and saving the field empty restores them.
 
 Anyone who can connect to the gateway can read its instructions, so keep secrets out of them. Clients that are already connected keep the previous text until they reconnect. The **Inspect** tab shows the instructions, tools, and member list exactly as a client receives them.
 
