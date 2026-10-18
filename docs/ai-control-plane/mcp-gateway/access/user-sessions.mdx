@@ -44,7 +44,7 @@ How clients identify themselves, what the registration endpoint accepts, how red
 
 ## The consent screen
 
-Consent is always shown. It is never skipped, even for a client that has connected before, because the prompt is what guards against one client being confused for another.
+Consent is shown on every authorization, even for a client that has connected before, because the prompt is what guards against one client being confused for another. The one exception is a server behind a [shared authorization server](#shared-authorization-servers), where an approval already given for the same client carries over.
 
 The screen names the client asking for access and the server it wants, shown as "**Client** is requesting access to the MCP server **slug**". When the upstream publishes RFC 9728 protected-resource metadata, the card also shows the resource's own name and its **Documentation**, **Policy**, and **Terms** links, falling back to the authorization server's metadata when the resource advertises none.
 
@@ -66,6 +66,16 @@ The screen ends with **Give Access** and **Cancel**.
 When tool filtering on consent screens is turned on for the organization, people can limit a connection to specific tools when they grant access. They choose by tool annotation (read-only, destructive, idempotent, or open-world) or pick individual tools. An annotation choice can either follow the server as tools are added or stay fixed to the tools that match at approval. The selection applies to both listing and calling tools, survives refreshes, and is replaced when the person authorizes again.
 
 An organization admin turns this on from the **MCP Sessions** page under **Identity**. Changing it requires the `org:admin` scope. See [Organization-wide view](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view).
+
+## Shared authorization servers
+
+By default, every MCP server is its own authorization server. A client registers with each server separately, and a person approves each one on its own consent screen. When an organization runs many servers, people end up approving the same client over and over.
+
+A shared authorization server serves several MCP servers from one issuer URL. When a person has already approved a client for one server under that issuer, connecting the same client to another of its servers skips the consent screen. The screen still appears when the new server needs something the person hasn't approved, such as an upstream service to connect. Only the approval is shared: each server still gets its own tokens, its own tool selection, and its own [team access](/docs/ai-control-plane/mcp-gateway/access/team-access) rules, and revoking a session works per server as before.
+
+Organization admins can see each authorization server's mode and issuer URL on the **Speakeasy authorization servers** page in organization settings. Copy the issuer URL from there when an identity provider such as Okta asks for the authorization server.
+
+Moving an existing MCP server to a different authorization server makes every client connected to it authorize again. The dashboard warns before saving that change, so plan it for a time when re-authorizing won't interrupt people.
 
 ## Token lifetimes
 
