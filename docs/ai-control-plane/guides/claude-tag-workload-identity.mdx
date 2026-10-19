@@ -1,0 +1,126 @@
+---
+title: "Connect Claude Tag channels with workload identity"
+description: "Let Claude Tag call MCP servers from Slack channels as an agent, with no stored secret, by trusting Anthropic's agent tokens in the Access Hub and connecting Speakeasy as a Claude Tag authorization server."
+guideCategory: "Governance"
+---
+
+import { Callout } from "@/mdx/components";
+
+[Claude Tag](https://claude.com/docs/claude-tag/admins/setup-overview) brings Claude into Slack. In a channel, Claude Tag acts as a channel agent rather than as the person who mentioned it. With [federated access](https://claude.com/docs/claude-tag/admins/federated-access/authorization-server), Anthropic gives each channel agent a short-lived identity token, and Claude Tag exchanges it at an authorization server for an access token to call MCP servers.
+
+Speakeasy can be that authorization server. Each Claude Tag channel then signs in with [workload identity](/docs/ai-control-plane/identity/agents/workload-identity), acts as a Speakeasy agent chosen for it, and needs no stored secret.
+
+<Callout type="info">
+  To have Claude Tag call tools as the person who mentioned it, with their own credentials, follow [Roll out Claude Tag with a gateway endpoint](/docs/ai-control-plane/guides/claude-tag-gateway-endpoint) instead. Use this guide when channels should act as a shared agent with its own policy.
+</Callout>
+
+This guide covers:
+
+- [How the connection works](#how-the-connection-works)
+- [Prerequisites](#prerequisites)
+- [Start the guided setup](#start-the-guided-setup)
+- [Enter the Anthropic organization](#enter-the-anthropic-organization)
+- [Choose an agent](#choose-an-agent)
+- [Connect the authorization server in Claude](#connect-the-authorization-server-in-claude)
+- [Add the server to a bundle](#add-the-server-to-a-bundle)
+- [Test from a channel](#test-from-a-channel)
+- [Manage and revoke access](#manage-and-revoke-access)
+
+## How the connection works
+
+When someone mentions Claude in a channel thread and Claude needs an MCP tool:
+
+- Anthropic issues a token for the channel's agent, signed by `https://identity.anthropic.com/agents`. Its subject has the form `wimse://identity.anthropic.com/org/ORG_ID/agent/AGENT_ID`, with one agent per channel.
+- Claude Tag posts the token to the Speakeasy token endpoint.
+- Speakeasy checks the signature and matches the subject against the Claude Tag access rule in the Access Hub. The rule covers every agent in one Anthropic organization.
+- Speakeasy returns an access token valid for 15 minutes. Claude Tag sends it on MCP requests and exchanges a new token when it expires.
+
+Each channel signs in under its own subject, so its sessions are listed and revocable separately. Every channel acts as the same Speakeasy agent and can do only what that agent's policy allows.
+
+## Prerequisites
+
+- In the Claude organization: Claude Tag with federated access, and an Owner or an admin with full Claude Tag management permission.
+- In Speakeasy: `workload:write`, which the Admin role holds by default.
+- An agent whose policy allows the MCP servers and tools Claude Tag should use. To create one, see [Authorizing agents](/docs/ai-control-plane/identity/agents/authorizing-agents#create-an-agent).
+- MCP servers on a Speakeasy host. A server on a custom domain signs clients in at its own origin, which Claude Tag can't use, because Claude Tag requires the token endpoint to be on a different host from the servers it calls.
+- A Speakeasy authorization server in shared mode for the organization or project. If the guided setup reports that no token endpoint is available, contact Speakeasy to enable one.
+
+## Start the guided setup
+
+Open the [Access Hub](https://ai.speakeasy.com/@self/access-hub) under **Secure > Access Hub**. On the **Catalog** tab, select **Claude Tag**, then **Set one up**.
+
+The **Set up Claude Tag** panel opens. Its first step links to the Claude Tag **Federated access** settings. Keep them open in another tab, because later steps switch between the two.
+
+## Enter the Anthropic organization
+
+Enter the **Anthropic organization ID**. It's at the bottom of the Claude organization settings, labeled **Organization ID**. The Claude Tag console shows the same value as **Tenant ID**.
+
+The panel shows the access rule it will create:
+
+```text
+wimse://identity.anthropic.com/org/ORG_ID/agent/*
+```
+
+The rule admits every Claude Tag channel in that Anthropic organization, including channels created later. That's safe because Anthropic mints the agent ID at the end of the subject, and no caller can choose it. Speakeasy already knows Anthropic's issuer and signing keys, so there's nothing else to enter.
+
+## Choose an agent
+
+Choose the agent every Claude Tag channel acts as, optionally add tags, and select **Connect Claude Tag**. Speakeasy trusts Anthropic's issuer and saves the access rule with that agent.
+
+## Connect the authorization server in Claude
+
+In the Claude Tag **Federated access** settings, under **Authorization servers**, select **Connect an authorization server**. Copy each value from the Speakeasy panel into the matching field:
+
+- **Token endpoint**: the Speakeasy token endpoint shown in the panel.
+- **Issuer URL**: the Speakeasy issuer URL shown in the panel. Claude marks this field optional, but fill it in. Claude Tag requests its token for this issuer, and Speakeasy refuses tokens issued for anything else.
+
+If the organization has more than one shared authorization server, choose the one that serves the MCP servers Claude Tag should reach before copying.
+
+Leave the values under **Set your authorization server to accept these values** as they are. Speakeasy already accepts Anthropic's issuer and the organization's subject prefix.
+
+Select the checkbox confirming that the authorization server checks each token's subject belongs to the organization. The Speakeasy access rule is that check. Then select **Register server**.
+
+## Add the server to a bundle
+
+Claude opens **Add authorization server to a bundle**. Fill in:
+
+- **Resource**: leave empty. Claude Tag's access token then works at every MCP server of the authorization server that the agent may connect to.
+- **Scope**: leave empty.
+- **Allowed API hosts**: the MCP host shown in the Speakeasy panel. If Claude also asks for API paths, list the path of each MCP server Claude Tag should use, such as `/mcp/SERVER_SLUG`.
+- **Access bundle**: the bundle assigned to the channels Claude Tag should work in, or a new one created with **New bundle**.
+
+Select **Connect server**.
+
+## Test from a channel
+
+In a Slack channel where the bundle applies, start a new thread, mention Claude, and ask it to list the MCP server's tools.
+
+<Callout title="Use a channel thread, not a direct message" type="warning">
+  Federated connections work only in channel threads. A direct message with Claude fails with `request blocked: federated connections work only in agent sessions`.
+</Callout>
+
+Each channel that signs in appears on [MCP Sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view) under Anthropic's issuer and the channel's own subject.
+
+If the exchange fails, check:
+
+- The Anthropic organization ID matches the **Tenant ID** in the Claude Tag console.
+- The **Issuer URL** in Claude matches the Speakeasy issuer URL exactly.
+- The MCP server is on a Speakeasy host and attached to the authorization server whose values were copied.
+- The agent's policy allows the server, and the agent owner still has access to it.
+
+Speakeasy returns the same `invalid_grant` error for every refusal, and Claude Tag reads only the error code, so these checks are the quickest way to find the cause.
+
+## Manage and revoke access
+
+After setup, the **Claude Tag** catalog entry in the Access Hub reads **Connected** and lists the access rule. From there:
+
+- To have one channel act as a different agent, select **Allow access** and add a rule for that channel's exact subject. An exact rule takes priority over the wildcard. Agent IDs appear in each channel's sessions on **MCP Sessions**.
+- To change the agent for every channel, select **⋮ > Edit** on the wildcard rule.
+- To disconnect Claude Tag, select **⋮ > Remove** on the rule, then remove the authorization server in the Claude Tag settings. Removing it there also frees a gateway slot, since a Claude organization can register at most five.
+
+Removing a rule stops new exchanges but doesn't end sessions already issued. To cut off a channel immediately, also revoke its sessions on **MCP Sessions**.
+
+## Next steps
+
+- Read [Workload identity](/docs/ai-control-plane/identity/agents/workload-identity) for how trusted platforms, access rules, and token exchange work for other platforms.
+- Read [Authorizing agents](/docs/ai-control-plane/identity/agents/authorizing-agents) to scope the agent Claude Tag acts as.
