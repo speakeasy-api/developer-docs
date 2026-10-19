@@ -38,7 +38,7 @@ Every action the platform authorizes or records is attributed to a principal: a 
 - **Identities** are the people and agents the platform knows about, whether or not they hold an account. Membership comes from the organization's identity provider through SSO and directory sync, and activity reported by AI tools is linked back to a person. See [Identities](/docs/ai-control-plane/identity/identities).
 - **Agents** are first-class nonhuman principals with one human owner, their own policy, and credentials that can be revoked independently. When an agent acts, the agent is recorded as the actor, not its owner. See [Agent identity](/docs/ai-control-plane/identity/agents).
 - **MCP sessions** are the OAuth connections the platform brokers between MCP clients and servers. Every tool call through a session carries both the person or agent behind it and the client that made it. Revoking a session cuts off access immediately. See [MCP sessions](/docs/ai-control-plane/mcp-gateway/access/clients-and-sessions#organization-wide-view) and [User sessions](/docs/ai-control-plane/mcp-gateway/access/user-sessions).
-- **Remote identity providers** are upstream OAuth and OIDC issuers the platform trusts to authenticate MCP clients and to obtain credentials for upstream services on a user's behalf. See [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers).
+- **Authorization servers** are upstream OAuth authorization servers the platform trusts to issue per-user tokens for upstream services and to authenticate MCP clients. OpenID Connect identity is optional. See [Authorization servers](/docs/ai-control-plane/identity/remote-identity-providers).
 
 ## Tools and MCP servers
 
@@ -111,7 +111,7 @@ Knowing who is calling answers only half the question. The platform also decides
 - **Per-user OAuth.** Each person connects their own account to an upstream service, so a tool call runs as that person upstream. Tokens are encrypted at rest and refreshed automatically. See [Credentials per end user](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#credentials-per-end-user).
 - **Shared credential.** One credential for a server, used for every caller. Access to the server itself is still controlled per person and per agent. See [One credential for the whole server](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#one-credential-for-the-whole-server).
 - **Enterprise Managed Auth.** With Okta, the platform exchanges the person's identity provider assertion for an upstream token using the Identity Assertion JWT Authorization Grant (ID-JAG). People reach a connected app without a separate consent prompt for each one. See [Enterprise Managed Auth](/docs/ai-control-plane/identity/identities/enterprise-managed-auth).
-- **Trusted identity providers for MCP sign-in.** MCP client sign-in can be federated to an upstream OAuth or OIDC issuer the organization trusts. See [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers).
+- **Trusted authorization servers for MCP sign-in.** MCP client sign-in can be federated to an upstream OAuth or OIDC issuer the organization trusts. See [Authorization servers](/docs/ai-control-plane/identity/remote-identity-providers).
 - **Signed identity to private servers.** Tunneled servers inside a private network receive a short-lived signed token that names the caller, so the server can apply its own policy. See [Signed caller identity](/docs/ai-control-plane/mcp-gateway/tunneled-servers/internal-mcp#signed-caller-identity).
 
 See [OAuth and upstream providers](/docs/ai-control-plane/concepts#oauth-and-upstream-providers) for how the inbound and upstream OAuth relationships fit together.
@@ -267,7 +267,7 @@ Every governed MCP connection involves two separate OAuth relationships. Inbound
 
 The following diagram shows both relationships on one connection.
 
-![Two OAuth relationships on a governed connection. An MCP client such as Claude Code, Cursor, or an agent signs in to the AI Control Plane, which then presents a credential to an upstream service such as Linear, GitHub, Slack, or an identity provider. The inbound panel says the control plane is the authorization server: clients identify with DCR or a CIMD and sign in with PKCE, a consent screen appears on every sign-in with no OAuth scopes, access tokens last one hour and refresh tokens rotate, and this relationship decides who is calling. The upstream panel says the control plane is an OAuth client: remote identity providers live at the platform, organization, or project tier, a server uses a per-user token, a shared agent credential, or none, tokens are encrypted at rest and refreshed before use, and this relationship decides which credential reaches the API. A footnote says the two relationships are configured, refreshed, and revoked separately, and revoking a sign-in does not revoke the grant at the upstream provider.](/assets/docs/ai-control-plane/diagrams/concepts/oauth-two-relationships.webp)
+![Two OAuth relationships on a governed connection. An MCP client such as Claude Code, Cursor, or an agent signs in to the AI Control Plane, which then presents a credential to an upstream service such as Linear, GitHub, Slack, or an identity provider. The inbound panel says the control plane is the authorization server: clients identify with DCR or a CIMD and sign in with PKCE, a consent screen appears on every sign-in with no OAuth scopes, access tokens last one hour and refresh tokens rotate, and this relationship decides who is calling. The upstream panel says the control plane is an OAuth client: authorization servers live at the platform, organization, or project tier, a server uses a per-user token, a shared agent credential, or none, tokens are encrypted at rest and refreshed before use, and this relationship decides which credential reaches the API. A footnote says the two relationships are configured, refreshed, and revoked separately, and revoking a sign-in does not revoke the grant at the upstream provider.](/assets/docs/ai-control-plane/diagrams/concepts/oauth-two-relationships.webp)
 
 ### Inbound: the control plane as authorization server
 
@@ -282,23 +282,23 @@ The platform implements standard MCP authorization for every server with user se
 
 A built server can also authenticate against an authorization server outside the platform. See [Build MCP with external OAuth](/docs/ai-control-plane/guides/oauth-external-server).
 
-### Upstream: remote identity providers
+### Upstream: authorization servers
 
-A remote identity provider is an upstream OAuth or OIDC issuer the platform trusts, such as Linear, GitHub, Slack, or a company identity provider. It is configured once and reused by every server that talks to that issuer. Providers live at three tiers, and a lookup prefers the most specific one.
+An authorization server is an upstream OAuth issuer the platform trusts, such as Linear, GitHub, Slack, or a company identity provider. It is configured once and reused by every server that talks to that issuer. Authorization servers live at three tiers, and a lookup prefers the most specific one.
 
 | Tier | Maintained by |
 | --- | --- |
-| **Platform** | Speakeasy, for common services, so they work with no setup. Organizations can add clients but cannot edit the provider. |
+| **Platform** | Speakeasy, for common services, so they work with no setup. Organizations can add clients but cannot edit the authorization server. |
 | **Organization** | The organization, shared by every project. |
 | **Project** | The organization, scoped to one project that needs its own branding, scopes, or audience handling. |
 
 - **Issuer discovery.** Admins add an issuer by URL. The platform reads its endpoints from published metadata (RFC 8414) and warns when the issuer does not advertise PKCE `S256`.
-- **Client registration.** Each provider needs a registered client, created by DCR (RFC 7591), by a CIMD the platform hosts with no stored secret, or entered manually. A client either signs in as each user, holding a token per person, or as a service account, holding one token for itself obtained with the OAuth client credentials grant.
+- **Client registration.** Each authorization server needs a registered client, created by DCR (RFC 7591), by a CIMD the platform hosts with no stored secret, or entered manually. A client either signs in as each user, holding a token per person, or as a service account, holding one token for itself obtained with the OAuth client credentials grant.
 - **Signed-key client authentication.** A client can authenticate to the issuer with `private_key_jwt` instead of a shared secret. The assertion is signed with a signing key set built from the organization's own KMS keys, which requires the customer-managed encryption keys entitlement. See [Encryption Keys](/docs/ai-control-plane/org-admin/encryption-keys#signing-keys-jwks).
 - **Private issuers.** An issuer reachable only from a private network can be bound to an MCP tunnel. Discovery, token exchange, refresh, revocation, and client registration then go through the tunnel.
-- **Housekeeping.** Providers can move between project and organization scope or be consolidated into another provider for the same issuer. DCR clients can be rotated in place. Client secrets are encrypted at rest and never displayed.
+- **Housekeeping.** Authorization servers can move between project and organization scope or be consolidated into another one for the same issuer. DCR clients can be rotated in place. Client secrets are encrypted at rest and never displayed.
 
-See [Remote identity providers](/docs/ai-control-plane/identity/remote-identity-providers) for setup.
+See [Authorization servers](/docs/ai-control-plane/identity/remote-identity-providers) for setup.
 
 ### Upstream credential modes
 
@@ -306,7 +306,7 @@ Each server decides what reaches the upstream API.
 
 | Mode | What reaches the upstream API |
 | --- | --- |
-| **User Identity** | Each person's own OAuth token from the remote identity provider. A tool call runs as that person in the upstream system. |
+| **User Identity** | Each person's own OAuth token from the authorization server. A tool call runs as that person in the upstream system. |
 | **Service Account** | One shared credential for the server, sent as the `Authorization` header for every caller. Either a static credential, or an access token the platform obtains for itself with the OAuth client credentials grant. |
 | **Manual** | No managed credential. Suitable for public upstream APIs, with any static headers set by hand. |
 | **Environment variables** | On built servers, values from an attached environment injected by the system, or supplied by each user when they connect. |
@@ -317,7 +317,7 @@ With Enterprise Managed Auth, a remote or tunneled server bound to the organizat
 
 ### Connecting, refreshing, and revoking
 
-- **Connecting services.** Attached providers appear on the consent screen under **Connect required services**, one card per upstream, marked connected or expired. Access cannot be granted until at least one service is connected. See [What the end user sees](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#what-the-end-user-sees).
+- **Connecting services.** Attached authorization servers appear on the consent screen under **Connect required services**, one card per upstream, marked connected or expired. Access cannot be granted until at least one service is connected. See [What the end user sees](/docs/ai-control-plane/mcp-gateway/access/upstream-credentials#what-the-end-user-sees).
 - **Storage and refresh.** Upstream tokens are encrypted at rest and refreshed just before use, with one refresh shared by concurrent calls. The organization's automatic session refresh policy also renews idle connections in the background: **Disabled**, **Required**, or **User controlled**, where each person chooses on the consent screen. See [Automatic session refresh](/docs/ai-control-plane/mcp-gateway/access/session-refresh#automatic-session-refresh).
 - **Revocation.** Disconnecting a service deletes the stored credential. Revoking a session in the platform does not revoke the grant at the upstream provider, which has to be revoked there. See [Revoking access](/docs/ai-control-plane/mcp-gateway/access/user-sessions#revoking-access).
 - **Private servers.** Private tunneled servers also receive a signed JWT naming the caller in the `X-Speakeasy-Identity` header, valid for at most 60 seconds, so the server can apply its own policy. See [Signed caller identity](/docs/ai-control-plane/mcp-gateway/tunneled-servers/internal-mcp#signed-caller-identity).
